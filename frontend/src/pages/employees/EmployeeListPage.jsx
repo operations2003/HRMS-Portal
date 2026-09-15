@@ -244,7 +244,7 @@ export const EmployeeListPage = () => {
   // Determine if logged in user has salary view privilege
   const canViewSalary = (emp) => {
     if (!emp) return false;
-    if (['Admin', 'SuperAdmin', 'OrgAdmin', 'HR', 'HRManager'].includes(user?.roleName)) {
+    if (['Admin', 'HR', 'Manager'].includes(user?.roleName)) {
       return true;
     }
     return user?.email === emp.email;
