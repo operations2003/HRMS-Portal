@@ -1,0 +1,297 @@
+import { hashPassword } from '../utils/passwordUtils.js';
+
+/**
+ * DataStore - In-Memory Relational Data Repository for Phase 1
+ * Designed specifically with normalized relationships so Ajay can replace
+ * this store with SQL/ORM database queries seamlessly.
+ */
+
+export const permissions = [
+  // Dashboard
+  { id: 'perm-1', name: 'View Dashboard', code: 'dashboard:read', module: 'dashboard', description: 'Access dashboard and analytics' },
+  
+  // Organizations
+  { id: 'perm-2', name: 'View Organizations', code: 'org:read', module: 'organization', description: 'View organization listings and details' },
+  { id: 'perm-3', name: 'Create Organization', code: 'org:write', module: 'organization', description: 'Create and update organizations' },
+  { id: 'perm-4', name: 'Delete Organization', code: 'org:delete', module: 'organization', description: 'Deactivate or delete organizations' },
+  
+  // Employees
+  { id: 'perm-5', name: 'View Employees', code: 'employee:read', module: 'employee', description: 'View employee directory and profiles' },
+  { id: 'perm-6', name: 'Create/Edit Employee', code: 'employee:write', module: 'employee', description: 'Add or update employee details' },
+  { id: 'perm-7', name: 'Delete Employee', code: 'employee:delete', module: 'employee', description: 'Deactivate or delete employees' },
+  
+  // Departments & Designations
+  { id: 'perm-8', name: 'View Departments', code: 'dept:read', module: 'department', description: 'View departments and designations' },
+  { id: 'perm-9', name: 'Manage Departments', code: 'dept:write', module: 'department', description: 'Create and edit departments' },
+  
+  // Users & RBAC
+  { id: 'perm-10', name: 'View Users', code: 'user:read', module: 'user', description: 'View system user accounts' },
+  { id: 'perm-11', name: 'Manage Users', code: 'user:write', module: 'user', description: 'Create and update user accounts and roles' },
+];
+
+export const roles = [
+  {
+    id: 'role-superadmin',
+    name: 'SuperAdmin',
+    description: 'Full system-wide administrative control across all organizations',
+    permissions: [
+      'dashboard:read',
+      'org:read', 'org:write', 'org:delete',
+      'employee:read', 'employee:write', 'employee:delete',
+      'dept:read', 'dept:write',
+      'user:read', 'user:write',
+    ],
+  },
+  {
+    id: 'role-orgadmin',
+    name: 'OrgAdmin',
+    description: 'Organization-level administrator with full control over own organization',
+    permissions: [
+      'dashboard:read',
+      'org:read', 'org:write',
+      'employee:read', 'employee:write', 'employee:delete',
+      'dept:read', 'dept:write',
+      'user:read', 'user:write',
+    ],
+  },
+  {
+    id: 'role-hrmanager',
+    name: 'HRManager',
+    description: 'Human Resources manager with employee and department management access',
+    permissions: [
+      'dashboard:read',
+      'org:read',
+      'employee:read', 'employee:write',
+      'dept:read',
+      'user:read',
+    ],
+  },
+  {
+    id: 'role-employee',
+    name: 'Employee',
+    description: 'Standard staff member with read-only access to own profile and directory',
+    permissions: [
+      'dashboard:read',
+      'employee:read',
+    ],
+  },
+];
+
+export const organizations = [
+  {
+    id: 'org-1',
+    name: 'TechCorp Solutions',
+    code: 'TCORP',
+    email: 'contact@techcorp.com',
+    phone: '+1 (555) 019-2834',
+    website: 'https://techcorp.example.com',
+    address: '100 Innovation Way, Suite 400, San Francisco, CA',
+    status: 'Active',
+    createdAt: '2026-01-10T08:00:00.000Z',
+    updatedAt: '2026-01-10T08:00:00.000Z',
+  },
+  {
+    id: 'org-2',
+    name: 'Apex Global Logistics',
+    code: 'APEX',
+    email: 'info@apexlogistics.com',
+    phone: '+1 (555) 482-9102',
+    website: 'https://apexlogistics.example.com',
+    address: '450 Harbor Boulevard, Newark, NJ',
+    status: 'Active',
+    createdAt: '2026-02-15T09:30:00.000Z',
+    updatedAt: '2026-02-15T09:30:00.000Z',
+  },
+  {
+    id: 'org-3',
+    name: 'Horizon Health Systems',
+    code: 'HORIZON',
+    email: 'support@horizonhealth.org',
+    phone: '+1 (555) 739-1122',
+    website: 'https://horizonhealth.example.org',
+    address: '782 Medical Center Drive, Chicago, IL',
+    status: 'Inactive',
+    createdAt: '2026-03-01T11:00:00.000Z',
+    updatedAt: '2026-03-01T11:00:00.000Z',
+  },
+];
+
+export const departments = [
+  { id: 'dept-1', orgId: 'org-1', name: 'Engineering & Technology', code: 'ENG', status: 'Active' },
+  { id: 'dept-2', orgId: 'org-1', name: 'Human Resources', code: 'HR', status: 'Active' },
+  { id: 'dept-3', orgId: 'org-1', name: 'Sales & Marketing', code: 'SALES', status: 'Active' },
+  { id: 'dept-4', orgId: 'org-1', name: 'Finance & Accounts', code: 'FIN', status: 'Active' },
+  { id: 'dept-5', orgId: 'org-2', name: 'Fleet Operations', code: 'OPS', status: 'Active' },
+];
+
+export const designations = [
+  { id: 'desig-1', orgId: 'org-1', title: 'Principal Software Architect', code: 'ARCH' },
+  { id: 'desig-2', orgId: 'org-1', title: 'Senior Full Stack Engineer', code: 'SDE-2' },
+  { id: 'desig-3', orgId: 'org-1', title: 'HR Operations Lead', code: 'HR-LEAD' },
+  { id: 'desig-4', orgId: 'org-1', title: 'Enterprise Account Executive', code: 'SALES-EXEC' },
+  { id: 'desig-5', orgId: 'org-2', title: 'Logistics Coordinator', code: 'LOG-COORD' },
+];
+
+export let users = [
+  {
+    id: 'user-admin',
+    orgId: 'org-1',
+    roleId: 'role-superadmin',
+    email: 'admin@hrms.local',
+    passwordHash: '', // Initialized on boot
+    firstName: 'Super',
+    lastName: 'Administrator',
+    status: 'Active',
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'user-orgadmin',
+    orgId: 'org-1',
+    roleId: 'role-orgadmin',
+    email: 'orgadmin@techcorp.local',
+    passwordHash: '',
+    firstName: 'Elena',
+    lastName: 'Rostova',
+    status: 'Active',
+    createdAt: '2026-01-15T00:00:00.000Z',
+  },
+  {
+    id: 'user-hr',
+    orgId: 'org-1',
+    roleId: 'role-hrmanager',
+    email: 'hr@techcorp.local',
+    passwordHash: '',
+    firstName: 'Marcus',
+    lastName: 'Vance',
+    status: 'Active',
+    createdAt: '2026-02-01T00:00:00.000Z',
+  },
+  {
+    id: 'user-emp',
+    orgId: 'org-1',
+    roleId: 'role-employee',
+    email: 'emp@techcorp.local',
+    passwordHash: '',
+    firstName: 'Sophia',
+    lastName: 'Chen',
+    status: 'Active',
+    createdAt: '2026-02-10T00:00:00.000Z',
+  },
+];
+
+export let employees = [
+  {
+    id: 'emp-1',
+    orgId: 'org-1',
+    deptId: 'dept-1',
+    desigId: 'desig-1',
+    userId: 'user-admin',
+    employeeCode: 'EMP-001',
+    firstName: 'Super',
+    lastName: 'Administrator',
+    email: 'admin@hrms.local',
+    phone: '+1 (555) 100-0001',
+    dateOfJoining: '2025-01-01',
+    employmentType: 'Full-Time',
+    status: 'Active',
+    salary: 185000,
+    createdAt: '2025-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'emp-2',
+    orgId: 'org-1',
+    deptId: 'dept-1',
+    desigId: 'desig-2',
+    userId: 'user-emp',
+    employeeCode: 'EMP-002',
+    firstName: 'Sophia',
+    lastName: 'Chen',
+    email: 'emp@techcorp.local',
+    phone: '+1 (555) 234-5678',
+    dateOfJoining: '2025-03-15',
+    employmentType: 'Full-Time',
+    status: 'Active',
+    salary: 140000,
+    createdAt: '2025-03-15T00:00:00.000Z',
+    updatedAt: '2026-02-10T00:00:00.000Z',
+  },
+  {
+    id: 'emp-3',
+    orgId: 'org-1',
+    deptId: 'dept-2',
+    desigId: 'desig-3',
+    userId: 'user-hr',
+    employeeCode: 'EMP-003',
+    firstName: 'Marcus',
+    lastName: 'Vance',
+    email: 'hr@techcorp.local',
+    phone: '+1 (555) 345-6789',
+    dateOfJoining: '2025-04-01',
+    employmentType: 'Full-Time',
+    status: 'Active',
+    salary: 115000,
+    createdAt: '2025-04-01T00:00:00.000Z',
+    updatedAt: '2026-02-01T00:00:00.000Z',
+  },
+  {
+    id: 'emp-4',
+    orgId: 'org-1',
+    deptId: 'dept-3',
+    desigId: 'desig-4',
+    userId: null,
+    employeeCode: 'EMP-004',
+    firstName: 'Liam',
+    lastName: 'Gallagher',
+    email: 'liam.g@techcorp.com',
+    phone: '+1 (555) 456-7890',
+    dateOfJoining: '2025-06-20',
+    employmentType: 'Contract',
+    status: 'On Leave',
+    salary: 95000,
+    createdAt: '2025-06-20T00:00:00.000Z',
+    updatedAt: '2026-01-15T00:00:00.000Z',
+  },
+  {
+    id: 'emp-5',
+    orgId: 'org-2',
+    deptId: 'dept-5',
+    desigId: 'desig-5',
+    userId: null,
+    employeeCode: 'EMP-005',
+    firstName: 'Aarav',
+    lastName: 'Patel',
+    email: 'aarav.p@apexlogistics.com',
+    phone: '+1 (555) 567-8901',
+    dateOfJoining: '2025-08-10',
+    employmentType: 'Full-Time',
+    status: 'Active',
+    salary: 88000,
+    createdAt: '2025-08-10T00:00:00.000Z',
+    updatedAt: '2026-01-20T00:00:00.000Z',
+  },
+];
+
+let isInitialized = false;
+
+/**
+ * Initialize default test user credentials with secure bcrypt hashes
+ */
+export const initDataStore = async () => {
+  if (isInitialized) return;
+
+  const passwords = {
+    'admin@hrms.local': 'Admin@123',
+    'orgadmin@techcorp.local': 'OrgAdmin@123',
+    'hr@techcorp.local': 'Hr@123',
+    'emp@techcorp.local': 'Emp@123',
+  };
+
+  for (const user of users) {
+    const rawPass = passwords[user.email] || 'Password@123';
+    user.passwordHash = await hashPassword(rawPass);
+  }
+
+  isInitialized = true;
+  console.log('✅ In-Memory DataStore initialized with secure bcrypt credentials.');
+};
