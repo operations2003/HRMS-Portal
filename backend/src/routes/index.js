@@ -4,6 +4,9 @@ import orgRoutes from './orgRoutes.js';
 import employeeRoutes from './employeeRoutes.js';
 import userRoutes from './userRoutes.js';
 import dashboardRoutes from './dashboardRoutes.js';
+import atsRoutes from './atsRoutes.js';
+import onboardingRoutes from './onboardingRoutes.js';
+import documentRoutes from './documentRoutes.js';
 import { sendSuccess } from '../utils/apiResponse.js';
 
 const router = Router();
@@ -23,5 +26,8 @@ router.use('/v1/organizations', orgRoutes);
 router.use('/v1/employees', employeeRoutes);
 router.use('/v1/users', userRoutes);
 router.use('/v1/dashboard', dashboardRoutes);
+router.use('/v1/integration/ats', atsRoutes);
+router.use('/v1/onboarding', onboardingRoutes);
+router.use('/v1/documents', documentRoutes);
 
 export default router;
