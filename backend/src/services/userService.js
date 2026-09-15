@@ -1,10 +1,22 @@
 import { userRepository } from '../repositories/userRepository.js';
 import { roleRepository } from '../repositories/roleRepository.js';
+import { orgRepository } from '../repositories/orgRepository.js';
 import { hashPassword } from '../utils/passwordUtils.js';
+
+/**
+ * Remove sensitive passwordHash from user object before sending response
+ */
+const sanitizeUser = (user) => {
+  if (!user) return null;
+  const sanitized = { ...user };
+  delete sanitized.passwordHash;
+  return sanitized;
+};
 
 export const userService = {
   async listUsers() {
-    return await userRepository.findAll();
+    const users = await userRepository.findAll();
+    return users.map(sanitizeUser);
   },
 
   async getUserById(id) {
@@ -14,10 +26,39 @@ export const userService = {
       error.statusCode = 404;
       throw error;
     }
-    return user;
+    return sanitizeUser(user);
   },
 
   async createUser(data) {
+    // 1. Validate role is provided
+    if (!data.roleId || typeof data.roleId !== 'string' || !data.roleId.trim()) {
+      const error = new Error('Role selection is required.');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    // 2. Validate role exists
+    let role = await roleRepository.findRoleById(data.roleId.trim());
+    if (!role) {
+      // Also check by name
+      role = await roleRepository.findRoleByName(data.roleId.trim());
+    }
+    if (!role) {
+      const error = new Error(`Role '${data.roleId}' does not exist.`);
+      error.statusCode = 400;
+      throw error;
+    }
+
+    // 3. Validate organization exists
+    const orgId = data.orgId || 'org-1';
+    const org = await orgRepository.findById(orgId);
+    if (!org) {
+      const error = new Error(`Organization with ID '${orgId}' does not exist.`);
+      error.statusCode = 400;
+      throw error;
+    }
+
+    // 4. Check duplicate email
     const existing = await userRepository.findByEmail(data.email);
     if (existing) {
       const error = new Error(`A user with email '${data.email}' already exists.`);
@@ -25,19 +66,30 @@ export const userService = {
       throw error;
     }
 
-    const role = await roleRepository.findRoleById(data.roleId);
-    if (!role) {
-      const error = new Error(`Role '${data.roleId}' does not exist.`);
-      error.statusCode = 400;
-      throw error;
-    }
-
+    // 5. Secure bcrypt hash
     const passwordHash = await hashPassword(data.password);
 
-    return await userRepository.create({
-      ...data,
-      passwordHash,
-    });
+    try {
+      const newUser = await userRepository.create({
+        ...data,
+        roleId: role.id,
+        orgId,
+        passwordHash,
+      });
+      return sanitizeUser(newUser);
+    } catch (dbError) {
+      if (dbError.code === '23505') {
+        const error = new Error(`A user with email '${data.email}' already exists.`);
+        error.statusCode = 409;
+        throw error;
+      }
+      if (dbError.code === '23503') {
+        const error = new Error('Invalid role or organization selected.');
+        error.statusCode = 400;
+        throw error;
+      }
+      throw dbError;
+    }
   },
 
   async updateUser(id, data) {
@@ -54,7 +106,32 @@ export const userService = {
       delete updates.password;
     }
 
-    return await userRepository.update(id, updates);
+    if (data.roleId) {
+      const role = (await roleRepository.findRoleById(data.roleId)) || (await roleRepository.findRoleByName(data.roleId));
+      if (!role) {
+        const error = new Error(`Role '${data.roleId}' does not exist.`);
+        error.statusCode = 400;
+        throw error;
+      }
+      updates.roleId = role.id;
+    }
+
+    try {
+      const updated = await userRepository.update(id, updates);
+      return sanitizeUser(updated);
+    } catch (dbError) {
+      if (dbError.code === '23505') {
+        const error = new Error(`A user with email '${data.email}' already exists.`);
+        error.statusCode = 409;
+        throw error;
+      }
+      if (dbError.code === '23503') {
+        const error = new Error('Invalid role or organization selected.');
+        error.statusCode = 400;
+        throw error;
+      }
+      throw dbError;
+    }
   },
 
   async getRoles() {

@@ -23,7 +23,16 @@ export const orgService = {
       throw error;
     }
 
-    return await orgRepository.create(data);
+    try {
+      return await orgRepository.create(data);
+    } catch (dbError) {
+      if (dbError.code === '23505') {
+        const error = new Error(`Organization code '${data.code.toUpperCase()}' is already in use.`);
+        error.statusCode = 409;
+        throw error;
+      }
+      throw dbError;
+    }
   },
 
   async updateOrganization(id, data) {
@@ -43,7 +52,16 @@ export const orgService = {
       }
     }
 
-    return await orgRepository.update(id, data);
+    try {
+      return await orgRepository.update(id, data);
+    } catch (dbError) {
+      if (dbError.code === '23505') {
+        const error = new Error(`Organization code '${data.code.toUpperCase()}' is already taken.`);
+        error.statusCode = 409;
+        throw error;
+      }
+      throw dbError;
+    }
   },
 
   async deleteOrganization(id) {
@@ -54,6 +72,17 @@ export const orgService = {
       throw error;
     }
 
-    return await orgRepository.delete(id);
+    try {
+      return await orgRepository.delete(id);
+    } catch (dbError) {
+      if (dbError.code === '23503') {
+        const error = new Error(
+          'Cannot delete organization with active departments or employees. Please deactivate the organization instead.'
+        );
+        error.statusCode = 400;
+        throw error;
+      }
+      throw dbError;
+    }
   },
 };

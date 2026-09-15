@@ -1,7 +1,6 @@
 import { orgRepository } from '../repositories/orgRepository.js';
 import { employeeRepository } from '../repositories/employeeRepository.js';
 import { userRepository } from '../repositories/userRepository.js';
-import { departments } from '../repositories/dataStore.js';
 import { sendSuccess } from '../utils/apiResponse.js';
 
 export const dashboardController = {
@@ -11,8 +10,12 @@ export const dashboardController = {
   async getStats(req, res, next) {
     try {
       const orgs = await orgRepository.findAll();
-      const empData = await employeeRepository.findAll({ limit: 100 });
-      const users = await userRepository.findAll();
+      const [empData, metadata, users] = await Promise.all([
+        employeeRepository.findAll({ limit: 100 }),
+        employeeRepository.getMetadata(),
+        userRepository.findAll(),
+      ]);
+      const departments = metadata.departments || [];
 
       const activeEmployees = empData.employees.filter((e) => e.status === 'Active').length;
       const onLeaveEmployees = empData.employees.filter((e) => e.status === 'On Leave').length;

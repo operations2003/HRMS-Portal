@@ -3,6 +3,8 @@ export const validateCreateOrg = (body) => {
 
   if (!body.name || typeof body.name !== 'string' || !body.name.trim()) {
     errors.push('Organization name is required.');
+  } else if (body.name.trim().length > 255) {
+    errors.push('Organization name must not exceed 255 characters.');
   }
 
   if (!body.code || typeof body.code !== 'string' || !body.code.trim()) {
@@ -13,6 +15,8 @@ export const validateCreateOrg = (body) => {
 
   if (!body.email || typeof body.email !== 'string' || !body.email.trim()) {
     errors.push('Official email is required.');
+  } else if (body.email.trim().length > 255) {
+    errors.push('Official email must not exceed 255 characters.');
   } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email.trim())) {
     errors.push('Please enter a valid official email address.');
   }

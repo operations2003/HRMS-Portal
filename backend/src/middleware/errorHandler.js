@@ -7,12 +7,32 @@ import { config } from '../config/index.js';
 export const errorHandler = (err, req, res, next) => {
   console.error('💥 Unhandled Error:', err);
 
-  const statusCode = err.statusCode || err.status || 500;
-  const message = err.message || 'Internal server error occurred.';
+  let statusCode = err.statusCode || err.status || 500;
+  let message = err.message || 'Internal server error occurred.';
+
+  // Handle Express body-parser malformed JSON errors
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    statusCode = 400;
+    message = 'Invalid JSON syntax in request body.';
+  }
+
+  // Handle PostgreSQL data exceptions if not caught in service layer
+  if (err.code === '22001') {
+    statusCode = 400;
+    message = 'One or more text fields exceed the maximum allowed length.';
+  } else if (err.code === '22003') {
+    statusCode = 400;
+    message = 'Numeric value is out of allowable range.';
+  } else if (err.code === '22007') {
+    statusCode = 400;
+    message = 'Invalid date format or calendar date is out of range.';
+  } else if (err.code === '22P02') {
+    statusCode = 400;
+    message = 'Invalid input syntax for data type.';
+  }
 
   const errors = [];
   if (config.nodeEnv === 'development' && err.stack) {
-    // Only in development do we record error detail in a clean error object
     errors.push(err.message);
   }
 

@@ -1,138 +1,343 @@
-import { employees, organizations, departments, designations } from './dataStore.js';
+import { pool } from '../config/db.js';
+
+/**
+ * Format a joined employee row into the standard API response structure
+ */
+const mapEmployeeRow = (row) => {
+  if (!row) return null;
+  return {
+    id: row.id,
+    orgId: row.orgId,
+    deptId: row.deptId || null,
+    desigId: row.desigId || null,
+    userId: row.userId || null,
+    employeeCode: row.employeeCode,
+    firstName: row.firstName,
+    lastName: row.lastName,
+    email: row.email,
+    phone: row.phone || '',
+    dateOfJoining: row.dateOfJoining || '',
+    employmentType: row.employmentType || 'Full-Time',
+    status: row.status || 'Active',
+    salary: parseFloat(row.salary) || 0,
+    createdAt: row.createdAt ? new Date(row.createdAt).toISOString() : new Date().toISOString(),
+    updatedAt: row.updatedAt ? new Date(row.updatedAt).toISOString() : new Date().toISOString(),
+    organization: row.o_id ? { id: row.o_id, name: row.o_name, code: row.o_code } : null,
+    department: row.d_id ? { id: row.d_id, name: row.d_name, code: row.d_code } : null,
+    designation: row.ds_id ? { id: row.ds_id, title: row.ds_title, code: row.ds_code } : null,
+  };
+};
+
+const BASE_EMPLOYEE_SELECT = `
+  SELECT 
+    e.id,
+    e.org_id AS "orgId",
+    e.dept_id AS "deptId",
+    e.desig_id AS "desigId",
+    e.user_id AS "userId",
+    e.employee_code AS "employeeCode",
+    e.first_name AS "firstName",
+    e.last_name AS "lastName",
+    e.email,
+    e.phone,
+    TO_CHAR(e.date_of_joining, 'YYYY-MM-DD') AS "dateOfJoining",
+    e.employment_type AS "employmentType",
+    e.status,
+    e.salary::float AS salary,
+    e.created_at AS "createdAt",
+    e.updated_at AS "updatedAt",
+    o.id AS "o_id", o.name AS "o_name", o.code AS "o_code",
+    d.id AS "d_id", d.name AS "d_name", d.code AS "d_code",
+    ds.id AS "ds_id", ds.title AS "ds_title", ds.code AS "ds_code"
+  FROM employees e
+  LEFT JOIN organizations o ON o.id = e.org_id
+  LEFT JOIN departments d ON d.id = e.dept_id
+  LEFT JOIN designations ds ON ds.id = e.desig_id
+`;
 
 export const employeeRepository = {
+  /**
+   * Find all employees with filtering and pagination
+   */
   async findAll({ search = '', orgId = '', deptId = '', status = '', page = 1, limit = 20 } = {}) {
-    let result = [...employees];
+    const conditions = [];
+    const values = [];
+    let paramIndex = 1;
 
     if (orgId) {
-      result = result.filter((e) => e.orgId === orgId);
+      conditions.push(`e.org_id = $${paramIndex++}`);
+      values.push(orgId);
     }
 
     if (deptId) {
-      result = result.filter((e) => e.deptId === deptId);
+      conditions.push(`e.dept_id = $${paramIndex++}`);
+      values.push(deptId);
     }
 
     if (status) {
-      result = result.filter((e) => e.status.toLowerCase() === status.toLowerCase());
+      conditions.push(`LOWER(e.status) = LOWER($${paramIndex++})`);
+      values.push(status);
     }
 
     if (search) {
-      const q = search.toLowerCase();
-      result = result.filter(
-        (e) =>
-          e.firstName.toLowerCase().includes(q) ||
-          e.lastName.toLowerCase().includes(q) ||
-          e.email.toLowerCase().includes(q) ||
-          e.employeeCode.toLowerCase().includes(q)
+      const q = `%${search.toLowerCase()}%`;
+      conditions.push(
+        `(LOWER(e.first_name) LIKE $${paramIndex} OR LOWER(e.last_name) LIKE $${paramIndex} OR LOWER(e.email) LIKE $${paramIndex} OR LOWER(e.employee_code) LIKE $${paramIndex})`
       );
+      values.push(q);
+      paramIndex++;
     }
 
-    const total = result.length;
-    const startIndex = (page - 1) * limit;
-    const paginated = result.slice(startIndex, startIndex + limit);
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-    // Enrich with relation objects
-    const enriched = paginated.map((emp) => {
-      const org = organizations.find((o) => o.id === emp.orgId);
-      const dept = departments.find((d) => d.id === emp.deptId);
-      const desig = designations.find((ds) => ds.id === emp.desigId);
+    // Count query
+    const countSql = `SELECT COUNT(*)::int AS total FROM employees e ${whereClause};`;
+    const countRes = await pool.query(countSql, values);
+    const total = countRes.rows[0]?.total || 0;
 
-      return {
-        ...emp,
-        organization: org ? { id: org.id, name: org.name, code: org.code } : null,
-        department: dept ? { id: dept.id, name: dept.name, code: dept.code } : null,
-        designation: desig ? { id: desig.id, title: desig.title, code: desig.code } : null,
-      };
-    });
+    // Pagination
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.max(1, parseInt(limit, 10) || 20);
+    const offset = (pageNum - 1) * limitNum;
+
+    const listSql = `
+      ${BASE_EMPLOYEE_SELECT}
+      ${whereClause}
+      ORDER BY e.created_at DESC
+      LIMIT $${paramIndex++} OFFSET $${paramIndex++};
+    `;
+
+    const listRes = await pool.query(listSql, [...values, limitNum, offset]);
+    const employees = listRes.rows.map(mapEmployeeRow);
 
     return {
-      employees: enriched,
+      employees,
       pagination: {
         total,
-        page: Number(page),
-        limit: Number(limit),
-        totalPages: Math.ceil(total / limit) || 1,
+        page: pageNum,
+        limit: limitNum,
+        totalPages: Math.ceil(total / limitNum) || 1,
       },
     };
   },
 
+  /**
+   * Find employee by ID
+   */
   async findById(id) {
-    const emp = employees.find((e) => e.id === id);
-    if (!emp) return null;
+    if (!id || typeof id !== 'string') return null;
 
-    const org = organizations.find((o) => o.id === emp.orgId);
-    const dept = departments.find((d) => d.id === emp.deptId);
-    const desig = designations.find((ds) => ds.id === emp.desigId);
-
-    return {
-      ...emp,
-      organization: org ? { id: org.id, name: org.name, code: org.code } : null,
-      department: dept ? { id: dept.id, name: dept.name, code: dept.code } : null,
-      designation: desig ? { id: desig.id, title: desig.title, code: desig.code } : null,
-    };
+    const sql = `
+      ${BASE_EMPLOYEE_SELECT}
+      WHERE e.id = $1;
+    `;
+    const res = await pool.query(sql, [id]);
+    return res.rows.length > 0 ? mapEmployeeRow(res.rows[0]) : null;
   },
 
-  async findByCode(code) {
-    return employees.find((e) => e.employeeCode.toUpperCase() === code.toUpperCase()) || null;
+  /**
+   * Find employee by unique code
+   */
+  async findByCode(code, orgId = null) {
+    if (!code || typeof code !== 'string') return null;
+
+    let sql = `${BASE_EMPLOYEE_SELECT} WHERE UPPER(e.employee_code) = UPPER($1)`;
+    const values = [code.trim()];
+
+    if (orgId) {
+      sql += ' AND e.org_id = $2';
+      values.push(orgId);
+    }
+
+    sql += ' LIMIT 1;';
+    const res = await pool.query(sql, values);
+    return res.rows.length > 0 ? mapEmployeeRow(res.rows[0]) : null;
   },
 
-  async findByEmail(email) {
-    return employees.find((e) => e.email.toLowerCase() === email.toLowerCase()) || null;
+  /**
+   * Find employee by email
+   */
+  async findByEmail(email, orgId = null) {
+    if (!email || typeof email !== 'string') return null;
+
+    let sql = `${BASE_EMPLOYEE_SELECT} WHERE LOWER(e.email) = LOWER($1)`;
+    const values = [email.trim()];
+
+    if (orgId) {
+      sql += ' AND e.org_id = $2';
+      values.push(orgId);
+    }
+
+    sql += ' LIMIT 1;';
+    const res = await pool.query(sql, values);
+    return res.rows.length > 0 ? mapEmployeeRow(res.rows[0]) : null;
   },
 
+  /**
+   * Create new employee record in PostgreSQL
+   */
   async create(data) {
-    const newEmployee = {
-      id: `emp-${Date.now()}`,
-      orgId: data.orgId,
-      deptId: data.deptId || null,
-      desigId: data.desigId || null,
-      userId: data.userId || null,
-      employeeCode: data.employeeCode || `EMP-${Math.floor(100 + Math.random() * 900)}`,
-      firstName: data.firstName.trim(),
-      lastName: data.lastName.trim(),
-      email: data.email.trim().toLowerCase(),
-      phone: data.phone || '',
-      dateOfJoining: data.dateOfJoining || new Date().toISOString().split('T')[0],
-      employmentType: data.employmentType || 'Full-Time',
-      status: data.status || 'Active',
-      salary: data.salary ? Number(data.salary) : 0,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+    const id = data.id || `emp-${Date.now()}`;
+    const orgId = data.orgId;
+    const deptId = data.deptId || null;
+    const desigId = data.desigId || null;
+    const userId = data.userId || null;
+    const employeeCode = data.employeeCode ? data.employeeCode.trim() : `EMP-${Math.floor(100 + Math.random() * 900)}`;
+    const firstName = data.firstName.trim();
+    const lastName = data.lastName.trim();
+    const email = data.email.trim().toLowerCase();
+    const phone = data.phone ? data.phone.trim() : '';
+    const dateOfJoining = data.dateOfJoining || new Date().toISOString().split('T')[0];
+    const employmentType = data.employmentType || 'Full-Time';
+    const status = data.status || 'Active';
+    const salary = data.salary ? Number(data.salary) : 0;
 
-    employees.unshift(newEmployee);
-    return this.findById(newEmployee.id);
-  },
+    const sql = `
+      INSERT INTO employees (
+        id, org_id, dept_id, desig_id, user_id, employee_code,
+        first_name, last_name, email, phone, date_of_joining,
+        employment_type, status, salary
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      RETURNING id;
+    `;
 
-  async update(id, data) {
-    const index = employees.findIndex((e) => e.id === id);
-    if (index === -1) return null;
+    await pool.query(sql, [
+      id,
+      orgId,
+      deptId,
+      desigId,
+      userId,
+      employeeCode,
+      firstName,
+      lastName,
+      email,
+      phone,
+      dateOfJoining,
+      employmentType,
+      status,
+      salary,
+    ]);
 
-    const existing = employees[index];
-    const updated = {
-      ...existing,
-      ...data,
-      id: existing.id,
-      updatedAt: new Date().toISOString(),
-    };
-
-    employees[index] = updated;
     return this.findById(id);
   },
 
-  async delete(id) {
-    const index = employees.findIndex((e) => e.id === id);
-    if (index === -1) return false;
+  /**
+   * Update existing employee record
+   */
+  async update(id, data) {
+    if (!id || typeof id !== 'string') return null;
 
-    employees.splice(index, 1);
-    return true;
+    const setClauses = [];
+    const values = [];
+    let paramIndex = 1;
+
+    if (data.firstName !== undefined) {
+      setClauses.push(`first_name = $${paramIndex++}`);
+      values.push(data.firstName.trim());
+    }
+
+    if (data.lastName !== undefined) {
+      setClauses.push(`last_name = $${paramIndex++}`);
+      values.push(data.lastName.trim());
+    }
+
+    if (data.email !== undefined) {
+      setClauses.push(`email = $${paramIndex++}`);
+      values.push(data.email.trim().toLowerCase());
+    }
+
+    if (data.phone !== undefined) {
+      setClauses.push(`phone = $${paramIndex++}`);
+      values.push(data.phone.trim());
+    }
+
+    if (data.orgId !== undefined) {
+      setClauses.push(`org_id = $${paramIndex++}`);
+      values.push(data.orgId);
+    }
+
+    if (data.deptId !== undefined) {
+      setClauses.push(`dept_id = $${paramIndex++}`);
+      values.push(data.deptId || null);
+    }
+
+    if (data.desigId !== undefined) {
+      setClauses.push(`desig_id = $${paramIndex++}`);
+      values.push(data.desigId || null);
+    }
+
+    if (data.userId !== undefined) {
+      setClauses.push(`user_id = $${paramIndex++}`);
+      values.push(data.userId || null);
+    }
+
+    if (data.employeeCode !== undefined) {
+      setClauses.push(`employee_code = $${paramIndex++}`);
+      values.push(data.employeeCode.trim());
+    }
+
+    if (data.dateOfJoining !== undefined) {
+      setClauses.push(`date_of_joining = $${paramIndex++}`);
+      values.push(data.dateOfJoining);
+    }
+
+    if (data.employmentType !== undefined) {
+      setClauses.push(`employment_type = $${paramIndex++}`);
+      values.push(data.employmentType);
+    }
+
+    if (data.status !== undefined) {
+      setClauses.push(`status = $${paramIndex++}`);
+      values.push(data.status);
+    }
+
+    if (data.salary !== undefined) {
+      setClauses.push(`salary = $${paramIndex++}`);
+      values.push(Number(data.salary) || 0);
+    }
+
+    if (setClauses.length === 0) {
+      return this.findById(id);
+    }
+
+    values.push(id);
+    const sql = `
+      UPDATE employees
+      SET ${setClauses.join(', ')}
+      WHERE id = $${paramIndex}
+      RETURNING id;
+    `;
+
+    const res = await pool.query(sql, values);
+    if (res.rows.length === 0) return null;
+
+    return this.findById(id);
   },
 
+  /**
+   * Delete an employee
+   */
+  async delete(id) {
+    if (!id || typeof id !== 'string') return false;
+
+    const res = await pool.query('DELETE FROM employees WHERE id = $1;', [id]);
+    return res.rowCount > 0;
+  },
+
+  /**
+   * Load metadata (organizations, departments, designations) directly from PostgreSQL
+   */
   async getMetadata() {
+    const [orgsRes, deptsRes, desigsRes] = await Promise.all([
+      pool.query('SELECT id, name, code FROM organizations ORDER BY name ASC;'),
+      pool.query('SELECT id, org_id AS "orgId", name, code FROM departments ORDER BY name ASC;'),
+      pool.query('SELECT id, org_id AS "orgId", title, code FROM designations ORDER BY title ASC;'),
+    ]);
+
     return {
-      organizations: organizations.map((o) => ({ id: o.id, name: o.name, code: o.code })),
-      departments: departments.map((d) => ({ id: d.id, orgId: d.orgId, name: d.name, code: d.code })),
-      designations: designations.map((ds) => ({ id: ds.id, orgId: ds.orgId, title: ds.title, code: ds.code })),
+      organizations: orgsRes.rows,
+      departments: deptsRes.rows,
+      designations: desigsRes.rows,
     };
   },
 };
