@@ -69,14 +69,14 @@ export const AuthProvider = ({ children }) => {
 
   const hasPermission = (permission) => {
     if (!user) return false;
-    if (user.roleName === 'SuperAdmin') return true;
+    if (user.roleName === 'Admin' || user.roleName === 'SuperAdmin') return true;
     const permissions = Array.isArray(permission) ? permission : [permission];
     return permissions.some((p) => user.permissions?.includes(p));
   };
 
   const hasRole = (role) => {
     if (!user) return false;
-    if (user.roleName === 'SuperAdmin') return true;
+    if (user.roleName === 'Admin' || user.roleName === 'SuperAdmin') return true;
     const roles = Array.isArray(role) ? role : [role];
     return roles.includes(user.roleName);
   };

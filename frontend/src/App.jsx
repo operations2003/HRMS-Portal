@@ -98,7 +98,7 @@ export const App = () => {
               <Route
                 path="users"
                 element={
-                  <PermissionRoute permission="user:read">
+                  <PermissionRoute permission="user:write">
                     <UserListPage />
                   </PermissionRoute>
                 }

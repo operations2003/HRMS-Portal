@@ -44,7 +44,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
       name: 'User Accounts',
       path: '/users',
       icon: UserCheck,
-      permission: 'user:read',
+      permission: 'user:write',
     },
   ];
 

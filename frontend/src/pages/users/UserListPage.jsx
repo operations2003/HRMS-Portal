@@ -203,7 +203,7 @@ export const UserListPage = () => {
       render: (row) => (
         <div className="flex items-center gap-2">
           <div className="flex flex-wrap gap-1 max-w-xs">
-            {row.roleName === 'SuperAdmin' ? (
+            {row.roleName === 'Admin' || row.roleName === 'SuperAdmin' ? (
               <span className="text-xs text-indigo-600 font-semibold flex items-center gap-1">
                 <ShieldCheck className="w-3.5 h-3.5" />
                 Full System Access
@@ -218,7 +218,7 @@ export const UserListPage = () => {
                 </span>
               ))
             )}
-            {row.permissions?.length > 2 && row.roleName !== 'SuperAdmin' && (
+            {row.permissions?.length > 2 && row.roleName !== 'Admin' && row.roleName !== 'SuperAdmin' && (
               <span className="text-[10px] text-slate-400 font-medium">
                 +{row.permissions.length - 2} more
               </span>
@@ -330,13 +330,13 @@ export const UserListPage = () => {
 
             <div>
               <h5 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                Active Privileges ({viewingUser.roleName === 'SuperAdmin' ? 'All (SuperAdmin)' : viewingUser.permissions?.length || 0})
+                Active Privileges ({viewingUser.roleName === 'Admin' || viewingUser.roleName === 'SuperAdmin' ? 'All (Admin)' : viewingUser.permissions?.length || 0})
               </h5>
 
-              {viewingUser.roleName === 'SuperAdmin' ? (
+              {viewingUser.roleName === 'Admin' || viewingUser.roleName === 'SuperAdmin' ? (
                 <div className="p-4 rounded-xl bg-indigo-50/70 border border-indigo-100 text-xs text-indigo-900 leading-relaxed">
                   <p className="font-semibold mb-1">Unrestricted Administrative Authority</p>
-                  SuperAdmin bypasses granular permission constraints with full CRUD access to organizations, employees, users, departments, and metrics across all tenants.
+                  Admin bypasses granular permission constraints with full CRUD access to organizations, employees, users, departments, and metrics across all tenants.
                 </div>
               ) : (
                 <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">

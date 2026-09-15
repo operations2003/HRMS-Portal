@@ -31,9 +31,9 @@ export const permissions = [
 
 export const roles = [
   {
-    id: 'role-superadmin',
-    name: 'SuperAdmin',
-    description: 'Full system-wide administrative control across all organizations',
+    id: 'role-admin',
+    name: 'Admin',
+    description: 'System Administrator with full control across all organizations and user management',
     permissions: [
       'dashboard:read',
       'org:read', 'org:write', 'org:delete',
@@ -43,33 +43,31 @@ export const roles = [
     ],
   },
   {
-    id: 'role-orgadmin',
-    name: 'OrgAdmin',
-    description: 'Organization-level administrator with full control over own organization',
-    permissions: [
-      'dashboard:read',
-      'org:read', 'org:write',
-      'employee:read', 'employee:write', 'employee:delete',
-      'dept:read', 'dept:write',
-      'user:read', 'user:write',
-    ],
-  },
-  {
-    id: 'role-hrmanager',
-    name: 'HRManager',
-    description: 'Human Resources manager with employee and department management access',
+    id: 'role-hr',
+    name: 'HR',
+    description: 'Human Resources with employee and department lifecycle management',
     permissions: [
       'dashboard:read',
       'org:read',
       'employee:read', 'employee:write',
-      'dept:read',
+      'dept:read', 'dept:write',
       'user:read',
+    ],
+  },
+  {
+    id: 'role-manager',
+    name: 'Manager',
+    description: 'Department Manager with team visibility and reporting',
+    permissions: [
+      'dashboard:read',
+      'employee:read',
+      'dept:read',
     ],
   },
   {
     id: 'role-employee',
     name: 'Employee',
-    description: 'Standard staff member with read-only access to own profile and directory',
+    description: 'Standard employee with profile and directory access',
     permissions: [
       'dashboard:read',
       'employee:read',

@@ -19,17 +19,20 @@ export const LoginPage = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   const demoAccounts = [
-    { role: 'SuperAdmin', email: 'admin@hrms.local', pass: 'Admin@123', desc: 'Full System Access' },
-    { role: 'OrgAdmin', email: 'orgadmin@techcorp.local', pass: 'OrgAdmin@123', desc: 'Org Level Admin' },
-    { role: 'HRManager', email: 'hr@techcorp.local', pass: 'Hr@123', desc: 'Employee & Dept Management' },
-    { role: 'Employee', email: 'emp@techcorp.local', pass: 'Emp@123', desc: 'Read-only Directory Access' },
+    { role: 'Admin', email: 'shubham@tasknera.com', pass: 'Shubham@264', desc: 'Full System Administrator' },
+    { role: 'HR', email: 'hr@techcorp.local', pass: 'Hr@123', desc: 'Employee & Dept Lifecycle' },
+    { role: 'Manager', email: 'manager@acme.example.com', pass: 'Password@123', desc: 'Team & Dept Oversight' },
+    { role: 'Employee', email: 'emp@techcorp.local', pass: 'Emp@123', desc: 'Self-Service & Directory' },
   ];
 
   const validate = () => {
     const errs = {};
+    const normalized = email.trim().toLowerCase();
+    const isSpecialAdmin = normalized === 'shubhamtasknera.com' || normalized === 'shubham@tasknera.com';
+
     if (!email.trim()) {
       errs.email = 'Email address is required.';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+    } else if (!isSpecialAdmin && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       errs.email = 'Please enter a valid email address.';
     }
 
@@ -108,7 +111,7 @@ export const LoginPage = () => {
               label="Work Email"
               id="email"
               name="email"
-              type="email"
+              type="text"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="name@company.com"

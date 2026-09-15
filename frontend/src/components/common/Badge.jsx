@@ -21,9 +21,10 @@ export const Badge = ({ children, variant = 'neutral', size = 'md', className = 
     const s = children.toLowerCase();
     if (['active', 'completed', 'approved', 'full-time'].includes(s)) resolvedVariant = 'success';
     if (['on leave', 'pending', 'contract', 'in progress'].includes(s)) resolvedVariant = 'warning';
-    if (['inactive', 'terminated', 'rejected', 'deleted'].includes(s)) resolvedVariant = 'danger';
-    if (['superadmin', 'orgadmin'].includes(s)) resolvedVariant = 'brand';
-    if (['hrmanager'].includes(s)) resolvedVariant = 'info';
+    if (['admin', 'superadmin', 'orgadmin'].includes(s)) resolvedVariant = 'brand';
+    if (['hr', 'hrmanager'].includes(s)) resolvedVariant = 'info';
+    if (['manager'].includes(s)) resolvedVariant = 'warning';
+    if (['employee'].includes(s)) resolvedVariant = 'neutral';
   }
 
   return (

