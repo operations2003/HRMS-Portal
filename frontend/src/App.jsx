@@ -1,11 +1,13 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
+import { ToastProvider } from './context/ToastContext.jsx';
 import { LoginPage } from './pages/auth/LoginPage.jsx';
 import { DashboardPage } from './pages/dashboard/DashboardPage.jsx';
 import { OrganizationListPage } from './pages/organizations/OrganizationListPage.jsx';
 import { EmployeeListPage } from './pages/employees/EmployeeListPage.jsx';
 import { UserListPage } from './pages/users/UserListPage.jsx';
+import { DepartmentsPage } from './pages/departments/DepartmentsPage.jsx';
 import { ForbiddenPage } from './pages/common/ForbiddenPage.jsx';
 import { NotFoundPage } from './pages/common/NotFoundPage.jsx';
 import { AppLayout } from './layouts/AppLayout.jsx';
@@ -49,63 +51,74 @@ const PermissionRoute = ({ permission, children }) => {
 export const App = () => {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          {/* Public Authentication Route */}
-          <Route path="/login" element={<LoginPage />} />
+      <ToastProvider>
+        <BrowserRouter>
+          <Routes>
+            {/* Public Authentication Route */}
+            <Route path="/login" element={<LoginPage />} />
 
-          {/* Authenticated Application Layout */}
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
-                <AppLayout />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<Navigate to="/dashboard" replace />} />
-            
+            {/* Authenticated Application Layout */}
             <Route
-              path="dashboard"
+              path="/"
               element={
-                <PermissionRoute permission="dashboard:read">
-                  <DashboardPage />
-                </PermissionRoute>
+                <ProtectedRoute>
+                  <AppLayout />
+                </ProtectedRoute>
               }
-            />
+            >
+              <Route index element={<Navigate to="/dashboard" replace />} />
+              
+              <Route
+                path="dashboard"
+                element={
+                  <PermissionRoute permission="dashboard:read">
+                    <DashboardPage />
+                  </PermissionRoute>
+                }
+              />
 
-            <Route
-              path="organizations"
-              element={
-                <PermissionRoute permission="org:read">
-                  <OrganizationListPage />
-                </PermissionRoute>
-              }
-            />
+              <Route
+                path="organizations"
+                element={
+                  <PermissionRoute permission="org:read">
+                    <OrganizationListPage />
+                  </PermissionRoute>
+                }
+              />
 
-            <Route
-              path="employees"
-              element={
-                <PermissionRoute permission="employee:read">
-                  <EmployeeListPage />
-                </PermissionRoute>
-              }
-            />
+              <Route
+                path="employees"
+                element={
+                  <PermissionRoute permission="employee:read">
+                    <EmployeeListPage />
+                  </PermissionRoute>
+                }
+              />
 
-            <Route
-              path="users"
-              element={
-                <PermissionRoute permission="user:read">
-                  <UserListPage />
-                </PermissionRoute>
-              }
-            />
+              <Route
+                path="users"
+                element={
+                  <PermissionRoute permission="user:read">
+                    <UserListPage />
+                  </PermissionRoute>
+                }
+              />
 
-            <Route path="forbidden" element={<ForbiddenPage />} />
-            <Route path="*" element={<NotFoundPage />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
+              <Route
+                path="departments"
+                element={
+                  <PermissionRoute permission="dept:read">
+                    <DepartmentsPage />
+                  </PermissionRoute>
+                }
+              />
+
+              <Route path="forbidden" element={<ForbiddenPage />} />
+              <Route path="*" element={<NotFoundPage />} />
+            </Route>
+          </Routes>
+        </BrowserRouter>
+      </ToastProvider>
     </AuthProvider>
   );
 };

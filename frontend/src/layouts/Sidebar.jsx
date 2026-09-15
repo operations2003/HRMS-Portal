@@ -5,6 +5,7 @@ import {
   Building2,
   Users,
   UserCheck,
+  Briefcase,
   ShieldCheck,
   X,
   Sparkles,
@@ -32,6 +33,12 @@ export const Sidebar = ({ isOpen, onClose }) => {
       path: '/employees',
       icon: Users,
       permission: 'employee:read',
+    },
+    {
+      name: 'Departments',
+      path: '/departments',
+      icon: Briefcase,
+      permission: 'dept:read',
     },
     {
       name: 'User Accounts',

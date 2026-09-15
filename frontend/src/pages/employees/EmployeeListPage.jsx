@@ -14,6 +14,8 @@ import {
   Calendar,
   Briefcase,
   DollarSign,
+  Lock,
+  X,
 } from 'lucide-react';
 import { DataTable } from '../../components/common/DataTable.jsx';
 import { Button } from '../../components/common/Button.jsx';
@@ -23,14 +25,21 @@ import { Badge } from '../../components/common/Badge.jsx';
 import { Modal } from '../../components/common/Modal.jsx';
 import { ConfirmDialog } from '../../components/common/ConfirmDialog.jsx';
 import { Alert } from '../../components/common/Alert.jsx';
+import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
 import { Can } from '../../components/rbac/Can.jsx';
+import { useAuth } from '../../context/AuthContext.jsx';
+import { useToast } from '../../context/ToastContext.jsx';
 
 export const EmployeeListPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const { user, hasPermission } = useAuth();
+  const toast = useToast();
+
   const [employees, setEmployees] = useState([]);
   const [pagination, setPagination] = useState(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [orgFilter, setOrgFilter] = useState('');
   const [deptFilter, setDeptFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [metadata, setMetadata] = useState({ organizations: [], departments: [], designations: [] });
@@ -40,6 +49,8 @@ export const EmployeeListPage = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [viewingEmployee, setViewingEmployee] = useState(null);
+  const [loadingViewProfile, setLoadingViewProfile] = useState(false);
+
   const [formData, setFormData] = useState({
     orgId: '',
     deptId: '',
@@ -68,6 +79,7 @@ export const EmployeeListPage = () => {
       setError(null);
       const res = await employeeService.listEmployees({
         search,
+        orgId: orgFilter,
         deptId: deptFilter,
         status: statusFilter,
         page,
@@ -97,7 +109,7 @@ export const EmployeeListPage = () => {
 
   useEffect(() => {
     fetchEmployees(1);
-  }, [search, deptFilter, statusFilter]);
+  }, [search, orgFilter, deptFilter, statusFilter]);
 
   // Handle URL action (e.g. ?action=new)
   useEffect(() => {
@@ -106,6 +118,19 @@ export const EmployeeListPage = () => {
       setSearchParams({});
     }
   }, [searchParams]);
+
+  const handleOpenView = async (emp) => {
+    setViewingEmployee(emp);
+    try {
+      setLoadingViewProfile(true);
+      const full = await employeeService.getEmployeeById(emp.id);
+      setViewingEmployee(full);
+    } catch (err) {
+      console.warn('Using cached employee row:', err);
+    } finally {
+      setLoadingViewProfile(false);
+    }
+  };
 
   const handleOpenCreate = () => {
     setEditingEmployee(null);
@@ -174,8 +199,10 @@ export const EmployeeListPage = () => {
       setIsSubmitting(true);
       if (editingEmployee) {
         await employeeService.updateEmployee(editingEmployee.id, formData);
+        toast.success(`Profile for '${formData.firstName} ${formData.lastName}' updated successfully.`);
       } else {
         await employeeService.createEmployee(formData);
+        toast.success(`Employee '${formData.firstName} ${formData.lastName}' registered successfully.`);
       }
       setIsFormOpen(false);
       await fetchEmployees(pagination?.page || 1);
@@ -195,13 +222,32 @@ export const EmployeeListPage = () => {
     try {
       setIsDeleting(true);
       await employeeService.deleteEmployee(deleteTarget.id);
+      toast.success(`Employee record for '${deleteTarget.firstName} ${deleteTarget.lastName}' deactivated.`);
       setDeleteTarget(null);
       await fetchEmployees(pagination?.page || 1);
     } catch (err) {
-      alert(err.message || 'Failed to delete employee.');
+      toast.error(err.message || 'Failed to delete employee.');
     } finally {
       setIsDeleting(false);
     }
+  };
+
+  const handleClearFilters = () => {
+    setSearch('');
+    setOrgFilter('');
+    setDeptFilter('');
+    setStatusFilter('');
+  };
+
+  const hasActiveFilters = Boolean(search || orgFilter || deptFilter || statusFilter);
+
+  // Determine if logged in user has salary view privilege
+  const canViewSalary = (emp) => {
+    if (!emp) return false;
+    if (user?.roleName === 'SuperAdmin' || user?.roleName === 'OrgAdmin' || user?.roleName === 'HRManager') {
+      return true;
+    }
+    return user?.email === emp.email;
   };
 
   const columns = [
@@ -229,6 +275,15 @@ export const EmployeeListPage = () => {
       ),
     },
     {
+      header: 'Organization',
+      accessor: (row) => row.organization?.name || '—',
+      render: (row) => (
+        <span className="text-xs text-slate-700 font-medium">
+          {row.organization?.name || '—'}
+        </span>
+      ),
+    },
+    {
       header: 'Department',
       accessor: (row) => row.department?.name || 'Unassigned',
       render: (row) => (
@@ -246,7 +301,7 @@ export const EmployeeListPage = () => {
           <div className="text-xs font-medium text-slate-700">{row.employmentType}</div>
           <div className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
             <Calendar className="w-3 h-3" />
-            Joined {row.dateOfJoining}
+            Joined {row.dateOfJoining || '—'}
           </div>
         </div>
       ),
@@ -267,7 +322,7 @@ export const EmployeeListPage = () => {
             variant="ghost"
             size="sm"
             icon={Eye}
-            onClick={() => setViewingEmployee(row)}
+            onClick={() => handleOpenView(row)}
             className="text-slate-600 hover:text-indigo-600"
             title="View Details"
           >
@@ -324,39 +379,66 @@ export const EmployeeListPage = () => {
       </div>
 
       {/* Filter Bar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div>
-          <Input
-            placeholder="Search by name, email, code..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            icon={Search}
-          />
+      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div>
+            <Input
+              placeholder="Search by name, email, code..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              icon={Search}
+            />
+          </div>
+          <div>
+            <Select
+              value={orgFilter}
+              onChange={(e) => setOrgFilter(e.target.value)}
+              placeholder="All Organizations"
+              options={[
+                { value: '', label: 'All Organizations' },
+                ...metadata.organizations.map((o) => ({ value: o.id, label: o.name })),
+              ]}
+            />
+          </div>
+          <div>
+            <Select
+              value={deptFilter}
+              onChange={(e) => setDeptFilter(e.target.value)}
+              placeholder="All Departments"
+              options={[
+                { value: '', label: 'All Departments' },
+                ...metadata.departments.map((d) => ({ value: d.id, label: d.name })),
+              ]}
+            />
+          </div>
+          <div>
+            <Select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              placeholder="All Statuses"
+              options={[
+                { value: '', label: 'All Statuses' },
+                { value: 'Active', label: 'Active' },
+                { value: 'On Leave', label: 'On Leave' },
+                { value: 'Inactive', label: 'Inactive' },
+              ]}
+            />
+          </div>
         </div>
-        <div>
-          <Select
-            value={deptFilter}
-            onChange={(e) => setDeptFilter(e.target.value)}
-            placeholder="All Departments"
-            options={[
-              { value: '', label: 'All Departments' },
-              ...metadata.departments.map((d) => ({ value: d.id, label: d.name })),
-            ]}
-          />
-        </div>
-        <div>
-          <Select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            placeholder="All Statuses"
-            options={[
-              { value: '', label: 'All Statuses' },
-              { value: 'Active', label: 'Active' },
-              { value: 'On Leave', label: 'On Leave' },
-              { value: 'Inactive', label: 'Inactive' },
-            ]}
-          />
-        </div>
+
+        {hasActiveFilters && (
+          <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs text-slate-500">
+            <span>Filtered results active</span>
+            <button
+              type="button"
+              onClick={handleClearFilters}
+              className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800 font-medium"
+            >
+              <X className="w-3.5 h-3.5" />
+              Reset filters
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Reusable Data Table */}
@@ -525,7 +607,11 @@ export const EmployeeListPage = () => {
         title="Employee Profile"
         subtitle="Detailed employment record and organizational assignment"
       >
-        {viewingEmployee && (
+        {loadingViewProfile ? (
+          <div className="p-8">
+            <LoadingSpinner message="Refreshing employee record..." />
+          </div>
+        ) : viewingEmployee ? (
           <div className="space-y-6">
             <div className="flex items-center gap-4 p-4 rounded-2xl bg-indigo-50/50 border border-indigo-100">
               <div className="w-14 h-14 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-bold text-lg shadow-sm">
@@ -600,21 +686,46 @@ export const EmployeeListPage = () => {
                   <DollarSign className="w-3.5 h-3.5" />
                   Compensation
                 </div>
-                <div className="font-medium text-slate-800">
-                  {viewingEmployee.salary
-                    ? `$${Number(viewingEmployee.salary).toLocaleString()} / yr`
-                    : 'Confidential'}
+                <div className="font-medium text-slate-800 flex items-center gap-1.5">
+                  {canViewSalary(viewingEmployee) ? (
+                    viewingEmployee.salary ? (
+                      `$${Number(viewingEmployee.salary).toLocaleString()} / yr`
+                    ) : (
+                      'Not specified'
+                    )
+                  ) : (
+                    <span className="text-xs text-slate-500 inline-flex items-center gap-1 italic">
+                      <Lock className="w-3 h-3 text-slate-400" />
+                      Confidential
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
 
-            <div className="flex justify-end pt-2">
-              <Button variant="secondary" onClick={() => setViewingEmployee(null)}>
-                Close
-              </Button>
+            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+              <Can permission="employee:write">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={Edit2}
+                  onClick={() => {
+                    const empToEdit = viewingEmployee;
+                    setViewingEmployee(null);
+                    handleOpenEdit(empToEdit);
+                  }}
+                >
+                  Edit Profile
+                </Button>
+              </Can>
+              <div className="ml-auto">
+                <Button variant="primary" size="sm" onClick={() => setViewingEmployee(null)}>
+                  Close
+                </Button>
+              </div>
             </div>
           </div>
-        )}
+        ) : null}
       </Modal>
 
       {/* Delete Confirmation Dialog */}

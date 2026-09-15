@@ -1,7 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { orgService } from '../../services/orgService.js';
-import { Building2, Plus, Search, Edit2, Trash2, Globe, Phone, Mail, MapPin } from 'lucide-react';
+import {
+  Building2,
+  Plus,
+  Search,
+  Edit2,
+  Trash2,
+  Eye,
+  Globe,
+  Phone,
+  Mail,
+  MapPin,
+  Users,
+  Briefcase,
+} from 'lucide-react';
 import { DataTable } from '../../components/common/DataTable.jsx';
 import { Button } from '../../components/common/Button.jsx';
 import { Input } from '../../components/common/Input.jsx';
@@ -10,17 +23,25 @@ import { Badge } from '../../components/common/Badge.jsx';
 import { Modal } from '../../components/common/Modal.jsx';
 import { ConfirmDialog } from '../../components/common/ConfirmDialog.jsx';
 import { Alert } from '../../components/common/Alert.jsx';
+import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
 import { Can } from '../../components/rbac/Can.jsx';
+import { useToast } from '../../context/ToastContext.jsx';
 
 export const OrganizationListPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const toast = useToast();
+
   const [orgs, setOrgs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [error, setError] = useState(null);
 
-  // Modal States
+  // View Details Modal State
+  const [viewingOrg, setViewingOrg] = useState(null);
+  const [loadingDetails, setLoadingDetails] = useState(false);
+
+  // Add/Edit Modal States
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingOrg, setEditingOrg] = useState(null);
   const [formData, setFormData] = useState({
@@ -50,7 +71,7 @@ export const OrganizationListPage = () => {
       setError(err.message || 'Failed to fetch organizations.');
     } finally {
       setLoading(false);
-    }
+      }
   };
 
   useEffect(() => {
@@ -64,6 +85,19 @@ export const OrganizationListPage = () => {
       setSearchParams({});
     }
   }, [searchParams]);
+
+  const handleOpenView = async (org) => {
+    try {
+      setLoadingDetails(true);
+      setViewingOrg(org);
+      const fullDetails = await orgService.getOrganizationById(org.id);
+      setViewingOrg(fullDetails);
+    } catch (err) {
+      toast.error(err.message || 'Failed to fetch organization details.');
+    } finally {
+      setLoadingDetails(false);
+    }
+  };
 
   const handleOpenCreate = () => {
     setEditingOrg(null);
@@ -120,8 +154,10 @@ export const OrganizationListPage = () => {
       setIsSubmitting(true);
       if (editingOrg) {
         await orgService.updateOrganization(editingOrg.id, formData);
+        toast.success(`Organization '${formData.name}' updated successfully.`);
       } else {
         await orgService.createOrganization(formData);
+        toast.success(`Organization '${formData.name}' created successfully.`);
       }
       setIsFormOpen(false);
       await fetchOrgs();
@@ -141,10 +177,11 @@ export const OrganizationListPage = () => {
     try {
       setIsDeleting(true);
       await orgService.deleteOrganization(deleteTarget.id);
+      toast.success(`Organization '${deleteTarget.name}' deactivated successfully.`);
       setDeleteTarget(null);
       await fetchOrgs();
     } catch (err) {
-      alert(err.message || 'Failed to delete organization.');
+      toast.error(err.message || 'Failed to delete organization.');
     } finally {
       setIsDeleting(false);
     }
@@ -206,6 +243,16 @@ export const OrganizationListPage = () => {
       cellClassName: 'text-right',
       render: (row) => (
         <div className="flex items-center justify-end gap-1.5">
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={Eye}
+            onClick={() => handleOpenView(row)}
+            className="text-slate-600 hover:text-indigo-600"
+            title="View Details"
+          >
+            View
+          </Button>
           <Can permission="org:write">
             <Button
               variant="ghost"
@@ -213,6 +260,7 @@ export const OrganizationListPage = () => {
               icon={Edit2}
               onClick={() => handleOpenEdit(row)}
               className="text-slate-600 hover:text-indigo-600"
+              title="Edit Organization"
             >
               Edit
             </Button>
@@ -224,6 +272,7 @@ export const OrganizationListPage = () => {
               icon={Trash2}
               onClick={() => setDeleteTarget(row)}
               className="text-slate-400 hover:text-rose-600 hover:bg-rose-50"
+              title="Delete Organization"
             >
               Delete
             </Button>
@@ -287,6 +336,174 @@ export const OrganizationListPage = () => {
         emptyTitle="No organizations found"
         emptyDescription="Try adjusting your search filters or register a new organization."
       />
+
+      {/* View Organization Details Modal */}
+      <Modal
+        isOpen={!!viewingOrg}
+        onClose={() => setViewingOrg(null)}
+        maxWidth="max-w-2xl"
+        title={viewingOrg?.name || 'Organization Details'}
+        subtitle="Corporate profile, contact points, and departmental breakdown."
+      >
+        {loadingDetails ? (
+          <div className="p-8">
+            <LoadingSpinner message="Fetching organization dossier..." />
+          </div>
+        ) : viewingOrg ? (
+          <div className="space-y-6">
+            {/* Header info badge card */}
+            <div className="flex items-center justify-between p-4 rounded-2xl bg-indigo-50/60 border border-indigo-100">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-lg shadow-sm">
+                  <Building2 className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-base font-bold text-slate-900">{viewingOrg.name}</h4>
+                    <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-indigo-100 text-indigo-700">
+                      {viewingOrg.code}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Registered entity • ID: {viewingOrg.id}
+                  </p>
+                </div>
+              </div>
+              <Badge>{viewingOrg.status}</Badge>
+            </div>
+
+            {/* Quick Metrics */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 flex items-center gap-3">
+                <div className="p-2.5 rounded-lg bg-indigo-100 text-indigo-600">
+                  <Users className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-xl font-bold text-slate-900">
+                    {viewingOrg.stats?.employeesCount || 0}
+                  </div>
+                  <div className="text-xs text-slate-500">Active Headcount</div>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 flex items-center gap-3">
+                <div className="p-2.5 rounded-lg bg-amber-100 text-amber-600">
+                  <Briefcase className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-xl font-bold text-slate-900">
+                    {viewingOrg.departments?.length || viewingOrg.stats?.departmentsCount || 0}
+                  </div>
+                  <div className="text-xs text-slate-500">Departments Established</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Contact & Location Details */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+              <div className="p-3 rounded-xl bg-white border border-slate-200/80">
+                <div className="text-xs text-slate-400 flex items-center gap-1.5 mb-1">
+                  <Mail className="w-3.5 h-3.5" />
+                  Official Email
+                </div>
+                <div className="font-medium text-slate-800 break-all">{viewingOrg.email}</div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-white border border-slate-200/80">
+                <div className="text-xs text-slate-400 flex items-center gap-1.5 mb-1">
+                  <Phone className="w-3.5 h-3.5" />
+                  Telephone Contact
+                </div>
+                <div className="font-medium text-slate-800">{viewingOrg.phone || '—'}</div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-white border border-slate-200/80">
+                <div className="text-xs text-slate-400 flex items-center gap-1.5 mb-1">
+                  <Globe className="w-3.5 h-3.5" />
+                  Website
+                </div>
+                <div>
+                  {viewingOrg.website ? (
+                    <a
+                      href={viewingOrg.website}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-indigo-600 font-medium hover:underline inline-flex items-center gap-1"
+                    >
+                      {viewingOrg.website}
+                    </a>
+                  ) : (
+                    <span className="text-slate-500">—</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-white border border-slate-200/80">
+                <div className="text-xs text-slate-400 flex items-center gap-1.5 mb-1">
+                  <MapPin className="w-3.5 h-3.5" />
+                  Headquarters
+                </div>
+                <div className="font-medium text-slate-800">{viewingOrg.address || '—'}</div>
+              </div>
+            </div>
+
+            {/* Departments Breakdown List */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h5 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Associated Departments ({viewingOrg.departments?.length || 0})
+                </h5>
+              </div>
+
+              {viewingOrg.departments && viewingOrg.departments.length > 0 ? (
+                <div className="border border-slate-200/80 rounded-xl overflow-hidden divide-y divide-slate-100 bg-white">
+                  {viewingOrg.departments.map((dept) => (
+                    <div key={dept.id} className="p-3 flex items-center justify-between text-xs">
+                      <div>
+                        <span className="font-semibold text-slate-800">{dept.name}</span>
+                        <span className="ml-2 font-mono text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
+                          {dept.code}
+                        </span>
+                        {dept.description && (
+                          <p className="text-slate-500 mt-0.5">{dept.description}</p>
+                        )}
+                      </div>
+                      <Badge variant="brand" size="sm">Active</Badge>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 text-center text-xs text-slate-500">
+                  No departments currently linked to this organization.
+                </div>
+              )}
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+              <Can permission="org:write">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={Edit2}
+                  onClick={() => {
+                    const orgToEdit = viewingOrg;
+                    setViewingOrg(null);
+                    handleOpenEdit(orgToEdit);
+                  }}
+                >
+                  Edit Profile
+                </Button>
+              </Can>
+              <div className="ml-auto">
+                <Button variant="primary" size="sm" onClick={() => setViewingOrg(null)}>
+                  Close
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
 
       {/* Add/Edit Organization Modal */}
       <Modal
