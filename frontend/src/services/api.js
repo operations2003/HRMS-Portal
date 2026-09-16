@@ -6,9 +6,10 @@ const BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 export const apiClient = async (endpoint, options = {}) => {
   const token = localStorage.getItem('hrms_token');
+  const isFormData = options.body instanceof FormData;
 
   const headers = {
-    'Content-Type': 'application/json',
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...options.headers,
   };
@@ -18,7 +19,7 @@ export const apiClient = async (endpoint, options = {}) => {
     headers,
   };
 
-  if (config.body && typeof config.body === 'object') {
+  if (!isFormData && config.body && typeof config.body === 'object') {
     config.body = JSON.stringify(config.body);
   }
 
@@ -53,5 +54,8 @@ export const http = {
   get: (endpoint, options) => apiClient(endpoint, { method: 'GET', ...options }),
   post: (endpoint, body, options) => apiClient(endpoint, { method: 'POST', body, ...options }),
   put: (endpoint, body, options) => apiClient(endpoint, { method: 'PUT', body, ...options }),
+  patch: (endpoint, body, options) => apiClient(endpoint, { method: 'PATCH', body, ...options }),
   delete: (endpoint, options) => apiClient(endpoint, { method: 'DELETE', ...options }),
+  upload: (endpoint, formData, options) =>
+    apiClient(endpoint, { method: 'POST', body: formData, ...options }),
 };

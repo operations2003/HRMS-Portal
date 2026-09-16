@@ -22,9 +22,23 @@ app.use(
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'x-api-key',
+      'x-ats-key',
+      'idempotency-key',
+      'Idempotency-Key',
+      'x-idempotency-key',
+      'X-Idempotency-Key',
+      'x-request-id',
+      'X-Request-Id',
+    ],
   })
 );
+
+// Serve uploads directory statically for documents
+app.use('/uploads', express.static('uploads'));
 
 // Request Logging
 if (config.nodeEnv !== 'test') {

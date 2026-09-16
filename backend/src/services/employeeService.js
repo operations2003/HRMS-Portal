@@ -1,5 +1,9 @@
 import { employeeRepository } from '../repositories/employeeRepository.js';
 import { orgRepository } from '../repositories/orgRepository.js';
+import { userRepository } from '../repositories/userRepository.js';
+import { roleRepository } from '../repositories/roleRepository.js';
+import { hashPassword } from '../utils/passwordUtils.js';
+import { pool } from '../config/db.js';
 
 /**
  * Handle PostgreSQL specific error codes for Employee domain
@@ -100,8 +104,71 @@ export const employeeService = {
       }
     }
 
+    // 4. Handle portal user account and password credentials if provided
+    let userId = data.userId || null;
+    if (data.password) {
+      // Resolve role
+      let role = null;
+      if (data.roleId) {
+        role = (await roleRepository.findRoleById(data.roleId)) || (await roleRepository.findRoleByName(data.roleId));
+      }
+      if (!role) {
+        role = (await roleRepository.findRoleByName('Employee')) || (await roleRepository.findRoleByName('EMPLOYEE'));
+      }
+      if (!role) {
+        const allRoles = await roleRepository.findAllRoles();
+        role = allRoles.find((r) => r.name.toLowerCase() === 'employee') || allRoles[0];
+      }
+
+      const passwordHash = await hashPassword(data.password);
+
+      // Check if user account with this email already exists
+      const existingUser = await userRepository.findByEmail(data.email);
+      if (existingUser) {
+        // Check if already linked to another employee
+        const empCheck = await pool.query(
+          'SELECT id, first_name, last_name FROM employees WHERE user_id = $1 LIMIT 1;',
+          [existingUser.id]
+        );
+        if (empCheck.rows.length > 0) {
+          const linkedEmp = empCheck.rows[0];
+          const error = new Error(
+            `A user account with email '${data.email}' is already linked to employee '${linkedEmp.first_name} ${linkedEmp.last_name}'.`
+          );
+          error.statusCode = 409;
+          throw error;
+        }
+
+        // Update user account credentials & active status
+        await userRepository.update(existingUser.id, {
+          passwordHash,
+          status: data.status || 'Active',
+          roleId: role ? role.id : existingUser.roleId,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          orgId: data.orgId,
+        });
+        userId = existingUser.id;
+      } else {
+        // Create new user login account
+        const newUser = await userRepository.create({
+          orgId: data.orgId,
+          roleId: role ? role.id : 'role-employee',
+          email: data.email,
+          passwordHash,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          status: data.status || 'Active',
+        });
+        userId = newUser.id;
+      }
+    }
+
     try {
-      return await employeeRepository.create(data);
+      return await employeeRepository.create({
+        ...data,
+        userId,
+      });
     } catch (err) {
       throw handlePostgresError(err, data);
     }
@@ -135,8 +202,63 @@ export const employeeService = {
       }
     }
 
+    // Handle password update and linked user synchronization
+    let userId = existing.userId;
+    if (data.password) {
+      const passwordHash = await hashPassword(data.password);
+      let user = null;
+      if (userId) {
+        user = await userRepository.findById(userId);
+      }
+      if (!user) {
+        user = await userRepository.findByEmail(data.email || existing.email);
+      }
+
+      if (user) {
+        await userRepository.update(user.id, {
+          passwordHash,
+          email: data.email || user.email,
+          firstName: data.firstName || user.firstName,
+          lastName: data.lastName || user.lastName,
+          status: data.status || user.status,
+          ...(data.roleId ? { roleId: data.roleId } : {}),
+        });
+        userId = user.id;
+      } else {
+        let role = null;
+        if (data.roleId) {
+          role = (await roleRepository.findRoleById(data.roleId)) || (await roleRepository.findRoleByName(data.roleId));
+        }
+        if (!role) {
+          role = (await roleRepository.findRoleByName('Employee')) || (await roleRepository.findRoleByName('EMPLOYEE'));
+        }
+        const newUser = await userRepository.create({
+          orgId,
+          roleId: role ? role.id : 'role-employee',
+          email: data.email || existing.email,
+          passwordHash,
+          firstName: data.firstName || existing.firstName,
+          lastName: data.lastName || existing.lastName,
+          status: data.status || existing.status || 'Active',
+        });
+        userId = newUser.id;
+      }
+    } else if (userId && (data.email || data.firstName || data.lastName || data.status || data.roleId)) {
+      // Sync basic profile updates to user account if linked
+      await userRepository.update(userId, {
+        ...(data.email ? { email: data.email } : {}),
+        ...(data.firstName ? { firstName: data.firstName } : {}),
+        ...(data.lastName ? { lastName: data.lastName } : {}),
+        ...(data.status ? { status: data.status } : {}),
+        ...(data.roleId ? { roleId: data.roleId } : {}),
+      });
+    }
+
     try {
-      return await employeeRepository.update(id, data);
+      return await employeeRepository.update(id, {
+        ...data,
+        userId,
+      });
     } catch (err) {
       throw handlePostgresError(err, { ...existing, ...data });
     }

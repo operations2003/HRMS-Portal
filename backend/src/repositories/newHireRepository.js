@@ -12,6 +12,25 @@ export const mapNewHireRow = (row, includeDecrypted = false) => {
     nationalIdPlain = decryptField(row.national_id_number);
   }
 
+  const tracker =
+    typeof row.readiness_tracker === 'string'
+      ? JSON.parse(row.readiness_tracker)
+      : row.readiness_tracker || {};
+
+  const itSetup = tracker.it_setup || {
+    workEmail: '',
+    emailProvisioned: tracker.itSetup || false,
+    systemAccess: ['HRMS'],
+    accounts: {},
+    hardwareAssigned: tracker.workstationReady || false,
+    laptopModel: '',
+    assetTag: '',
+    status: tracker.itSetup ? 'COMPLETED' : 'PENDING',
+    notes: '',
+    updatedAt: null,
+    updatedBy: null,
+  };
+
   return {
     id: row.id,
     orgId: row.org_id,
@@ -22,7 +41,11 @@ export const mapNewHireRow = (row, includeDecrypted = false) => {
     fullName: `${row.first_name} ${row.last_name}`.trim(),
     email: row.email,
     phone: row.phone || '',
-    dateOfJoining: row.date_of_joining ? (row.date_of_joining.toISOString ? row.date_of_joining.toISOString().split('T')[0] : row.date_of_joining) : '',
+    dateOfJoining: row.date_of_joining
+      ? row.date_of_joining.toISOString
+        ? row.date_of_joining.toISOString().split('T')[0]
+        : String(row.date_of_joining).split('T')[0]
+      : '',
     deptId: row.dept_id || null,
     desigId: row.desig_id || null,
     managerId: row.manager_id || null,
@@ -30,7 +53,8 @@ export const mapNewHireRow = (row, includeDecrypted = false) => {
     lifecycleState: row.lifecycle_state,
     onboardingStatus: row.onboarding_status,
     bgvStatus: row.bgv_status,
-    readinessTracker: typeof row.readiness_tracker === 'string' ? JSON.parse(row.readiness_tracker) : (row.readiness_tracker || {}),
+    readinessTracker: tracker,
+    itSetup,
     nationalIdType: row.national_id_type || 'PAN',
     nationalIdMasked: nationalIdPlain ? maskNationalId(nationalIdPlain) : '',
     nationalId: includeDecrypted ? nationalIdPlain : undefined,
@@ -40,7 +64,9 @@ export const mapNewHireRow = (row, includeDecrypted = false) => {
     organization: row.o_id ? { id: row.o_id, name: row.o_name, code: row.o_code } : null,
     department: row.d_id ? { id: row.d_id, name: row.d_name, code: row.d_code } : null,
     designation: row.ds_id ? { id: row.ds_id, title: row.ds_title, code: row.ds_code } : null,
-    manager: row.m_id ? { id: row.m_id, name: `${row.m_first_name} ${row.m_last_name}`.trim(), code: row.m_code } : null,
+    manager: row.m_id
+      ? { id: row.m_id, name: `${row.m_first_name} ${row.m_last_name}`.trim(), code: row.m_code }
+      : null,
   };
 };
 
@@ -146,6 +172,19 @@ export const newHireRepository = {
       idCardGenerated: false,
       orientationScheduled: false,
       completionPercentage: 0,
+      it_setup: {
+        workEmail: '',
+        emailProvisioned: false,
+        systemAccess: ['HRMS'],
+        accounts: {},
+        hardwareAssigned: false,
+        laptopModel: '',
+        assetTag: '',
+        status: 'PENDING',
+        notes: '',
+        updatedAt: new Date().toISOString(),
+        updatedBy: 'ATS_Handoff',
+      },
     };
 
     const values = [
@@ -200,7 +239,7 @@ export const newHireRepository = {
     if (updates.length === 0) return this.findById(id);
 
     values.push(id);
-    const sql = `UPDATE new_hires SET ${updates.join(', ')} WHERE id = $${idx} RETURNING id;`;
+    const sql = `UPDATE new_hires SET ${updates.join(', ')}, updated_at = NOW() WHERE id = $${idx} RETURNING id;`;
     await query(sql, values);
     return this.findById(id);
   },
@@ -211,7 +250,7 @@ export const newHireRepository = {
   async updateReadinessTracker(id, checklist) {
     const text = `
       UPDATE new_hires 
-      SET readiness_tracker = $1
+      SET readiness_tracker = $1, updated_at = NOW()
       WHERE id = $2
       RETURNING id;
     `;
@@ -220,14 +259,118 @@ export const newHireRepository = {
   },
 
   /**
+   * Update individual checklist items and recalculate completion percentage
+   */
+  async updateChecklist(id, updates = {}) {
+    const existing = await this.findById(id);
+    if (!existing) return null;
+
+    const tracker = existing.readinessTracker || {};
+    const merged = { ...tracker };
+
+    const CHECKLIST_KEYS = [
+      'itSetup',
+      'workstationReady',
+      'welcomeKitDispatched',
+      'idCardGenerated',
+      'orientationScheduled',
+    ];
+
+    for (const [key, val] of Object.entries(updates)) {
+      if (typeof val === 'boolean') {
+        merged[key] = val;
+      }
+    }
+
+    // Recalculate completion percentage
+    const completedCount = CHECKLIST_KEYS.filter((k) => merged[k] === true).length;
+    merged.completionPercentage = Math.round((completedCount / CHECKLIST_KEYS.length) * 100);
+
+    // Synchronize onboarding status if completed
+    let newStatus = existing.onboardingStatus;
+    if (merged.completionPercentage === 100 && (existing.onboardingStatus === 'IN_PROGRESS' || existing.onboardingStatus === 'NOT_STARTED')) {
+      newStatus = 'READY_FOR_JOINING';
+    }
+
+    await query(
+      'UPDATE new_hires SET readiness_tracker = $1, onboarding_status = $2, updated_at = NOW() WHERE id = $3;',
+      [JSON.stringify(merged), newStatus, id]
+    );
+
+    return this.findById(id);
+  },
+
+  /**
+   * Get IT setup status and configuration
+   */
+  async getItSetup(id) {
+    const existing = await this.findById(id);
+    if (!existing) return null;
+    return existing.itSetup;
+  },
+
+  /**
+   * Update IT setup provisioning status
+   */
+  async updateItSetup(id, itData = {}, updatedBy = 'IT Admin') {
+    const existing = await this.findById(id);
+    if (!existing) return null;
+
+    const tracker = existing.readinessTracker || {};
+    const currentIt = tracker.it_setup || {};
+
+    const updatedIt = {
+      ...currentIt,
+      ...itData,
+      updatedAt: new Date().toISOString(),
+      updatedBy: updatedBy || currentIt.updatedBy || 'IT Admin',
+    };
+
+    // Auto-sync itSetup and workstationReady flags
+    if (updatedIt.status === 'COMPLETED' || updatedIt.emailProvisioned) {
+      tracker.itSetup = true;
+    }
+    if (updatedIt.hardwareAssigned) {
+      tracker.workstationReady = true;
+    }
+
+    tracker.it_setup = updatedIt;
+
+    // Recalculate completion percentage
+    const CHECKLIST_KEYS = [
+      'itSetup',
+      'workstationReady',
+      'welcomeKitDispatched',
+      'idCardGenerated',
+      'orientationScheduled',
+    ];
+    const completedCount = CHECKLIST_KEYS.filter((k) => tracker[k] === true).length;
+    tracker.completionPercentage = Math.round((completedCount / CHECKLIST_KEYS.length) * 100);
+
+    let newStatus = existing.onboardingStatus;
+    if (tracker.completionPercentage === 100 && (existing.onboardingStatus === 'IN_PROGRESS' || existing.onboardingStatus === 'NOT_STARTED')) {
+      newStatus = 'READY_FOR_JOINING';
+    }
+
+    await query(
+      'UPDATE new_hires SET readiness_tracker = $1, onboarding_status = $2, updated_at = NOW() WHERE id = $3;',
+      [JSON.stringify(tracker), newStatus, id]
+    );
+
+    const updated = await this.findById(id);
+    return updated ? updated.itSetup : null;
+  },
+
+  /**
    * Convert Onboarding New Hire to Active Employee within an atomic transaction
+   * Links to existing employee if found by email, avoiding duplicate profiles in Employee Master
    */
   async convertToEmployee(newHireId, employeeData = {}) {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
 
-      // 1. Fetch current new_hire record inside transaction
+      // 1. Fetch current new_hire record inside transaction with row lock
       const nhRes = await client.query('SELECT * FROM new_hires WHERE id = $1 FOR UPDATE;', [newHireId]);
       if (nhRes.rows.length === 0) {
         throw new Error(`New hire record ${newHireId} not found`);
@@ -238,53 +381,77 @@ export const newHireRepository = {
         throw new Error(`Candidate is already converted to employee (Employee ID: ${nh.employee_id})`);
       }
 
-      // 2. Generate unique employee code if not provided
-      let employeeCode = employeeData.employeeCode;
-      if (!employeeCode) {
-        const countRes = await client.query('SELECT COUNT(*)::int AS count FROM employees WHERE org_id = $1;', [nh.org_id]);
-        const seq = (countRes.rows[0].count + 1).toString().padStart(4, '0');
-        const year = new Date().getFullYear();
-        employeeCode = `EMP-${year}-${seq}`;
+      // 2. Check if an active employee profile with this candidate's email already exists in this organization
+      const existingEmpRes = await client.query(
+        'SELECT * FROM employees WHERE org_id = $1 AND LOWER(email) = LOWER($2);',
+        [nh.org_id, nh.email]
+      );
+
+      let empId;
+      let employeeCode;
+      let employeeRecord;
+      let isExistingProfileLinked = false;
+
+      if (existingEmpRes.rows.length > 0) {
+        // Link to existing employee profile without creating a duplicate record
+        employeeRecord = existingEmpRes.rows[0];
+        empId = employeeRecord.id;
+        employeeCode = employeeRecord.employee_code;
+        isExistingProfileLinked = true;
+      } else {
+        // Generate unique employee code if not provided
+        employeeCode = employeeData.employeeCode;
+        if (!employeeCode) {
+          const countRes = await client.query('SELECT COUNT(*)::int AS count FROM employees WHERE org_id = $1;', [
+            nh.org_id,
+          ]);
+          const seq = (countRes.rows[0].count + 1).toString().padStart(4, '0');
+          const year = new Date().getFullYear();
+          employeeCode = `EMP-${year}-${seq}`;
+        }
+
+        // Ensure unique code
+        const codeCheck = await client.query(
+          'SELECT id FROM employees WHERE org_id = $1 AND employee_code = $2;',
+          [nh.org_id, employeeCode]
+        );
+        if (codeCheck.rows.length > 0) {
+          employeeCode = `EMP-${Date.now().toString().slice(-6)}`;
+        }
+
+        // Create new employee record in employees table
+        empId = `emp_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+        const empSql = `
+          INSERT INTO employees (
+            id, org_id, dept_id, desig_id, employee_code, first_name, last_name,
+            email, phone, date_of_joining, employment_type, status, salary
+          ) VALUES (
+            $1, $2, $3, $4, $5, $6, $7,
+            $8, $9, $10, $11, $12, $13
+          ) RETURNING *;
+        `;
+
+        const empValues = [
+          empId,
+          nh.org_id,
+          employeeData.deptId || nh.dept_id,
+          employeeData.desigId || nh.desig_id,
+          employeeCode,
+          nh.first_name,
+          nh.last_name,
+          nh.email,
+          nh.phone || '',
+          employeeData.dateOfJoining || nh.date_of_joining,
+          employeeData.employmentType || 'Full-Time',
+          'Active',
+          employeeData.salary || 0.0,
+        ];
+
+        const empInsertRes = await client.query(empSql, empValues);
+        employeeRecord = empInsertRes.rows[0];
       }
 
-      // Check unique employee code
-      const codeCheck = await client.query('SELECT id FROM employees WHERE org_id = $1 AND employee_code = $2;', [nh.org_id, employeeCode]);
-      if (codeCheck.rows.length > 0) {
-        employeeCode = `EMP-${Date.now().toString().slice(-6)}`;
-      }
-
-      // 3. Create employee record in employees table
-      const empId = `emp_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-      const empSql = `
-        INSERT INTO employees (
-          id, org_id, dept_id, desig_id, employee_code, first_name, last_name,
-          email, phone, date_of_joining, employment_type, status, salary
-        ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7,
-          $8, $9, $10, $11, $12, $13
-        ) RETURNING *;
-      `;
-
-      const empValues = [
-        empId,
-        nh.org_id,
-        employeeData.deptId || nh.dept_id,
-        employeeData.desigId || nh.desig_id,
-        employeeCode,
-        nh.first_name,
-        nh.last_name,
-        nh.email,
-        nh.phone || '',
-        employeeData.dateOfJoining || nh.date_of_joining,
-        employeeData.employmentType || 'Full-Time',
-        'Active',
-        employeeData.salary || 0.0,
-      ];
-
-      const empInsertRes = await client.query(empSql, empValues);
-      const createdEmployee = empInsertRes.rows[0];
-
-      // 4. Update new_hires table state to CONVERTED_TO_EMPLOYEE and link employee_id
+      // 3. Update new_hires table state to CONVERTED_TO_EMPLOYEE and link employee_id
       const nhUpdateSql = `
         UPDATE new_hires
         SET 
@@ -296,20 +463,24 @@ export const newHireRepository = {
       `;
       await client.query(nhUpdateSql, [empId, newHireId]);
 
-      // 5. If documents exist under owner_type='NEW_HIRE', link to new employee as well
-      await client.query(`
+      // 4. If documents exist under owner_type='NEW_HIRE', link to employee profile
+      await client.query(
+        `
         UPDATE document_vault
         SET owner_type = 'EMPLOYEE', owner_id = $1, updated_at = NOW()
         WHERE owner_type = 'NEW_HIRE' AND owner_id = $2;
-      `, [empId, newHireId]);
+      `,
+        [empId, newHireId]
+      );
 
       await client.query('COMMIT');
 
       return {
         success: true,
+        isExistingProfileLinked,
         employeeId: empId,
         employeeCode: employeeCode,
-        employee: createdEmployee,
+        employee: employeeRecord,
       };
     } catch (err) {
       await client.query('ROLLBACK');
@@ -322,7 +493,22 @@ export const newHireRepository = {
   /**
    * Search / filter new hires with pagination
    */
-  async findAll({ orgId, lifecycleState, onboardingStatus, bgvStatus, search, page = 1, limit = 20 } = {}) {
+  async findAll({
+    orgId,
+    status,
+    lifecycleState,
+    onboardingStatus,
+    bgvStatus,
+    joiningDate,
+    dateOfJoining,
+    joiningDateFrom,
+    joiningDateTo,
+    deptId,
+    department,
+    search,
+    page = 1,
+    limit = 20,
+  } = {}) {
     const conditions = [];
     const values = [];
     let idx = 1;
@@ -338,11 +524,39 @@ export const newHireRepository = {
     if (onboardingStatus) {
       conditions.push(`nh.onboarding_status = $${idx++}`);
       values.push(onboardingStatus);
+    } else if (status) {
+      conditions.push(`(nh.onboarding_status = $${idx} OR nh.lifecycle_state = $${idx})`);
+      values.push(status);
+      idx++;
     }
     if (bgvStatus) {
       conditions.push(`nh.bgv_status = $${idx++}`);
       values.push(bgvStatus);
     }
+
+    const jd = joiningDate || dateOfJoining;
+    if (jd) {
+      conditions.push(`nh.date_of_joining = $${idx++}`);
+      values.push(jd);
+    }
+    if (joiningDateFrom) {
+      conditions.push(`nh.date_of_joining >= $${idx++}`);
+      values.push(joiningDateFrom);
+    }
+    if (joiningDateTo) {
+      conditions.push(`nh.date_of_joining <= $${idx++}`);
+      values.push(joiningDateTo);
+    }
+
+    if (deptId) {
+      conditions.push(`nh.dept_id = $${idx++}`);
+      values.push(deptId);
+    } else if (department) {
+      conditions.push(`(d.name ILIKE $${idx} OR d.code ILIKE $${idx})`);
+      values.push(`%${department}%`);
+      idx++;
+    }
+
     if (search) {
       conditions.push(`(
         nh.first_name ILIKE $${idx} OR
@@ -356,7 +570,12 @@ export const newHireRepository = {
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-    const countSql = `SELECT COUNT(*)::int AS total FROM new_hires nh ${whereClause};`;
+    const countSql = `
+      SELECT COUNT(*)::int AS total 
+      FROM new_hires nh 
+      LEFT JOIN departments d ON d.id = nh.dept_id
+      ${whereClause};
+    `;
     const countRes = await query(countSql, values);
     const total = countRes.rows[0]?.total || 0;
 
@@ -383,4 +602,3 @@ export const newHireRepository = {
     };
   },
 };
-

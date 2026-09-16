@@ -29,6 +29,12 @@ export const Sidebar = ({ isOpen, onClose }) => {
       permission: 'org:read',
     },
     {
+      name: 'Onboarding',
+      path: '/onboarding',
+      icon: UserCheck,
+      permission: 'onboarding:read',
+    },
+    {
       name: 'Employees',
       path: '/employees',
       icon: Users,

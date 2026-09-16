@@ -30,6 +30,21 @@ export const validateAddDocument = (body) => {
   return errors;
 };
 
+export const validateDocumentUploadMetadata = (body) => {
+  const errors = [];
+  const allowedCategories = ['IDENTITY', 'TAX', 'EDUCATION', 'OFFER', 'EXPERIENCE', 'MEDICAL', 'OTHER'];
+
+  if (body.category && !allowedCategories.includes(body.category.trim().toUpperCase())) {
+    errors.push(`Invalid category. Allowed: ${allowedCategories.join(', ')}`);
+  }
+
+  if (body.title && typeof body.title === 'string' && body.title.trim().length > 255) {
+    errors.push('Document title must not exceed 255 characters.');
+  }
+
+  return errors;
+};
+
 export const validateVerifyDocument = (body) => {
   const errors = [];
   const allowed = ['APPROVED', 'REJECTED', 'PENDING'];
@@ -46,4 +61,3 @@ export const validateVerifyDocument = (body) => {
 
   return errors;
 };
-

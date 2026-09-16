@@ -1,6 +1,8 @@
 import { query } from '../config/db.js';
 import { newHireRepository } from '../repositories/newHireRepository.js';
+import { documentRepository } from '../repositories/documentRepository.js';
 import { encryptField, hashDeterministic } from '../utils/cryptoUtils.js';
+import { logger } from '../utils/logger.js';
 
 export const atsIntegrationService = {
   /**
@@ -8,7 +10,7 @@ export const atsIntegrationService = {
    * Validates incoming candidate against both new_hires and employees tables.
    *
    * @param {Object} payload
-   * @returns {Promise<{ isDuplicate: boolean, isIdempotent: boolean, conflictReason?: string, record?: Object }>}
+   * @returns {Promise<{ isDuplicate: boolean, isIdempotent: boolean, conflictReason?: string, record?: Object, existingType?: string, existingId?: string }>}
    */
   async checkDuplicates({ orgId, atsCandidateId, email, nationalId }) {
     const normalizedEmail = (email || '').toLowerCase().trim();
@@ -76,9 +78,13 @@ export const atsIntegrationService = {
    * Core Handoff Data Handler receiving candidate payload from ATS (Portal 2)
    *
    * @param {Object} rawPayload
-   * @returns {Promise<{ status: string, code: number, message: string, record: Object, isIdempotent: boolean }>}
+   * @param {Object} contextOptions (headers, requestId, etc.)
+   * @returns {Promise<{ status: string, code: number, message: string, record: Object, isIdempotent: boolean, offerDocuments?: Array }>}
    */
-  async processHandoff(rawPayload) {
+  async processHandoff(rawPayload, contextOptions = {}) {
+    const startTime = Date.now();
+    const requestId = contextOptions.requestId || contextOptions.idempotencyKey || `req_${Date.now()}`;
+
     const {
       atsCandidateId,
       atsJobId = '',
@@ -90,45 +96,60 @@ export const atsIntegrationService = {
       dateOfJoining,
       deptId,
       departmentName,
+      department,
       desigId,
       designationTitle,
+      jobTitle,
       managerId,
       location = '',
       nationalIdType = 'PAN',
       nationalId = '',
+      offerDocuments = [],
+      compensationRef,
+      salary,
     } = rawPayload;
+
+    logger.info('ATS-HANDOFF', `Processing candidate handoff for ${email}`, {
+      requestId,
+      atsCandidateId,
+      orgId,
+    });
 
     // 1. Verify Organization exists
     const orgRes = await query('SELECT id, name, status FROM organizations WHERE id = $1;', [orgId]);
     if (orgRes.rows.length === 0) {
       const err = new Error(`Organization with ID '${orgId}' does not exist.`);
       err.statusCode = 404;
+      logger.error('ATS-HANDOFF', 'Organization not found', err, { requestId, orgId });
       throw err;
     }
     if (orgRes.rows[0].status !== 'Active') {
       const err = new Error(`Organization '${orgRes.rows[0].name}' is currently inactive.`);
       err.statusCode = 400;
+      logger.error('ATS-HANDOFF', 'Organization inactive', err, { requestId, orgId });
       throw err;
     }
 
-    // 2. Resolve Department if departmentName provided without deptId
+    // 2. Resolve Department if name provided without deptId
     let resolvedDeptId = deptId || null;
-    if (!resolvedDeptId && departmentName) {
+    const targetDeptName = departmentName || department;
+    if (!resolvedDeptId && targetDeptName) {
       const deptRes = await query(
         'SELECT id FROM departments WHERE org_id = $1 AND LOWER(name) = LOWER($2) LIMIT 1;',
-        [orgId, departmentName.trim()]
+        [orgId, targetDeptName.trim()]
       );
       if (deptRes.rows.length > 0) {
         resolvedDeptId = deptRes.rows[0].id;
       }
     }
 
-    // 3. Resolve Designation if designationTitle provided without desigId
+    // 3. Resolve Designation if title provided without desigId
     let resolvedDesigId = desigId || null;
-    if (!resolvedDesigId && designationTitle) {
+    const targetDesigTitle = designationTitle || jobTitle;
+    if (!resolvedDesigId && targetDesigTitle) {
       const desigRes = await query(
         'SELECT id FROM designations WHERE org_id = $1 AND LOWER(title) = LOWER($2) LIMIT 1;',
-        [orgId, designationTitle.trim()]
+        [orgId, targetDesigTitle.trim()]
       );
       if (desigRes.rows.length > 0) {
         resolvedDesigId = desigRes.rows[0].id;
@@ -140,7 +161,7 @@ export const atsIntegrationService = {
     if (resolvedManagerId) {
       const mgrRes = await query('SELECT id FROM employees WHERE org_id = $1 AND id = $2;', [orgId, resolvedManagerId]);
       if (mgrRes.rows.length === 0) {
-        resolvedManagerId = null; // Don't block handoff if manager ID doesn't exist, keep null
+        resolvedManagerId = null;
       }
     }
 
@@ -154,24 +175,40 @@ export const atsIntegrationService = {
 
     // Case A: Idempotent Retry (Candidate already handed off)
     if (duplicateCheck.isDuplicate && duplicateCheck.isIdempotent) {
+      logger.info('ATS-HANDOFF', `Idempotent replay for candidate ${atsCandidateId}`, {
+        requestId,
+        durationMs: Date.now() - startTime,
+      });
+
+      // Fetch attached documents if any
+      const docs = await documentRepository.findByOwner('NEW_HIRE', duplicateCheck.record.id);
+
       return {
         status: 'SUCCESS_IDEMPOTENT',
         code: 200,
         message: `ATS candidate ${atsCandidateId} was already handed off. Returning existing record without duplication.`,
         isIdempotent: true,
-        record: duplicateCheck.record,
+        record: {
+          ...duplicateCheck.record,
+          documents: docs,
+        },
       };
     }
 
-    // Case B: Conflict with existing employee or different candidate
+    // Case B: Conflict with existing employee or different candidate (Duplicate Entry)
     if (duplicateCheck.isDuplicate && !duplicateCheck.isIdempotent) {
       const err = new Error(duplicateCheck.conflictReason);
       err.statusCode = 409;
-      err.code = 'DUPLICATE_CONFLICT';
+      err.code = 'DUPLICATE_ENTRY';
       err.details = {
         existingType: duplicateCheck.existingType,
         existingId: duplicateCheck.existingId,
+        conflictReason: duplicateCheck.conflictReason,
       };
+      logger.warn('ATS-HANDOFF', `Duplicate conflict: ${duplicateCheck.conflictReason}`, {
+        requestId,
+        details: err.details,
+      });
       throw err;
     }
 
@@ -206,7 +243,42 @@ export const atsIntegrationService = {
       nationalIdType,
       nationalIdNumber: encryptedNationalId,
       nationalIdHash,
-      rawAtsPayload: rawPayload,
+      rawAtsPayload: {
+        ...rawPayload,
+        compensationRef: compensationRef || salary || null,
+        requestId,
+      },
+    });
+
+    // 6. Persist Offer Documents to Document Vault
+    const savedOfferDocs = [];
+    if (Array.isArray(offerDocuments) && offerDocuments.length > 0) {
+      for (const doc of offerDocuments) {
+        try {
+          const docRecord = await documentRepository.create({
+            orgId,
+            ownerType: 'NEW_HIRE',
+            ownerId: newHireRecord.id,
+            category: doc.category || 'OFFER',
+            documentType: doc.documentType || 'OFFER_LETTER',
+            title: doc.title || 'Official Offer Letter',
+            fileUrl: doc.fileUrl || `/uploads/onboarding_documents/offer_${newHireRecord.id}.pdf`,
+            fileSize: doc.fileSize || 0,
+            mimeType: doc.mimeType || 'application/pdf',
+            verificationStatus: doc.verificationStatus || 'APPROVED',
+          });
+          savedOfferDocs.push(docRecord);
+        } catch (docErr) {
+          logger.warn('ATS-HANDOFF', `Could not persist offer doc '${doc.title}': ${docErr.message}`);
+        }
+      }
+    }
+
+    logger.info('ATS-HANDOFF', `Successfully created new hire record for ${firstName} ${lastName}`, {
+      requestId,
+      newHireId: newHireRecord.id,
+      offerDocumentsPersisted: savedOfferDocs.length,
+      durationMs: Date.now() - startTime,
     });
 
     return {
@@ -214,7 +286,10 @@ export const atsIntegrationService = {
       code: 201,
       message: `Candidate ${firstName} ${lastName} successfully handed off to HRMS Onboarding.`,
       isIdempotent: false,
-      record: newHireRecord,
+      record: {
+        ...newHireRecord,
+        documents: savedOfferDocs,
+      },
     };
   },
 
@@ -228,7 +303,10 @@ export const atsIntegrationService = {
       err.statusCode = 404;
       throw err;
     }
-    return record;
+    const documents = await documentRepository.findByOwner('NEW_HIRE', record.id);
+    return {
+      ...record,
+      documents,
+    };
   },
 };
-

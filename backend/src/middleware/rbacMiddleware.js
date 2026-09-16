@@ -1,6 +1,11 @@
 import { sendError } from '../utils/apiResponse.js';
 
 /**
+ * Normalizes role string for comparison
+ */
+const normalizeRole = (r) => (r || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+/**
  * Role-Based Access Control (RBAC) Middleware
  * Checks whether authenticated user has at least one of the required permissions
  * @param {string|string[]} requiredPermissions - Single permission code or array of permitted codes
@@ -11,8 +16,9 @@ export const authorize = (requiredPermissions) => {
       return sendError(res, 'Unauthorized. Please authenticate first.', 401);
     }
 
-    // SuperAdmin has full system access bypass
-    if (req.user.roleName === 'SuperAdmin') {
+    const normRole = normalizeRole(req.user.roleName);
+    // SuperAdmin or Admin has full system access bypass
+    if (normRole === 'superadmin' || normRole === 'admin') {
       return next();
     }
 
@@ -44,7 +50,13 @@ export const requireRoles = (allowedRoles) => {
       return sendError(res, 'Unauthorized. Please authenticate first.', 401);
     }
 
-    if (req.user.roleName === 'SuperAdmin' || allowedRoles.includes(req.user.roleName)) {
+    const normUserRole = normalizeRole(req.user.roleName);
+    if (normUserRole === 'superadmin' || normUserRole === 'admin') {
+      return next();
+    }
+
+    const normAllowed = allowedRoles.map(normalizeRole);
+    if (normAllowed.includes(normUserRole)) {
       return next();
     }
 

@@ -25,6 +25,7 @@ const mapEmployeeRow = (row) => {
     organization: row.o_id ? { id: row.o_id, name: row.o_name, code: row.o_code } : null,
     department: row.d_id ? { id: row.d_id, name: row.d_name, code: row.d_code } : null,
     designation: row.ds_id ? { id: row.ds_id, title: row.ds_title, code: row.ds_code } : null,
+    user: row.u_id ? { id: row.u_id, status: row.u_status, roleId: row.r_id, roleName: row.r_name } : null,
   };
 };
 
@@ -48,11 +49,15 @@ const BASE_EMPLOYEE_SELECT = `
     e.updated_at AS "updatedAt",
     o.id AS "o_id", o.name AS "o_name", o.code AS "o_code",
     d.id AS "d_id", d.name AS "d_name", d.code AS "d_code",
-    ds.id AS "ds_id", ds.title AS "ds_title", ds.code AS "ds_code"
+    ds.id AS "ds_id", ds.title AS "ds_title", ds.code AS "ds_code",
+    u.id AS "u_id", u.status AS "u_status",
+    r.id AS "r_id", r.name AS "r_name"
   FROM employees e
   LEFT JOIN organizations o ON o.id = e.org_id
   LEFT JOIN departments d ON d.id = e.dept_id
   LEFT JOIN designations ds ON ds.id = e.desig_id
+  LEFT JOIN users u ON u.id = e.user_id
+  LEFT JOIN roles r ON r.id = u.role_id
 `;
 
 export const employeeRepository = {
@@ -328,16 +333,18 @@ export const employeeRepository = {
    * Load metadata (organizations, departments, designations) directly from PostgreSQL
    */
   async getMetadata() {
-    const [orgsRes, deptsRes, desigsRes] = await Promise.all([
+    const [orgsRes, deptsRes, desigsRes, rolesRes] = await Promise.all([
       pool.query('SELECT id, name, code FROM organizations ORDER BY name ASC;'),
       pool.query('SELECT id, org_id AS "orgId", name, code FROM departments ORDER BY name ASC;'),
       pool.query('SELECT id, org_id AS "orgId", title, code FROM designations ORDER BY title ASC;'),
+      pool.query("SELECT id, name, description FROM roles WHERE status = 'Active' ORDER BY name ASC;"),
     ]);
 
     return {
       organizations: orgsRes.rows,
       departments: deptsRes.rows,
       designations: desigsRes.rows,
+      roles: rolesRes.rows,
     };
   },
 };

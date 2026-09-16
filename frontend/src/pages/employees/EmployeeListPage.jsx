@@ -15,11 +15,13 @@ import {
   Briefcase,
   DollarSign,
   Lock,
+  KeyRound,
   X,
 } from 'lucide-react';
 import { DataTable } from '../../components/common/DataTable.jsx';
 import { Button } from '../../components/common/Button.jsx';
 import { Input } from '../../components/common/Input.jsx';
+import { PasswordInput } from '../../components/common/PasswordInput.jsx';
 import { Select } from '../../components/common/Select.jsx';
 import { Badge } from '../../components/common/Badge.jsx';
 import { Modal } from '../../components/common/Modal.jsx';
@@ -42,7 +44,7 @@ export const EmployeeListPage = () => {
   const [orgFilter, setOrgFilter] = useState('');
   const [deptFilter, setDeptFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [metadata, setMetadata] = useState({ organizations: [], departments: [], designations: [] });
+  const [metadata, setMetadata] = useState({ organizations: [], departments: [], designations: [], roles: [] });
   const [error, setError] = useState(null);
 
   // Modals
@@ -55,6 +57,8 @@ export const EmployeeListPage = () => {
     orgId: '',
     deptId: '',
     desigId: '',
+    roleId: '',
+    password: '',
     employeeCode: '',
     firstName: '',
     lastName: '',
@@ -134,10 +138,16 @@ export const EmployeeListPage = () => {
 
   const handleOpenCreate = () => {
     setEditingEmployee(null);
+    const defaultRole =
+      metadata.roles?.find((r) => r.name.toLowerCase() === 'employee')?.id ||
+      metadata.roles?.[0]?.id ||
+      'role-employee';
     setFormData({
       orgId: metadata.organizations[0]?.id || '',
       deptId: metadata.departments[0]?.id || '',
       desigId: metadata.designations[0]?.id || '',
+      roleId: defaultRole,
+      password: '',
       employeeCode: `EMP-${Math.floor(100 + Math.random() * 900)}`,
       firstName: '',
       lastName: '',
@@ -155,10 +165,16 @@ export const EmployeeListPage = () => {
 
   const handleOpenEdit = (emp) => {
     setEditingEmployee(emp);
+    const existingRoleId =
+      emp.user?.roleId ||
+      metadata.roles?.find((r) => r.name.toLowerCase() === 'employee')?.id ||
+      'role-employee';
     setFormData({
       orgId: emp.orgId || '',
       deptId: emp.deptId || '',
       desigId: emp.desigId || '',
+      roleId: existingRoleId,
+      password: '',
       employeeCode: emp.employeeCode || '',
       firstName: emp.firstName || '',
       lastName: emp.lastName || '',
@@ -185,6 +201,19 @@ export const EmployeeListPage = () => {
     }
     if (!formData.orgId) errs.orgId = 'Organization selection is required.';
 
+    // Password validation: required when registering new employee, optional on edit
+    if (!editingEmployee) {
+      if (!formData.password) {
+        errs.password = 'Login password is required for portal access.';
+      } else if (formData.password.length < 6) {
+        errs.password = 'Password must be at least 6 characters.';
+      }
+    } else {
+      if (formData.password && formData.password.length < 6) {
+        errs.password = 'New password must be at least 6 characters.';
+      }
+    }
+
     setFormErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -202,7 +231,7 @@ export const EmployeeListPage = () => {
         toast.success(`Profile for '${formData.firstName} ${formData.lastName}' updated successfully.`);
       } else {
         await employeeService.createEmployee(formData);
-        toast.success(`Employee '${formData.firstName} ${formData.lastName}' registered successfully.`);
+        toast.success(`Employee '${formData.firstName} ${formData.lastName}' registered successfully with portal credentials.`);
       }
       setIsFormOpen(false);
       await fetchEmployees(pagination?.page || 1);
@@ -268,6 +297,12 @@ export const EmployeeListPage = () => {
               <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
                 {row.employeeCode}
               </span>
+              {row.user?.roleName && (
+                <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100 flex items-center gap-1">
+                  <KeyRound className="w-2.5 h-2.5" />
+                  {row.user.roleName}
+                </span>
+              )}
             </div>
             <div className="text-xs text-slate-400 mt-0.5">{row.email}</div>
           </div>
@@ -514,6 +549,62 @@ export const EmployeeListPage = () => {
             />
           </div>
 
+          {/* Portal Login Credentials Section */}
+          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-md bg-indigo-100 text-indigo-700 flex items-center justify-center">
+                  <KeyRound className="w-3.5 h-3.5" />
+                </div>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                  {editingEmployee ? 'Portal Access & Credentials' : 'Login Credentials (Required for Portal Access)'}
+                </h4>
+              </div>
+              <span
+                className={`text-[11px] font-medium px-2 py-0.5 rounded border ${
+                  editingEmployee
+                    ? 'text-slate-600 bg-white border-slate-200'
+                    : 'text-indigo-700 bg-indigo-50 border-indigo-200 font-semibold'
+                }`}
+              >
+                {editingEmployee ? 'Optional Reset' : 'Required'}
+              </span>
+            </div>
+            <p className="text-xs text-slate-600">
+              {editingEmployee
+                ? 'Leave password empty to preserve current credentials, or enter a new password to reset employee login access.'
+                : 'Set the initial password for this employee. They and authorized administrators will log in using this work email and password.'}
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+              <PasswordInput
+                label={editingEmployee ? 'Reset Password' : 'Login Password'}
+                value={formData.password || ''}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                placeholder={editingEmployee ? 'Leave empty to keep unchanged' : 'Min. 6 characters'}
+                error={formErrors.password}
+                required={!editingEmployee}
+                helperText={!editingEmployee ? 'Minimum 6 characters' : undefined}
+              />
+              <Select
+                label="System Role"
+                value={formData.roleId || ''}
+                onChange={(e) => setFormData({ ...formData, roleId: e.target.value })}
+                options={
+                  metadata.roles?.length
+                    ? metadata.roles.map((r) => ({ value: r.id, label: r.name }))
+                    : [
+                        { value: 'role-employee', label: 'Employee' },
+                        { value: 'role-manager', label: 'Manager' },
+                        { value: 'role-hr', label: 'HR' },
+                        { value: 'role-admin', label: 'Admin' },
+                      ]
+                }
+                helperText="Determines permissions when logging into the HRMS portal"
+              />
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Select
               label="Organization"
@@ -700,6 +791,26 @@ export const EmployeeListPage = () => {
                     </span>
                   )}
                 </div>
+              </div>
+
+              {/* Portal Account Status Card */}
+              <div className="p-3.5 rounded-xl bg-indigo-50/60 border border-indigo-100/80 flex items-center justify-between col-span-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center shadow-xs">
+                    <KeyRound className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-slate-800">Portal Login Account</div>
+                    <div className="text-xs text-slate-500">
+                      {viewingEmployee.user
+                        ? `Linked User Account • Role: ${viewingEmployee.user.roleName || 'Employee'}`
+                        : 'No linked portal account'}
+                    </div>
+                  </div>
+                </div>
+                <Badge variant={viewingEmployee.user ? 'success' : 'neutral'}>
+                  {viewingEmployee.user ? 'Login Active' : 'No Account'}
+                </Badge>
               </div>
             </div>
 

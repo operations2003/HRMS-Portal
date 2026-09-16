@@ -8,13 +8,23 @@ export const atsIntegrationController = {
    */
   async handleCandidateHandoff(req, res, next) {
     try {
+      const idempotencyKey = req.headers['idempotency-key'] || req.headers['x-idempotency-key'];
+      const requestId = req.headers['x-request-id'] || idempotencyKey || `req_${Date.now()}`;
+
       const payload = {
         ...req.body,
-        // If user is authenticated, default to their orgId if not explicitly provided
         orgId: req.body.orgId || (req.user && req.user.orgId),
       };
 
-      const result = await atsIntegrationService.processHandoff(payload);
+      const result = await atsIntegrationService.processHandoff(payload, {
+        idempotencyKey,
+        requestId,
+      });
+
+      if (result.isIdempotent) {
+        res.setHeader('X-Idempotent-Replay', 'true');
+      }
+      res.setHeader('X-Request-Id', requestId);
 
       return res.status(result.code).json({
         success: true,
@@ -24,8 +34,9 @@ export const atsIntegrationController = {
         data: result.record,
       });
     } catch (error) {
-      if (error.statusCode === 409) {
-        return sendError(res, error.message, 409, error.details ? [JSON.stringify(error.details)] : []);
+      if (error.statusCode === 409 || error.code === 'DUPLICATE_ENTRY') {
+        const errorReason = error.details?.conflictReason || error.message;
+        return sendError(res, error.message, 409, [errorReason]);
       }
       if (error.statusCode === 404 || error.statusCode === 400) {
         return sendError(res, error.message, error.statusCode);
@@ -57,4 +68,3 @@ export const atsIntegrationController = {
     }
   },
 };
-

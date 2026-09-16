@@ -47,6 +47,26 @@ export const validateAtsHandoff = (body) => {
     errors.push('Phone number must not exceed 50 characters.');
   }
 
+  const compensationVal = body.salary ?? body.compensationRef ?? body.compensation;
+  if (compensationVal !== undefined && compensationVal !== null && compensationVal !== '') {
+    if (isNaN(Number(compensationVal)) || Number(compensationVal) < 0) {
+      errors.push('Compensation/Salary must be a non-negative number.');
+    }
+  }
+
+  if (body.offerDocuments !== undefined && body.offerDocuments !== null) {
+    if (!Array.isArray(body.offerDocuments)) {
+      errors.push('offerDocuments must be an array of document objects.');
+    } else {
+      body.offerDocuments.forEach((doc, idx) => {
+        if (!doc || typeof doc !== 'object') {
+          errors.push(`offerDocuments[${idx}] must be an object.`);
+        } else if (!doc.title && !doc.fileUrl) {
+          errors.push(`offerDocuments[${idx}] requires at least a title or fileUrl.`);
+        }
+      });
+    }
+  }
+
   return errors;
 };
-

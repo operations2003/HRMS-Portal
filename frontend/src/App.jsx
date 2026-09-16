@@ -8,6 +8,8 @@ import { OrganizationListPage } from './pages/organizations/OrganizationListPage
 import { EmployeeListPage } from './pages/employees/EmployeeListPage.jsx';
 import { UserListPage } from './pages/users/UserListPage.jsx';
 import { DepartmentsPage } from './pages/departments/DepartmentsPage.jsx';
+import { OnboardingDashboardPage } from './pages/onboarding/OnboardingDashboardPage.jsx';
+import { OnboardingDetailPage } from './pages/onboarding/OnboardingDetailPage.jsx';
 import { ForbiddenPage } from './pages/common/ForbiddenPage.jsx';
 import { NotFoundPage } from './pages/common/NotFoundPage.jsx';
 import { AppLayout } from './layouts/AppLayout.jsx';
@@ -100,6 +102,24 @@ export const App = () => {
                 element={
                   <PermissionRoute permission="user:write">
                     <UserListPage />
+                  </PermissionRoute>
+                }
+              />
+
+              <Route
+                path="onboarding"
+                element={
+                  <PermissionRoute permission="onboarding:read">
+                    <OnboardingDashboardPage />
+                  </PermissionRoute>
+                }
+              />
+
+              <Route
+                path="onboarding/:id"
+                element={
+                  <PermissionRoute permission="onboarding:read">
+                    <OnboardingDetailPage />
                   </PermissionRoute>
                 }
               />
