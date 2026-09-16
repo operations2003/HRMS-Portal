@@ -11,6 +11,18 @@ const VALID_STATUSES = ['PRESENT', 'ABSENT', 'HALF_DAY', 'LATE', 'ON_LEAVE', 'HO
 export const validateCheckIn = (body) => {
   const errors = [];
 
+  if (body.date !== undefined && body.date !== null && body.date !== '') {
+    if (typeof body.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(body.date.trim())) {
+      errors.push('Date must follow YYYY-MM-DD format.');
+    } else {
+      const [year, month, day] = body.date.trim().split('-').map(Number);
+      const d = new Date(year, month - 1, day);
+      if (d.getFullYear() !== year || d.getMonth() !== month - 1 || d.getDate() !== day) {
+        errors.push('Please enter a valid calendar date.');
+      }
+    }
+  }
+
   if (body.timezone !== undefined && body.timezone !== null) {
     if (typeof body.timezone !== 'string' || body.timezone.trim().length > 50) {
       errors.push('Timezone must be a string not exceeding 50 characters.');
@@ -56,6 +68,18 @@ export const validateCheckIn = (body) => {
  */
 export const validateCheckOut = (body) => {
   const errors = [];
+
+  if (body.date !== undefined && body.date !== null && body.date !== '') {
+    if (typeof body.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(body.date.trim())) {
+      errors.push('Date must follow YYYY-MM-DD format.');
+    } else {
+      const [year, month, day] = body.date.trim().split('-').map(Number);
+      const d = new Date(year, month - 1, day);
+      if (d.getFullYear() !== year || d.getMonth() !== month - 1 || d.getDate() !== day) {
+        errors.push('Please enter a valid calendar date.');
+      }
+    }
+  }
 
   if (body.breakDurationMinutes !== undefined && body.breakDurationMinutes !== null) {
     const breaks = Number(body.breakDurationMinutes);

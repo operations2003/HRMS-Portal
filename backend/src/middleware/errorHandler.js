@@ -23,7 +23,7 @@ export const errorHandler = (err, req, res, next) => {
   } else if (err.code === '22003') {
     statusCode = 400;
     message = 'Numeric value is out of allowable range.';
-  } else if (err.code === '22007') {
+  } else if (err.code === '22007' || err.code === '22008') {
     statusCode = 400;
     message = 'Invalid date format or calendar date is out of range.';
   } else if (err.code === '22P02') {
