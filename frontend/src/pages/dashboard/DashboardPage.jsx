@@ -115,7 +115,7 @@ export const DashboardPage = () => {
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-200 text-xs font-semibold backdrop-blur-sm border border-indigo-400/20 mb-3">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>HRMS Phase 1 Production Console</span>
+              <span>HRMS Enterprise Workspace</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
               Welcome back, {user?.firstName}!

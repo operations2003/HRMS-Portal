@@ -148,7 +148,7 @@ export const EmployeeListPage = () => {
       desigId: metadata.designations[0]?.id || '',
       roleId: defaultRole,
       password: '',
-      employeeCode: `EMP-${Math.floor(100 + Math.random() * 900)}`,
+      employeeCode: '',
       firstName: '',
       lastName: '',
       email: '',
@@ -156,7 +156,7 @@ export const EmployeeListPage = () => {
       dateOfJoining: new Date().toISOString().split('T')[0],
       employmentType: 'Full-Time',
       status: 'Active',
-      salary: '85000',
+      salary: '',
     });
     setFormErrors({});
     setFormApiError(null);
@@ -517,7 +517,7 @@ export const EmployeeListPage = () => {
               label="First Name"
               value={formData.firstName}
               onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-              placeholder="e.g. Liam"
+              placeholder="First name"
               error={formErrors.firstName}
               required
             />
@@ -525,7 +525,7 @@ export const EmployeeListPage = () => {
               label="Last Name"
               value={formData.lastName}
               onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-              placeholder="e.g. Vance"
+              placeholder="Last name"
               error={formErrors.lastName}
               required
             />
@@ -537,7 +537,7 @@ export const EmployeeListPage = () => {
               type="email"
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              placeholder="liam.vance@company.com"
+              placeholder="name@company.com"
               error={formErrors.email}
               required
             />
@@ -633,7 +633,7 @@ export const EmployeeListPage = () => {
               label="Employee Code"
               value={formData.employeeCode}
               onChange={(e) => setFormData({ ...formData, employeeCode: e.target.value })}
-              placeholder="EMP-100"
+              placeholder="e.g. EMP-001"
             />
             <Select
               label="Employment Type"
@@ -670,7 +670,7 @@ export const EmployeeListPage = () => {
               type="number"
               value={formData.salary}
               onChange={(e) => setFormData({ ...formData, salary: e.target.value })}
-              placeholder="e.g. 95000"
+              placeholder="e.g. 50000"
             />
           </div>
 

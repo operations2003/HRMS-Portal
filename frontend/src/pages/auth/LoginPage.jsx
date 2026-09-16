@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.jsx';
-import { Building2, Mail, Lock, Shield, Check } from 'lucide-react';
+import { Building2, Mail } from 'lucide-react';
 import { Input } from '../../components/common/Input.jsx';
 import { PasswordInput } from '../../components/common/PasswordInput.jsx';
 import { Button } from '../../components/common/Button.jsx';
@@ -17,13 +17,6 @@ export const LoginPage = () => {
   const [errors, setErrors] = useState({});
   const [apiError, setApiError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-
-  const demoAccounts = [
-    { role: 'Admin', email: 'shubham@tasknera.com', pass: 'Shubham@264', desc: 'Full System Administrator' },
-    { role: 'HR', email: 'hr@techcorp.local', pass: 'Hr@123', desc: 'Employee & Dept Lifecycle' },
-    { role: 'Manager', email: 'manager@acme.example.com', pass: 'Password@123', desc: 'Team & Dept Oversight' },
-    { role: 'Employee', email: 'emp@techcorp.local', pass: 'Emp@123', desc: 'Self-Service & Directory' },
-  ];
 
   const validate = () => {
     const errs = {};
@@ -65,13 +58,6 @@ export const LoginPage = () => {
     }
   };
 
-  const handleSelectDemo = (acc) => {
-    setEmail(acc.email);
-    setPassword(acc.pass);
-    setErrors({});
-    setApiError(null);
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 flex items-center justify-center p-4 sm:p-6 lg:p-8">
       <div className="w-full max-w-md">
@@ -91,7 +77,7 @@ export const LoginPage = () => {
           <div className="mb-6">
             <h3 className="text-lg font-semibold text-slate-900">Sign in to your account</h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              Enter your corporate credentials or select a test role below.
+              Enter your corporate credentials to access the portal.
             </p>
           </div>
 
@@ -141,39 +127,11 @@ export const LoginPage = () => {
               Sign In
             </Button>
           </form>
-
-          {/* Demo Accounts Quick-Select */}
-          <div className="mt-8 pt-6 border-t border-slate-100">
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
-              <Shield className="w-3.5 h-3.5 text-indigo-600" />
-              <span>Quick Test Credentials (RBAC)</span>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {demoAccounts.map((acc) => (
-                <button
-                  key={acc.role}
-                  type="button"
-                  onClick={() => handleSelectDemo(acc)}
-                  className={`p-2 rounded-xl text-left border text-xs transition-all ${
-                    email === acc.email
-                      ? 'border-indigo-600 bg-indigo-50/70 text-indigo-950 font-semibold ring-1 ring-indigo-600'
-                      : 'border-slate-200 hover:border-indigo-300 hover:bg-slate-50 text-slate-700'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-slate-900">{acc.role}</span>
-                    {email === acc.email && <Check className="w-3.5 h-3.5 text-indigo-600" />}
-                  </div>
-                  <div className="text-[10px] text-slate-500 truncate mt-0.5">{acc.desc}</div>
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
 
         {/* Footer info */}
-        <p className="text-center text-xs text-slate-400 mt-6">
-          Phase 1 Architecture • Ready for PostgreSQL/Supabase DB Integration
+        <p className="text-center text-xs text-slate-500 mt-6">
+          Secure Enterprise Authentication
         </p>
       </div>
     </div>
