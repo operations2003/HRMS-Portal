@@ -70,6 +70,12 @@ export const HARDCODED_SUPERADMIN = {
     'dept:write',
     'user:read',
     'user:write',
+    'attendance:read',
+    'attendance:write',
+    'attendance:regularize',
+    'leave:read',
+    'leave:write',
+    'leave:approve',
   ],
   organization: { id: 'org-1', name: 'TechCorp Solutions', code: 'TCORP' },
 };

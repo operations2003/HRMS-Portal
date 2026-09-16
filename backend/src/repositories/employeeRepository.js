@@ -141,6 +141,25 @@ export const employeeRepository = {
   },
 
   /**
+   * Find employee by linked user ID and optional org ID
+   */
+  async findByUserId(userId, orgId = null) {
+    if (!userId || typeof userId !== 'string') return null;
+
+    let sql = `${BASE_EMPLOYEE_SELECT} WHERE e.user_id = $1`;
+    const values = [userId];
+
+    if (orgId) {
+      sql += ' AND e.org_id = $2';
+      values.push(orgId);
+    }
+
+    sql += ' LIMIT 1;';
+    const res = await pool.query(sql, values);
+    return res.rows.length > 0 ? mapEmployeeRow(res.rows[0]) : null;
+  },
+
+  /**
    * Find employee by unique code
    */
   async findByCode(code, orgId = null) {

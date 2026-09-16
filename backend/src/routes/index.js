@@ -7,6 +7,8 @@ import dashboardRoutes from './dashboardRoutes.js';
 import atsRoutes from './atsRoutes.js';
 import onboardingRoutes from './onboardingRoutes.js';
 import documentRoutes from './documentRoutes.js';
+import attendanceRoutes from './attendanceRoutes.js';
+import leaveRoutes from './leaveRoutes.js';
 import { sendSuccess } from '../utils/apiResponse.js';
 
 const router = Router();
@@ -29,5 +31,7 @@ router.use('/v1/dashboard', dashboardRoutes);
 router.use('/v1/integration/ats', atsRoutes);
 router.use('/v1/onboarding', onboardingRoutes);
 router.use('/v1/documents', documentRoutes);
+router.use('/v1/attendance', attendanceRoutes);
+router.use('/v1/leaves', leaveRoutes);
 
 export default router;
