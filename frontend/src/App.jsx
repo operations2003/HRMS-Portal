@@ -4,6 +4,8 @@ import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import { ToastProvider } from './context/ToastContext.jsx';
 import { LoginPage } from './pages/auth/LoginPage.jsx';
 import { DashboardPage } from './pages/dashboard/DashboardPage.jsx';
+import { AttendanceDashboardPage } from './pages/attendance/AttendanceDashboardPage.jsx';
+import { LeaveManagementPage } from './pages/leaves/LeaveManagementPage.jsx';
 import { OrganizationListPage } from './pages/organizations/OrganizationListPage.jsx';
 import { EmployeeListPage } from './pages/employees/EmployeeListPage.jsx';
 import { UserListPage } from './pages/users/UserListPage.jsx';
@@ -75,6 +77,24 @@ export const App = () => {
                 element={
                   <PermissionRoute permission="dashboard:read">
                     <DashboardPage />
+                  </PermissionRoute>
+                }
+              />
+
+              <Route
+                path="attendance"
+                element={
+                  <PermissionRoute permission="attendance:read">
+                    <AttendanceDashboardPage />
+                  </PermissionRoute>
+                }
+              />
+
+              <Route
+                path="leaves"
+                element={
+                  <PermissionRoute permission="leave:read">
+                    <LeaveManagementPage />
                   </PermissionRoute>
                 }
               />

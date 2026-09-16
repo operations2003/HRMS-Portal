@@ -9,6 +9,8 @@ import {
   ShieldCheck,
   X,
   Sparkles,
+  CalendarCheck,
+  CalendarDays,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { TaskNeraLogo } from '../components/common/TaskNeraLogo.jsx';
@@ -22,6 +24,18 @@ export const Sidebar = ({ isOpen, onClose }) => {
       path: '/dashboard',
       icon: LayoutDashboard,
       permission: 'dashboard:read',
+    },
+    {
+      name: 'Attendance',
+      path: '/attendance',
+      icon: CalendarCheck,
+      permission: 'attendance:read',
+    },
+    {
+      name: 'Leaves',
+      path: '/leaves',
+      icon: CalendarDays,
+      permission: 'leave:read',
     },
     {
       name: 'Organizations',
