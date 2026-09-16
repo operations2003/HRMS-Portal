@@ -292,7 +292,7 @@ export const AttendanceHistoryTable = ({
                   {/* Card Timestamps & Duration Grid */}
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div className="p-2 rounded-xl bg-slate-50/80 border border-slate-100">
-                      <span className="text-slate-400 text-[10px] block font-medium">Check In</span>
+                      <span className="text-slate-400 text-[10px] block font-medium">Login</span>
                       <span className="font-bold text-slate-800">
                         {row.checkIn
                           ? new Date(row.checkIn).toLocaleTimeString([], {
@@ -304,7 +304,7 @@ export const AttendanceHistoryTable = ({
                     </div>
 
                     <div className="p-2 rounded-xl bg-slate-50/80 border border-slate-100">
-                      <span className="text-slate-400 text-[10px] block font-medium">Check Out</span>
+                      <span className="text-slate-400 text-[10px] block font-medium">Logout</span>
                       <span className="font-bold text-slate-800">
                         {row.checkOut
                           ? new Date(row.checkOut).toLocaleTimeString([], {
@@ -374,10 +374,10 @@ export const AttendanceHistoryTable = ({
                     Status
                   </th>
                   <th scope="col" className="px-6 py-4 whitespace-nowrap">
-                    Check In
+                    Login Time
                   </th>
                   <th scope="col" className="px-6 py-4 whitespace-nowrap">
-                    Check Out
+                    Logout Time
                   </th>
                   <th scope="col" className="px-6 py-4 whitespace-nowrap">
                     Working Duration

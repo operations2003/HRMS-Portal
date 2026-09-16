@@ -30,6 +30,20 @@ router.post(
   attendanceController.checkOut
 );
 
+// 2b. Employee break pause API
+router.post(
+  '/pause-break',
+  authorize('attendance:write'),
+  attendanceController.pauseBreak
+);
+
+// 2c. Employee break resume API
+router.post(
+  '/resume-break',
+  authorize('attendance:write'),
+  attendanceController.resumeBreak
+);
+
 // 3. Employee own attendance history API
 router.get(
   '/my',

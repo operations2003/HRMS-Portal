@@ -11,6 +11,7 @@ import {
   FileText,
   UserCheck,
   ShieldCheck,
+  Coffee,
 } from 'lucide-react';
 import { Modal } from '../common/Modal.jsx';
 import { Badge } from '../common/Badge.jsx';
@@ -92,7 +93,7 @@ export const AttendanceDetailModal = ({ isOpen, onClose, record = null }) => {
           <div className="p-4 rounded-2xl bg-slate-50/70 border border-slate-100">
             <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 mb-1">
               <LogIn className="w-4 h-4 text-emerald-600" />
-              Check-In Punch
+              Login Punch
             </div>
             <div className="text-sm font-bold text-slate-900">
               {formatTimestamp(record.checkIn)}
@@ -102,7 +103,7 @@ export const AttendanceDetailModal = ({ isOpen, onClose, record = null }) => {
           <div className="p-4 rounded-2xl bg-slate-50/70 border border-slate-100">
             <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 mb-1">
               <LogOut className="w-4 h-4 text-rose-600" />
-              Check-Out Punch
+              Logout Punch
             </div>
             <div className="text-sm font-bold text-slate-900">
               {formatTimestamp(record.checkOut)}
@@ -135,6 +136,32 @@ export const AttendanceDetailModal = ({ isOpen, onClose, record = null }) => {
             </div>
           </div>
         </div>
+
+        {/* Break Sessions History Breakdown */}
+        {Array.isArray(record.breakHistory) && record.breakHistory.length > 0 && (
+          <div className="p-4 rounded-2xl bg-amber-50/50 border border-amber-200/70 space-y-2">
+            <div className="flex items-center gap-2 text-xs font-bold text-amber-800 uppercase tracking-wider">
+              <Coffee className="w-4 h-4 text-amber-600" />
+              Break Sessions ({record.breakHistory.length}) — Total {record.breakDurationMinutes || 0} mins
+            </div>
+            <div className="space-y-1.5 max-h-36 overflow-y-auto">
+              {record.breakHistory.map((b, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-center justify-between py-1.5 px-3 rounded-xl bg-white/90 border border-amber-200/50 text-xs text-slate-700"
+                >
+                  <span className="font-semibold text-slate-700">Break #{idx + 1}</span>
+                  <span className="font-mono text-slate-500">
+                    {formatTimestamp(b.startTime)} — {formatTimestamp(b.endTime)}
+                  </span>
+                  <span className="font-bold text-amber-700 font-mono">
+                    {b.durationMinutes ?? (b.durationSeconds ? Math.round(b.durationSeconds / 60) : 0)} mins
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Device & Punch Metadata */}
         <div className="p-4 rounded-2xl bg-slate-50/50 border border-slate-100 space-y-3">

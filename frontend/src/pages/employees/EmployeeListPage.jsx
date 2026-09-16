@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { employeeService } from '../../services/employeeService.js';
 import { designationService } from '../../services/designationService.js';
+import { departmentService } from '../../services/departmentService.js';
 import {
   Users,
   Plus,
@@ -17,6 +18,7 @@ import {
   DollarSign,
   Lock,
   KeyRound,
+  Clock,
   X,
 } from 'lucide-react';
 import { DataTable } from '../../components/common/DataTable.jsx';
@@ -53,6 +55,52 @@ export const EmployeeListPage = () => {
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [viewingEmployee, setViewingEmployee] = useState(null);
   const [loadingViewProfile, setLoadingViewProfile] = useState(false);
+
+  // Quick Add Department Modal
+  const [isQuickAddDeptOpen, setIsQuickAddDeptOpen] = useState(false);
+  const [quickDeptName, setQuickDeptName] = useState('');
+  const [quickDeptCode, setQuickDeptCode] = useState('');
+  const [quickDeptDescription, setQuickDeptDescription] = useState('');
+  const [quickDeptLoading, setQuickDeptLoading] = useState(false);
+  const [quickDeptError, setQuickDeptError] = useState(null);
+
+  const handleQuickAddDepartment = async (e) => {
+    e.preventDefault();
+    if (!quickDeptName.trim()) {
+      setQuickDeptError('Department name is required.');
+      return;
+    }
+    try {
+      setQuickDeptLoading(true);
+      setQuickDeptError(null);
+      const res = await departmentService.createDepartment({
+        name: quickDeptName.trim(),
+        code: quickDeptCode.trim().toUpperCase(),
+        description: quickDeptDescription.trim(),
+        orgId: formData.orgId || metadata.organizations?.[0]?.id || 'org-1',
+      });
+      const freshMeta = await employeeService.getMetadata();
+      setMetadata(freshMeta);
+      const newDeptId =
+        res?.id ||
+        res?.data?.id ||
+        freshMeta.departments?.find(
+          (d) => d.name.toLowerCase() === quickDeptName.trim().toLowerCase()
+        )?.id;
+      if (newDeptId) {
+        setFormData((prev) => ({ ...prev, deptId: newDeptId }));
+      }
+      setIsQuickAddDeptOpen(false);
+      setQuickDeptName('');
+      setQuickDeptCode('');
+      setQuickDeptDescription('');
+      toast?.success?.(`Department "${quickDeptName.trim()}" added successfully!`);
+    } catch (err) {
+      setQuickDeptError(err.message || 'Failed to create department.');
+    } finally {
+      setQuickDeptLoading(false);
+    }
+  };
 
   // Quick Add Designation Modal
   const [isQuickAddDesigOpen, setIsQuickAddDesigOpen] = useState(false);
@@ -105,6 +153,7 @@ export const EmployeeListPage = () => {
     employmentType: 'Full-Time',
     status: 'Active',
     salary: '',
+    shiftTiming: '11:00 AM - 07:00 PM',
   });
   const [formErrors, setFormErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -194,6 +243,7 @@ export const EmployeeListPage = () => {
       employmentType: 'Full-Time',
       status: 'Active',
       salary: '',
+      shiftTiming: '11:00 AM - 07:00 PM',
     });
     setFormErrors({});
     setFormApiError(null);
@@ -221,6 +271,7 @@ export const EmployeeListPage = () => {
       employmentType: emp.employmentType || 'Full-Time',
       status: emp.status || 'Active',
       salary: emp.salary?.toString() || '',
+      shiftTiming: emp.shiftTiming || '11:00 AM - 07:00 PM',
     });
     setFormErrors({});
     setFormApiError(null);
@@ -371,6 +422,10 @@ export const EmployeeListPage = () => {
       render: (row) => (
         <div>
           <div className="text-xs font-medium text-slate-700">{row.employmentType}</div>
+          <div className="text-[11px] text-brand-700 flex items-center gap-1 mt-0.5 font-medium">
+            <Clock className="w-3 h-3 text-brand-500" />
+            {row.shiftTiming || '11:00 AM - 07:00 PM'}
+          </div>
           <div className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
             <Calendar className="w-3 h-3" />
             Joined {row.dateOfJoining || '—'}
@@ -651,12 +706,54 @@ export const EmployeeListPage = () => {
               required
               options={metadata.organizations.map((o) => ({ value: o.id, label: o.name }))}
             />
-            <Select
-              label="Department"
-              value={formData.deptId}
-              onChange={(e) => setFormData({ ...formData, deptId: e.target.value })}
-              options={metadata.departments.map((d) => ({ value: d.id, label: d.name }))}
-            />
+            <div className="w-full">
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                  Department
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQuickDeptName('');
+                    setQuickDeptCode('');
+                    setQuickDeptDescription('');
+                    setQuickDeptError(null);
+                    setIsQuickAddDeptOpen(true);
+                  }}
+                  className="text-xs font-semibold text-brand-600 hover:text-brand-700 flex items-center gap-1 transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Add More
+                </button>
+              </div>
+              <select
+                value={formData.deptId}
+                onChange={(e) => {
+                  if (e.target.value === '__add_new__') {
+                    setQuickDeptName('');
+                    setQuickDeptCode('');
+                    setQuickDeptDescription('');
+                    setQuickDeptError(null);
+                    setIsQuickAddDeptOpen(true);
+                  } else {
+                    setFormData({ ...formData, deptId: e.target.value });
+                  }
+                }}
+                className="block w-full rounded-lg border text-sm py-2.5 px-3.5 bg-white border-slate-300 text-slate-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors"
+              >
+                <option value="" disabled>
+                  Select an option
+                </option>
+                {metadata.departments.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+                <option value="__add_new__" className="font-semibold text-brand-600 bg-brand-50">
+                  + Add more department...
+                </option>
+              </select>
+            </div>
             <div className="w-full">
               <div className="flex items-center justify-between mb-1.5">
                 <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider">
@@ -751,6 +848,60 @@ export const EmployeeListPage = () => {
             />
           </div>
 
+          {/* Work Shift & Time Slot Segment */}
+          <div className="p-4 rounded-2xl bg-brand-50/40 border border-brand-100/80 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-brand-600" />
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                  Assigned Work Shift & Time Slot
+                </span>
+              </div>
+              <span className="text-[11px] text-brand-700 bg-brand-100/70 px-2 py-0.5 rounded-full font-medium">
+                Reflects on Employee Attendance Timer
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Select
+                label="Shift Preset"
+                value={
+                  [
+                    '11:00 AM - 07:00 PM',
+                    '09:00 AM - 05:00 PM',
+                    '10:00 AM - 06:00 PM',
+                    '12:00 PM - 08:00 PM',
+                    '02:00 PM - 10:00 PM',
+                    '08:00 AM - 04:00 PM',
+                  ].includes(formData.shiftTiming)
+                    ? formData.shiftTiming
+                    : 'custom'
+                }
+                onChange={(e) => {
+                  if (e.target.value !== 'custom') {
+                    setFormData({ ...formData, shiftTiming: e.target.value });
+                  }
+                }}
+                options={[
+                  { value: '11:00 AM - 07:00 PM', label: '11:00 AM – 07:00 PM (General Shift • 8 hrs)' },
+                  { value: '09:00 AM - 05:00 PM', label: '09:00 AM – 05:00 PM (Morning Shift • 8 hrs)' },
+                  { value: '10:00 AM - 06:00 PM', label: '10:00 AM – 06:00 PM (Standard Day • 8 hrs)' },
+                  { value: '12:00 PM - 08:00 PM', label: '12:00 PM – 08:00 PM (Mid-Day Shift • 8 hrs)' },
+                  { value: '02:00 PM - 10:00 PM', label: '02:00 PM – 10:00 PM (Evening Shift • 8 hrs)' },
+                  { value: '08:00 AM - 04:00 PM', label: '08:00 AM – 04:00 PM (Early Shift • 8 hrs)' },
+                  { value: 'custom', label: 'Custom Time Slot (edit field below)' },
+                ]}
+              />
+              <Input
+                label="Time Slot (Customizable)"
+                value={formData.shiftTiming}
+                onChange={(e) => setFormData({ ...formData, shiftTiming: e.target.value })}
+                placeholder="e.g. 11:00 AM - 07:00 PM"
+                helperText="Active schedule shown on employee's login/logout page"
+              />
+            </div>
+          </div>
+
           <div className="mt-6 flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
             <Button
               type="button"
@@ -762,6 +913,79 @@ export const EmployeeListPage = () => {
             </Button>
             <Button type="submit" variant="primary" isLoading={isSubmitting}>
               {editingEmployee ? 'Save Changes' : 'Register Employee'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Quick Add Department Modal */}
+      <Modal
+        isOpen={isQuickAddDeptOpen}
+        onClose={() => setIsQuickAddDeptOpen(false)}
+        title="Add New Department"
+        subtitle="Quickly define a new corporate department or business division."
+        maxWidth="max-w-md"
+      >
+        <form onSubmit={handleQuickAddDepartment} className="space-y-4">
+          {quickDeptError && (
+            <Alert variant="danger">
+              {quickDeptError}
+            </Alert>
+          )}
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Department Name <span className="text-rose-500">*</span>
+            </label>
+            <Input
+              placeholder="e.g. Finance & Accounting"
+              value={quickDeptName}
+              onChange={(e) => setQuickDeptName(e.target.value)}
+              required
+              autoFocus
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Department Code <span className="text-slate-400 font-normal">(Optional)</span>
+            </label>
+            <Input
+              placeholder="e.g. FIN (auto-generated if empty)"
+              value={quickDeptCode}
+              onChange={(e) => setQuickDeptCode(e.target.value.toUpperCase())}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Description <span className="text-slate-400 font-normal">(Optional)</span>
+            </label>
+            <Input
+              placeholder="Brief description of department scope..."
+              value={quickDeptDescription}
+              onChange={(e) => setQuickDeptDescription(e.target.value)}
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              onClick={() => setIsQuickAddDeptOpen(false)}
+              disabled={quickDeptLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              size="md"
+              isLoading={quickDeptLoading}
+              icon={Plus}
+            >
+              Add Department
             </Button>
           </div>
         </form>
@@ -929,6 +1153,19 @@ export const EmployeeListPage = () => {
                       Confidential
                     </span>
                   )}
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 col-span-2">
+                <div className="text-xs text-slate-400 flex items-center gap-1.5 mb-1">
+                  <Clock className="w-3.5 h-3.5 text-brand-600" />
+                  Assigned Work Shift & Time Slot
+                </div>
+                <div className="font-semibold text-slate-900 flex items-center gap-2">
+                  <span>{viewingEmployee.shiftTiming || '11:00 AM - 07:00 PM'}</span>
+                  <span className="text-[11px] text-brand-600 bg-brand-50 px-2 py-0.5 rounded font-medium border border-brand-100">
+                    Timer Schedule
+                  </span>
                 </div>
               </div>
 

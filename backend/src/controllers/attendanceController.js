@@ -39,6 +39,38 @@ export const attendanceController = {
   },
 
   /**
+   * POST /api/v1/attendance/pause-break
+   * Pause shift for break
+   */
+  async pauseBreak(req, res, next) {
+    try {
+      const record = await attendanceService.pauseBreak(req.user);
+      return sendSuccess(res, 'Work session paused for break.', record, 200);
+    } catch (error) {
+      if (error.statusCode) {
+        return sendError(res, error.message, error.statusCode);
+      }
+      next(error);
+    }
+  },
+
+  /**
+   * POST /api/v1/attendance/resume-break
+   * Resume shift after break
+   */
+  async resumeBreak(req, res, next) {
+    try {
+      const record = await attendanceService.resumeBreak(req.user);
+      return sendSuccess(res, 'Break ended. Work session resumed.', record, 200);
+    } catch (error) {
+      if (error.statusCode) {
+        return sendError(res, error.message, error.statusCode);
+      }
+      next(error);
+    }
+  },
+
+  /**
    * GET /api/v1/attendance/my
    * Fetch authenticated user's own attendance history
    */
@@ -48,6 +80,7 @@ export const attendanceController = {
       return sendSuccess(res, 'Attendance history fetched successfully.', result.records, {
         statistics: result.statistics,
         pagination: result.pagination,
+        employeeProfile: result.employeeProfile,
       });
     } catch (error) {
       if (error.statusCode) {

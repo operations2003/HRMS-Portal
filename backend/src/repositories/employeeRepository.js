@@ -20,6 +20,7 @@ const mapEmployeeRow = (row) => {
     employmentType: row.employmentType || 'Full-Time',
     status: row.status || 'Active',
     salary: parseFloat(row.salary) || 0,
+    shiftTiming: row.shiftTiming || '11:00 AM - 07:00 PM',
     createdAt: row.createdAt ? new Date(row.createdAt).toISOString() : new Date().toISOString(),
     updatedAt: row.updatedAt ? new Date(row.updatedAt).toISOString() : new Date().toISOString(),
     organization: row.o_id ? { id: row.o_id, name: row.o_name, code: row.o_code } : null,
@@ -45,6 +46,7 @@ const BASE_EMPLOYEE_SELECT = `
     e.employment_type AS "employmentType",
     e.status,
     e.salary::float AS salary,
+    e.shift_timing AS "shiftTiming",
     e.created_at AS "createdAt",
     e.updated_at AS "updatedAt",
     o.id AS "o_id", o.name AS "o_name", o.code AS "o_code",
@@ -215,13 +217,14 @@ export const employeeRepository = {
     const employmentType = data.employmentType || 'Full-Time';
     const status = data.status || 'Active';
     const salary = data.salary ? Number(data.salary) : 0;
+    const shiftTiming = data.shiftTiming ? data.shiftTiming.trim() : '11:00 AM - 07:00 PM';
 
     const sql = `
       INSERT INTO employees (
         id, org_id, dept_id, desig_id, user_id, employee_code,
         first_name, last_name, email, phone, date_of_joining,
-        employment_type, status, salary
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        employment_type, status, salary, shift_timing
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       RETURNING id;
     `;
 
@@ -240,6 +243,7 @@ export const employeeRepository = {
       employmentType,
       status,
       salary,
+      shiftTiming,
     ]);
 
     return this.findById(id);
@@ -318,6 +322,11 @@ export const employeeRepository = {
     if (data.salary !== undefined) {
       setClauses.push(`salary = $${paramIndex++}`);
       values.push(Number(data.salary) || 0);
+    }
+
+    if (data.shiftTiming !== undefined) {
+      setClauses.push(`shift_timing = $${paramIndex++}`);
+      values.push(data.shiftTiming ? data.shiftTiming.trim() : '11:00 AM - 07:00 PM');
     }
 
     if (setClauses.length === 0) {

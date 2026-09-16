@@ -60,7 +60,7 @@ export const RegularizeModal = ({
       const inTime = new Date(formData.checkIn).getTime();
       const outTime = new Date(formData.checkOut).getTime();
       if (outTime < inTime) {
-        errs.checkOut = 'Check-out timestamp cannot be earlier than check-in.';
+        errs.checkOut = 'Logout timestamp cannot be earlier than login.';
       }
     }
 
@@ -128,7 +128,7 @@ export const RegularizeModal = ({
         <div>
           <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
             <Clock className="w-3.5 h-3.5 text-slate-500" />
-            Adjusted Check-In Timestamp
+            Adjusted Login Timestamp
           </label>
           <Input
             type="datetime-local"
@@ -141,7 +141,7 @@ export const RegularizeModal = ({
         <div>
           <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
             <Clock className="w-3.5 h-3.5 text-slate-500" />
-            Adjusted Check-Out Timestamp
+            Adjusted Logout Timestamp
           </label>
           <Input
             type="datetime-local"

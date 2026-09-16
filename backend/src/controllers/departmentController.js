@@ -45,19 +45,22 @@ export const departmentController = {
       if (!name || typeof name !== 'string' || !name.trim()) {
         return sendError(res, 'Department name is required.', 400);
       }
-      if (!code || typeof code !== 'string' || !code.trim()) {
-        return sendError(res, 'Department code is required.', 400);
+
+      // Generate a default code if not provided
+      let finalCode = code && typeof code === 'string' && code.trim() ? code.trim().toUpperCase() : '';
+      if (!finalCode) {
+        finalCode = name.trim().toUpperCase().replace(/[^A-Z0-9]/g, '-').slice(0, 10);
       }
 
-      const existing = await departmentRepository.findByCode(code.trim(), orgId);
+      const existing = await departmentRepository.findByCode(finalCode, orgId);
       if (existing) {
-        return sendError(res, `Department with code "${code.trim().toUpperCase()}" already exists.`, 409);
+        return sendError(res, `Department with code "${finalCode}" already exists.`, 409);
       }
 
       const created = await departmentRepository.create({
         orgId,
         name: name.trim(),
-        code: code.trim(),
+        code: finalCode,
         description: description?.trim() || '',
         status: status || 'Active',
       });

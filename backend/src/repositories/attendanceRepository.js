@@ -16,7 +16,10 @@ const mapAttendanceRow = (row) => {
     totalHours: parseFloat(row.totalHours) || 0.0,
     status: row.status || 'PRESENT',
     shiftId: row.shiftId || null,
+    isOnBreak: Boolean(row.isOnBreak),
+    currentBreakStart: row.currentBreakStart ? new Date(row.currentBreakStart).toISOString() : null,
     breakDurationMinutes: parseInt(row.breakDurationMinutes, 10) || 0,
+    breakHistory: Array.isArray(row.breakHistory) ? row.breakHistory : [],
     overtimeHours: parseFloat(row.overtimeHours) || 0.0,
     source: row.source || 'WEB',
     ipAddress: row.ipAddress || '',
@@ -39,6 +42,7 @@ const mapAttendanceRow = (row) => {
           deptId: row.emp_dept_id,
           departmentName: row.dept_name || '',
           designationTitle: row.desig_title || '',
+          shiftTiming: row.emp_shift_timing || '11:00 AM - 07:00 PM',
         }
       : null,
     // Regularizer information if available
@@ -64,6 +68,9 @@ const BASE_ATTENDANCE_SELECT = `
     a.total_hours AS "totalHours",
     a.status,
     a.shift_id AS "shiftId",
+    a.is_on_break AS "isOnBreak",
+    a.current_break_start AS "currentBreakStart",
+    a.break_history AS "breakHistory",
     a.break_duration_minutes AS "breakDurationMinutes",
     a.overtime_hours AS "overtimeHours",
     a.source,
@@ -82,6 +89,7 @@ const BASE_ATTENDANCE_SELECT = `
     e.last_name AS emp_last_name,
     e.email AS emp_email,
     e.dept_id AS emp_dept_id,
+    e.shift_timing AS emp_shift_timing,
     d.name AS dept_name,
     ds.title AS desig_title,
     u.id AS reg_user_id,
@@ -231,6 +239,21 @@ export const attendanceRepository = {
     if (data.breakDurationMinutes !== undefined) {
       setClauses.push(`break_duration_minutes = $${paramIndex++}`);
       values.push(parseInt(data.breakDurationMinutes, 10) || 0);
+    }
+
+    if (data.isOnBreak !== undefined) {
+      setClauses.push(`is_on_break = $${paramIndex++}`);
+      values.push(Boolean(data.isOnBreak));
+    }
+
+    if (data.currentBreakStart !== undefined) {
+      setClauses.push(`current_break_start = $${paramIndex++}`);
+      values.push(data.currentBreakStart);
+    }
+
+    if (data.breakHistory !== undefined) {
+      setClauses.push(`break_history = $${paramIndex++}::jsonb`);
+      values.push(typeof data.breakHistory === 'object' ? JSON.stringify(data.breakHistory) : '[]');
     }
 
     if (data.overtimeHours !== undefined) {

@@ -4,34 +4,72 @@ import {
   LogIn,
   LogOut,
   CheckCircle2,
-  AlertCircle,
   Timer,
   Coffee,
-  FileText,
-  MapPin,
+  Play,
   Calendar,
-  Sparkles,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { Button } from '../common/Button.jsx';
-import { Badge } from '../common/Badge.jsx';
-import { Modal } from '../common/Modal.jsx';
-import { Input } from '../common/Input.jsx';
 import { Alert } from '../common/Alert.jsx';
+
+/**
+ * Format total seconds into HH:MM:SS
+ */
+const formatHMS = (totalSeconds) => {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(s / 3600);
+  const mins = Math.floor((s % 3600) / 60);
+  const secs = s % 60;
+  return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+};
+
+/**
+ * Format break seconds into human readable string (e.g. "12m 30s" or "45 mins")
+ */
+const formatBreakDuration = (totalSeconds) => {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(s / 3600);
+  const mins = Math.floor((s % 3600) / 60);
+  const secs = s % 60;
+
+  if (hours > 0) {
+    return `${hours}h ${mins}m ${secs}s`;
+  }
+  if (mins > 0) {
+    return `${mins}m ${secs}s`;
+  }
+  return `${secs}s`;
+};
+
+const formatTimeOnly = (dateStr) => {
+  if (!dateStr) return '';
+  try {
+    return new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return '';
+  }
+};
 
 export const AttendancePunchCard = ({
   todayRecord = null,
+  assignedShift = '11:00 AM - 07:00 PM',
   onCheckIn,
   onCheckOut,
+  onPauseBreak,
+  onResumeBreak,
   isPunchingIn = false,
   isPunchingOut = false,
+  isBreakLoading = false,
   error = null,
   onClearError,
 }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [isCheckOutModalOpen, setIsCheckOutModalOpen] = useState(false);
-  const [breakDuration, setBreakDuration] = useState('0');
-  const [checkOutNotes, setCheckOutNotes] = useState('');
   const [elapsedTime, setElapsedTime] = useState('00:00:00');
+  const [breakElapsed, setBreakElapsed] = useState('00:00:00');
+  const [totalBreakFormatted, setTotalBreakFormatted] = useState('0 mins');
+  const [showBreakHistory, setShowBreakHistory] = useState(false);
 
   // Live real-time clock updating every second
   useEffect(() => {
@@ -41,57 +79,96 @@ export const AttendancePunchCard = ({
     return () => clearInterval(timer);
   }, []);
 
-  // Compute live elapsed working time if checked in but not checked out
+  // Compute live elapsed working time and live break duration every second
   useEffect(() => {
-    if (todayRecord?.checkIn && !todayRecord?.checkOut) {
-      const updateElapsed = () => {
-        const checkInDate = new Date(todayRecord.checkIn);
-        const diffMs = Math.max(0, new Date().getTime() - checkInDate.getTime());
-        const totalSecs = Math.floor(diffMs / 1000);
-        const hours = Math.floor(totalSecs / 3600);
-        const mins = Math.floor((totalSecs % 3600) / 60);
-        const secs = totalSecs % 60;
-        setElapsedTime(
-          `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
-        );
-      };
-      updateElapsed();
-      const interval = setInterval(updateElapsed, 1000);
-      return () => clearInterval(interval);
-    }
+    const computeTimers = () => {
+      const now = new Date();
+
+      // Sum completed past breaks from breakHistory
+      const history = Array.isArray(todayRecord?.breakHistory) ? todayRecord.breakHistory : [];
+      let pastBreakSeconds = 0;
+
+      for (const b of history) {
+        if (b.durationSeconds !== undefined && b.durationSeconds !== null) {
+          pastBreakSeconds += Number(b.durationSeconds);
+        } else if (b.durationMinutes !== undefined && b.durationMinutes !== null) {
+          pastBreakSeconds += Number(b.durationMinutes) * 60;
+        } else if (b.startTime && b.endTime) {
+          pastBreakSeconds += Math.max(0, Math.floor((new Date(b.endTime).getTime() - new Date(b.startTime).getTime()) / 1000));
+        }
+      }
+
+      // Fallback if breakDurationMinutes is present without history
+      if (history.length === 0 && todayRecord?.breakDurationMinutes) {
+        pastBreakSeconds = Number(todayRecord.breakDurationMinutes) * 60;
+      }
+
+      // If currently on break, calculate live duration of this break
+      let ongoingBreakSeconds = 0;
+      if (todayRecord?.isOnBreak && todayRecord?.currentBreakStart) {
+        ongoingBreakSeconds = Math.max(0, Math.floor((now.getTime() - new Date(todayRecord.currentBreakStart).getTime()) / 1000));
+      }
+
+      const totalBreakSecs = pastBreakSeconds + ongoingBreakSeconds;
+      setBreakElapsed(formatHMS(ongoingBreakSeconds));
+      setTotalBreakFormatted(formatBreakDuration(totalBreakSecs));
+
+      // Calculate net working time if logged in
+      if (todayRecord?.checkIn && !todayRecord?.checkOut) {
+        const checkInTime = new Date(todayRecord.checkIn).getTime();
+        const grossElapsedSeconds = Math.max(0, Math.floor((now.getTime() - checkInTime) / 1000));
+        // Net working seconds freezes while on break because grossElapsed and ongoingBreakSecs grow at the same rate
+        const netWorkingSeconds = Math.max(0, grossElapsedSeconds - totalBreakSecs);
+        setElapsedTime(formatHMS(netWorkingSeconds));
+      }
+    };
+
+    computeTimers();
+    const interval = setInterval(computeTimers, 1000);
+    return () => clearInterval(interval);
   }, [todayRecord]);
 
   const hasCheckedIn = Boolean(todayRecord?.checkIn);
   const hasCheckedOut = Boolean(todayRecord?.checkOut);
+  const isOnBreak = Boolean(todayRecord?.isOnBreak);
+  const breakHistory = Array.isArray(todayRecord?.breakHistory) ? todayRecord.breakHistory : [];
 
   // Status mapping
   let statusBadge = (
     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
       <span className="w-2 h-2 rounded-full bg-slate-400"></span>
-      Not Checked In
+      Not Logged In
     </span>
   );
 
   if (hasCheckedIn && !hasCheckedOut) {
-    statusBadge = (
-      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 ring-1 ring-emerald-500/20 animate-pulse">
-        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-        Currently In Office ({todayRecord.status || 'PRESENT'})
-      </span>
-    );
+    if (isOnBreak) {
+      statusBadge = (
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-300 ring-1 ring-amber-500/20 animate-pulse">
+          <Coffee className="w-3.5 h-3.5 text-amber-600" />
+          On Break (Shift Paused)
+        </span>
+      );
+    } else {
+      statusBadge = (
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 ring-1 ring-emerald-500/20 animate-pulse">
+          <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+          Logged In • Active Shift ({todayRecord.status || 'PRESENT'})
+        </span>
+      );
+    }
   } else if (hasCheckedIn && hasCheckedOut) {
     statusBadge = (
       <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-200">
         <CheckCircle2 className="w-3.5 h-3.5 text-sky-600" />
-        Completed Workday ({todayRecord.status || 'PRESENT'})
+        Logged Out • Completed ({todayRecord.status || 'PRESENT'})
       </span>
     );
   }
 
-  const handlePunchInClick = () => {
+  const handleLoginClick = () => {
     if (isPunchingIn || isPunchingOut) return;
     if (onClearError) onClearError();
-    // Gather client timezone
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
     onCheckIn({
       timezone,
@@ -99,22 +176,19 @@ export const AttendancePunchCard = ({
     });
   };
 
-  const handlePunchOutConfirm = () => {
-    if (isPunchingIn || isPunchingOut) return;
+  // Direct logout without unnecessary dialogs or fixed break inputs
+  const handleDirectLogout = () => {
+    if (isPunchingIn || isPunchingOut || isBreakLoading) return;
     if (onClearError) onClearError();
-    onCheckOut({
-      breakDurationMinutes: parseInt(breakDuration, 10) || 0,
-      notes: checkOutNotes.trim(),
-    });
-    setIsCheckOutModalOpen(false);
+    onCheckOut();
   };
 
   return (
-    <>
-      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden flex flex-col justify-between transition-all duration-200 hover:shadow-md">
-        {/* Top Header with Live Date & Status */}
-        <div className="p-6 border-b border-slate-100 bg-gradient-to-r from-slate-50/70 via-white to-brand-50/30">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden flex flex-col justify-between transition-all duration-200 hover:shadow-md">
+      {/* Top Header with Live Date, Assigned Shift & Status */}
+      <div className="p-6 border-b border-slate-100 bg-gradient-to-r from-slate-50/70 via-white to-brand-50/30">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
             <div className="flex items-center gap-2 text-slate-500 text-xs font-semibold uppercase tracking-wider">
               <Calendar className="w-4 h-4 text-brand-500" />
               <span>
@@ -126,189 +200,233 @@ export const AttendancePunchCard = ({
                 })}
               </span>
             </div>
-            {statusBadge}
+
+            {/* Assigned Shift Time Slot Pill */}
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-50 border border-brand-200 text-brand-800 text-xs font-bold shadow-2xs">
+              <Clock className="w-3.5 h-3.5 text-brand-600" />
+              <span>Shift: {assignedShift || '11:00 AM - 07:00 PM'}</span>
+            </div>
           </div>
 
-          {/* Large Live Digital Clock */}
-          <div className="mt-4 flex items-baseline gap-2">
-            <span className="text-4xl sm:text-5xl font-extrabold tracking-tight text-slate-900 font-mono">
-              {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-            </span>
-            <span className="text-xs font-medium text-slate-400">
-              ({Intl.DateTimeFormat().resolvedOptions().timeZone})
-            </span>
-          </div>
+          {statusBadge}
         </div>
 
-        {/* Error Alert if any */}
-        {error && (
-          <div className="px-6 pt-4">
-            <Alert variant="danger" dismissible onDismiss={onClearError}>
-              {error}
-            </Alert>
-          </div>
-        )}
-
-        {/* Middle Status & Duration Stats */}
-        <div className="p-6 space-y-5">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {/* Check-In Time */}
-            <div className="p-3.5 rounded-2xl bg-slate-50/80 border border-slate-100">
-              <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 mb-1">
-                <LogIn className="w-3.5 h-3.5 text-emerald-600" />
-                Check In
-              </div>
-              <div className="text-sm font-bold text-slate-800">
-                {todayRecord?.checkIn
-                  ? new Date(todayRecord.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                  : '— : —'}
-              </div>
-            </div>
-
-            {/* Check-Out Time */}
-            <div className="p-3.5 rounded-2xl bg-slate-50/80 border border-slate-100">
-              <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 mb-1">
-                <LogOut className="w-3.5 h-3.5 text-rose-600" />
-                Check Out
-              </div>
-              <div className="text-sm font-bold text-slate-800">
-                {todayRecord?.checkOut
-                  ? new Date(todayRecord.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                  : '— : —'}
-              </div>
-            </div>
-
-            {/* Live Worked Hours or Total */}
-            <div className="p-3.5 rounded-2xl bg-brand-50/50 border border-brand-100/60">
-              <div className="flex items-center gap-1.5 text-xs font-medium text-brand-700 mb-1">
-                <Timer className="w-3.5 h-3.5 text-brand-600" />
-                {hasCheckedIn && !hasCheckedOut ? 'Live Working Time' : 'Total Work Hours'}
-              </div>
-              <div className="text-sm font-bold text-brand-900 font-mono">
-                {hasCheckedIn && !hasCheckedOut
-                  ? elapsedTime
-                  : todayRecord?.totalHours
-                  ? `${todayRecord.totalHours} hrs`
-                  : '0.00 hrs'}
-              </div>
-            </div>
-          </div>
-
-          {/* Notes or regularized info if available */}
-          {todayRecord?.notes && (
-            <div className="text-xs text-slate-500 bg-slate-50 p-2.5 rounded-xl border border-slate-100 flex items-start gap-2">
-              <FileText className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
-              <span className="truncate">{todayRecord.notes}</span>
-            </div>
-          )}
-        </div>
-
-        {/* Action Punch Buttons */}
-        <div className="p-6 pt-0">
-          {!hasCheckedIn ? (
-            /* 1. Show Check In when employee is not checked in */
-            <Button
-              type="button"
-              variant="primary"
-              size="lg"
-              className="w-full justify-center !py-3.5 text-sm font-bold shadow-md shadow-brand-500/20"
-              icon={LogIn}
-              disabled={isPunchingIn || isPunchingOut}
-              isLoading={isPunchingIn}
-              onClick={handlePunchInClick}
-            >
-              {isPunchingIn ? 'Recording Check-In...' : 'Check In'}
-            </Button>
-          ) : !hasCheckedOut ? (
-            /* 2. Show Check Out after successful check-in */
-            <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full">
-              <Button
-                type="button"
-                variant="danger"
-                size="lg"
-                className="w-full justify-center !py-3.5 text-sm font-bold shadow-md shadow-rose-600/20"
-                icon={LogOut}
-                disabled={isPunchingIn || isPunchingOut}
-                isLoading={isPunchingOut}
-                onClick={() => setIsCheckOutModalOpen(true)}
-              >
-                {isPunchingOut ? 'Recording Check-Out...' : 'Check Out'}
-              </Button>
-            </div>
-          ) : (
-            /* 3. Both completed */
-            <div className="w-full p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 text-center flex items-center justify-center gap-2 text-sm font-semibold text-slate-600">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-              <span>Workday Completed • Checked Out for Today</span>
-            </div>
-          )}
+        {/* Large Live Digital Clock */}
+        <div className="mt-4 flex items-baseline gap-2">
+          <span className="text-4xl sm:text-5xl font-extrabold tracking-tight text-slate-900 font-mono">
+            {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+          </span>
+          <span className="text-xs font-medium text-slate-400">
+            ({Intl.DateTimeFormat().resolvedOptions().timeZone})
+          </span>
         </div>
       </div>
 
-      {/* Check Out Confirmation & Remarks Modal */}
-      <Modal
-        isOpen={isCheckOutModalOpen}
-        onClose={() => setIsCheckOutModalOpen(false)}
-        title="Confirm Workday Check-Out"
-        subtitle="Finalize your working hours and clock out"
-        maxWidth="max-w-md"
-      >
-        <div className="space-y-4">
-          <p className="text-sm text-slate-600">
-            Are you sure you want to clock out for today? Total net hours and overtime will be calculated
-            automatically.
-          </p>
+      {/* Error Alert if any */}
+      {error && (
+        <div className="px-6 pt-4">
+          <Alert variant="danger" dismissible onDismiss={onClearError}>
+            {error}
+          </Alert>
+        </div>
+      )}
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
-              <Coffee className="w-3.5 h-3.5 text-slate-500" />
-              Break Duration (Minutes)
-            </label>
-            <Input
-              type="number"
-              min="0"
-              max="720"
-              value={breakDuration}
-              onChange={(e) => setBreakDuration(e.target.value)}
-              placeholder="e.g. 45"
-              helperText="Duration spent on lunch or personal break (deducted from gross hours)."
-            />
+      {/* Middle Status & Duration Stats */}
+      <div className="p-6 space-y-5">
+        {/* Active Break Banner */}
+        {isOnBreak && (
+          <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200/90 shadow-2xs flex items-center justify-between gap-3 text-amber-900">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                <Coffee className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wider text-amber-800">
+                  Break in Progress
+                </div>
+                <div className="text-xs text-amber-700">
+                  Shift paused since{' '}
+                  {todayRecord?.currentBreakStart
+                    ? formatTimeOnly(todayRecord.currentBreakStart)
+                    : 'just now'}
+                </div>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-xs text-amber-600 font-medium">Break Time</div>
+              <div className="text-lg font-extrabold font-mono text-amber-900">{breakElapsed}</div>
+            </div>
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {/* Login Time */}
+          <div className="p-3.5 rounded-2xl bg-slate-50/80 border border-slate-100">
+            <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 mb-1">
+              <LogIn className="w-3.5 h-3.5 text-emerald-600" />
+              Login Time
+            </div>
+            <div className="text-sm font-bold text-slate-800">
+              {todayRecord?.checkIn ? formatTimeOnly(todayRecord.checkIn) : '— : —'}
+            </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
-              <FileText className="w-3.5 h-3.5 text-slate-500" />
-              Punch Remarks / Notes (Optional)
-            </label>
-            <Input
-              type="text"
-              value={checkOutNotes}
-              onChange={(e) => setCheckOutNotes(e.target.value)}
-              placeholder="e.g. Completed scheduled sprint tasks"
-            />
+          {/* Logout Time */}
+          <div className="p-3.5 rounded-2xl bg-slate-50/80 border border-slate-100">
+            <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 mb-1">
+              <LogOut className="w-3.5 h-3.5 text-rose-600" />
+              Logout Time
+            </div>
+            <div className="text-sm font-bold text-slate-800">
+              {todayRecord?.checkOut ? formatTimeOnly(todayRecord.checkOut) : '— : —'}
+            </div>
           </div>
 
-          <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-slate-100">
-            <Button
-              variant="secondary"
-              size="md"
-              onClick={() => setIsCheckOutModalOpen(false)}
-              disabled={isPunchingOut}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="danger"
-              size="md"
-              icon={LogOut}
-              isLoading={isPunchingOut}
-              onClick={handlePunchOutConfirm}
-            >
-              Confirm Check-Out
-            </Button>
+          {/* Live Worked Hours (Freezes on Break) or Total Completed */}
+          <div className="p-3.5 rounded-2xl bg-brand-50/50 border border-brand-100/60">
+            <div className="flex items-center gap-1.5 text-xs font-medium text-brand-700 mb-1">
+              <Timer className="w-3.5 h-3.5 text-brand-600" />
+              {hasCheckedIn && !hasCheckedOut ? 'Live Working Time' : 'Total Work Hours'}
+            </div>
+            <div className="text-sm font-bold text-brand-900 font-mono">
+              {hasCheckedIn && !hasCheckedOut
+                ? elapsedTime
+                : todayRecord?.totalHours !== undefined
+                ? `${Number(todayRecord.totalHours).toFixed(2)} hrs`
+                : '0.00 hrs'}
+            </div>
+            {hasCheckedIn && !hasCheckedOut && isOnBreak && (
+              <span className="text-[10px] text-amber-600 font-semibold block mt-0.5">
+                (Paused for Break)
+              </span>
+            )}
+          </div>
+
+          {/* Break Duration Total - Dynamically Calculated */}
+          <div className="p-3.5 rounded-2xl bg-slate-50/80 border border-slate-100">
+            <div className="flex items-center justify-between gap-1 mb-1">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
+                <Coffee className="w-3.5 h-3.5 text-amber-600" />
+                Total Break
+              </div>
+              {breakHistory.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowBreakHistory(!showBreakHistory)}
+                  className="text-[11px] text-brand-600 hover:text-brand-700 flex items-center font-medium"
+                >
+                  {breakHistory.length} {breakHistory.length === 1 ? 'break' : 'breaks'}
+                  {showBreakHistory ? (
+                    <ChevronUp className="w-3 h-3 ml-0.5" />
+                  ) : (
+                    <ChevronDown className="w-3 h-3 ml-0.5" />
+                  )}
+                </button>
+              )}
+            </div>
+            <div className="text-sm font-bold text-slate-800 font-mono">
+              {hasCheckedIn ? totalBreakFormatted : '0 mins'}
+            </div>
           </div>
         </div>
-      </Modal>
-    </>
+
+        {/* Break Sessions Breakdown (collapsible if breaks exist) */}
+        {showBreakHistory && breakHistory.length > 0 && (
+          <div className="p-3.5 rounded-2xl bg-slate-50/80 border border-slate-100 space-y-2 text-xs">
+            <div className="font-semibold text-slate-700 flex items-center justify-between">
+              <span>Today's Break Sessions ({breakHistory.length})</span>
+              <span className="text-slate-400 font-normal">Calculated dynamically</span>
+            </div>
+            <div className="space-y-1.5">
+              {breakHistory.map((b, idx) => {
+                const durMin = b.durationMinutes ?? (b.durationSeconds ? Math.round(b.durationSeconds / 60) : 0);
+                const durSec = b.durationSeconds ? `${b.durationSeconds % 60}s` : '';
+                return (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between py-1 px-2.5 rounded-lg bg-white border border-slate-200/60 text-slate-700"
+                  >
+                    <span className="font-medium text-slate-600">Break #{idx + 1}</span>
+                    <span className="text-slate-500 font-mono">
+                      {formatTimeOnly(b.startTime)} — {formatTimeOnly(b.endTime)}
+                    </span>
+                    <span className="font-semibold text-amber-700 font-mono">
+                      {durMin}m {durSec}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Action Punch Buttons */}
+      <div className="p-6 pt-0">
+        {!hasCheckedIn ? (
+          /* 1. Show Login when employee is not logged in */
+          <Button
+            type="button"
+            variant="primary"
+            size="lg"
+            className="w-full justify-center !py-3.5 text-sm font-bold shadow-md shadow-brand-500/20"
+            icon={LogIn}
+            disabled={isPunchingIn || isPunchingOut}
+            isLoading={isPunchingIn}
+            onClick={handleLoginClick}
+          >
+            {isPunchingIn ? 'Logging In...' : 'Login'}
+          </Button>
+        ) : !hasCheckedOut ? (
+          /* 2. Show Break control + Logout when active */
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
+            {isOnBreak ? (
+              <Button
+                type="button"
+                size="lg"
+                className="w-full justify-center !py-3.5 text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/20"
+                icon={Play}
+                disabled={isBreakLoading || isPunchingOut}
+                isLoading={isBreakLoading}
+                onClick={onResumeBreak}
+              >
+                {isBreakLoading ? 'Resuming...' : 'Resume Work (End Break)'}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                size="lg"
+                className="w-full justify-center !py-3.5 text-sm font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-md shadow-amber-500/20"
+                icon={Coffee}
+                disabled={isBreakLoading || isPunchingOut}
+                isLoading={isBreakLoading}
+                onClick={onPauseBreak}
+              >
+                {isBreakLoading ? 'Pausing...' : 'Pause for Break'}
+              </Button>
+            )}
+
+            <Button
+              type="button"
+              variant="danger"
+              size="lg"
+              className="w-full justify-center !py-3.5 text-sm font-bold shadow-md shadow-rose-600/20"
+              icon={LogOut}
+              disabled={isPunchingIn || isPunchingOut || isBreakLoading}
+              isLoading={isPunchingOut}
+              onClick={handleDirectLogout}
+            >
+              {isPunchingOut ? 'Logging Out...' : 'Logout'}
+            </Button>
+          </div>
+        ) : (
+          /* 3. Both completed */
+          <div className="w-full p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 text-center flex items-center justify-center gap-2 text-sm font-semibold text-slate-600">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            <span>Workday Completed • Logged Out for Today</span>
+          </div>
+        )}
+      </div>
+    </div>
   );
 };
