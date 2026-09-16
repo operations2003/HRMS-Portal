@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.jsx';
-import { Building2, Mail } from 'lucide-react';
+import { Mail, Shield, Check, Sparkles } from 'lucide-react';
 import { Input } from '../../components/common/Input.jsx';
 import { PasswordInput } from '../../components/common/PasswordInput.jsx';
 import { Button } from '../../components/common/Button.jsx';
 import { Alert } from '../../components/common/Alert.jsx';
+import { TaskNeraLogo } from '../../components/common/TaskNeraLogo.jsx';
 
 export const LoginPage = () => {
   const navigate = useNavigate();
@@ -17,6 +18,13 @@ export const LoginPage = () => {
   const [errors, setErrors] = useState({});
   const [apiError, setApiError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  const demoAccounts = [
+    { role: 'Admin', email: 'shubham@tasknera.com', pass: 'Shubham@264', desc: 'Full System Administrator' },
+    { role: 'HR', email: 'hr@techcorp.local', pass: 'Hr@123', desc: 'Employee & Dept Lifecycle' },
+    { role: 'Manager', email: 'manager@acme.example.com', pass: 'Password@123', desc: 'Team & Dept Oversight' },
+    { role: 'Employee', email: 'emp@techcorp.local', pass: 'Emp@123', desc: 'Self-Service & Directory' },
+  ];
 
   const validate = () => {
     const errs = {};
@@ -58,26 +66,40 @@ export const LoginPage = () => {
     }
   };
 
+  const handleSelectDemo = (acc) => {
+    setEmail(acc.email);
+    setPassword(acc.pass);
+    setErrors({});
+    setApiError(null);
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 flex items-center justify-center p-4 sm:p-6 lg:p-8">
-      <div className="w-full max-w-md">
-        {/* Brand Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-indigo-600 text-white shadow-xl shadow-indigo-500/30 mb-4 ring-4 ring-indigo-500/20">
-            <Building2 className="w-7 h-7" />
+    <div className="min-h-screen tasknera-gradient flex items-center justify-center p-4 sm:p-6 lg:p-8 relative overflow-hidden">
+      {/* Dynamic ambient background glow */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute -top-40 -left-40 w-96 h-96 bg-brand-500/10 rounded-full blur-3xl" />
+        <div className="absolute top-1/2 -right-40 w-96 h-96 bg-brand-500/15 rounded-full blur-3xl" />
+        <div className="absolute -bottom-40 left-1/3 w-80 h-80 bg-slate-400/10 rounded-full blur-3xl" />
+      </div>
+
+      <div className="w-full max-w-md relative z-10">
+        {/* Brand Header with Official Logo Lockup */}
+        <div className="text-center mb-7">
+          <div className="flex justify-center mb-4">
+            <TaskNeraLogo variant="full" size="md" />
           </div>
-          <h2 className="text-2xl font-bold tracking-tight text-white">HRMS Portal</h2>
-          <p className="text-sm text-slate-400 mt-1">
-            Enterprise Organization & Employee Management
-          </p>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-50 border border-brand-200/70 text-brand-700 text-xs font-semibold shadow-sm">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Enterprise HR & Workforce Management</span>
+          </div>
         </div>
 
         {/* Login Card */}
-        <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-2xl border border-slate-100/10">
-          <div className="mb-6">
-            <h3 className="text-lg font-semibold text-slate-900">Sign in to your account</h3>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Enter your corporate credentials to access the portal.
+        <div className="bg-white/95 backdrop-blur-xl rounded-3xl p-7 sm:p-9 shadow-2xl border border-slate-200/80 shadow-slate-200/60">
+          <div className="mb-6 text-center sm:text-left">
+            <h2 className="text-2xl font-black text-slate-900 tracking-tight">Sign in to your portal</h2>
+            <p className="text-sm text-slate-500 mt-1">
+              Enter your corporate credentials or choose a test role
             </p>
           </div>
 
@@ -92,7 +114,7 @@ export const LoginPage = () => {
             />
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-5">
             <Input
               label="Work Email"
               id="email"
@@ -121,18 +143,51 @@ export const LoginPage = () => {
               type="submit"
               variant="primary"
               size="lg"
-              className="w-full mt-2"
+              className="w-full mt-3 shadow-lg shadow-brand-500/30"
               isLoading={isLoading}
             >
               Sign In
             </Button>
           </form>
+
+          {/* Demo Accounts Quick-Select */}
+          <div className="mt-8 pt-6 border-t border-slate-100">
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-600 uppercase tracking-wider mb-4">
+              <Shield className="w-4 h-4 text-brand-500" />
+              <span>Demo Accounts (RBAC)</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2.5">
+              {demoAccounts.map((acc) => (
+                <button
+                  key={acc.role}
+                  type="button"
+                  onClick={() => handleSelectDemo(acc)}
+                  className={`p-3 rounded-xl text-left border-2 text-xs transition-all hover:scale-105 ${
+                    email === acc.email
+                      ? 'border-brand-500 bg-brand-50/70 text-brand-900 font-semibold shadow-md shadow-brand-500/20'
+                      : 'border-slate-200 hover:border-brand-300 hover:bg-slate-50 text-slate-700'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-bold text-sm text-slate-900">{acc.role}</span>
+                    {email === acc.email && <Check className="w-4 h-4 text-brand-500" />}
+                  </div>
+                  <div className="text-[11px] text-slate-500 leading-relaxed">{acc.desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* Footer info */}
-        <p className="text-center text-xs text-slate-500 mt-6">
-          Secure Enterprise Authentication
-        </p>
+        <div className="mt-8 text-center">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/80 backdrop-blur-sm border border-slate-200 shadow-sm">
+            <Sparkles className="w-4 h-4 text-brand-500" />
+            <span className="text-xs text-slate-600 font-medium">
+              Enterprise HRMS v1.0 • PostgreSQL Ready
+            </span>
+          </div>
+        </div>
       </div>
     </div>
   );

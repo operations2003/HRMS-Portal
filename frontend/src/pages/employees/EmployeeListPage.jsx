@@ -285,7 +285,7 @@ export const EmployeeListPage = () => {
       accessor: 'firstName',
       render: (row) => (
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-600 to-indigo-400 text-white font-semibold text-xs flex items-center justify-center shrink-0 shadow-sm">
+          <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-brand-600 to-brand-400 text-white font-semibold text-xs flex items-center justify-center shrink-0 shadow-sm">
             {row.firstName?.[0]}
             {row.lastName?.[0]}
           </div>
@@ -298,7 +298,7 @@ export const EmployeeListPage = () => {
                 {row.employeeCode}
               </span>
               {row.user?.roleName && (
-                <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100 flex items-center gap-1">
+                <span className="text-[10px] font-semibold text-brand-700 bg-brand-50 px-1.5 py-0.5 rounded border border-brand-100 flex items-center gap-1">
                   <KeyRound className="w-2.5 h-2.5" />
                   {row.user.roleName}
                 </span>
@@ -358,7 +358,7 @@ export const EmployeeListPage = () => {
             size="sm"
             icon={Eye}
             onClick={() => handleOpenView(row)}
-            className="text-slate-600 hover:text-indigo-600"
+            className="text-slate-600 hover:text-brand-600"
             title="View Details"
           >
             View
@@ -369,7 +369,7 @@ export const EmployeeListPage = () => {
               size="sm"
               icon={Edit2}
               onClick={() => handleOpenEdit(row)}
-              className="text-slate-600 hover:text-indigo-600"
+              className="text-slate-600 hover:text-brand-600"
               title="Edit Profile"
             >
               Edit
@@ -398,7 +398,7 @@ export const EmployeeListPage = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-            <Users className="w-6 h-6 text-indigo-600" />
+            <Users className="w-6 h-6 text-brand-500" />
             Employees Directory
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
@@ -467,7 +467,7 @@ export const EmployeeListPage = () => {
             <button
               type="button"
               onClick={handleClearFilters}
-              className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800 font-medium"
+              className="inline-flex items-center gap-1 text-brand-600 hover:text-brand-800 font-medium"
             >
               <X className="w-3.5 h-3.5" />
               Reset filters
@@ -553,7 +553,7 @@ export const EmployeeListPage = () => {
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-md bg-indigo-100 text-indigo-700 flex items-center justify-center">
+                <div className="w-6 h-6 rounded-md bg-brand-100 text-brand-700 flex items-center justify-center">
                   <KeyRound className="w-3.5 h-3.5" />
                 </div>
                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
@@ -564,7 +564,7 @@ export const EmployeeListPage = () => {
                 className={`text-[11px] font-medium px-2 py-0.5 rounded border ${
                   editingEmployee
                     ? 'text-slate-600 bg-white border-slate-200'
-                    : 'text-indigo-700 bg-indigo-50 border-indigo-200 font-semibold'
+                    : 'text-brand-700 bg-brand-50 border-brand-200 font-semibold'
                 }`}
               >
                 {editingEmployee ? 'Optional Reset' : 'Required'}
@@ -704,8 +704,8 @@ export const EmployeeListPage = () => {
           </div>
         ) : viewingEmployee ? (
           <div className="space-y-6">
-            <div className="flex items-center gap-4 p-4 rounded-2xl bg-indigo-50/50 border border-indigo-100">
-              <div className="w-14 h-14 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-bold text-lg shadow-sm">
+            <div className="flex items-center gap-4 p-4 rounded-2xl bg-brand-50/50 border border-brand-100">
+              <div className="w-14 h-14 rounded-2xl bg-brand-500 text-white flex items-center justify-center font-bold text-lg shadow-sm">
                 {viewingEmployee.firstName?.[0]}
                 {viewingEmployee.lastName?.[0]}
               </div>
@@ -713,7 +713,7 @@ export const EmployeeListPage = () => {
                 <h3 className="text-lg font-bold text-slate-900">
                   {viewingEmployee.firstName} {viewingEmployee.lastName}
                 </h3>
-                <p className="text-xs text-indigo-600 font-semibold">
+                <p className="text-xs text-brand-600 font-semibold">
                   {viewingEmployee.designation?.title || 'Staff Member'}
                 </p>
                 <div className="mt-1 flex items-center gap-2">
@@ -794,9 +794,9 @@ export const EmployeeListPage = () => {
               </div>
 
               {/* Portal Account Status Card */}
-              <div className="p-3.5 rounded-xl bg-indigo-50/60 border border-indigo-100/80 flex items-center justify-between col-span-2">
+              <div className="p-3.5 rounded-xl bg-brand-50/60 border border-brand-100/80 flex items-center justify-between col-span-2">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center shadow-xs">
+                  <div className="w-8 h-8 rounded-lg bg-brand-500 text-white flex items-center justify-center shadow-xs">
                     <KeyRound className="w-4 h-4" />
                   </div>
                   <div>

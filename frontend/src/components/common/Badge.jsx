@@ -6,7 +6,7 @@ export const Badge = ({ children, variant = 'neutral', size = 'md', className = 
     warning: 'bg-amber-50 text-amber-700 border-amber-200 ring-amber-600/10',
     danger: 'bg-rose-50 text-rose-700 border-rose-200 ring-rose-600/10',
     info: 'bg-sky-50 text-sky-700 border-sky-200 ring-sky-600/10',
-    brand: 'bg-indigo-50 text-indigo-700 border-indigo-200 ring-indigo-600/10',
+    brand: 'bg-brand-50 text-brand-700 border-brand-200 ring-brand-600/10',
     neutral: 'bg-slate-50 text-slate-700 border-slate-200 ring-slate-600/10',
   };
 

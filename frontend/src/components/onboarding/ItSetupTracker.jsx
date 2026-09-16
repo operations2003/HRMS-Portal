@@ -187,7 +187,7 @@ export const ItSetupTracker = ({
             <button
               type="button"
               onClick={() => handleCopyEmail(itSetup.workEmail)}
-              className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
+              className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-brand-600 dark:text-brand-400 hover:underline"
             >
               {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
               {copied ? 'Copied to Clipboard' : 'Copy Email Address'}
@@ -313,7 +313,7 @@ export const ItSetupTracker = ({
                   type="checkbox"
                   checked={emailProvisioned}
                   onChange={(e) => setEmailProvisioned(e.target.checked)}
-                  className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
+                  className="w-4 h-4 rounded text-brand-600 focus:ring-brand-500"
                 />
                 <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
                   Mark Corporate Email as Active & Provisioned
@@ -325,7 +325,7 @@ export const ItSetupTracker = ({
                   type="checkbox"
                   checked={hardwareAssigned}
                   onChange={(e) => setHardwareAssigned(e.target.checked)}
-                  className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
+                  className="w-4 h-4 rounded text-brand-600 focus:ring-brand-500"
                 />
                 <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
                   Workstation Imaged & Physically Assigned to Candidate
@@ -346,7 +346,7 @@ export const ItSetupTracker = ({
                       key={sys}
                       className={`p-2.5 rounded-lg border text-xs font-medium flex items-center gap-2 cursor-pointer transition-colors ${
                         checked
-                          ? 'border-indigo-500 bg-indigo-50/40 dark:bg-indigo-950/30 text-indigo-900 dark:text-indigo-200'
+                          ? 'border-brand-500 bg-brand-50/40 dark:bg-brand-950/30 text-brand-900 dark:text-brand-200'
                           : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/40 text-slate-600 dark:text-slate-300'
                       }`}
                     >
@@ -354,7 +354,7 @@ export const ItSetupTracker = ({
                         type="checkbox"
                         checked={checked}
                         onChange={() => toggleSystem(sys)}
-                        className="rounded text-indigo-600 focus:ring-indigo-500"
+                        className="rounded text-brand-600 focus:ring-brand-500"
                       />
                       <span>{sys}</span>
                     </label>

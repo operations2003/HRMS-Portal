@@ -178,7 +178,7 @@ export const DocumentVaultUploader = ({
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <Upload className="w-5 h-5 text-indigo-600" />
+                <Upload className="w-5 h-5 text-brand-600" />
                 Upload Onboarding Document to Vault
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
@@ -199,10 +199,10 @@ export const DocumentVaultUploader = ({
               onClick={() => fileInputRef.current?.click()}
               className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all ${
                 isDragging
-                  ? 'border-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/20'
+                  ? 'border-brand-600 bg-brand-50/50 dark:bg-brand-950/20'
                   : selectedFile
                   ? 'border-emerald-500 bg-emerald-50/20 dark:bg-emerald-950/10'
-                  : 'border-slate-300 dark:border-slate-700 hover:border-indigo-400 bg-slate-50/50 dark:bg-slate-800/30'
+                  : 'border-slate-300 dark:border-slate-700 hover:border-brand-400 bg-slate-50/50 dark:bg-slate-800/30'
               }`}
             >
               <input
@@ -291,7 +291,7 @@ export const DocumentVaultUploader = ({
         <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
           <div>
             <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <FileText className="w-5 h-5 text-indigo-600" />
+              <FileText className="w-5 h-5 text-brand-600" />
               Document Vault ({documents.length})
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">

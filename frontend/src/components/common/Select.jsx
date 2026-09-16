@@ -32,7 +32,7 @@ export const Select = ({
         className={`block w-full rounded-lg border text-sm py-2.5 px-3.5 bg-white transition-colors duration-150 ${
           error
             ? 'border-rose-400 text-rose-900 focus:border-rose-500 focus:ring-rose-500 bg-rose-50/20'
-            : 'border-slate-300 text-slate-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500'
+            : 'border-slate-300 text-slate-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500'
         } disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed ${className}`}
         {...props}
       >

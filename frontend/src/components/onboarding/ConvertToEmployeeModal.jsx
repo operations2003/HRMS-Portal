@@ -92,8 +92,8 @@ export const ConvertToEmployeeModal = ({
             </div>
           </div>
         ) : (
-          <div className="p-4 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50 text-indigo-900 dark:text-indigo-200 text-xs flex items-start gap-3">
-            <Sparkles className="w-5 h-5 shrink-0 text-indigo-600 dark:text-indigo-400" />
+          <div className="p-4 rounded-xl bg-brand-50/70 dark:bg-brand-950/30 border border-brand-100 dark:border-brand-900/50 text-brand-900 dark:text-brand-200 text-xs flex items-start gap-3">
+            <Sparkles className="w-5 h-5 shrink-0 text-brand-600 dark:text-brand-400" />
             <div>
               <p className="font-semibold text-sm">Day-1 Profile Activation</p>
               <p className="mt-0.5 text-slate-600 dark:text-slate-300 leading-relaxed">

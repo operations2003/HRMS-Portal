@@ -187,7 +187,7 @@ export const UserListPage = () => {
       render: (row) =>
         row.organization ? (
           <div className="flex items-center gap-1.5 text-xs">
-            <Building2 className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+            <Building2 className="w-3.5 h-3.5 text-brand-500 shrink-0" />
             <span className="font-medium text-slate-800">{row.organization.name}</span>
             <span className="text-[10px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
               {row.organization.code}
@@ -204,7 +204,7 @@ export const UserListPage = () => {
         <div className="flex items-center gap-2">
           <div className="flex flex-wrap gap-1 max-w-xs">
             {row.roleName === 'Admin' || row.roleName === 'SuperAdmin' ? (
-              <span className="text-xs text-indigo-600 font-semibold flex items-center gap-1">
+              <span className="text-xs text-brand-600 font-semibold flex items-center gap-1">
                 <ShieldCheck className="w-3.5 h-3.5" />
                 Full System Access
               </span>
@@ -227,7 +227,7 @@ export const UserListPage = () => {
           <button
             type="button"
             onClick={() => setViewingUser(row)}
-            className="p-1 text-slate-400 hover:text-indigo-600 transition-colors"
+            className="p-1 text-slate-400 hover:text-brand-600 transition-colors"
             title="View full permission details"
           >
             <Eye className="w-4 h-4" />
@@ -248,7 +248,7 @@ export const UserListPage = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-            <UserCheck className="w-6 h-6 text-indigo-600" />
+            <UserCheck className="w-6 h-6 text-brand-500" />
             User Accounts & RBAC
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
@@ -334,7 +334,7 @@ export const UserListPage = () => {
               </h5>
 
               {viewingUser.roleName === 'Admin' || viewingUser.roleName === 'SuperAdmin' ? (
-                <div className="p-4 rounded-xl bg-indigo-50/70 border border-indigo-100 text-xs text-indigo-900 leading-relaxed">
+                <div className="p-4 rounded-xl bg-brand-50/70 border border-brand-100 text-xs text-brand-900 leading-relaxed">
                   <p className="font-semibold mb-1">Unrestricted Administrative Authority</p>
                   Admin bypasses granular permission constraints with full CRUD access to organizations, employees, users, departments, and metrics across all tenants.
                 </div>

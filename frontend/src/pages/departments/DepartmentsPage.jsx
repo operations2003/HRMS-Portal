@@ -48,7 +48,7 @@ export const DepartmentsPage = () => {
       accessor: 'name',
       render: (row) => (
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xs">
+          <div className="w-8 h-8 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center font-bold text-xs">
             <Briefcase className="w-4 h-4" />
           </div>
           <div>
@@ -135,7 +135,7 @@ export const DepartmentsPage = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-            <Briefcase className="w-6 h-6 text-indigo-600" />
+            <Briefcase className="w-6 h-6 text-brand-500" />
             Departments & Designations
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">

@@ -111,7 +111,7 @@ export const OnboardingDashboardPage = () => {
       id: 'IN_PROGRESS',
       title: 'In Progress',
       description: 'Checklist, BGV & IT setup underway',
-      color: 'border-indigo-500 bg-indigo-50/20 text-indigo-700',
+      color: 'border-brand-500 bg-brand-50/20 text-brand-700',
       filter: (c) =>
         (c.onboardingStatus === 'IN_PROGRESS' ||
           c.onboardingStatus === 'DOCUMENTATION_PENDING' ||
@@ -157,12 +157,12 @@ export const OnboardingDashboardPage = () => {
       header: 'New Hire Candidate',
       accessor: (row) => (
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-700 text-white font-bold flex items-center justify-center text-sm shadow-sm">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-white font-bold flex items-center justify-center text-sm shadow-sm">
             {row.firstName?.[0]}
             {row.lastName?.[0]}
           </div>
           <div>
-            <span className="font-semibold text-slate-900 dark:text-white block hover:text-indigo-600 transition-colors">
+            <span className="font-semibold text-slate-900 dark:text-white block hover:text-brand-600 transition-colors">
               {row.fullName}
             </span>
             <span className="text-xs text-slate-400 font-mono">{row.atsCandidateId}</span>
@@ -214,7 +214,7 @@ export const OnboardingDashboardPage = () => {
                   pct === 100
                     ? 'bg-emerald-500'
                     : pct >= 50
-                    ? 'bg-indigo-600'
+                    ? 'bg-brand-600'
                     : 'bg-amber-500'
                 }`}
                 style={{ width: `${pct}%` }}
@@ -249,7 +249,7 @@ export const OnboardingDashboardPage = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2.5">
-            <UserCheck className="w-7 h-7 text-indigo-600" />
+            <UserCheck className="w-7 h-7 text-brand-600" />
             Phase 3: Onboarding & Candidate Intake
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
@@ -320,11 +320,11 @@ export const OnboardingDashboardPage = () => {
             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
               Onboarding In Progress
             </p>
-            <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400 mt-1">
+            <p className="text-2xl font-black text-brand-600 dark:text-brand-400 mt-1">
               {metrics.inProgress}
             </p>
           </div>
-          <div className="w-12 h-12 rounded-xl bg-indigo-100 dark:bg-indigo-950/50 text-indigo-600 flex items-center justify-center">
+          <div className="w-12 h-12 rounded-xl bg-brand-100 dark:bg-brand-950/50 text-brand-600 flex items-center justify-center">
             <Clock className="w-6 h-6" />
           </div>
         </div>
@@ -369,7 +369,7 @@ export const OnboardingDashboardPage = () => {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search candidate by name, email, or ATS ID..."
-              className="w-full pl-10 pr-4 py-2 rounded-xl text-sm border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white"
+              className="w-full pl-10 pr-4 py-2 rounded-xl text-sm border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white"
             />
           </div>
 
@@ -378,7 +378,7 @@ export const OnboardingDashboardPage = () => {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl text-sm border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-3 py-2 rounded-xl text-sm border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500"
             >
               <option value="ALL">All Statuses</option>
               <option value="NOT_STARTED">Not Started</option>
@@ -394,7 +394,7 @@ export const OnboardingDashboardPage = () => {
               <select
                 value={departmentFilter}
                 onChange={(e) => setDepartmentFilter(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl text-sm border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-3 py-2 rounded-xl text-sm border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500"
               >
                 <option value="ALL">All Departments</option>
                 {departmentOptions.map((d) => (
@@ -412,7 +412,7 @@ export const OnboardingDashboardPage = () => {
               type="date"
               value={joiningDateFilter}
               onChange={(e) => setJoiningDateFilter(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl text-sm border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-3 py-2 rounded-xl text-sm border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500"
               title="Filter by joining date"
             />
           </div>
@@ -493,11 +493,11 @@ export const OnboardingDashboardPage = () => {
                         <div
                           key={candidate.id}
                           onClick={() => navigate(`/onboarding/${candidate.id}`)}
-                          className="p-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 shadow-sm hover:shadow-md hover:border-indigo-400 dark:hover:border-indigo-500 cursor-pointer transition-all space-y-3"
+                          className="p-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 shadow-sm hover:shadow-md hover:border-brand-400 dark:hover:border-brand-500 cursor-pointer transition-all space-y-3"
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div>
-                              <h4 className="text-sm font-bold text-slate-900 dark:text-white hover:text-indigo-600 transition-colors">
+                              <h4 className="text-sm font-bold text-slate-900 dark:text-white hover:text-brand-600 transition-colors">
                                 {candidate.fullName}
                               </h4>
                               <p className="text-xs text-slate-500">{candidate.email}</p>
@@ -524,7 +524,7 @@ export const OnboardingDashboardPage = () => {
                           <div>
                             <div className="flex items-center justify-between text-[11px] mb-1">
                               <span className="font-semibold text-slate-500">Readiness</span>
-                              <span className="font-bold text-indigo-600">{pct}%</span>
+                              <span className="font-bold text-brand-600">{pct}%</span>
                             </div>
                             <div className="w-full bg-slate-100 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
                               <div
@@ -532,7 +532,7 @@ export const OnboardingDashboardPage = () => {
                                   pct === 100
                                     ? 'bg-emerald-500'
                                     : pct >= 50
-                                    ? 'bg-indigo-600'
+                                    ? 'bg-brand-600'
                                     : 'bg-amber-500'
                                 }`}
                                 style={{ width: `${pct}%` }}

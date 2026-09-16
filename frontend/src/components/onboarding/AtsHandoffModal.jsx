@@ -90,8 +90,8 @@ export const AtsHandoffModal = ({ isOpen, onClose, onHandoffSuccess }) => {
       maxWidth="max-w-xl"
     >
       <form onSubmit={handleSimulateHandoff} className="space-y-4">
-        <div className="p-3.5 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900 text-indigo-900 dark:text-indigo-200 text-xs flex items-center gap-2.5">
-          <Sparkles className="w-5 h-5 shrink-0 text-indigo-600 dark:text-indigo-400" />
+        <div className="p-3.5 rounded-xl bg-brand-50/70 dark:bg-brand-950/40 border border-brand-100 dark:border-brand-900 text-brand-900 dark:text-brand-200 text-xs flex items-center gap-2.5">
+          <Sparkles className="w-5 h-5 shrink-0 text-brand-600 dark:text-brand-400" />
           <span>
             This API endpoint (`POST /api/v1/onboarding/ats-handoff`) implements idempotency headers,
             checks for duplicates against active employees & new hires, and persists offer documents.

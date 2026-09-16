@@ -100,7 +100,7 @@ export const OnboardingDetailPage = () => {
         <button
           type="button"
           onClick={() => navigate('/onboarding')}
-          className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-indigo-600 transition-colors"
+          className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-brand-600 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Onboarding Pipeline
@@ -135,7 +135,7 @@ export const OnboardingDetailPage = () => {
       <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8 shadow-sm">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div className="flex items-start gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-700 text-white font-black text-2xl flex items-center justify-center shadow-lg shadow-indigo-500/20 shrink-0">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 text-white font-black text-2xl flex items-center justify-center shadow-lg shadow-brand-500/20 shrink-0">
               {candidate.firstName?.[0]}
               {candidate.lastName?.[0]}
             </div>
@@ -198,7 +198,7 @@ export const OnboardingDetailPage = () => {
               <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                 Overall Day-1 Readiness
               </span>
-              <span className="text-3xl font-black text-indigo-600 dark:text-indigo-400">
+              <span className="text-3xl font-black text-brand-600 dark:text-brand-400">
                 {completionPercentage}%
               </span>
             </div>
@@ -208,7 +208,7 @@ export const OnboardingDetailPage = () => {
                   completionPercentage === 100
                     ? 'bg-emerald-500'
                     : completionPercentage >= 50
-                    ? 'bg-indigo-600'
+                    ? 'bg-brand-600'
                     : 'bg-amber-500'
                 }`}
                 style={{ width: `${completionPercentage}%` }}
@@ -225,7 +225,7 @@ export const OnboardingDetailPage = () => {
           onClick={() => setActiveTab('checklist')}
           className={`pb-3.5 px-4 text-sm font-semibold border-b-2 flex items-center gap-2 transition-all ${
             activeTab === 'checklist'
-              ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
+              ? 'border-brand-600 text-brand-600 dark:text-brand-400'
               : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
           }`}
         >
@@ -238,7 +238,7 @@ export const OnboardingDetailPage = () => {
           onClick={() => setActiveTab('documents')}
           className={`pb-3.5 px-4 text-sm font-semibold border-b-2 flex items-center gap-2 transition-all ${
             activeTab === 'documents'
-              ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
+              ? 'border-brand-600 text-brand-600 dark:text-brand-400'
               : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
           }`}
         >
@@ -251,7 +251,7 @@ export const OnboardingDetailPage = () => {
           onClick={() => setActiveTab('it')}
           className={`pb-3.5 px-4 text-sm font-semibold border-b-2 flex items-center gap-2 transition-all ${
             activeTab === 'it'
-              ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
+              ? 'border-brand-600 text-brand-600 dark:text-brand-400'
               : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
           }`}
         >
@@ -264,7 +264,7 @@ export const OnboardingDetailPage = () => {
           onClick={() => setActiveTab('ats')}
           className={`pb-3.5 px-4 text-sm font-semibold border-b-2 flex items-center gap-2 transition-all ${
             activeTab === 'ats'
-              ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
+              ? 'border-brand-600 text-brand-600 dark:text-brand-400'
               : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
           }`}
         >
@@ -312,7 +312,7 @@ export const OnboardingDetailPage = () => {
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-indigo-600" />
+              <Sparkles className="w-5 h-5 text-brand-600" />
               ATS Hiring Payload Ingestion Data
             </h3>
             <span className="text-xs font-mono text-slate-400">

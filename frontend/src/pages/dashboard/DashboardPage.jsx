@@ -70,9 +70,9 @@ export const DashboardPage = () => {
       value: stats?.totalOrganizations || 0,
       subtext: `${stats?.activeOrganizations || 0} active organizations`,
       icon: Building2,
-      color: 'bg-indigo-500 text-indigo-600',
-      bgLight: 'bg-indigo-50/70',
-      border: 'border-indigo-100',
+      color: 'text-brand-600',
+      bgLight: 'bg-brand-50',
+      border: 'border-brand-200/70',
       action: () => navigate('/organizations'),
     },
     {
@@ -80,9 +80,9 @@ export const DashboardPage = () => {
       value: stats?.totalEmployees || 0,
       subtext: `${stats?.activeEmployees || 0} active, ${stats?.onLeaveEmployees || 0} on leave`,
       icon: Users,
-      color: 'bg-emerald-500 text-emerald-600',
-      bgLight: 'bg-emerald-50/70',
-      border: 'border-emerald-100',
+      color: 'text-emerald-600',
+      bgLight: 'bg-emerald-50',
+      border: 'border-emerald-200/70',
       action: () => navigate('/employees'),
     },
     {
@@ -90,9 +90,9 @@ export const DashboardPage = () => {
       value: stats?.totalDepartments || 0,
       subtext: 'Operational units mapped',
       icon: Briefcase,
-      color: 'bg-amber-500 text-amber-600',
-      bgLight: 'bg-amber-50/70',
-      border: 'border-amber-100',
+      color: 'text-amber-600',
+      bgLight: 'bg-amber-50',
+      border: 'border-amber-200/70',
       action: () => navigate('/organizations'),
     },
     {
@@ -100,28 +100,28 @@ export const DashboardPage = () => {
       value: stats?.totalUsers || 0,
       subtext: 'RBAC identity profiles',
       icon: UserCheck,
-      color: 'bg-sky-500 text-sky-600',
-      bgLight: 'bg-sky-50/70',
-      border: 'border-sky-100',
+      color: 'text-slate-600',
+      bgLight: 'bg-slate-100',
+      border: 'border-slate-200/70',
       action: () => navigate('/users'),
     },
   ];
 
   return (
     <div className="space-y-8">
-      {/* Welcome Banner */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-indigo-900 via-indigo-800 to-slate-900 p-6 sm:p-8 text-white shadow-xl">
+      {/* Welcome Hero Banner */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 p-6 sm:p-8 text-white shadow-xl border border-slate-800">
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-200 text-xs font-semibold backdrop-blur-sm border border-indigo-400/20 mb-3">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>HRMS Enterprise Workspace</span>
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-500/20 text-brand-300 text-xs font-semibold backdrop-blur-sm border border-brand-500/30 mb-3">
+              <Sparkles className="w-3.5 h-3.5 text-brand-400" />
+              <span>TaskNera Enterprise Console</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
               Welcome back, {user?.firstName}!
             </h1>
-            <p className="mt-1 text-sm text-indigo-200/80 max-w-xl">
-              Oversee corporate organizations, manage employee lifecycle profiles, and maintain strict role-based access control.
+            <p className="mt-1 text-sm text-slate-300 max-w-xl leading-relaxed">
+              People. Processes. Performance. Manage your workforce with enterprise-grade precision and real-time visibility.
             </p>
           </div>
 
@@ -132,7 +132,7 @@ export const DashboardPage = () => {
                 size="md"
                 icon={Plus}
                 onClick={() => navigate('/employees?action=new')}
-                className="bg-white text-indigo-950 hover:bg-indigo-50 border-0 shadow-md font-semibold"
+                className="shadow-lg shadow-brand-500/30"
               >
                 Add Employee
               </Button>
@@ -143,7 +143,7 @@ export const DashboardPage = () => {
                 size="md"
                 icon={Plus}
                 onClick={() => navigate('/organizations?action=new')}
-                className="bg-indigo-800/60 text-white border-indigo-700/50 hover:bg-indigo-700/60"
+                className="bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700 hover:text-white"
               >
                 Add Organization
               </Button>
@@ -151,8 +151,9 @@ export const DashboardPage = () => {
           </div>
         </div>
 
-        {/* Decorative background circle */}
-        <div className="absolute -right-16 -top-24 w-72 h-72 rounded-full bg-indigo-500/10 blur-3xl pointer-events-none" />
+        {/* Ambient brand glow in corner */}
+        <div className="absolute -right-20 -top-24 w-80 h-80 rounded-full bg-brand-500/25 blur-3xl pointer-events-none" />
+        <div className="absolute right-1/3 -bottom-24 w-64 h-64 rounded-full bg-brand-600/15 blur-2xl pointer-events-none" />
       </div>
 
       {/* KPI Cards Grid */}
@@ -166,7 +167,7 @@ export const DashboardPage = () => {
               className={`rounded-2xl border ${card.border} bg-white p-5 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer group`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider group-hover:text-indigo-600 transition-colors">
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider group-hover:text-brand-600 transition-colors">
                   {card.title}
                 </span>
                 <div className={`p-2.5 rounded-xl ${card.bgLight} ${card.color}`}>
@@ -275,7 +276,7 @@ export const DashboardPage = () => {
                     </div>
                     <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
                       <div
-                        className="h-full rounded-full bg-indigo-600 transition-all duration-500"
+                        className="h-full rounded-full bg-brand-500 transition-all duration-500"
                         style={{ width: `${percentage}%` }}
                       />
                     </div>

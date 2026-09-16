@@ -43,7 +43,7 @@ export const Input = ({
           } pr-3.5 ${
             error
               ? 'border-rose-400 text-rose-900 placeholder-rose-300 focus:border-rose-500 focus:ring-rose-500 bg-rose-50/20'
-              : 'border-slate-300 text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 bg-white'
+              : 'border-slate-300 text-slate-900 placeholder-slate-400 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 bg-white'
           } disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed ${className}`}
           {...props}
         />

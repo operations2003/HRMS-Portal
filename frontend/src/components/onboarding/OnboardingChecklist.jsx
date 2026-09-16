@@ -61,7 +61,7 @@ export const OnboardingChecklist = ({
       title: '1. Pre-Joining Documents & Compliance',
       subtitle: 'Identity verification, signed documents, and tax disclosures',
       icon: FileCheck,
-      color: 'from-blue-500 to-indigo-600',
+      color: 'from-blue-500 to-brand-600',
       items: [
         {
           key: 'idCardGenerated',
@@ -84,7 +84,7 @@ export const OnboardingChecklist = ({
       title: '3. IT Setup & Digital Access',
       subtitle: 'Corporate email, laptop provisioning, and platform credentials',
       icon: Laptop,
-      color: 'from-purple-500 to-indigo-600',
+      color: 'from-purple-500 to-brand-600',
       items: [
         {
           key: 'itSetup',
@@ -150,11 +150,11 @@ export const OnboardingChecklist = ({
   return (
     <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
       {/* Header & Progress Bar */}
-      <div className="p-6 border-b border-slate-100 dark:border-slate-800 bg-gradient-to-r from-slate-50 to-indigo-50/30 dark:from-slate-800/40 dark:to-indigo-950/20">
+      <div className="p-6 border-b border-slate-100 dark:border-slate-800 bg-gradient-to-r from-slate-50 to-brand-50/30 dark:from-slate-800/40 dark:to-brand-950/20">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+              <Sparkles className="w-5 h-5 text-brand-600 dark:text-brand-400" />
               Onboarding Checklist & Day-1 Readiness
             </h3>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
@@ -164,7 +164,7 @@ export const OnboardingChecklist = ({
 
           <div className="flex items-center gap-3">
             <div className="text-right">
-              <span className="text-2xl font-black text-indigo-600 dark:text-indigo-400">
+              <span className="text-2xl font-black text-brand-600 dark:text-brand-400">
                 {completionPercentage}%
               </span>
               <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
@@ -181,7 +181,7 @@ export const OnboardingChecklist = ({
               completionPercentage === 100
                 ? 'bg-emerald-500'
                 : completionPercentage >= 50
-                ? 'bg-indigo-600'
+                ? 'bg-brand-600'
                 : 'bg-amber-500'
             }`}
             style={{ width: `${completionPercentage}%` }}
@@ -279,7 +279,7 @@ export const OnboardingChecklist = ({
                               >
                                 <div className="mt-0.5 shrink-0">
                                   {isUpdating ? (
-                                    <Loader2 className="w-5 h-5 text-indigo-600 animate-spin" />
+                                    <Loader2 className="w-5 h-5 text-brand-600 animate-spin" />
                                   ) : item.completed ? (
                                     <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 fill-emerald-100 dark:fill-emerald-950" />
                                   ) : (
@@ -308,7 +308,7 @@ export const OnboardingChecklist = ({
                                   size="xs"
                                   icon={Send}
                                   onClick={() => handleRequestItem(item.title)}
-                                  className="shrink-0 text-slate-500 hover:text-indigo-600"
+                                  className="shrink-0 text-slate-500 hover:text-brand-600"
                                 >
                                   Request
                                 </Button>

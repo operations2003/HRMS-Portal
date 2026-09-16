@@ -10,8 +10,8 @@ export const LoadingSpinner = ({ size = 'md', message = 'Loading...', fullPage =
 
   const content = (
     <div className="flex flex-col items-center justify-center p-8 text-center space-y-3">
-      <Loader2 className={`${sizes[size] || sizes.md} animate-spin text-indigo-600`} />
-      {message && <p className="text-sm text-slate-500 font-medium animate-pulse">{message}</p>}
+      <Loader2 className={`${sizes[size] || sizes.md} animate-spin text-brand-500`} />
+      {message && <p className="text-sm text-slate-600 font-medium animate-pulse">{message}</p>}
     </div>
   );
 
