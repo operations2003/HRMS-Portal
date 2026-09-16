@@ -157,9 +157,19 @@ export const leaveRepository = {
     const sql = `
       SELECT * FROM leave_types
       WHERE org_id = $1 AND status = 'Active'
-      ORDER BY name ASC;
+      ORDER BY 
+        CASE 
+          WHEN UPPER(code) = 'EL' OR UPPER(name) LIKE '%EMERGENCY%' THEN 1
+          WHEN UPPER(code) = 'SL' OR UPPER(name) LIKE '%SICK%' THEN 2
+          WHEN UPPER(code) = 'CL' OR UPPER(name) LIKE '%CASUAL%' THEN 3
+          ELSE 4
+        END,
+        name ASC;
     `;
-    const res = await pool.query(sql, [orgId]);
+    let res = await pool.query(sql, [orgId]);
+    if (res.rows.length === 0 && orgId && orgId !== 'org-1') {
+      res = await pool.query(sql, ['org-1']);
+    }
     return res.rows.map(mapLeaveTypeRow);
   },
 
@@ -189,17 +199,25 @@ export const leaveRepository = {
   },
 
   /**
-   * Find leave type by ID
+   * Find leave type by ID or Code
    */
   async findLeaveTypeById(id, orgId = null) {
-    let sql = 'SELECT * FROM leave_types WHERE id = $1';
+    let sql = `
+      SELECT * FROM leave_types 
+      WHERE (
+        id = $1 
+        OR LOWER(id) = LOWER($1) 
+        OR LOWER(code) = LOWER($1) 
+        OR LOWER(name) = LOWER($1)
+      )
+    `;
     const values = [id];
     if (orgId) {
-      sql += ' AND org_id = $2';
+      sql += ' AND (org_id = $2 OR org_id = \'org-1\')';
       values.push(orgId);
     }
-    sql += ' LIMIT 1;';
-    const res = await pool.query(sql, values);
+    sql += ' ORDER BY CASE WHEN org_id = $2 THEN 0 ELSE 1 END, status ASC LIMIT 1;';
+    const res = await pool.query(sql, orgId ? [id, orgId] : [id]);
     return res.rows.length > 0 ? mapLeaveTypeRow(res.rows[0]) : null;
   },
 
@@ -587,8 +605,15 @@ export const leaveRepository = {
         lt.code AS lt_code
       FROM leave_balances lb
       JOIN leave_types lt ON lt.id = lb.leave_type_id
-      WHERE lb.employee_id = $1 AND lb.year = $2
-      ORDER BY lt.name ASC;
+      WHERE lb.employee_id = $1 AND lb.year = $2 AND lt.status = 'Active'
+      ORDER BY 
+        CASE 
+          WHEN UPPER(lt.code) = 'EL' OR UPPER(lt.name) LIKE '%EMERGENCY%' THEN 1
+          WHEN UPPER(lt.code) = 'SL' OR UPPER(lt.name) LIKE '%SICK%' THEN 2
+          WHEN UPPER(lt.code) = 'CL' OR UPPER(lt.name) LIKE '%CASUAL%' THEN 3
+          ELSE 4
+        END,
+        lt.name ASC;
     `;
     const res = await pool.query(sql, [employeeId, year]);
     return res.rows.map(mapLeaveBalanceRow);

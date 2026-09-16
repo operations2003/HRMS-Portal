@@ -353,7 +353,7 @@ export const employeeRepository = {
    */
   async getMetadata() {
     const [orgsRes, deptsRes, desigsRes, rolesRes] = await Promise.all([
-      pool.query('SELECT id, name, code FROM organizations ORDER BY name ASC;'),
+      pool.query("SELECT id, name, code FROM organizations WHERE status = 'Active' ORDER BY name ASC;"),
       pool.query('SELECT id, org_id AS "orgId", name, code FROM departments ORDER BY name ASC;'),
       pool.query('SELECT id, org_id AS "orgId", title, code FROM designations ORDER BY title ASC;'),
       pool.query("SELECT id, name, description FROM roles WHERE status = 'Active' ORDER BY name ASC;"),

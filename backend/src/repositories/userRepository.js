@@ -77,7 +77,7 @@ export const HARDCODED_SUPERADMIN = {
     'leave:write',
     'leave:approve',
   ],
-  organization: { id: 'org-1', name: 'TechCorp Solutions', code: 'TCORP' },
+  organization: { id: 'org-1', name: 'Tasknera Global HR Solutions', code: 'TASKNERA' },
 };
 
 export const userRepository = {

@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   Clock,
   Calendar,
@@ -8,7 +7,6 @@ import {
   Users,
   Building2,
   Sparkles,
-  CalendarDays,
   ShieldCheck,
   AlertCircle,
 } from 'lucide-react';
@@ -25,7 +23,6 @@ import { Alert } from '../../components/common/Alert.jsx';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
 
 export const AttendanceDashboardPage = () => {
-  const navigate = useNavigate();
   const { user, hasRole, hasPermission } = useAuth();
   const toast = useToast();
 
@@ -259,18 +256,6 @@ export const AttendanceDashboardPage = () => {
           >
             Refresh Logs
           </Button>
-
-          {hasPermission('leave:write') && (
-            <Button
-              variant="primary"
-              size="md"
-              icon={CalendarDays}
-              onClick={() => navigate('/leaves')}
-              className="shadow-sm shadow-brand-500/20"
-            >
-              Apply Leave
-            </Button>
-          )}
         </div>
       </div>
 

@@ -18,6 +18,12 @@ import { Select } from '../common/Select.jsx';
 import { Alert } from '../common/Alert.jsx';
 import { leaveService } from '../../services/leaveService.js';
 
+const DEFAULT_LEAVE_CATEGORIES = [
+  { id: 'lt-el', name: 'Emergency', code: 'EL', description: 'Leave for unforeseen emergencies and urgent personal matters' },
+  { id: 'lt-sl', name: 'Sick', code: 'SL', description: 'Leave for medical and health recovery' },
+  { id: 'lt-cl', name: 'Casual', code: 'CL', description: 'Casual leave for personal matters' },
+];
+
 export const ApplyLeaveModal = ({
   isOpen,
   onClose,
@@ -25,6 +31,8 @@ export const ApplyLeaveModal = ({
   leaveTypes = [],
   leaveBalances = [],
 }) => {
+  const effectiveLeaveTypes = leaveTypes && leaveTypes.length > 0 ? leaveTypes : DEFAULT_LEAVE_CATEGORIES;
+
   const [formData, setFormData] = useState({
     leaveTypeId: '',
     startDate: '',
@@ -45,7 +53,7 @@ export const ApplyLeaveModal = ({
   // Initialize or reset form on open
   useEffect(() => {
     if (isOpen) {
-      const defaultType = leaveTypes[0]?.id || '';
+      const defaultType = effectiveLeaveTypes[0]?.id || '';
       const todayStr = new Date().toISOString().split('T')[0];
       setFormData({
         leaveTypeId: defaultType,
@@ -181,17 +189,15 @@ export const ApplyLeaveModal = ({
     }
   };
 
-  // Leave Type options mapping with balance
-  const typeOptions = leaveTypes.map((t) => {
-    const bal = leaveBalances.find((b) => b.leaveTypeId === t.id);
-    const balanceText = bal ? ` (${bal.remainingDays} days left)` : '';
+  // Leave Category options mapping (Emergency, Sick, Casual)
+  const typeOptions = effectiveLeaveTypes.map((t) => {
     return {
       value: t.id,
-      label: `${t.name}${balanceText}`,
+      label: t.name,
     };
   });
 
-  const selectedTypeObj = leaveTypes.find((t) => t.id === formData.leaveTypeId);
+  const selectedTypeObj = effectiveLeaveTypes.find((t) => t.id === formData.leaveTypeId);
   const selectedBalanceObj = leaveBalances.find((b) => b.leaveTypeId === formData.leaveTypeId);
 
   return (

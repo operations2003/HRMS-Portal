@@ -205,7 +205,13 @@ export const leaveService = {
    * Get active leave types for organization
    */
   async getLeaveTypes(user) {
-    return leaveRepository.findLeaveTypes(user.orgId);
+    const emp = await resolveRequesterEmployee(user);
+    const orgId = emp?.orgId || user?.orgId || 'org-1';
+    let types = await leaveRepository.findLeaveTypes(orgId);
+    if (!types || types.length === 0) {
+      types = await leaveRepository.findLeaveTypes('org-1');
+    }
+    return types;
   },
 
   /**

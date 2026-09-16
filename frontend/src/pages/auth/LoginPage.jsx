@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.jsx';
-import { Mail, Shield, Check, Sparkles } from 'lucide-react';
+import { Mail, Sparkles } from 'lucide-react';
 import { Input } from '../../components/common/Input.jsx';
 import { PasswordInput } from '../../components/common/PasswordInput.jsx';
 import { Button } from '../../components/common/Button.jsx';
@@ -18,13 +18,6 @@ export const LoginPage = () => {
   const [errors, setErrors] = useState({});
   const [apiError, setApiError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-
-  const demoAccounts = [
-    { role: 'Admin', email: 'shubham@tasknera.com', pass: 'Shubham@264', desc: 'Full System Administrator' },
-    { role: 'HR', email: 'hr@techcorp.local', pass: 'Hr@123', desc: 'Employee & Dept Lifecycle' },
-    { role: 'Manager', email: 'manager@acme.example.com', pass: 'Password@123', desc: 'Team & Dept Oversight' },
-    { role: 'Employee', email: 'emp@techcorp.local', pass: 'Emp@123', desc: 'Self-Service & Directory' },
-  ];
 
   const validate = () => {
     const errs = {};
@@ -64,13 +57,6 @@ export const LoginPage = () => {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleSelectDemo = (acc) => {
-    setEmail(acc.email);
-    setPassword(acc.pass);
-    setErrors({});
-    setApiError(null);
   };
 
   return (
@@ -149,34 +135,6 @@ export const LoginPage = () => {
               Sign In
             </Button>
           </form>
-
-          {/* Demo Accounts Quick-Select */}
-          <div className="mt-8 pt-6 border-t border-slate-100">
-            <div className="flex items-center gap-2 text-xs font-semibold text-slate-600 uppercase tracking-wider mb-4">
-              <Shield className="w-4 h-4 text-brand-500" />
-              <span>Demo Accounts (RBAC)</span>
-            </div>
-            <div className="grid grid-cols-2 gap-2.5">
-              {demoAccounts.map((acc) => (
-                <button
-                  key={acc.role}
-                  type="button"
-                  onClick={() => handleSelectDemo(acc)}
-                  className={`p-3 rounded-xl text-left border-2 text-xs transition-all hover:scale-105 ${
-                    email === acc.email
-                      ? 'border-brand-500 bg-brand-50/70 text-brand-900 font-semibold shadow-md shadow-brand-500/20'
-                      : 'border-slate-200 hover:border-brand-300 hover:bg-slate-50 text-slate-700'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-bold text-sm text-slate-900">{acc.role}</span>
-                    {email === acc.email && <Check className="w-4 h-4 text-brand-500" />}
-                  </div>
-                  <div className="text-[11px] text-slate-500 leading-relaxed">{acc.desc}</div>
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
 
         {/* Footer info */}
