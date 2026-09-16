@@ -115,6 +115,33 @@ export const notificationRepository = {
   },
 
   /**
+   * Find single notification by ID and User ID
+   */
+  async findById(notificationId, userId) {
+    const query = `
+      SELECT * FROM notifications
+      WHERE id = $1 AND user_id = $2
+      LIMIT 1;
+    `;
+    const { rows } = await pool.query(query, [notificationId, userId]);
+    return mapNotificationRow(rows[0]);
+  },
+
+  /**
+   * Mark single notification as unread
+   */
+  async markAsUnread(notificationId, userId) {
+    const query = `
+      UPDATE notifications
+      SET is_read = FALSE, read_at = NULL
+      WHERE id = $1 AND user_id = $2
+      RETURNING *;
+    `;
+    const { rows } = await pool.query(query, [notificationId, userId]);
+    return mapNotificationRow(rows[0]);
+  },
+
+  /**
    * Mark all unread notifications as read for a user
    */
   async markAllAsRead(userId) {

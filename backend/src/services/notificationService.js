@@ -30,10 +30,45 @@ export const notificationService = {
   },
 
   /**
+   * Mark a single notification as unread
+   */
+  async markNotificationUnread(notificationId, userId) {
+    const updated = await notificationRepository.markAsUnread(notificationId, userId);
+    if (!updated) {
+      const err = new Error('Notification not found or access denied.');
+      err.statusCode = 404;
+      throw err;
+    }
+    return updated;
+  },
+
+  /**
    * Mark all notifications as read
    */
   async markAllNotificationsRead(userId) {
     return notificationRepository.markAllAsRead(userId);
+  },
+
+  /**
+   * Create system or custom notification
+   */
+  async createSystemNotification({ orgId, userId, eventType = 'GENERAL_ALERT', title, message, entityType = 'GENERAL', entityId = 'system', actionUrl = '' }) {
+    if (!userId || !title || !message) {
+      const err = new Error('User ID, title, and message are required.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    return notificationRepository.create({
+      orgId: orgId || 'org-1',
+      userId,
+      eventType,
+      title,
+      message,
+      entityType,
+      entityId,
+      actionUrl,
+    });
   },
 
   // =========================================================================
