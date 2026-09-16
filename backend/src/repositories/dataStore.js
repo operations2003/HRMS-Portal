@@ -91,19 +91,29 @@ export const organizations = [
 ];
 
 export const departments = [
-  { id: 'dept-1', orgId: 'org-1', name: 'Engineering & Technology', code: 'ENG', status: 'Active' },
-  { id: 'dept-2', orgId: 'org-1', name: 'Human Resources', code: 'HR', status: 'Active' },
-  { id: 'dept-3', orgId: 'org-1', name: 'Sales & Marketing', code: 'SALES', status: 'Active' },
-  { id: 'dept-4', orgId: 'org-1', name: 'Finance & Accounts', code: 'FIN', status: 'Active' },
-  { id: 'dept-5', orgId: 'org-2', name: 'Fleet Operations', code: 'OPS', status: 'Active' },
+  { id: 'dept-ops', orgId: 'org-1', name: 'Operations', code: 'OPS', status: 'Active' },
+  { id: 'dept-hr', orgId: 'org-1', name: 'HR', code: 'HR', status: 'Active' },
+  { id: 'dept-ta', orgId: 'org-1', name: 'Talent Acquisition', code: 'TA', status: 'Active' },
+  { id: 'dept-ld', orgId: 'org-1', name: 'Learning & Development', code: 'L&D', status: 'Active' },
+  { id: 'dept-it', orgId: 'org-1', name: 'IT', code: 'IT', status: 'Active' },
+  { id: 'dept-bd', orgId: 'org-1', name: 'Business Development', code: 'BD', status: 'Active' },
 ];
 
 export const designations = [
-  { id: 'desig-1', orgId: 'org-1', title: 'Principal Software Architect', code: 'ARCH' },
-  { id: 'desig-2', orgId: 'org-1', title: 'Senior Full Stack Engineer', code: 'SDE-2' },
-  { id: 'desig-3', orgId: 'org-1', title: 'HR Operations Lead', code: 'HR-LEAD' },
-  { id: 'desig-4', orgId: 'org-1', title: 'Enterprise Account Executive', code: 'SALES-EXEC' },
-  { id: 'desig-5', orgId: 'org-2', title: 'Logistics Coordinator', code: 'LOG-COORD' },
+  { id: 'desig-ops-tl', orgId: 'org-1', title: 'Operations Team Leader', code: 'OPS-TL', status: 'Active' },
+  { id: 'desig-hr-exec', orgId: 'org-1', title: 'HR Executive', code: 'HR-EXEC', status: 'Active' },
+  { id: 'desig-ops-exec', orgId: 'org-1', title: 'Operations Executive', code: 'OPS-EXEC', status: 'Active' },
+  { id: 'desig-ta-int', orgId: 'org-1', title: 'Talent Acquisition Intern', code: 'TA-INT', status: 'Active' },
+  { id: 'desig-ta-spec', orgId: 'org-1', title: 'Talent Acquisition Specialist', code: 'TA-SPEC', status: 'Active' },
+  { id: 'desig-hr-int', orgId: 'org-1', title: 'HR Intern', code: 'HR-INT', status: 'Active' },
+  { id: 'desig-it-exec', orgId: 'org-1', title: 'IT Executive', code: 'IT-EXEC', status: 'Active' },
+  { id: 'desig-it-int', orgId: 'org-1', title: 'IT Intern', code: 'IT-INT', status: 'Active' },
+  { id: 'desig-bdm-supp', orgId: 'org-1', title: 'BDM Support', code: 'BDM-SUPP', status: 'Active' },
+  { id: 'desig-bdm-exec', orgId: 'org-1', title: 'BDM Executive', code: 'BDM-EXEC', status: 'Active' },
+  { id: 'desig-ta-head', orgId: 'org-1', title: 'Talent Acquisition Head', code: 'TA-HEAD', status: 'Active' },
+  { id: 'desig-ops-head', orgId: 'org-1', title: 'Operations Head', code: 'OPS-HEAD', status: 'Active' },
+  { id: 'desig-acct-exec', orgId: 'org-1', title: 'Account Executive', code: 'ACCT-EXEC', status: 'Active' },
+  { id: 'desig-ta-tl', orgId: 'org-1', title: 'Talent Acquisition Team Leader', code: 'TA-TL', status: 'Active' },
 ];
 
 export let users = [
@@ -124,8 +134,8 @@ export let employees = [
   {
     id: 'emp-shubham-admin',
     orgId: 'org-1',
-    deptId: 'dept-1',
-    desigId: 'desig-1',
+    deptId: 'dept-it',
+    desigId: 'desig-it-exec',
     userId: 'user-superadmin-shubham',
     employeeCode: 'EMP-001',
     firstName: 'Shubham',

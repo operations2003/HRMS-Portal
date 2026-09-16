@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { employeeService } from '../../services/employeeService.js';
+import { designationService } from '../../services/designationService.js';
 import {
   Users,
   Plus,
@@ -52,6 +53,42 @@ export const EmployeeListPage = () => {
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [viewingEmployee, setViewingEmployee] = useState(null);
   const [loadingViewProfile, setLoadingViewProfile] = useState(false);
+
+  // Quick Add Designation Modal
+  const [isQuickAddDesigOpen, setIsQuickAddDesigOpen] = useState(false);
+  const [quickDesigTitle, setQuickDesigTitle] = useState('');
+  const [quickDesigCode, setQuickDesigCode] = useState('');
+  const [quickDesigLoading, setQuickDesigLoading] = useState(false);
+  const [quickDesigError, setQuickDesigError] = useState(null);
+
+  const handleQuickAddDesignation = async (e) => {
+    e.preventDefault();
+    if (!quickDesigTitle.trim()) {
+      setQuickDesigError('Designation title is required.');
+      return;
+    }
+    try {
+      setQuickDesigLoading(true);
+      setQuickDesigError(null);
+      const res = await designationService.createDesignation({
+        title: quickDesigTitle.trim(),
+        code: quickDesigCode.trim().toUpperCase(),
+      });
+      const freshMeta = await employeeService.getMetadata();
+      setMetadata(freshMeta);
+      if (res?.data?.id) {
+        setFormData((prev) => ({ ...prev, desigId: res.data.id }));
+      }
+      setIsQuickAddDesigOpen(false);
+      setQuickDesigTitle('');
+      setQuickDesigCode('');
+      toast?.success?.(`Designation "${quickDesigTitle.trim()}" added successfully!`);
+    } catch (err) {
+      setQuickDesigError(err.message || 'Failed to create designation.');
+    } finally {
+      setQuickDesigLoading(false);
+    }
+  };
 
   const [formData, setFormData] = useState({
     orgId: '',
@@ -620,12 +657,52 @@ export const EmployeeListPage = () => {
               onChange={(e) => setFormData({ ...formData, deptId: e.target.value })}
               options={metadata.departments.map((d) => ({ value: d.id, label: d.name }))}
             />
-            <Select
-              label="Designation"
-              value={formData.desigId}
-              onChange={(e) => setFormData({ ...formData, desigId: e.target.value })}
-              options={metadata.designations.map((ds) => ({ value: ds.id, label: ds.title }))}
-            />
+            <div className="w-full">
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                  Designation
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQuickDesigTitle('');
+                    setQuickDesigCode('');
+                    setQuickDesigError(null);
+                    setIsQuickAddDesigOpen(true);
+                  }}
+                  className="text-xs font-semibold text-brand-600 hover:text-brand-700 flex items-center gap-1 transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Add More
+                </button>
+              </div>
+              <select
+                value={formData.desigId}
+                onChange={(e) => {
+                  if (e.target.value === '__add_new__') {
+                    setQuickDesigTitle('');
+                    setQuickDesigCode('');
+                    setQuickDesigError(null);
+                    setIsQuickAddDesigOpen(true);
+                  } else {
+                    setFormData({ ...formData, desigId: e.target.value });
+                  }
+                }}
+                className="block w-full rounded-lg border text-sm py-2.5 px-3.5 bg-white border-slate-300 text-slate-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors"
+              >
+                <option value="" disabled>
+                  Select an option
+                </option>
+                {metadata.designations.map((ds) => (
+                  <option key={ds.id} value={ds.id}>
+                    {ds.title}
+                  </option>
+                ))}
+                <option value="__add_new__" className="font-semibold text-brand-600 bg-brand-50">
+                  + Add more designation...
+                </option>
+              </select>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -685,6 +762,68 @@ export const EmployeeListPage = () => {
             </Button>
             <Button type="submit" variant="primary" isLoading={isSubmitting}>
               {editingEmployee ? 'Save Changes' : 'Register Employee'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Quick Add Designation Modal */}
+      <Modal
+        isOpen={isQuickAddDesigOpen}
+        onClose={() => setIsQuickAddDesigOpen(false)}
+        title="Add New Designation"
+        subtitle="Quickly define a new corporate title or job role."
+        maxWidth="max-w-md"
+      >
+        <form onSubmit={handleQuickAddDesignation} className="space-y-4">
+          {quickDesigError && (
+            <Alert variant="danger">
+              {quickDesigError}
+            </Alert>
+          )}
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Designation Title <span className="text-rose-500">*</span>
+            </label>
+            <Input
+              placeholder="e.g. Operations Team Leader"
+              value={quickDesigTitle}
+              onChange={(e) => setQuickDesigTitle(e.target.value)}
+              required
+              autoFocus
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Designation Code <span className="text-slate-400 font-normal">(Optional)</span>
+            </label>
+            <Input
+              placeholder="e.g. OPS-TL (auto-generated if empty)"
+              value={quickDesigCode}
+              onChange={(e) => setQuickDesigCode(e.target.value.toUpperCase())}
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              onClick={() => setIsQuickAddDesigOpen(false)}
+              disabled={quickDesigLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              size="md"
+              isLoading={quickDesigLoading}
+              icon={Plus}
+            >
+              Add Designation
             </Button>
           </div>
         </form>
