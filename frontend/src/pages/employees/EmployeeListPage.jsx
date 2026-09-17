@@ -15,7 +15,7 @@ import {
   Building2,
   Calendar,
   Briefcase,
-  DollarSign,
+  IndianRupee,
   Lock,
   KeyRound,
   Clock,
@@ -840,11 +840,11 @@ export const EmployeeListPage = () => {
               onChange={(e) => setFormData({ ...formData, dateOfJoining: e.target.value })}
             />
             <Input
-              label="Annual Salary ($)"
+              label="Annual Salary (₹)"
               type="number"
               value={formData.salary}
               onChange={(e) => setFormData({ ...formData, salary: e.target.value })}
-              placeholder="e.g. 50000"
+              placeholder="e.g. 600000"
             />
           </div>
 
@@ -1137,13 +1137,13 @@ export const EmployeeListPage = () => {
 
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
                 <div className="text-xs text-slate-400 flex items-center gap-1.5 mb-1">
-                  <DollarSign className="w-3.5 h-3.5" />
+                  <IndianRupee className="w-3.5 h-3.5" />
                   Compensation
                 </div>
                 <div className="font-medium text-slate-800 flex items-center gap-1.5">
                   {canViewSalary(viewingEmployee) ? (
                     viewingEmployee.salary ? (
-                      `$${Number(viewingEmployee.salary).toLocaleString()} / yr`
+                      `₹${Number(viewingEmployee.salary).toLocaleString('en-IN')} / yr`
                     ) : (
                       'Not specified'
                     )

@@ -3,7 +3,7 @@ import {
   Send,
   Building2,
   Calendar,
-  DollarSign,
+  IndianRupee,
   FileText,
   Sparkles,
   CheckCircle2,
@@ -29,8 +29,8 @@ export const AtsHandoffModal = ({ isOpen, onClose, onHandoffSuccess }) => {
   const [departmentName, setDepartmentName] = useState('Engineering');
   const [designationTitle, setDesignationTitle] = useState('Software Engineer');
   const [dateOfJoining, setDateOfJoining] = useState('');
-  const [salary, setSalary] = useState('110000');
-  const [location, setLocation] = useState('Remote - US');
+  const [salary, setSalary] = useState('600000');
+  const [location, setLocation] = useState('Remote - IN');
   const [atsCandidateId, setAtsCandidateId] = useState(`cand_ats_${Date.now().toString().slice(-6)}`);
 
   const handleSimulateHandoff = async (e) => {
@@ -54,7 +54,7 @@ export const AtsHandoffModal = ({ isOpen, onClose, onHandoffSuccess }) => {
         designationTitle,
         dateOfJoining,
         location,
-        salary: salary ? Number(salary) : 100000,
+        salary: salary ? Number(salary) : 600000,
         offerDocuments: [
           {
             title: `Signed Offer Letter - ${firstName} ${lastName}`,
@@ -156,11 +156,11 @@ export const AtsHandoffModal = ({ isOpen, onClose, onHandoffSuccess }) => {
             required
           />
           <Input
-            label="Annual Salary ($)"
+            label="Annual Salary (₹)"
             type="number"
             value={salary}
             onChange={(e) => setSalary(e.target.value)}
-            placeholder="110000"
+            placeholder="600000"
           />
           <Input
             label="Work Location"

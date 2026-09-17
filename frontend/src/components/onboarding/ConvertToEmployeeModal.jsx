@@ -3,7 +3,7 @@ import {
   UserCheck,
   Building2,
   Calendar,
-  DollarSign,
+  IndianRupee,
   AlertTriangle,
   CheckCircle2,
   Sparkles,
@@ -132,11 +132,11 @@ export const ConvertToEmployeeModal = ({
         {/* Override Fields */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
           <Input
-            label="Annual Compensation ($)"
+            label="Annual Compensation (₹)"
             type="number"
             value={salary}
             onChange={(e) => setSalary(e.target.value)}
-            placeholder="e.g. 120000"
+            placeholder="e.g. 600000"
           />
           <Input
             label="Official Joining Date"
