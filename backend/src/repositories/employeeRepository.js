@@ -27,6 +27,15 @@ const mapEmployeeRow = (row) => {
     department: row.d_id ? { id: row.d_id, name: row.d_name, code: row.d_code } : null,
     designation: row.ds_id ? { id: row.ds_id, title: row.ds_title, code: row.ds_code } : null,
     user: row.u_id ? { id: row.u_id, status: row.u_status, roleId: row.r_id, roleName: row.r_name } : null,
+    managerId: row.managerId || null,
+    manager: row.m_id
+      ? {
+          id: row.m_id,
+          employeeCode: row.m_code,
+          fullName: `${row.m_first_name || ''} ${row.m_last_name || ''}`.trim(),
+          email: row.m_email,
+        }
+      : null,
   };
 };
 
@@ -37,6 +46,7 @@ const BASE_EMPLOYEE_SELECT = `
     e.dept_id AS "deptId",
     e.desig_id AS "desigId",
     e.user_id AS "userId",
+    e.manager_id AS "managerId",
     e.employee_code AS "employeeCode",
     e.first_name AS "firstName",
     e.last_name AS "lastName",
@@ -53,13 +63,15 @@ const BASE_EMPLOYEE_SELECT = `
     d.id AS "d_id", d.name AS "d_name", d.code AS "d_code",
     ds.id AS "ds_id", ds.title AS "ds_title", ds.code AS "ds_code",
     u.id AS "u_id", u.status AS "u_status",
-    r.id AS "r_id", r.name AS "r_name"
+    r.id AS "r_id", r.name AS "r_name",
+    m.id AS "m_id", m.employee_code AS "m_code", m.first_name AS "m_first_name", m.last_name AS "m_last_name", m.email AS "m_email"
   FROM employees e
   LEFT JOIN organizations o ON o.id = e.org_id
   LEFT JOIN departments d ON d.id = e.dept_id
   LEFT JOIN designations ds ON ds.id = e.desig_id
   LEFT JOIN users u ON u.id = e.user_id
   LEFT JOIN roles r ON r.id = u.role_id
+  LEFT JOIN employees m ON m.id = e.manager_id
 `;
 
 export const employeeRepository = {
@@ -218,13 +230,14 @@ export const employeeRepository = {
     const status = data.status || 'Active';
     const salary = data.salary ? Number(data.salary) : 0;
     const shiftTiming = data.shiftTiming ? data.shiftTiming.trim() : '11:00 AM - 07:00 PM';
+    const managerId = data.managerId || null;
 
     const sql = `
       INSERT INTO employees (
         id, org_id, dept_id, desig_id, user_id, employee_code,
         first_name, last_name, email, phone, date_of_joining,
-        employment_type, status, salary, shift_timing
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        employment_type, status, salary, shift_timing, manager_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
       RETURNING id;
     `;
 
@@ -244,6 +257,7 @@ export const employeeRepository = {
       status,
       salary,
       shiftTiming,
+      managerId,
     ]);
 
     return this.findById(id);
@@ -327,6 +341,11 @@ export const employeeRepository = {
     if (data.shiftTiming !== undefined) {
       setClauses.push(`shift_timing = $${paramIndex++}`);
       values.push(data.shiftTiming ? data.shiftTiming.trim() : '11:00 AM - 07:00 PM');
+    }
+
+    if (data.managerId !== undefined) {
+      setClauses.push(`manager_id = $${paramIndex++}`);
+      values.push(data.managerId || null);
     }
 
     if (setClauses.length === 0) {
