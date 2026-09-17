@@ -105,7 +105,7 @@ export const OnboardingChecklist = ({
       title: '4. Welcome Kit & Logistics',
       subtitle: 'Welcome package, swag, and access card dispatch',
       icon: Package,
-      color: 'from-amber-500 to-orange-600',
+      color: 'from-brand-500 to-brand-700',
       items: [
         {
           key: 'welcomeKitDispatched',

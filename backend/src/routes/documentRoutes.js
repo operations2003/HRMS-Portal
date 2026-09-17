@@ -3,6 +3,7 @@ import { documentController } from '../controllers/documentController.js';
 import { authenticate } from '../middleware/authMiddleware.js';
 import { authorize } from '../middleware/rbacMiddleware.js';
 import { validate } from '../middleware/validateMiddleware.js';
+import { uploadSingleDocument } from '../middleware/uploadMiddleware.js';
 import { validateAddDocument, validateVerifyDocument } from '../validators/documentValidator.js';
 
 const router = Router();
@@ -10,10 +11,14 @@ const router = Router();
 // All document routes require authentication
 router.use(authenticate);
 
-// Document CRUD & Querying
+// 1. Employee Self-Service (IDOR protected)
+router.get('/my', documentController.getMyDocuments);
+router.post('/my/upload', uploadSingleDocument('file'), documentController.uploadMyDocument);
+
+// 2. Document CRUD & Querying
 router.post('/', authorize('document:write'), validate(validateAddDocument), documentController.addDocument);
-router.get('/owner/:ownerType/:ownerId', authorize('document:read'), documentController.getDocumentsByOwner);
-router.get('/:id', authorize('document:read'), documentController.getDocumentById);
+router.get('/owner/:ownerType/:ownerId', authorize(['document:read', 'employee:read']), documentController.getDocumentsByOwner);
+router.get('/:id', authorize(['document:read', 'employee:read']), documentController.getDocumentById);
 router.delete('/:id', authorize('document:write'), documentController.deleteDocument);
 
 // Document Verification Workflow

@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { LogOut, Menu, User, Shield, ChevronDown } from 'lucide-react';
 import { Badge } from '../components/common/Badge.jsx';
 import { ConfirmDialog } from '../components/common/ConfirmDialog.jsx';
+import { NotificationBell } from '../components/notifications/NotificationBell.jsx';
 
 export const Navbar = ({ onToggleSidebar }) => {
   const { user, logout } = useAuth();
@@ -36,6 +37,7 @@ export const Navbar = ({ onToggleSidebar }) => {
 
         {/* User profile dropdown & Logout */}
         <div className="flex items-center gap-3">
+          <NotificationBell />
           {user && (
             <div className="relative">
               <button

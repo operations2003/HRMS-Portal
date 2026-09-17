@@ -19,43 +19,30 @@ export const TaskNeraLogo = ({
   className = '',
   alt = 'TaskNera',
 }) => {
-  const [imgError, setImgError] = useState(false);
-
-  // Scalable SVG Fallback for the TaskNera Emblem
+  // Scalable SVG for the TaskNera Official Emblem in Royal Indigo & Slate
   const renderEmblem = (sizeClasses = 'w-12 h-12') => {
-    if (!imgError) {
-      return (
-        <img
-          src="/tasknera-icon-transparent.png"
-          alt={alt}
-          onError={() => setImgError(true)}
-          className={`${sizeClasses} object-contain shrink-0 drop-shadow-sm transition-transform duration-200 hover:scale-105`}
-        />
-      );
-    }
-
     return (
       <svg
         viewBox="0 0 100 100"
-        className={`${sizeClasses} shrink-0 drop-shadow-sm`}
+        className={`${sizeClasses} shrink-0 drop-shadow-sm transition-transform duration-200 hover:scale-105`}
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
         aria-label="TaskNera Icon"
       >
         <defs>
-          <linearGradient id="tnOrange" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#FF7A50" />
-            <stop offset="100%" stopColor="#F25E35" />
+          <linearGradient id="tnIndigo" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#6366F1" />
+            <stop offset="100%" stopColor="#4338CA" />
           </linearGradient>
           <linearGradient id="tnSlate" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#7E7270" />
-            <stop offset="100%" stopColor="#5E5352" />
+            <stop offset="0%" stopColor="#475569" />
+            <stop offset="100%" stopColor="#1E293B" />
           </linearGradient>
         </defs>
         {/* Top curved horizontal bar */}
         <path
           d="M10 8 C10 8, 30 8, 88 8 C92 8, 94 10, 92 14 L78 32 C77 34, 75 35, 72 35 L26 35 C17 35, 10 28, 10 19 Z"
-          fill="url(#tnOrange)"
+          fill="url(#tnIndigo)"
         />
         {/* Left rounded vertical stem */}
         <path
@@ -65,7 +52,7 @@ export const TaskNeraLogo = ({
         {/* Right angled checkmark */}
         <path
           d="M48 64 C47 62, 49 59, 52 61 L61 68 C63 70, 66 69, 68 67 L95 38 C97 36, 100 37, 99 40 L73 89 C70 94, 63 94, 60 90 L48 64 Z"
-          fill="url(#tnOrange)"
+          fill="url(#tnIndigo)"
         />
       </svg>
     );

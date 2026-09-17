@@ -29,8 +29,8 @@ export const AtsHandoffModal = ({ isOpen, onClose, onHandoffSuccess }) => {
   const [departmentName, setDepartmentName] = useState('Engineering');
   const [designationTitle, setDesignationTitle] = useState('Software Engineer');
   const [dateOfJoining, setDateOfJoining] = useState('');
-  const [salary, setSalary] = useState('600000');
-  const [location, setLocation] = useState('Remote - IN');
+  const [salary, setSalary] = useState('1200000');
+  const [location, setLocation] = useState('Bangalore / Hybrid');
   const [atsCandidateId, setAtsCandidateId] = useState(`cand_ats_${Date.now().toString().slice(-6)}`);
 
   const handleSimulateHandoff = async (e) => {
@@ -54,7 +54,7 @@ export const AtsHandoffModal = ({ isOpen, onClose, onHandoffSuccess }) => {
         designationTitle,
         dateOfJoining,
         location,
-        salary: salary ? Number(salary) : 600000,
+        salary: salary ? Number(salary) : 1200000,
         offerDocuments: [
           {
             title: `Signed Offer Letter - ${firstName} ${lastName}`,
@@ -160,13 +160,13 @@ export const AtsHandoffModal = ({ isOpen, onClose, onHandoffSuccess }) => {
             type="number"
             value={salary}
             onChange={(e) => setSalary(e.target.value)}
-            placeholder="600000"
+            placeholder="1200000"
           />
           <Input
             label="Work Location"
             value={location}
             onChange={(e) => setLocation(e.target.value)}
-            placeholder="San Francisco / Remote"
+            placeholder="Bangalore / Hybrid / Remote"
           />
         </div>
 

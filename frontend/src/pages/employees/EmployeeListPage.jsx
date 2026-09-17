@@ -844,7 +844,7 @@ export const EmployeeListPage = () => {
               type="number"
               value={formData.salary}
               onChange={(e) => setFormData({ ...formData, salary: e.target.value })}
-              placeholder="e.g. 600000"
+              placeholder="e.g. 1200000"
             />
           </div>
 

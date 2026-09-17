@@ -11,6 +11,11 @@ import {
   Sparkles,
   CalendarCheck,
   CalendarDays,
+  Wallet,
+  FileText,
+  FolderLock,
+  LifeBuoy,
+  ClipboardList,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { TaskNeraLogo } from '../components/common/TaskNeraLogo.jsx';
@@ -56,6 +61,36 @@ export const Sidebar = ({ isOpen, onClose }) => {
       permission: 'employee:read',
     },
     {
+      name: 'Payroll',
+      path: '/payroll',
+      icon: Wallet,
+      permission: ['payroll:read', 'payslip:read'],
+    },
+    {
+      name: 'Payslips',
+      path: '/payslips',
+      icon: FileText,
+      permission: 'payslip:read',
+    },
+    {
+      name: 'Documents',
+      path: '/documents',
+      icon: FolderLock,
+      permission: ['document:read', 'employee:read'],
+    },
+    {
+      name: 'Helpdesk',
+      path: '/helpdesk',
+      icon: LifeBuoy,
+      permission: ['helpdesk:read', 'employee:read'],
+    },
+    {
+      name: 'Requests',
+      path: '/requests',
+      icon: ClipboardList,
+      permission: ['request:read', 'employee:read'],
+    },
+    {
       name: 'Departments',
       path: '/departments',
       icon: Briefcase,
@@ -95,7 +130,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
             <div className="flex flex-col">
               <div className="flex items-center text-lg font-black tracking-tight leading-none">
                 <span className="text-slate-900 group-hover:text-slate-800 transition-colors">Task</span>
-                <span className="text-brand-500">Nera</span>
+                <span className="bg-gradient-to-r from-brand-600 to-cyan-600 bg-clip-text text-transparent">Nera</span>
               </div>
               <span className="text-[10px] text-slate-400 font-semibold tracking-wider uppercase mt-0.5">
                 HRMS Portal
@@ -128,7 +163,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
                     isActive
-                      ? 'bg-brand-50 text-brand-600 font-bold border-l-4 border-brand-500 shadow-sm shadow-brand-500/10 translate-x-0.5'
+                      ? 'bg-gradient-to-r from-brand-500/10 via-brand-500/5 to-transparent text-brand-700 dark:text-brand-400 font-bold border-l-[3.5px] border-brand-600 shadow-xs translate-x-0.5'
                       : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                   }`
                 }

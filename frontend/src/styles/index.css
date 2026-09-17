@@ -9,7 +9,7 @@
   }
 }
 
-/* Custom modern scrollbars - TaskNera theme */
+/* Custom modern scrollbars - Executive theme */
 ::-webkit-scrollbar {
   width: 7px;
   height: 7px;
@@ -18,11 +18,11 @@
   background: #f8fafc;
 }
 ::-webkit-scrollbar-thumb {
-  background: #F25E35;
+  background: #4F46E5;
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #DE4A21;
+  background: #4338CA;
 }
 
 /* Glassmorphism helpers */
@@ -40,19 +40,19 @@
 
 /* TaskNera gradient backgrounds */
 .tasknera-gradient {
-  background: linear-gradient(135deg, #FFF6F3 0%, #FFFFFF 45%, #F8FAFC 100%);
+  background: linear-gradient(135deg, #F0F3FF 0%, #FFFFFF 50%, #F8FAFC 100%);
 }
 
 .tasknera-hero-gradient {
-  background: linear-gradient(135deg, #1E293B 0%, #0F172A 60%, #1A222D 100%);
+  background: linear-gradient(135deg, #0F172A 0%, #1E1B4B 50%, #0F172A 100%);
 }
 
 .tasknera-brand-gradient {
-  background: linear-gradient(135deg, #F25E35 0%, #FF7B54 50%, #DE4A21 100%);
+  background: linear-gradient(135deg, #4F46E5 0%, #6366F1 50%, #4338CA 100%);
 }
 
 .tasknera-glow {
-  box-shadow: 0 0 40px -10px rgba(242, 94, 53, 0.25);
+  box-shadow: 0 0 40px -10px rgba(79, 70, 229, 0.25);
 }
 
 /* Smooth animations */
@@ -71,8 +71,32 @@
   animation: fade-in 0.2s ease-out;
 }
 
-/* Focus states with TaskNera colors */
+/* Focus states with Executive Royal Indigo */
 *:focus-visible {
-  outline: 2px solid #F25E35;
+  outline: 2px solid #4F46E5;
   outline-offset: 2px;
+}
+
+/* Creative Modern Utilities */
+.aurora-mesh {
+  background-color: #f8fafc;
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.07) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(6, 182, 212, 0.07) 0px, transparent 50%),
+    radial-gradient(at 50% 100%, rgba(139, 92, 246, 0.04) 0px, transparent 50%);
+}
+
+/* Creative Card Micro-interactions */
+.card-creative {
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.card-creative:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px -6px rgba(15, 23, 42, 0.08), 0 0 1px 1px rgba(99, 102, 241, 0.15);
+}
+
+/* Creative Enterprise Typography */
+h1, h2, h3, .font-heading {
+  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
+  letter-spacing: -0.02em;
 }

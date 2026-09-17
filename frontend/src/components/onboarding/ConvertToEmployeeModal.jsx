@@ -56,7 +56,7 @@ export const ConvertToEmployeeModal = ({
       const result = await onboardingService.convertToEmployee(candidate.id, payload);
       showSuccess(
         result.message ||
-          `Candidate converted to Employee (${result.employeeCode}) successfully!`
+        `Candidate converted to Employee (${result.employeeCode}) successfully!`
       );
 
       if (onConverted) {
@@ -136,7 +136,7 @@ export const ConvertToEmployeeModal = ({
             type="number"
             value={salary}
             onChange={(e) => setSalary(e.target.value)}
-            placeholder="e.g. 600000"
+            placeholder="e.g. 1200000"
           />
           <Input
             label="Official Joining Date"
