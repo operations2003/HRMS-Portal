@@ -302,6 +302,36 @@ export const performanceRepository = {
     return rows.map(mapRecordRow);
   },
 
+  async findTeamRecords(orgId, managerEmployeeId) {
+    const query = `
+      SELECT 
+        pr.*,
+        e.id AS e_id, e.employee_code, e.first_name AS e_first_name, e.last_name AS e_last_name, e.email AS e_email, e.user_id AS e_user_id,
+        d.name AS dept_name,
+        ds.title AS desig_title,
+        r.id AS r_id, r.employee_code AS r_employee_code, r.first_name AS r_first_name, r.last_name AS r_last_name, r.email AS r_email
+      FROM performance_records pr
+      JOIN employees e ON pr.employee_id = e.id
+      LEFT JOIN departments d ON e.dept_id = d.id
+      LEFT JOIN designations ds ON e.desig_id = ds.id
+      LEFT JOIN employees r ON pr.reviewer_id = r.id
+      WHERE pr.org_id = $1 AND (e.manager_id = $2 OR pr.reviewer_id = $2)
+      ORDER BY pr.created_at DESC;
+    `;
+    const { rows } = await pool.query(query, [orgId, managerEmployeeId]);
+    return rows.map(mapRecordRow);
+  },
+
+  async findRecordByEmployeeAndPeriod(employeeId, reviewPeriod) {
+    const query = `
+      SELECT id, record_number, employee_id, review_period, status
+      FROM performance_records
+      WHERE employee_id = $1 AND review_period = $2;
+    `;
+    const { rows } = await pool.query(query, [employeeId, reviewPeriod]);
+    return rows[0] || null;
+  },
+
   async findRecordById(id, orgId) {
     const recordQuery = `
       SELECT 

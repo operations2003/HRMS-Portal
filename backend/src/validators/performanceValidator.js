@@ -54,8 +54,8 @@ export const validateUpdatePeriod = (body) => {
 export const validateCreateRecord = (body) => {
   const errors = [];
 
-  if (!body.employeeId || typeof body.employeeId !== 'string' || !body.employeeId.trim()) {
-    errors.push('Employee ID is required.');
+  if (body.employeeId !== undefined && (typeof body.employeeId !== 'string' || !body.employeeId.trim())) {
+    errors.push('Employee ID must be a valid string if provided.');
   }
 
   if (!body.reviewPeriod || typeof body.reviewPeriod !== 'string' || !body.reviewPeriod.trim()) {
@@ -111,10 +111,11 @@ export const validateManagerReview = (body) => {
 
 export const validateReturnOrRejectRecord = (body) => {
   const errors = [];
+  const reason = body.rejectionReason || body.reason || body.comments;
 
-  if (!body.rejectionReason || typeof body.rejectionReason !== 'string' || !body.rejectionReason.trim()) {
+  if (!reason || typeof reason !== 'string' || !reason.trim()) {
     errors.push('A reason is required when returning or rejecting an appraisal.');
-  } else if (body.rejectionReason.trim().length < 5) {
+  } else if (reason.trim().length < 5) {
     errors.push('Reason must be at least 5 characters long.');
   }
 

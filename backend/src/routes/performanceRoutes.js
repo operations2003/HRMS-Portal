@@ -122,6 +122,13 @@ router.post(
   performanceController.returnRecord
 );
 
+router.post(
+  '/records/:id/reject',
+  authorize(['performance:write', 'workflow:action']),
+  validate(validateReturnOrRejectRecord),
+  performanceController.rejectRecord
+);
+
 router.get(
   '/records/:id/history',
   authorize(['performance:read']),

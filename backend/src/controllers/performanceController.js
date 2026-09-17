@@ -179,6 +179,18 @@ export const performanceController = {
     }
   },
 
+  async rejectRecord(req, res, next) {
+    try {
+      const rejected = await performanceService.rejectRecord(req.user, req.params.id, req.body);
+      return sendSuccess(res, 'Performance appraisal rejected.', rejected);
+    } catch (error) {
+      if (error.statusCode) {
+        return sendError(res, error.message, error.statusCode);
+      }
+      next(error);
+    }
+  },
+
   async getRecordHistory(req, res, next) {
     try {
       const history = await performanceService.getRecordHistory(req.user, req.params.id);

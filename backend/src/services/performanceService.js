@@ -2,6 +2,7 @@ import { performanceRepository } from '../repositories/performanceRepository.js'
 import { employeeRepository } from '../repositories/employeeRepository.js';
 import { workflowRepository } from '../repositories/workflowRepository.js';
 import { notificationService } from './notificationService.js';
+import { validateEmployeeId } from '../validators/managerValidator.js';
 import { logger } from '../utils/logger.js';
 
 export const performanceService = {
@@ -75,10 +76,39 @@ export const performanceService = {
     const isHrAdmin = this.isHrOrAdmin(currentUser);
     const emp = await this.resolveEmployee(currentUser);
 
+    // If employeeId is not provided, default to the caller's employee profile
+    if (!data.employeeId && emp) {
+      data.employeeId = emp.id;
+    }
+
     // If regular employee, they can only create self-review for their own employee record
     if (!isHrAdmin && (!emp || emp.id !== data.employeeId)) {
       const err = new Error('Forbidden: Employees can only create their own performance self-evaluations.');
       err.statusCode = 403;
+      throw err;
+    }
+
+    const idErr = validateEmployeeId(data.employeeId);
+    if (idErr) {
+      const err = new Error(idErr);
+      err.statusCode = 400;
+      throw err;
+    }
+
+    if (data.reviewerId) {
+      const revErr = validateEmployeeId(data.reviewerId);
+      if (revErr) {
+        const err = new Error(`Reviewer ID error: ${revErr}`);
+        err.statusCode = 400;
+        throw err;
+      }
+    }
+
+    // Duplicate submission prevention
+    const existing = await performanceRepository.findRecordByEmployeeAndPeriod(data.employeeId, data.reviewPeriod);
+    if (existing) {
+      const err = new Error(`Duplicate submission error: A performance appraisal record already exists for employee '${data.employeeId}' in period '${data.reviewPeriod}'.`);
+      err.statusCode = 409;
       throw err;
     }
 
@@ -172,9 +202,15 @@ export const performanceService = {
   },
 
   async getTeamRecords(currentUser) {
+    const isHrAdmin = this.isHrOrAdmin(currentUser);
+    if (isHrAdmin) {
+      return performanceRepository.findRecords(currentUser.orgId);
+    }
+
     const emp = await this.resolveEmployee(currentUser);
     if (!emp) return [];
-    return performanceRepository.findRecords(currentUser.orgId, { reviewerId: emp.id });
+
+    return performanceRepository.findTeamRecords(currentUser.orgId, emp.id);
   },
 
   async getRecordById(currentUser, recordId) {
@@ -190,9 +226,12 @@ export const performanceService = {
     if (!isHrAdmin) {
       const emp = await this.resolveEmployee(currentUser);
       const isOwn = emp && emp.id === record.employeeId;
+
+      const targetEmp = await employeeRepository.findById(record.employeeId);
+      const isDirectManager = emp && targetEmp && targetEmp.managerId === emp.id;
       const isReviewer = emp && (emp.id === record.reviewerId || record.reviewerUserId === currentUser.id);
 
-      if (!isOwn && !isReviewer) {
+      if (!isOwn && !isDirectManager && !isReviewer) {
         const err = new Error('Access Forbidden: You do not have permission to view this performance review.');
         err.statusCode = 403;
         throw err;
@@ -222,7 +261,7 @@ export const performanceService = {
     const record = await this.getRecordById(currentUser, recordId);
 
     if (!['DRAFT', 'RETURNED'].includes(record.status)) {
-      const err = new Error(`Appraisal cannot be submitted from status '${record.status}'.`);
+      const err = new Error(`Invalid status transition: Cannot submit appraisal from status '${record.status}'. Appraisal must be in 'DRAFT' or 'RETURNED' status.`);
       err.statusCode = 400;
       throw err;
     }
@@ -280,23 +319,48 @@ export const performanceService = {
     const isHrAdmin = this.isHrOrAdmin(currentUser);
     const emp = await this.resolveEmployee(currentUser);
 
-    const isAuthorizedReviewer = isHrAdmin || (emp && (emp.id === record.reviewerId || record.reviewerUserId === currentUser.id));
-    if (!isAuthorizedReviewer) {
-      const err = new Error('Forbidden: You are not designated as the reviewer for this employee.');
+    // Self-approval / self-review prevention
+    if (emp && emp.id === record.employeeId && !isHrAdmin) {
+      const err = new Error('Self-approval violation: You cannot perform manager evaluation or review your own appraisal.');
       err.statusCode = 403;
       throw err;
     }
 
+    // Manager scope authorization
+    const targetEmp = await employeeRepository.findById(record.employeeId);
+    const isDirectManager = emp && targetEmp && targetEmp.managerId === emp.id;
+    const isAuthorizedReviewer = isHrAdmin || isDirectManager || (emp && (emp.id === record.reviewerId || record.reviewerUserId === currentUser.id));
+    
+    if (!isAuthorizedReviewer) {
+      const err = new Error('Forbidden: You are not authorized to review performance appraisals for this employee.');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    // State transition validation
     if (!['SUBMITTED', 'PENDING'].includes(record.status)) {
-      const err = new Error(`Cannot submit manager review on appraisal with status '${record.status}'.`);
+      const err = new Error(`Invalid status transition: Cannot submit manager review on appraisal with status '${record.status}'. Appraisal must be in 'SUBMITTED' status.`);
+      err.statusCode = 400;
+      throw err;
+    }
+
+    // Rating validation
+    if (reviewData.rating === undefined || reviewData.rating === null) {
+      const err = new Error('Manager rating is required (between 1.00 and 5.00).');
+      err.statusCode = 400;
+      throw err;
+    }
+    const r = parseFloat(reviewData.rating);
+    if (isNaN(r) || r < 1.0 || r > 5.0) {
+      const err = new Error('Rating must be a numeric score between 1.00 and 5.00.');
       err.statusCode = 400;
       throw err;
     }
 
     const updated = await performanceRepository.updateStatus(record.id, currentUser.orgId, 'UNDER_REVIEW', {
       approvalState: 'IN_REVIEW',
-      rating: reviewData.rating !== undefined ? reviewData.rating : record.rating,
-      score: reviewData.score !== undefined ? reviewData.score : record.score,
+      rating: r,
+      score: reviewData.score !== undefined ? parseFloat(reviewData.score) : record.score,
       reviewerComments: reviewData.reviewerComments || '',
       feedback: reviewData.feedback || '',
       actorUserId: currentUser.id,
@@ -336,6 +400,21 @@ export const performanceService = {
     }
 
     const record = await this.getRecordById(currentUser, recordId);
+    const emp = await this.resolveEmployee(currentUser);
+
+    // Self-approval prevention
+    if (emp && emp.id === record.employeeId) {
+      const err = new Error('Self-approval violation: You cannot approve your own performance appraisal.');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    // State transition validation: must be UNDER_REVIEW
+    if (record.status !== 'UNDER_REVIEW') {
+      const err = new Error(`Invalid status transition: Cannot approve appraisal in status '${record.status}'. Appraisal must be in 'UNDER_REVIEW' status.`);
+      err.statusCode = 400;
+      throw err;
+    }
 
     const updated = await performanceRepository.updateStatus(record.id, currentUser.orgId, 'APPROVED', {
       approvalState: 'APPROVED',
@@ -381,32 +460,41 @@ export const performanceService = {
   },
 
   /**
-   * 6. Lifecycle Stage: Return review back to previous stage (with mandatory reason)
+   * 6. Lifecycle Stage: Return review back to employee for revision
    */
-  async returnRecord(currentUser, recordId, { rejectionReason = '', comments = '' } = {}) {
+  async returnRecord(currentUser, recordId, { reason = '', rejectionReason = '', comments = '' } = {}) {
     const record = await this.getRecordById(currentUser, recordId);
     const isHrAdmin = this.isHrOrAdmin(currentUser);
     const emp = await this.resolveEmployee(currentUser);
 
-    const isAuthorized = isHrAdmin || (emp && (emp.id === record.reviewerId || record.reviewerUserId === currentUser.id));
+    const targetEmp = await employeeRepository.findById(record.employeeId);
+    const isDirectManager = emp && targetEmp && targetEmp.managerId === emp.id;
+    const isAuthorized = isHrAdmin || isDirectManager || (emp && (emp.id === record.reviewerId || record.reviewerUserId === currentUser.id));
+
     if (!isAuthorized) {
       const err = new Error('Forbidden: You are not authorized to return this performance review.');
       err.statusCode = 403;
       throw err;
     }
 
-    const reason = rejectionReason || comments;
-    if (!reason || !reason.trim()) {
+    const finalReason = (reason || rejectionReason || comments || '').trim();
+    if (!finalReason) {
       const err = new Error('A reason is required when returning an appraisal for revision.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    if (!['SUBMITTED', 'UNDER_REVIEW', 'PENDING'].includes(record.status)) {
+      const err = new Error(`Invalid status transition: Cannot return appraisal in status '${record.status}'.`);
       err.statusCode = 400;
       throw err;
     }
 
     const updated = await performanceRepository.updateStatus(record.id, currentUser.orgId, 'RETURNED', {
       approvalState: 'RETURNED',
-      rejectionReason: reason,
+      rejectionReason: finalReason,
       actorUserId: currentUser.id,
-      comments: `Returned for revision: ${reason}`,
+      comments: `Returned for revision: ${finalReason}`,
     });
 
     // Record action in workflow
@@ -421,7 +509,7 @@ export const performanceService = {
           fromStatus: record.status,
           toStatus: 'RETURNED',
           nextStage: 'EMPLOYEE_SUBMISSION',
-          comments: reason,
+          comments: finalReason,
         });
       }
     } catch (e) {
@@ -435,7 +523,81 @@ export const performanceService = {
         userId: record.employee.userId,
         eventType: 'GENERAL_ALERT',
         title: 'Performance Review Returned for Revision',
-        message: `Your review for ${record.reviewPeriod} was returned: "${reason}". Please revise and resubmit.`,
+        message: `Your review for ${record.reviewPeriod} was returned: "${finalReason}". Please revise and resubmit.`,
+        entityType: 'PERFORMANCE_REVIEW',
+        entityId: record.id,
+        actionUrl: `/performance/${record.id}`,
+      });
+    }
+
+    return updated;
+  },
+
+  /**
+   * 7. Lifecycle Stage: Reject review
+   */
+  async rejectRecord(currentUser, recordId, { reason = '', rejectionReason = '', comments = '' } = {}) {
+    const record = await this.getRecordById(currentUser, recordId);
+    const isHrAdmin = this.isHrOrAdmin(currentUser);
+    const emp = await this.resolveEmployee(currentUser);
+
+    const targetEmp = await employeeRepository.findById(record.employeeId);
+    const isDirectManager = emp && targetEmp && targetEmp.managerId === emp.id;
+    const isAuthorized = isHrAdmin || isDirectManager || (emp && (emp.id === record.reviewerId || record.reviewerUserId === currentUser.id));
+
+    if (!isAuthorized) {
+      const err = new Error('Forbidden: You are not authorized to reject this performance review.');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    const finalReason = (rejectionReason || reason || comments || '').trim();
+    if (!finalReason) {
+      const err = new Error('A rejection reason is required when rejecting an appraisal.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    if (!['SUBMITTED', 'UNDER_REVIEW', 'PENDING'].includes(record.status)) {
+      const err = new Error(`Invalid status transition: Cannot reject appraisal in status '${record.status}'.`);
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const updated = await performanceRepository.updateStatus(record.id, currentUser.orgId, 'REJECTED', {
+      approvalState: 'REJECTED',
+      rejectionReason: finalReason,
+      actorUserId: currentUser.id,
+      comments: `Appraisal rejected: ${finalReason}`,
+    });
+
+    // Record action in workflow
+    try {
+      const wf = await workflowRepository.findByEntity('PERFORMANCE_REVIEW', record.id);
+      if (wf) {
+        await workflowRepository.recordAction(wf.id, {
+          stage: wf.current_stage || 'HR_REVIEW',
+          actorUserId: currentUser.id,
+          actorRole: currentUser.roleName || 'Reviewer',
+          action: 'REJECT',
+          fromStatus: record.status,
+          toStatus: 'REJECTED',
+          nextStage: 'REJECTED',
+          comments: reason,
+        });
+      }
+    } catch (e) {
+      logger.warn('PerformanceService', `Failed to advance workflow audit: ${e.message}`);
+    }
+
+    // Notify employee of rejected appraisal
+    if (record.employee?.userId) {
+      await notificationService.createSystemNotification({
+        orgId: currentUser.orgId,
+        userId: record.employee.userId,
+        eventType: 'GENERAL_ALERT',
+        title: 'Performance Review Rejected',
+        message: `Your review for ${record.reviewPeriod} was rejected: "${reason}".`,
         entityType: 'PERFORMANCE_REVIEW',
         entityId: record.id,
         actionUrl: `/performance/${record.id}`,
