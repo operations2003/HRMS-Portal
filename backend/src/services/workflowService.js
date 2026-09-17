@@ -86,10 +86,13 @@ export const workflowService = {
       throw err;
     }
 
+    const action = (actionData.action || '').toUpperCase();
+    const reason = (actionData.comments || actionData.reason || actionData.rejectionReason || '').trim();
+
     // =========================================================================
     // Security Enforcement 2: Prevent Self-Approval
     // =========================================================================
-    if (emp && emp.id === wf.requesterId) {
+    if (emp && emp.id === wf.requesterId && ['APPROVE', 'REJECT', 'RETURN', 'SUBMIT_REVIEW'].includes(action)) {
       const err = new Error('Self-approval violation: You cannot approve, return, or reject your own workflow request.');
       err.statusCode = 403;
       throw err;
@@ -101,18 +104,34 @@ export const workflowService = {
     // =========================================================================
     // Security Enforcement 3: Role & Team Scope Verification
     // =========================================================================
-    const action = (actionData.action || '').toUpperCase();
-    const reason = (actionData.comments || actionData.reason || actionData.rejectionReason || '').trim();
+    const userRole = (currentUser.roleName || '').toLowerCase();
+    const isManagerRole = ['manager', 'lead', 'teamlead', 'supervisor'].includes(userRole);
 
     let nextStage = wf.currentStage;
     let toStatus = wf.currentStatus;
 
-    if (wf.currentStage === 'MANAGER_REVIEW') {
+    if (wf.currentStage === 'EMPLOYEE_SUBMISSION') {
+      const isRequester = emp && emp.id === wf.requesterId;
+      if (!isRequester && !isHrAdmin) {
+        const err = new Error('Access denied: Only the requester can submit or resubmit this workflow.');
+        err.statusCode = 403;
+        throw err;
+      }
+
+      if (action === 'SUBMIT' || action === 'RESUBMIT' || action === 'SUBMIT_REVIEW') {
+        nextStage = 'MANAGER_REVIEW';
+        toStatus = 'SUBMITTED';
+      } else {
+        const err = new Error(`Invalid workflow action '${action}' at stage '${wf.currentStage}'. Expected SUBMIT or RESUBMIT.`);
+        err.statusCode = 400;
+        throw err;
+      }
+    } else if (wf.currentStage === 'MANAGER_REVIEW') {
       const isDirectManager =
         emp &&
         ((wf.managerId && emp.id === wf.managerId) ||
           (targetEmp && targetEmp.managerId === emp.id) ||
-          (targetEmp && targetEmp.deptId && emp.deptId && targetEmp.deptId === emp.deptId));
+          (isManagerRole && targetEmp && targetEmp.deptId && emp.deptId && targetEmp.deptId === emp.deptId));
 
       if (!isDirectManager && !isHrAdmin) {
         const err = new Error(
@@ -193,50 +212,38 @@ export const workflowService = {
     // 4. Synchronize Domain Entity
     // =========================================================================
     if (wf.entityType === 'PERFORMANCE_REVIEW') {
-      try {
-        const perfUpdates = {
-          approvalState: toStatus === 'APPROVED' ? 'APPROVED' : toStatus === 'REJECTED' ? 'REJECTED' : 'IN_REVIEW',
-          actorUserId: currentUser.id,
-          rejectionReason: reason,
-          comments: reason || actionData.feedback || '',
-          feedback: actionData.feedback || '',
-        };
-        if (actionData.rating !== undefined) {
-          perfUpdates.rating = parseFloat(actionData.rating);
-        }
-        if (actionData.score !== undefined) {
-          perfUpdates.score = parseFloat(actionData.score);
-        }
-
-        await performanceRepository.updateStatus(wf.entityId, currentUser.orgId, toStatus, perfUpdates);
-      } catch (e) {
-        logger.warn('WorkflowService', `Failed to sync performance record ${wf.entityId}: ${e.message}`);
+      const perfUpdates = {
+        approvalState: toStatus === 'APPROVED' ? 'APPROVED' : toStatus === 'REJECTED' ? 'REJECTED' : toStatus === 'RETURNED' ? 'RETURNED' : 'IN_REVIEW',
+        actorUserId: currentUser.id,
+        rejectionReason: reason,
+        comments: reason || actionData.feedback || '',
+        feedback: actionData.feedback || '',
+      };
+      if (actionData.rating !== undefined) {
+        perfUpdates.rating = parseFloat(actionData.rating);
       }
+      if (actionData.score !== undefined) {
+        perfUpdates.score = parseFloat(actionData.score);
+      }
+
+      await performanceRepository.updateStatus(wf.entityId, currentUser.orgId, toStatus, perfUpdates);
     } else if (wf.entityType === 'LEAVE_REQUEST') {
-      try {
-        if (action === 'APPROVE') {
-          await leaveService.approveLeave(currentUser, wf.entityId);
-        } else if (action === 'REJECT') {
-          await leaveService.rejectLeave(currentUser, wf.entityId, { rejectionReason: reason });
-        }
-      } catch (e) {
-        logger.warn('WorkflowService', `Failed to sync leave request ${wf.entityId}: ${e.message}`);
+      if (action === 'APPROVE') {
+        await leaveService.approveLeave(currentUser, wf.entityId, { skipWorkflowSync: true });
+      } else if (action === 'REJECT') {
+        await leaveService.rejectLeave(currentUser, wf.entityId, { rejectionReason: reason, skipWorkflowSync: true });
       }
     } else if (wf.entityType === 'EMPLOYEE_REQUEST') {
-      try {
-        if (action === 'APPROVE') {
-          await employeeRequestRepository.updateStatus(wf.entityId, currentUser.orgId, 'APPROVED', {
-            approverUserId: currentUser.id,
-            adminNotes: reason,
-          });
-        } else if (action === 'REJECT') {
-          await employeeRequestRepository.updateStatus(wf.entityId, currentUser.orgId, 'REJECTED', {
-            approverUserId: currentUser.id,
-            rejectionReason: reason,
-          });
-        }
-      } catch (e) {
-        logger.warn('WorkflowService', `Failed to sync employee request ${wf.entityId}: ${e.message}`);
+      if (action === 'APPROVE') {
+        await employeeRequestRepository.updateStatus(wf.entityId, currentUser.orgId, 'APPROVED', {
+          approverUserId: currentUser.id,
+          adminNotes: reason,
+        });
+      } else if (action === 'REJECT') {
+        await employeeRequestRepository.updateStatus(wf.entityId, currentUser.orgId, 'REJECTED', {
+          approverUserId: currentUser.id,
+          rejectionReason: reason,
+        });
       }
     }
 

@@ -318,12 +318,17 @@ export const workflowRepository = {
 
     if (!isHrOrAdmin && managerEmployeeId) {
       // Manager sees direct reports at MANAGER_REVIEW stage
-      conditions.push(`w.manager_id = $${idx++} AND w.current_stage = 'MANAGER_REVIEW'`);
+      conditions.push(`(w.manager_id = $${idx} OR req.manager_id = $${idx}) AND w.current_stage = 'MANAGER_REVIEW'`);
       values.push(managerEmployeeId);
+      idx++;
     } else if (isHrOrAdmin) {
-      // HR sees all items at HR_REVIEW stage (and optionally all active workflows)
+      // HR sees all items at HR_REVIEW stage (and active MANAGER_REVIEW items)
       conditions.push(`w.current_stage IN ('HR_REVIEW', 'MANAGER_REVIEW')`);
     }
+
+    // Always filter to non-finalized pending approvals in the queue
+    conditions.push(`w.current_status NOT IN ('APPROVED', 'REJECTED', 'CANCELLED')`);
+    conditions.push(`w.current_stage NOT IN ('COMPLETED', 'REJECTED')`);
 
     const query = `
       SELECT 

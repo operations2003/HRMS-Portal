@@ -520,7 +520,7 @@ export const leaveService = {
   /**
    * Approve Leave (Manager / HR / Admin)
    */
-  async approveLeave(user, id) {
+  async approveLeave(user, id, options = {}) {
     const record = await leaveRepository.findById(id);
     if (!record) {
       const error = new Error('Leave request not found.');
@@ -585,23 +585,25 @@ export const leaveService = {
       usedDelta: record.totalDays,
     });
 
-    // Advance workflow state machine if tracking instance exists
-    try {
-      const wf = await workflowRepository.findByEntity('LEAVE_REQUEST', id);
-      if (wf) {
-        await workflowRepository.recordAction(wf.id, {
-          stage: wf.currentStage || 'MANAGER_REVIEW',
-          actorUserId: user.id,
-          actorRole: user.roleName || 'Approver',
-          action: 'APPROVE',
-          fromStatus: 'PENDING',
-          toStatus: 'APPROVED',
-          nextStage: 'COMPLETED',
-          comments: 'Leave request approved.',
-        });
+    // Advance workflow state machine if tracking instance exists and not bypassed by workflow engine
+    if (!options.skipWorkflowSync) {
+      try {
+        const wf = await workflowRepository.findByEntity('LEAVE_REQUEST', id);
+        if (wf && wf.currentStatus !== 'APPROVED') {
+          await workflowRepository.recordAction(wf.id, {
+            stage: wf.currentStage || 'MANAGER_REVIEW',
+            actorUserId: user.id,
+            actorRole: user.roleName || 'Approver',
+            action: 'APPROVE',
+            fromStatus: 'PENDING',
+            toStatus: 'APPROVED',
+            nextStage: 'COMPLETED',
+            comments: options.comments || 'Leave request approved.',
+          });
+        }
+      } catch (wfErr) {
+        logger.warn('LeaveService', `Failed to advance workflow audit for leave ${id}: ${wfErr.message}`);
       }
-    } catch (wfErr) {
-      logger.warn('LeaveService', `Failed to advance workflow audit for leave ${id}: ${wfErr.message}`);
     }
 
     return updated;
@@ -610,7 +612,7 @@ export const leaveService = {
   /**
    * Reject Leave (Manager / HR / Admin)
    */
-  async rejectLeave(user, id, data) {
+  async rejectLeave(user, id, data = {}) {
     const record = await leaveRepository.findById(id);
     if (!record) {
       const error = new Error('Leave request not found.');
@@ -683,23 +685,25 @@ export const leaveService = {
       pendingDelta: -record.totalDays,
     });
 
-    // Advance workflow state machine if tracking instance exists
-    try {
-      const wf = await workflowRepository.findByEntity('LEAVE_REQUEST', id);
-      if (wf) {
-        await workflowRepository.recordAction(wf.id, {
-          stage: wf.currentStage || 'MANAGER_REVIEW',
-          actorUserId: user.id,
-          actorRole: user.roleName || 'Approver',
-          action: 'REJECT',
-          fromStatus: 'PENDING',
-          toStatus: 'REJECTED',
-          nextStage: 'REJECTED',
-          comments: rejectionReason,
-        });
+    // Advance workflow state machine if tracking instance exists and not bypassed by workflow engine
+    if (!data.skipWorkflowSync) {
+      try {
+        const wf = await workflowRepository.findByEntity('LEAVE_REQUEST', id);
+        if (wf && wf.currentStatus !== 'REJECTED') {
+          await workflowRepository.recordAction(wf.id, {
+            stage: wf.currentStage || 'MANAGER_REVIEW',
+            actorUserId: user.id,
+            actorRole: user.roleName || 'Approver',
+            action: 'REJECT',
+            fromStatus: 'PENDING',
+            toStatus: 'REJECTED',
+            nextStage: 'REJECTED',
+            comments: rejectionReason,
+          });
+        }
+      } catch (wfErr) {
+        logger.warn('LeaveService', `Failed to advance workflow audit for leave ${id}: ${wfErr.message}`);
       }
-    } catch (wfErr) {
-      logger.warn('LeaveService', `Failed to advance workflow audit for leave ${id}: ${wfErr.message}`);
     }
 
     return updated;
