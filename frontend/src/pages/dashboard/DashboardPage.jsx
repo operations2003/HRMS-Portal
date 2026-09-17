@@ -137,17 +137,6 @@ export const DashboardPage = () => {
                 Add Employee
               </Button>
             </Can>
-            <Can permission="org:write">
-              <Button
-                variant="secondary"
-                size="md"
-                icon={Plus}
-                onClick={() => navigate('/organizations?action=new')}
-                className="bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700 hover:text-white"
-              >
-                Add Organization
-              </Button>
-            </Can>
           </div>
         </div>
 

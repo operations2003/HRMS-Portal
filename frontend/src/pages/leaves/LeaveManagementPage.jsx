@@ -9,7 +9,6 @@ import {
   Ban,
   UserCheck,
   Users,
-  Building2,
   Calendar,
   Filter,
   RotateCcw,
@@ -43,9 +42,8 @@ export const LeaveManagementPage = () => {
   const canApply = hasPermission('leave:write');
   const canApprove = hasPermission('leave:approve');
   const canViewTeam = hasRole(['Manager', 'HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin']);
-  const canViewOrg = hasRole(['HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin']);
 
-  // Active Tab: 'my' | 'team' | 'org'
+  // Active Tab: 'my' | 'team'
   const [activeTab, setActiveTab] = useState('my');
 
   // Leave data
@@ -107,14 +105,6 @@ export const LeaveManagementPage = () => {
           setPagination(res.pagination || null);
         } else if (activeTab === 'team') {
           const res = await leaveService.getTeamLeaves({
-            status: statusFilter,
-            page,
-            limit: 15,
-          });
-          setRecords(res.records || []);
-          setPagination(res.pagination || null);
-        } else if (activeTab === 'org') {
-          const res = await leaveService.getOrgLeaves({
             status: statusFilter,
             page,
             limit: 15,
@@ -405,15 +395,11 @@ export const LeaveManagementPage = () => {
           <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
             {activeTab === 'team'
               ? 'Team Leave Approvals'
-              : activeTab === 'org'
-              ? 'Organization Leave Records'
               : 'Leave Applications'}
           </h1>
           <p className="mt-1 text-sm text-slate-500 leading-relaxed">
             {activeTab === 'team'
               ? 'Review, approve, or reject authorized team leave applications with real-time balance checks.'
-              : activeTab === 'org'
-              ? 'Monitor organization-wide leave history, departmental leave trends, and status records.'
               : 'Apply for annual, sick, or casual leaves, track status, and view available entitlement balances.'}
           </p>
         </div>
@@ -484,21 +470,6 @@ export const LeaveManagementPage = () => {
               <span>Team Requests</span>
             </button>
           )}
-
-          {canViewOrg && (
-            <button
-              type="button"
-              onClick={() => setActiveTab('org')}
-              className={`pb-4 px-1 border-b-2 font-semibold text-sm transition-colors flex items-center gap-2 ${
-                activeTab === 'org'
-                  ? 'border-brand-500 text-brand-600 font-bold'
-                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-              }`}
-            >
-              <Building2 className="w-4 h-4" />
-              <span>Organization Records</span>
-            </button>
-          )}
         </nav>
       </div>
 
@@ -539,8 +510,6 @@ export const LeaveManagementPage = () => {
         emptyTitle={
           activeTab === 'team'
             ? 'No Team Requests Found'
-            : activeTab === 'org'
-            ? 'No Organization Requests'
             : 'No Leave Requests Found'
         }
         emptyDescription={

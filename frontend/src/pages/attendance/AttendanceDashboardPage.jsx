@@ -17,7 +17,6 @@ import { AttendancePunchCard } from '../../components/attendance/AttendancePunch
 import { AttendanceStatsBar } from '../../components/attendance/AttendanceStatsBar.jsx';
 import { AttendanceHistoryTable } from '../../components/attendance/AttendanceHistoryTable.jsx';
 import { AttendanceDetailModal } from '../../components/attendance/AttendanceDetailModal.jsx';
-import { RegularizeModal } from '../../components/attendance/RegularizeModal.jsx';
 import { Button } from '../../components/common/Button.jsx';
 import { Alert } from '../../components/common/Alert.jsx';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
@@ -29,7 +28,6 @@ export const AttendanceDashboardPage = () => {
   // Role permissions
   const canViewTeam = hasRole(['Manager', 'HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin']);
   const canViewOrg = hasRole(['HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin']);
-  const canRegularize = hasPermission('attendance:regularize');
 
   // Active view tab: 'my' | 'team' | 'org'
   const [activeTab, setActiveTab] = useState('my');
@@ -60,9 +58,6 @@ export const AttendanceDashboardPage = () => {
 
   // Modals state
   const [selectedDetailRecord, setSelectedDetailRecord] = useState(null);
-  const [regularizeRecord, setRegularizeRecord] = useState(null);
-  const [isSubmittingRegularize, setIsSubmittingRegularize] = useState(false);
-  const [regularizeApiError, setRegularizeApiError] = useState(null);
 
   // Today's Date String YYYY-MM-DD
   const todayDateString = new Date().toISOString().split('T')[0];
@@ -239,23 +234,6 @@ export const AttendanceDashboardPage = () => {
     }
   };
 
-  // Handle Regularize Submit
-  const handleRegularizeSubmit = async (recordId, payload) => {
-    try {
-      setIsSubmittingRegularize(true);
-      setRegularizeApiError(null);
-      await attendanceService.regularize(recordId, payload);
-      toast.success('Attendance record regularized successfully.');
-      setRegularizeRecord(null);
-      fetchTableData(pagination?.page || 1);
-      fetchTodayRecord();
-    } catch (err) {
-      setRegularizeApiError(err.message || 'Failed to regularize attendance.');
-      toast.error(err.message || 'Failed to regularize attendance.');
-    } finally {
-      setIsSubmittingRegularize(false);
-    }
-  };
 
   const handleFilterChange = (key, value) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
@@ -283,7 +261,7 @@ export const AttendanceDashboardPage = () => {
             Attendance Dashboard
           </h1>
           <p className="mt-1 text-sm text-slate-500 leading-relaxed">
-            Record daily work punches, track active hours, review history, and manage regularization workflows.
+            Record daily work punches, track active hours, and review history.
           </p>
         </div>
 
@@ -408,11 +386,6 @@ export const AttendanceDashboardPage = () => {
         error={error}
         onPageChange={(p) => fetchTableData(p)}
         onViewDetails={(rec) => setSelectedDetailRecord(rec)}
-        onRegularize={(rec) => {
-          setRegularizeApiError(null);
-          setRegularizeRecord(rec);
-        }}
-        canRegularize={canRegularize}
         showEmployeeCol={activeTab !== 'my'}
         showSearch={activeTab === 'org'}
         filters={filters}
@@ -426,16 +399,6 @@ export const AttendanceDashboardPage = () => {
         isOpen={Boolean(selectedDetailRecord)}
         onClose={() => setSelectedDetailRecord(null)}
         record={selectedDetailRecord}
-      />
-
-      {/* Regularize Modal */}
-      <RegularizeModal
-        isOpen={Boolean(regularizeRecord)}
-        onClose={() => setRegularizeRecord(null)}
-        record={regularizeRecord}
-        onSubmit={handleRegularizeSubmit}
-        isLoading={isSubmittingRegularize}
-        apiError={regularizeApiError}
       />
     </div>
   );

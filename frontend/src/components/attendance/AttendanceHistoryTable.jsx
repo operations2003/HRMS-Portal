@@ -3,7 +3,6 @@ import {
   Calendar,
   Clock,
   Eye,
-  ShieldCheck,
   Search,
   Filter,
   RotateCcw,
@@ -340,17 +339,6 @@ export const AttendanceHistoryTable = ({
                     >
                       Details
                     </Button>
-                    {canRegularize && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        icon={ShieldCheck}
-                        className="text-brand-600 hover:text-brand-700 hover:bg-brand-50"
-                        onClick={() => onRegularize && onRegularize(row)}
-                      >
-                        Regularize
-                      </Button>
-                    )}
                   </div>
                 </div>
               );
@@ -521,18 +509,6 @@ export const AttendanceHistoryTable = ({
                           >
                             Details
                           </Button>
-                          {canRegularize && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              icon={ShieldCheck}
-                              className="text-brand-600 hover:text-brand-700 hover:bg-brand-50"
-                              onClick={() => onRegularize && onRegularize(row)}
-                              title="Regularize Attendance"
-                            >
-                              Regularize
-                            </Button>
-                          )}
                         </div>
                       </td>
                     </tr>
