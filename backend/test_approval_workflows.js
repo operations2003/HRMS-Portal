@@ -309,8 +309,9 @@ async function runWorkflowTests() {
     const leaveTypesRes = await request('GET', '/v1/leaves/types', null, employeeToken);
     const leaveTypeId = leaveTypesRes.body.data?.[0]?.id;
 
-    const testLeaveStart = `2027-04-12`;
-    const testLeaveEnd = `2027-04-13`;
+    const randDay = Math.floor(Math.random() * 20) + 1;
+    const testLeaveStart = `2028-06-${String(randDay).padStart(2, '0')}`;
+    const testLeaveEnd = `2028-06-${String(randDay + 1).padStart(2, '0')}`;
 
     const applyLeaveRes = await request(
       'POST',
@@ -396,8 +397,9 @@ async function runWorkflowTests() {
     // 9. Rejection Workflow Flow
     // -----------------------------------------------------------------------
     console.log('\n--- 9. Rejection Workflow Flow ---');
-    const rejectLeaveStart = `2027-05-10`;
-    const rejectLeaveEnd = `2027-05-11`;
+    const randRejectDay = Math.floor(Math.random() * 20) + 1;
+    const rejectLeaveStart = `2029-08-${String(randRejectDay).padStart(2, '0')}`;
+    const rejectLeaveEnd = `2029-08-${String(randRejectDay + 1).padStart(2, '0')}`;
 
     const applyRejectLeave = await request(
       'POST',
