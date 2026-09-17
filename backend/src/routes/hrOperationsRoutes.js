@@ -18,4 +18,17 @@ router.get('/approval-queue', hrOperationsController.getApprovalQueue);
 // Broadcast announcement to workforce
 router.post('/broadcast', hrOperationsController.broadcastAnnouncement);
 
+// Teams and manager operational overviews
+router.get('/teams', hrOperationsController.getTeams);
+router.get('/teams/:managerId', hrOperationsController.getTeamByManager);
+
+// Organization operational summaries
+router.get('/performance/summary', hrOperationsController.getPerformanceSummary);
+router.get('/attendance/summary', hrOperationsController.getAttendanceSummary);
+router.get('/leaves/summary', hrOperationsController.getLeaveSummary);
+
+// Individual employee operational 360 profile
+router.get('/employees/:id', hrOperationsController.getEmployeeProfile);
+
 export default router;
+
