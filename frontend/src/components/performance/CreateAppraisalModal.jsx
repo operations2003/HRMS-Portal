@@ -1,0 +1,320 @@
+import React, { useState, useEffect } from 'react';
+import { Target, Award, AlertCircle, Plus, Trash2, Send, Save, Star } from 'lucide-react';
+import { Modal } from '../common/Modal.jsx';
+import { Button } from '../common/Button.jsx';
+import { Alert } from '../common/Alert.jsx';
+import { performanceService } from '../../services/performanceService.js';
+import { useToast } from '../../context/ToastContext.jsx';
+
+export const CreateAppraisalModal = ({ isOpen, onClose, onSuccess }) => {
+  const toast = useToast();
+  const [periods, setPeriods] = useState([]);
+  const [isLoadingPeriods, setIsLoadingPeriods] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+
+  const [formData, setFormData] = useState({
+    period_id: '',
+    self_rating: 4.0,
+    self_summary: '',
+    achievements: '',
+    challenges: '',
+  });
+
+  const [goals, setGoals] = useState([
+    { title: '', description: '', target_date: '', weightage: 100 },
+  ]);
+
+  useEffect(() => {
+    if (isOpen) {
+      loadPeriods();
+      setError(null);
+      setFormData({
+        period_id: '',
+        self_rating: 4.0,
+        self_summary: '',
+        achievements: '',
+        challenges: '',
+      });
+      setGoals([{ title: '', description: '', target_date: '', weightage: 100 }]);
+    }
+  }, [isOpen]);
+
+  const loadPeriods = async () => {
+    try {
+      setIsLoadingPeriods(true);
+      const res = await performanceService.getPeriods();
+      const list = res.items || res.data || (Array.isArray(res) ? res : []);
+      setPeriods(list);
+      // Auto select first active period if exists
+      const active = list.find((p) => p.status === 'ACTIVE') || list[0];
+      if (active) {
+        setFormData((prev) => ({ ...prev, period_id: active.id }));
+      }
+    } catch (err) {
+      toast.error('Failed to load performance review cycles.');
+    } finally {
+      setIsLoadingPeriods(false);
+    }
+  };
+
+  const handleGoalChange = (index, field, val) => {
+    const updated = [...goals];
+    updated[index][field] = val;
+    setGoals(updated);
+  };
+
+  const addGoalRow = () => {
+    setGoals([...goals, { title: '', description: '', target_date: '', weightage: 0 }]);
+  };
+
+  const removeGoalRow = (index) => {
+    if (goals.length <= 1) return;
+    setGoals(goals.filter((_, idx) => idx !== index));
+  };
+
+  const validate = () => {
+    if (!formData.period_id) {
+      setError('Please select an appraisal review period.');
+      return false;
+    }
+    if (!formData.self_summary.trim()) {
+      setError('Self-review summary is required.');
+      return false;
+    }
+    return true;
+  };
+
+  const handleSubmit = async (shouldSubmitDirectly = false) => {
+    setError(null);
+    if (!validate()) return;
+
+    try {
+      setIsSubmitting(true);
+      const payload = {
+        period_id: formData.period_id,
+        self_rating: Number(formData.self_rating),
+        self_summary: formData.self_summary.trim(),
+        self_review: {
+          summary: formData.self_summary.trim(),
+          achievements: formData.achievements.trim(),
+          challenges: formData.challenges.trim(),
+          rating: Number(formData.self_rating),
+        },
+        goals: goals.filter((g) => g.title.trim()),
+      };
+
+      const res = await performanceService.createRecord(payload);
+      const recordId = res.id || res.record?.id;
+
+      if (shouldSubmitDirectly && recordId) {
+        await performanceService.submitAppraisal(recordId, {
+          comment: 'Self appraisal submitted directly.',
+        });
+        toast.success('Appraisal self-evaluation submitted for manager review!');
+      } else {
+        toast.success('Performance appraisal saved as draft.');
+      }
+
+      onSuccess?.(res);
+      onClose();
+    } catch (err) {
+      setError(err.message || 'Failed to save appraisal record.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Create Performance Appraisal"
+      subtitle="Complete your self-evaluation and key goals for the review cycle"
+      maxWidth="max-w-2xl"
+    >
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          handleSubmit(false);
+        }}
+        className="space-y-6 text-sm"
+      >
+        {error && <Alert variant="error" message={error} />}
+
+        {/* Period Selection */}
+        <div>
+          <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
+            Review Period <span className="text-rose-500">*</span>
+          </label>
+          <select
+            value={formData.period_id}
+            onChange={(e) => setFormData({ ...formData, period_id: e.target.value })}
+            disabled={isLoadingPeriods}
+            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 font-medium"
+          >
+            <option value="">Select appraisal period...</option>
+            {periods.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name} ({p.code || 'CYCLE'}) &bull; {p.status}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Self Rating & Summary */}
+        <div className="bg-slate-50/80 p-4 rounded-2xl border border-slate-200/60 space-y-4">
+          <div className="flex items-center justify-between">
+            <h4 className="font-semibold text-slate-900 flex items-center gap-2">
+              <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
+              Self Evaluation
+            </h4>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-500 font-medium">Self Rating:</span>
+              <span className="text-sm font-bold text-brand-600 bg-brand-50 px-2 py-0.5 rounded-md border border-brand-200">
+                {Number(formData.self_rating).toFixed(1)} / 5.0
+              </span>
+            </div>
+          </div>
+
+          <div>
+            <input
+              type="range"
+              min="1.0"
+              max="5.0"
+              step="0.5"
+              value={formData.self_rating}
+              onChange={(e) => setFormData({ ...formData, self_rating: parseFloat(e.target.value) })}
+              className="w-full accent-brand-600 cursor-pointer"
+            />
+            <div className="flex justify-between text-[11px] text-slate-400 mt-1">
+              <span>1.0 Unsatisfactory</span>
+              <span>3.0 Meets Expectations</span>
+              <span>5.0 Outstanding</span>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1.5">
+              Performance Summary & Highlights <span className="text-rose-500">*</span>
+            </label>
+            <textarea
+              rows={3}
+              value={formData.self_summary}
+              onChange={(e) => setFormData({ ...formData, self_summary: e.target.value })}
+              placeholder="Summarize your overall performance, main contributions, and role execution during this period..."
+              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1.5">
+                Key Accomplishments
+              </label>
+              <textarea
+                rows={2}
+                value={formData.achievements}
+                onChange={(e) => setFormData({ ...formData, achievements: e.target.value })}
+                placeholder="Specific projects delivered or metrics improved..."
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-xs"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1.5">
+                Challenges & Roadblocks
+              </label>
+              <textarea
+                rows={2}
+                value={formData.challenges}
+                onChange={(e) => setFormData({ ...formData, challenges: e.target.value })}
+                placeholder="Obstacles encountered and how you handled them..."
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-xs"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Goals & Deliverables */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+              <Target className="w-3.5 h-3.5 text-brand-600" />
+              Key Deliverables & Goals
+            </label>
+            <button
+              type="button"
+              onClick={addGoalRow}
+              className="text-xs font-semibold text-brand-600 hover:text-brand-700 flex items-center gap-1"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Add Goal
+            </button>
+          </div>
+
+          <div className="space-y-2.5">
+            {goals.map((g, idx) => (
+              <div
+                key={idx}
+                className="p-3 bg-white border border-slate-200 rounded-xl space-y-2 hover:border-slate-300 transition-colors"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <input
+                    type="text"
+                    placeholder={`Goal #${idx + 1} Title`}
+                    value={g.title}
+                    onChange={(e) => handleGoalChange(idx, 'title', e.target.value)}
+                    className="flex-1 text-xs font-medium px-2.5 py-1.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  />
+                  {goals.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeGoalRow(idx)}
+                      className="p-1 text-slate-400 hover:text-rose-600 rounded-md transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+                <textarea
+                  rows={2}
+                  placeholder="Target outcome and measurement metrics..."
+                  value={g.description}
+                  onChange={(e) => handleGoalChange(idx, 'description', e.target.value)}
+                  className="w-full text-xs px-2.5 py-1.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+          <Button variant="ghost" onClick={onClose} disabled={isSubmitting}>
+            Cancel
+          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              icon={Save}
+              isLoading={isSubmitting}
+              onClick={() => handleSubmit(false)}
+            >
+              Save Draft
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              icon={Send}
+              isLoading={isSubmitting}
+              onClick={() => handleSubmit(true)}
+            >
+              Submit for Review
+            </Button>
+          </div>
+        </div>
+      </form>
+    </Modal>
+  );
+};

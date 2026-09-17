@@ -274,15 +274,17 @@ export const AttendanceHistoryTable = ({
                   </div>
 
                   {/* Employee Info for Team/Org Views */}
-                  {showEmployeeCol && row.employee && (
+                  {showEmployeeCol && (row.employee || row.fullName || row.employeeName) && (
                     <div className="text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-100">
                       <span className="font-bold text-slate-800">
-                        {row.employee.firstName} {row.employee.lastName}
+                        {row.employee
+                          ? `${row.employee.firstName || ''} ${row.employee.lastName || ''}`.trim()
+                          : (row.fullName || row.employeeName)}
                       </span>{' '}
-                      <span className="text-slate-400">({row.employee.employeeCode})</span>
-                      {row.employee.department?.name && (
+                      <span className="text-slate-400">({row.employee?.employeeCode || row.employeeCode || '—'})</span>
+                      {(row.employee?.departmentName || row.employee?.department?.name || row.department) && (
                         <span className="text-slate-500 block text-[11px] mt-0.5">
-                          {row.employee.department.name}
+                          {row.employee?.departmentName || row.employee?.department?.name || row.department}
                         </span>
                       )}
                     </div>
@@ -414,14 +416,16 @@ export const AttendanceHistoryTable = ({
                         <td className="px-6 py-4 whitespace-nowrap text-slate-700">
                           <div>
                             <div className="font-bold text-slate-900">
-                              {row.employee?.firstName} {row.employee?.lastName}
+                              {row.employee
+                                ? `${row.employee.firstName || ''} ${row.employee.lastName || ''}`.trim()
+                                : (row.fullName || row.employeeName || '—')}
                             </div>
                             <div className="text-xs text-slate-400 flex items-center gap-1.5">
-                              <span>{row.employee?.employeeCode || '—'}</span>
-                              {row.employee?.department?.name && (
+                              <span>{row.employee?.employeeCode || row.employeeCode || '—'}</span>
+                              {(row.employee?.departmentName || row.employee?.department?.name || row.department) && (
                                 <>
                                   <span>•</span>
-                                  <span>{row.employee.department.name}</span>
+                                  <span>{row.employee?.departmentName || row.employee?.department?.name || row.department}</span>
                                 </>
                               )}
                             </div>

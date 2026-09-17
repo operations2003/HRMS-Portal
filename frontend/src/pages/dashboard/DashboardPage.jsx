@@ -20,10 +20,17 @@ import { Button } from '../../components/common/Button.jsx';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
 import { EmptyState } from '../../components/common/EmptyState.jsx';
 import { Can } from '../../components/rbac/Can.jsx';
+import { ManagerDashboardPage } from '../manager/ManagerDashboardPage.jsx';
 
 export const DashboardPage = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, hasRole } = useAuth();
+
+  // Role-Aware Routing: Dedicated Manager Dashboard for Manager users
+  if (user?.roleName === 'Manager') {
+    return <ManagerDashboardPage />;
+  }
+
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -64,7 +71,9 @@ export const DashboardPage = () => {
     );
   }
 
-  const statCards = [
+  const isEmployee = user?.roleName === 'Employee';
+
+  const adminStatCards = [
     {
       title: 'Total Organizations',
       value: stats?.totalOrganizations || 0,
@@ -93,7 +102,7 @@ export const DashboardPage = () => {
       color: 'text-amber-600',
       bgLight: 'bg-amber-50',
       border: 'border-amber-200/70',
-      action: () => navigate('/organizations'),
+      action: () => navigate('/departments'),
     },
     {
       title: 'System Users',
@@ -106,6 +115,51 @@ export const DashboardPage = () => {
       action: () => navigate('/users'),
     },
   ];
+
+  const employeeStatCards = [
+    {
+      title: 'My Attendance',
+      value: 'Live Log',
+      subtext: 'Clock in/out & view daily records',
+      icon: Clock,
+      color: 'text-emerald-600',
+      bgLight: 'bg-emerald-50',
+      border: 'border-emerald-200/70',
+      action: () => navigate('/attendance'),
+    },
+    {
+      title: 'My Leaves',
+      value: 'Time Off',
+      subtext: 'Check balances & submit requests',
+      icon: Users,
+      color: 'text-brand-600',
+      bgLight: 'bg-brand-50',
+      border: 'border-brand-200/70',
+      action: () => navigate('/leaves'),
+    },
+    {
+      title: 'My Performance',
+      value: 'Reviews',
+      subtext: 'Quarterly reviews & self-appraisals',
+      icon: Briefcase,
+      color: 'text-purple-600',
+      bgLight: 'bg-purple-50',
+      border: 'border-purple-200/70',
+      action: () => navigate('/performance'),
+    },
+    {
+      title: 'Helpdesk & Support',
+      value: 'Requests',
+      subtext: 'Raise employee requests & tickets',
+      icon: UserCheck,
+      color: 'text-amber-600',
+      bgLight: 'bg-amber-50',
+      border: 'border-amber-200/70',
+      action: () => navigate('/helpdesk'),
+    },
+  ];
+
+  const statCards = isEmployee ? employeeStatCards : adminStatCards;
 
   return (
     <div className="space-y-8">
@@ -126,6 +180,17 @@ export const DashboardPage = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
+            {hasRole(['Manager', 'HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']) && (
+              <Button
+                variant="secondary"
+                size="md"
+                icon={Briefcase}
+                onClick={() => navigate('/manager')}
+                className="bg-white/10 hover:bg-white/20 text-white border-white/20 shadow-none text-xs"
+              >
+                Manager Cockpit
+              </Button>
+            )}
             <Can permission="employee:write">
               <Button
                 variant="primary"

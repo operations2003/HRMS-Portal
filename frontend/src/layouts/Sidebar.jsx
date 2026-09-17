@@ -16,12 +16,14 @@ import {
   FolderLock,
   LifeBuoy,
   ClipboardList,
+  Award,
+  CheckCircle2,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { TaskNeraLogo } from '../components/common/TaskNeraLogo.jsx';
 
 export const Sidebar = ({ isOpen, onClose }) => {
-  const { hasPermission } = useAuth();
+  const { hasPermission, hasRole } = useAuth();
 
   const navItems = [
     {
@@ -29,6 +31,36 @@ export const Sidebar = ({ isOpen, onClose }) => {
       path: '/dashboard',
       icon: LayoutDashboard,
       permission: 'dashboard:read',
+    },
+    {
+      name: 'Manager Cockpit',
+      path: '/manager',
+      icon: Briefcase,
+      roles: ['Manager', 'HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
+    },
+    {
+      name: 'Team',
+      path: '/team',
+      icon: Users,
+      roles: ['Manager', 'HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
+    },
+    {
+      name: 'Approvals',
+      path: '/approvals',
+      icon: CheckCircle2,
+      roles: ['Manager', 'HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
+    },
+    {
+      name: 'Performance',
+      path: '/performance',
+      icon: Award,
+      permission: ['performance:read', 'employee:read'],
+    },
+    {
+      name: 'HR Operations',
+      path: '/hr-operations',
+      icon: ShieldCheck,
+      roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
     },
     {
       name: 'Attendance',
@@ -104,8 +136,12 @@ export const Sidebar = ({ isOpen, onClose }) => {
     },
   ];
 
-  // Filter navigation links based on user permissions
-  const visibleItems = navItems.filter((item) => hasPermission(item.permission));
+  // Filter navigation links based on user permissions & roles
+  const visibleItems = navItems.filter((item) => {
+    if (item.roles && !hasRole(item.roles)) return false;
+    if (item.permission && !hasPermission(item.permission)) return false;
+    return true;
+  });
 
   return (
     <>

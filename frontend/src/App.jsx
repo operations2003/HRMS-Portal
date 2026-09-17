@@ -18,6 +18,11 @@ import { EmployeeDocumentsPage } from './pages/documents/EmployeeDocumentsPage.j
 import { HelpdeskPage } from './pages/helpdesk/HelpdeskPage.jsx';
 import { EmployeeRequestsPage } from './pages/requests/EmployeeRequestsPage.jsx';
 import { NotificationsPage } from './pages/notifications/NotificationsPage.jsx';
+import { ManagerDashboardPage } from './pages/manager/ManagerDashboardPage.jsx';
+import { TeamManagementPage } from './pages/team/TeamManagementPage.jsx';
+import { PerformancePage } from './pages/performance/PerformancePage.jsx';
+import { ApprovalsPage } from './pages/approvals/ApprovalsPage.jsx';
+import { HROperationsPage } from './pages/hr/HROperationsPage.jsx';
 import { ForbiddenPage } from './pages/common/ForbiddenPage.jsx';
 import { NotFoundPage } from './pages/common/NotFoundPage.jsx';
 import { AppLayout } from './layouts/AppLayout.jsx';
@@ -42,16 +47,20 @@ const ProtectedRoute = ({ children }) => {
 };
 
 /**
- * Route guard enforcing specific RBAC permissions
+ * Route guard enforcing specific RBAC permissions or roles
  */
-const PermissionRoute = ({ permission, children }) => {
-  const { hasPermission, loading } = useAuth();
+const PermissionRoute = ({ permission, roles, children }) => {
+  const { hasPermission, hasRole, loading } = useAuth();
 
   if (loading) {
     return <LoadingSpinner fullPage message="Verifying permissions..." />;
   }
 
-  if (!hasPermission(permission)) {
+  if (roles && !hasRole(roles)) {
+    return <Navigate to="/forbidden" replace />;
+  }
+
+  if (permission && !hasPermission(permission)) {
     return <Navigate to="/forbidden" replace />;
   }
 
@@ -209,6 +218,52 @@ export const App = () => {
                 element={
                   <PermissionRoute permission="dept:read">
                     <DepartmentsPage />
+                  </PermissionRoute>
+                }
+              />
+
+              {/* Phase 6 Routes */}
+              <Route
+                path="manager"
+                element={
+                  <PermissionRoute roles={['Manager', 'HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']}>
+                    <ManagerDashboardPage />
+                  </PermissionRoute>
+                }
+              />
+
+              <Route
+                path="team"
+                element={
+                  <PermissionRoute roles={['Manager', 'HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']}>
+                    <TeamManagementPage />
+                  </PermissionRoute>
+                }
+              />
+
+              <Route
+                path="performance"
+                element={
+                  <PermissionRoute permission={['performance:read', 'employee:read']}>
+                    <PerformancePage />
+                  </PermissionRoute>
+                }
+              />
+
+              <Route
+                path="approvals"
+                element={
+                  <PermissionRoute roles={['Manager', 'HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']}>
+                    <ApprovalsPage />
+                  </PermissionRoute>
+                }
+              />
+
+              <Route
+                path="hr-operations"
+                element={
+                  <PermissionRoute roles={['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']}>
+                    <HROperationsPage />
                   </PermissionRoute>
                 }
               />
