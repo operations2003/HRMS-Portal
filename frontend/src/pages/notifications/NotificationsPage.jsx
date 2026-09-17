@@ -95,12 +95,63 @@ export const NotificationsPage = () => {
   };
 
   const handleNavigate = (notif) => {
-    const eventType = notif.eventType || notif.event_type;
-    const { route } = getNotificationIcon(eventType);
-    if (route) {
-      navigate(route);
+    const targetUrl = notif.actionUrl || notif.action_url;
+    if (targetUrl) {
+      navigate(targetUrl);
+    } else {
+      const eventType = notif.eventType || notif.event_type;
+      const { route } = getNotificationIcon(
+        eventType,
+        notif.title,
+        notif.entityType || notif.entity_type
+      );
+      if (route) {
+        navigate(route);
+      }
     }
   };
+
+  const displayedNotifications = notifications.filter((notif) => {
+    if (filter === 'unread') return notif.isRead === false || notif.is_read === false;
+    if (filter === 'performance') {
+      const type = (notif.eventType || notif.event_type || '').toUpperCase();
+      const ent = (notif.entityType || notif.entity_type || '').toUpperCase();
+      const title = (notif.title || '').toLowerCase();
+      return (
+        type.includes('PERFORMANCE') ||
+        ent.includes('PERFORMANCE') ||
+        title.includes('performance') ||
+        title.includes('appraisal')
+      );
+    }
+    if (filter === 'leaves') {
+      const type = (notif.eventType || notif.event_type || '').toUpperCase();
+      const ent = (notif.entityType || notif.entity_type || '').toUpperCase();
+      const title = (notif.title || '').toLowerCase();
+      return type.includes('LEAVE') || ent.includes('LEAVE') || title.includes('leave');
+    }
+    if (filter === 'payroll') {
+      const type = (notif.eventType || notif.event_type || '').toUpperCase();
+      const ent = (notif.entityType || notif.entity_type || '').toUpperCase();
+      return (
+        type.includes('PAYROLL') ||
+        type.includes('PAYSLIP') ||
+        ent.includes('PAYROLL') ||
+        ent.includes('PAYSLIP')
+      );
+    }
+    if (filter === 'requests') {
+      const type = (notif.eventType || notif.event_type || '').toUpperCase();
+      const ent = (notif.entityType || notif.entity_type || '').toUpperCase();
+      return (
+        type.includes('TICKET') ||
+        type.includes('REQUEST') ||
+        ent.includes('HELPDESK') ||
+        ent.includes('REQUEST')
+      );
+    }
+    return true;
+  });
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
@@ -115,7 +166,7 @@ export const NotificationsPage = () => {
               Notification Center
             </h1>
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              Activity alerts for payroll, tickets, and employee service requests.
+              Activity alerts for leaves, performance reviews, manager approvals, payroll, and tickets.
             </p>
           </div>
         </div>
@@ -145,10 +196,10 @@ export const NotificationsPage = () => {
       </div>
 
       {/* Filter Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-2">
+      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-2 overflow-x-auto no-scrollbar">
         <button
           onClick={() => setFilter('all')}
-          className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+          className={`px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
             filter === 'all'
               ? 'bg-brand-600 text-white shadow-sm'
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -158,7 +209,7 @@ export const NotificationsPage = () => {
         </button>
         <button
           onClick={() => setFilter('unread')}
-          className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 ${
+          className={`px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap ${
             filter === 'unread'
               ? 'bg-brand-600 text-white shadow-sm'
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -167,7 +218,7 @@ export const NotificationsPage = () => {
           <span>Unread</span>
           {unreadCount > 0 && (
             <span
-              className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+              className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
                 filter === 'unread'
                   ? 'bg-white/20 text-white'
                   : 'bg-rose-500 text-white'
@@ -176,6 +227,46 @@ export const NotificationsPage = () => {
               {unreadCount}
             </span>
           )}
+        </button>
+        <button
+          onClick={() => setFilter('performance')}
+          className={`px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
+            filter === 'performance'
+              ? 'bg-brand-600 text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          Performance
+        </button>
+        <button
+          onClick={() => setFilter('leaves')}
+          className={`px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
+            filter === 'leaves'
+              ? 'bg-brand-600 text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          Leaves
+        </button>
+        <button
+          onClick={() => setFilter('payroll')}
+          className={`px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
+            filter === 'payroll'
+              ? 'bg-brand-600 text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          Payroll
+        </button>
+        <button
+          onClick={() => setFilter('requests')}
+          className={`px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
+            filter === 'requests'
+              ? 'bg-brand-600 text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          Helpdesk
         </button>
       </div>
 
@@ -202,21 +293,25 @@ export const NotificationsPage = () => {
               Loading your alerts...
             </p>
           </div>
-        ) : notifications.length === 0 ? (
+        ) : displayedNotifications.length === 0 ? (
           <div className="py-16 text-center text-slate-400">
             <Bell className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
             <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-              No notifications to display.
+              No notifications in this category.
             </p>
             <p className="text-xs text-slate-400 mt-1">
-              You will receive updates when payroll is processed, tickets update, or requests change.
+              You will receive updates when leaves are actioned, performance reviews progress, or payroll cycles process.
             </p>
           </div>
         ) : (
-          notifications.map((notif) => {
+          displayedNotifications.map((notif) => {
             const isUnread = notif.isRead === false || notif.is_read === false;
             const eventType = notif.eventType || notif.event_type;
-            const { icon: EventIcon, color } = getNotificationIcon(eventType);
+            const { icon: EventIcon, color } = getNotificationIcon(
+              eventType,
+              notif.title,
+              notif.entityType || notif.entity_type
+            );
 
             return (
               <div

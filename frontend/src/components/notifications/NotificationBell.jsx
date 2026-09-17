@@ -11,46 +11,171 @@ import {
   ExternalLink,
   ChevronRight,
   Clock,
+  Award,
+  CalendarDays,
+  UserCheck,
+  ShieldCheck,
+  CheckCircle2,
+  XCircle,
+  RotateCcw,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { notificationService } from '../../services/notificationService.js';
 
-export const getNotificationIcon = (eventType) => {
-  switch (eventType) {
-    case 'PAYROLL_PROCESSED':
-      return {
-        icon: Wallet,
-        color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40',
-        route: '/payroll',
-      };
-    case 'PAYSLIP_AVAILABLE':
-      return {
-        icon: FileText,
-        color: 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40',
-        route: '/payslips',
-      };
-    case 'TICKET_CREATED':
-    case 'TICKET_STATUS_CHANGED':
-      return {
-        icon: LifeBuoy,
-        color: 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40',
-        route: '/helpdesk',
-      };
-    case 'EMPLOYEE_REQUEST_CREATED':
-    case 'EMPLOYEE_REQUEST_STATUS_CHANGED':
-      return {
-        icon: ClipboardList,
-        color: 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40',
-        route: '/requests',
-      };
-    default:
-      return {
-        icon: Bell,
-        color: 'text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800',
-        route: '/notifications',
-      };
+export const getNotificationIcon = (eventType, title = '', entityType = '') => {
+  const type = (eventType || '').toUpperCase();
+  const lowerTitle = (title || '').toLowerCase();
+  const ent = (entityType || '').toUpperCase();
+
+  // Phase 5: Payroll & Payslips
+  if (type === 'PAYROLL_PROCESSED') {
+    return {
+      icon: Wallet,
+      color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40',
+      route: '/payroll',
+    };
   }
+  if (type === 'PAYSLIP_AVAILABLE') {
+    return {
+      icon: FileText,
+      color: 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40',
+      route: '/payslips',
+    };
+  }
+
+  // Phase 5: Helpdesk Tickets
+  if (type === 'TICKET_CREATED' || type === 'TICKET_STATUS_CHANGED') {
+    return {
+      icon: LifeBuoy,
+      color: 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40',
+      route: '/helpdesk',
+    };
+  }
+
+  // Phase 5: Employee Requests
+  if (type === 'EMPLOYEE_REQUEST_CREATED' || type === 'EMPLOYEE_REQUEST_STATUS_CHANGED') {
+    return {
+      icon: ClipboardList,
+      color: 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40',
+      route: '/requests',
+    };
+  }
+
+  // Phase 6: Performance Reviews
+  if (
+    type === 'PERFORMANCE_SUBMITTED' ||
+    type === 'PERFORMANCE_REVIEW_PENDING' ||
+    type === 'PERFORMANCE_PENDING' ||
+    lowerTitle.includes('performance review awaiting') ||
+    lowerTitle.includes('manager review completed') ||
+    (ent === 'PERFORMANCE_REVIEW' && lowerTitle.includes('awaiting'))
+  ) {
+    return {
+      icon: Award,
+      color: 'text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/40',
+      route: '/performance',
+    };
+  }
+  if (
+    type === 'PERFORMANCE_APPROVED' ||
+    lowerTitle.includes('performance review approved')
+  ) {
+    return {
+      icon: CheckCircle2,
+      color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40',
+      route: '/performance',
+    };
+  }
+  if (
+    type === 'PERFORMANCE_RETURNED' ||
+    lowerTitle.includes('performance review returned')
+  ) {
+    return {
+      icon: RotateCcw,
+      color: 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40',
+      route: '/performance',
+    };
+  }
+  if (
+    type === 'PERFORMANCE_REJECTED' ||
+    lowerTitle.includes('performance review rejected')
+  ) {
+    return {
+      icon: XCircle,
+      color: 'text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40',
+      route: '/performance',
+    };
+  }
+
+  // Phase 6: Leaves
+  if (
+    type === 'LEAVE_APPROVAL_PENDING' ||
+    type === 'LEAVE_PENDING' ||
+    type === 'LEAVE_APPLIED' ||
+    lowerTitle.includes('leave request pending')
+  ) {
+    return {
+      icon: CalendarDays,
+      color: 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40',
+      route: '/approvals',
+    };
+  }
+  if (
+    type === 'LEAVE_APPROVED' ||
+    lowerTitle.includes('leave request approved')
+  ) {
+    return {
+      icon: CheckCircle2,
+      color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40',
+      route: '/leaves',
+    };
+  }
+  if (
+    type === 'LEAVE_REJECTED' ||
+    lowerTitle.includes('leave request rejected')
+  ) {
+    return {
+      icon: XCircle,
+      color: 'text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40',
+      route: '/leaves',
+    };
+  }
+
+  // Phase 6: Manager & Hierarchy
+  if (
+    type === 'MANAGER_ASSIGNED' ||
+    type === 'TEAM_ASSIGNED' ||
+    lowerTitle.includes('reporting manager assigned') ||
+    lowerTitle.includes('direct report assigned')
+  ) {
+    return {
+      icon: UserCheck,
+      color: 'text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-950/40',
+      route: '/team',
+    };
+  }
+
+  // Phase 6: HR Operations & Broadcasts
+  if (
+    type === 'HR_APPROVAL_PENDING' ||
+    type === 'HR_ANNOUNCEMENT' ||
+    lowerTitle.includes('hr announcement') ||
+    lowerTitle.includes('hr approval') ||
+    ent === 'HR_OPERATIONS'
+  ) {
+    return {
+      icon: ShieldCheck,
+      color: 'text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-950/40',
+      route: '/hr-operations',
+    };
+  }
+
+  return {
+    icon: Bell,
+    color: 'text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800',
+    route: '/notifications',
+  };
 };
 
 export const NotificationBell = () => {
@@ -154,9 +279,18 @@ export const NotificationBell = () => {
     }
 
     setIsOpen(false);
-    const { route } = getNotificationIcon(notif.eventType || notif.event_type);
-    if (route) {
-      navigate(route);
+    const targetUrl = notif.actionUrl || notif.action_url;
+    if (targetUrl) {
+      navigate(targetUrl);
+    } else {
+      const { route } = getNotificationIcon(
+        notif.eventType || notif.event_type,
+        notif.title,
+        notif.entityType || notif.entity_type
+      );
+      if (route) {
+        navigate(route);
+      }
     }
   };
 
@@ -222,7 +356,11 @@ export const NotificationBell = () => {
               notifications.map((notif) => {
                 const isUnread = notif.isRead === false || notif.is_read === false;
                 const eventType = notif.eventType || notif.event_type;
-                const { icon: EventIcon, color } = getNotificationIcon(eventType);
+                const { icon: EventIcon, color } = getNotificationIcon(
+                  eventType,
+                  notif.title,
+                  notif.entityType || notif.entity_type
+                );
 
                 return (
                   <div

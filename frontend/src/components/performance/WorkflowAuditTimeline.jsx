@@ -61,10 +61,15 @@ export const WorkflowAuditTimeline = ({ history = [] }) => {
           : '';
 
         const actorName =
+          step.actorName ||
           step.actor_name ||
           (step.actor ? `${step.actor.first_name || ''} ${step.actor.last_name || ''}`.trim() : null) ||
           step.action_by ||
           'System';
+
+        const prevStatus = step.fromStatus || step.from_status || step.previous_status;
+        const nextStatus = step.toStatus || step.to_status || step.new_status;
+        const commentText = step.comments || step.comment;
 
         return (
           <div key={step.id || idx} className="relative group">
@@ -78,9 +83,9 @@ export const WorkflowAuditTimeline = ({ history = [] }) => {
                 <div className="flex items-center gap-1.5 font-semibold text-slate-800">
                   <User className="w-3.5 h-3.5 text-slate-400" />
                   <span>{actorName}</span>
-                  {step.actor_role && (
+                  {(step.actor_role || step.actorRole) && (
                     <span className="text-[10px] text-slate-500 font-normal">
-                      ({step.actor_role})
+                      ({step.actor_role || step.actorRole})
                     </span>
                   )}
                 </div>
@@ -94,25 +99,25 @@ export const WorkflowAuditTimeline = ({ history = [] }) => {
                 </div>
               </div>
 
-              {/* Status transition transition */}
-              {(step.previous_status || step.new_status) && (
+              {/* Status transition */}
+              {(prevStatus || nextStatus) && (
                 <div className="text-[11px] text-slate-600 flex items-center gap-1.5">
                   <span className="text-slate-400">Transition:</span>
                   <span className="font-mono bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-700">
-                    {step.previous_status || 'Start'}
+                    {prevStatus || 'Start'}
                   </span>
                   <span>&rarr;</span>
                   <span className="font-mono bg-white px-1.5 py-0.5 rounded border border-slate-200 font-medium text-slate-900">
-                    {step.new_status}
+                    {nextStatus}
                   </span>
                 </div>
               )}
 
               {/* Comments / reason */}
-              {step.comment && (
+              {commentText && (
                 <div className="flex items-start gap-1.5 text-slate-700 pt-1 border-t border-slate-200/60">
                   <MessageSquare className="w-3 h-3 text-slate-400 mt-0.5 shrink-0" />
-                  <p className="italic text-slate-600">{step.comment}</p>
+                  <p className="italic text-slate-600">{commentText}</p>
                 </div>
               )}
             </div>

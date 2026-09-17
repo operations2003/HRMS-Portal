@@ -309,9 +309,11 @@ async function runWorkflowTests() {
     const leaveTypesRes = await request('GET', '/v1/leaves/types', null, employeeToken);
     const leaveTypeId = leaveTypesRes.body.data?.[0]?.id;
 
-    const randDay = Math.floor(Math.random() * 20) + 1;
-    const testLeaveStart = `2028-06-${String(randDay).padStart(2, '0')}`;
-    const testLeaveEnd = `2028-06-${String(randDay + 1).padStart(2, '0')}`;
+    const randFutureYear = 2035 + Math.floor(Math.random() * 5);
+    const randMonth = String(1 + Math.floor(Math.random() * 11)).padStart(2, '0');
+    const randDay = String(10 + Math.floor(Math.random() * 10)).padStart(2, '0');
+    const testLeaveStart = `${randFutureYear}-${randMonth}-${randDay}`;
+    const testLeaveEnd = `${randFutureYear}-${randMonth}-${parseInt(randDay, 10) + 1}`;
 
     const applyLeaveRes = await request(
       'POST',

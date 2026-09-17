@@ -2,11 +2,24 @@ import React from 'react';
 import { Users, UserCheck, CalendarOff, Award, TrendingUp, Clock } from 'lucide-react';
 
 export const HROperationsOverviewCards = ({ stats = {} }) => {
+  const workforce = stats.workforce || {};
+  const actionItems = stats.actionItems || {};
+  const attendance = stats.attendance || {};
+
+  const totalEmployees = workforce.totalEmployees ?? stats.totalEmployees ?? stats.headcount ?? 0;
+  const activeEmployees = workforce.activeEmployees ?? stats.activeEmployees ?? 0;
+  const totalManagers = stats.totalManagers ?? stats.managerCount ?? stats.teamsCount ?? 0;
+  const attendanceRate = attendance.attendanceRate ?? stats.todayAttendanceRate ?? stats.attendanceRate ?? '95%';
+  const presentToday = attendance.present ?? stats.presentToday ?? 0;
+  const pendingTotal = actionItems.totalPendingActions ?? ((actionItems.pendingLeaves ?? stats.pendingLeaves ?? 0) + (actionItems.pendingAppraisals ?? stats.pendingAppraisals ?? 0));
+  const pendingLeaves = actionItems.pendingLeaves ?? stats.pendingLeaves ?? 0;
+  const pendingAppraisals = actionItems.pendingAppraisals ?? stats.pendingAppraisals ?? 0;
+
   const cards = [
     {
       title: 'Total Workforce',
-      value: stats.totalEmployees ?? stats.headcount ?? 0,
-      subtext: `${stats.activeEmployees ?? 0} active employees`,
+      value: totalEmployees,
+      subtext: `${activeEmployees} active employees`,
       icon: Users,
       color: 'from-blue-500 to-indigo-600',
       bgLight: 'bg-blue-50/60',
@@ -15,7 +28,7 @@ export const HROperationsOverviewCards = ({ stats = {} }) => {
     },
     {
       title: 'Reporting Managers',
-      value: stats.totalManagers ?? stats.managerCount ?? 0,
+      value: totalManagers,
       subtext: 'Leading active teams',
       icon: UserCheck,
       color: 'from-purple-500 to-indigo-600',
@@ -25,8 +38,8 @@ export const HROperationsOverviewCards = ({ stats = {} }) => {
     },
     {
       title: 'Today Presence',
-      value: stats.todayAttendanceRate ? `${stats.todayAttendanceRate}%` : `${stats.attendancePercentage ?? 95}%`,
-      subtext: `${stats.presentToday ?? 0} checked in today`,
+      value: typeof attendanceRate === 'string' && attendanceRate.includes('%') ? attendanceRate : `${attendanceRate}%`,
+      subtext: `${presentToday} checked in today`,
       icon: Clock,
       color: 'from-emerald-500 to-teal-600',
       bgLight: 'bg-emerald-50/60',
@@ -35,8 +48,8 @@ export const HROperationsOverviewCards = ({ stats = {} }) => {
     },
     {
       title: 'Pending Approvals',
-      value: (stats.pendingLeaves ?? 0) + (stats.pendingAppraisals ?? 0) + (stats.pendingApprovals ?? 0),
-      subtext: `${stats.pendingLeaves ?? 0} leaves &bull; ${stats.pendingAppraisals ?? 0} reviews`,
+      value: pendingTotal,
+      subtext: `${pendingLeaves} leaves &bull; ${pendingAppraisals} appraisals`,
       icon: CalendarOff,
       color: 'from-amber-500 to-orange-600',
       bgLight: 'bg-amber-50/60',

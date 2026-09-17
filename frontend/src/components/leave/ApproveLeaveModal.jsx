@@ -134,6 +134,27 @@ export const ApproveLeaveModal = ({
               </span>
             )}
           </div>
+
+          <div className="p-3 rounded-xl bg-white border border-slate-200">
+            <span className="text-slate-400 font-medium block">Current Status</span>
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 mt-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+              <Clock className="w-3 h-3 text-amber-600" />
+              {leaveRecord.status || 'PENDING'}
+            </span>
+          </div>
+
+          <div className="p-3 rounded-xl bg-white border border-slate-200">
+            <span className="text-slate-400 font-medium block">Submitted Date</span>
+            <span className="text-xs font-semibold text-slate-700 mt-1 block">
+              {leaveRecord.appliedDate || leaveRecord.createdAt
+                ? new Date(leaveRecord.appliedDate || leaveRecord.createdAt).toLocaleDateString(undefined, {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                  })
+                : 'Recent'}
+            </span>
+          </div>
         </div>
 
         {/* Reason Box */}

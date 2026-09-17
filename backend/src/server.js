@@ -12,7 +12,7 @@ const startServer = async () => {
       console.log(`🚀 HRMS Portal Backend Server Running`);
       console.log(`📡 Environment : ${config.nodeEnv}`);
       console.log(`🌐 URL         : http://localhost:${config.port}`);
-      console.log(`🩺 Health Check: http://localhost:${config.port}/api/health`);
+      console.log(`🩺 Health Check: http://localhost:${config.port}/api/v1/health`);
       console.log('====================================================');
     });
   } catch (error) {
@@ -20,5 +20,14 @@ const startServer = async () => {
     process.exit(1);
   }
 };
+
+// Protect server from unexpected remote connection dropouts
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('⚠️ [Server] Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('⚠️ [Server] Uncaught Exception:', err.message);
+});
 
 startServer();

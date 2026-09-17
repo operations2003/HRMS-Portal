@@ -69,16 +69,25 @@ export const AuthProvider = ({ children }) => {
 
   const hasPermission = (permission) => {
     if (!user) return false;
-    if (user.roleName === 'Admin' || user.roleName === 'SuperAdmin') return true;
-    const permissions = Array.isArray(permission) ? permission : [permission];
-    return permissions.some((p) => user.permissions?.includes(p));
+    const userRoleStr = (user.roleName || user.role?.name || user.role || '').toLowerCase().trim();
+    if (['admin', 'superadmin', 'orgadmin'].includes(userRoleStr)) return true;
+    const permissions = (Array.isArray(permission) ? permission : [permission]).map((p) =>
+      (typeof p === 'string' ? p : '').toLowerCase().trim()
+    );
+    const userPerms = Array.isArray(user.permissions)
+      ? user.permissions.map((p) => (typeof p === 'string' ? p : '').toLowerCase().trim())
+      : [];
+    return permissions.some((p) => userPerms.includes(p));
   };
 
   const hasRole = (role) => {
     if (!user) return false;
-    if (user.roleName === 'Admin' || user.roleName === 'SuperAdmin') return true;
-    const roles = Array.isArray(role) ? role : [role];
-    return roles.includes(user.roleName);
+    const userRoleStr = (user.roleName || user.role?.name || user.role || '').toLowerCase().trim();
+    if (['admin', 'superadmin', 'orgadmin'].includes(userRoleStr)) return true;
+    const targetRoles = (Array.isArray(role) ? role : [role]).map((r) =>
+      (typeof r === 'string' ? r : '').toLowerCase().trim()
+    );
+    return targetRoles.includes(userRoleStr);
   };
 
   return (

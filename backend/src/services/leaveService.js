@@ -1,6 +1,7 @@
 import { leaveRepository } from '../repositories/leaveRepository.js';
 import { employeeRepository } from '../repositories/employeeRepository.js';
 import { workflowRepository } from '../repositories/workflowRepository.js';
+import { notificationService } from './notificationService.js';
 import { logger } from '../utils/logger.js';
 
 const normalizeRole = (r) => (r || '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -345,6 +346,25 @@ export const leaveService = {
       logger.warn('LeaveService', `Failed to initialize workflow instance for leave ${request.id}: ${wfErr.message}`);
     }
 
+    // Dispatch in-app notification to Manager
+    try {
+      if (emp.managerId) {
+        const mgrEmp = await employeeRepository.findById(emp.managerId);
+        if (mgrEmp && mgrEmp.userId) {
+          await notificationService.notifyLeaveApprovalPending({
+            orgId: emp.orgId,
+            leaveId: request.id,
+            employeeName: `${emp.firstName || ''} ${emp.lastName || ''}`.trim(),
+            startDate,
+            endDate,
+            managerUserId: mgrEmp.userId,
+          });
+        }
+      }
+    } catch (notifErr) {
+      logger.warn('LeaveService', `Failed to dispatch pending leave notification: ${notifErr.message}`);
+    }
+
     return request;
   },
 
@@ -483,24 +503,26 @@ export const leaveService = {
   },
 
   /**
-   * Get team leaves for Manager (scoped to manager's department)
+   * Get team leaves for Manager (scoped to manager's department or direct reports)
    */
   async getTeamLeaves(user, query = {}) {
     const normRole = normalizeRole(user.roleName);
     let deptId = query.deptId || null;
+    let managerId = null;
 
     if (normRole === 'manager') {
       const managerEmp = await resolveRequesterEmployee(user);
-      if (!managerEmp || !managerEmp.deptId) {
+      if (!managerEmp) {
         return {
           records: [],
           pagination: { total: 0, page: 1, limit: 20, totalPages: 0 },
         };
       }
-      deptId = managerEmp.deptId;
+      deptId = managerEmp.deptId || null;
+      managerId = managerEmp.id;
     }
 
-    return leaveRepository.findTeamLeaves(deptId, user.orgId, query);
+    return leaveRepository.findTeamLeaves(deptId, user.orgId, { ...query, managerId });
   },
 
   /**
@@ -606,6 +628,25 @@ export const leaveService = {
       }
     }
 
+    // Send in-app system notification to employee
+    try {
+      const emp = await employeeRepository.findById(record.employeeId);
+      if (emp && emp.userId) {
+        await notificationService.createSystemNotification({
+          orgId: user.orgId,
+          userId: emp.userId,
+          eventType: 'LEAVE_APPROVED',
+          title: 'Leave Request Approved',
+          message: `Your leave request from ${record.startDate} to ${record.endDate} has been approved.${options.comments ? ` Comments: "${options.comments}"` : ''}`,
+          entityType: 'LEAVE_REQUEST',
+          entityId: record.id,
+          actionUrl: '/leaves',
+        });
+      }
+    } catch (notifErr) {
+      logger.warn('LeaveService', `Failed to dispatch approval notification for leave ${id}: ${notifErr.message}`);
+    }
+
     return updated;
   },
 
@@ -704,6 +745,25 @@ export const leaveService = {
       } catch (wfErr) {
         logger.warn('LeaveService', `Failed to advance workflow audit for leave ${id}: ${wfErr.message}`);
       }
+    }
+
+    // Send in-app system notification to employee
+    try {
+      const emp = await employeeRepository.findById(record.employeeId);
+      if (emp && emp.userId) {
+        await notificationService.createSystemNotification({
+          orgId: user.orgId,
+          userId: emp.userId,
+          eventType: 'LEAVE_REJECTED',
+          title: 'Leave Request Rejected',
+          message: `Your leave request from ${record.startDate} to ${record.endDate} has been rejected. Reason: "${rejectionReason}"`,
+          entityType: 'LEAVE_REQUEST',
+          entityId: record.id,
+          actionUrl: '/leaves',
+        });
+      }
+    } catch (notifErr) {
+      logger.warn('LeaveService', `Failed to dispatch rejection notification for leave ${id}: ${notifErr.message}`);
     }
 
     return updated;

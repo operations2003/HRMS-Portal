@@ -384,7 +384,7 @@ export const ManagerDashboardPage = () => {
 
             <div className="space-y-2">
               <NavLink
-                to="/approvals"
+                to="/leaves?tab=team"
                 className="flex items-center justify-between p-3 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 transition-colors text-xs font-semibold group"
               >
                 <div className="flex items-center gap-2.5">
@@ -451,7 +451,7 @@ export const ManagerDashboardPage = () => {
                 {pendingApprovals.leaves.length}
               </Badge>
             </div>
-            <NavLink to="/approvals" className="text-xs font-semibold text-brand-600 hover:text-brand-700">
+            <NavLink to="/leaves?tab=team" className="text-xs font-semibold text-brand-600 hover:text-brand-700">
               View queue &rarr;
             </NavLink>
           </div>

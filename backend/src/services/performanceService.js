@@ -292,18 +292,15 @@ export const performanceService = {
     }
 
     // Trigger in-app notification to Manager
-    if (record.reviewer) {
+    if (record.reviewer || record.reviewerId) {
       const reviewerEmp = await employeeRepository.findById(record.reviewerId);
       if (reviewerEmp && reviewerEmp.userId) {
-        await notificationService.createSystemNotification({
+        await notificationService.notifyPerformanceSubmitted({
           orgId: currentUser.orgId,
-          userId: reviewerEmp.userId,
-          eventType: 'GENERAL_ALERT',
-          title: 'Performance Review Awaiting Your Evaluation',
-          message: `${record.employee?.fullName || 'An employee'} has submitted their performance self-review for ${record.reviewPeriod}.`,
-          entityType: 'PERFORMANCE_REVIEW',
-          entityId: record.id,
-          actionUrl: `/performance/${record.id}`,
+          appraisalId: record.id,
+          reviewPeriod: record.reviewPeriod,
+          employeeName: record.employee?.fullName || 'An employee',
+          reviewerUserId: reviewerEmp.userId,
         });
       }
     }
@@ -386,6 +383,24 @@ export const performanceService = {
       logger.warn('PerformanceService', `Failed to advance workflow audit: ${e.message}`);
     }
 
+    // Notify employee that manager review is completed and awaiting HR approval
+    try {
+      if (record.employee?.userId) {
+        await notificationService.createSystemNotification({
+          orgId: currentUser.orgId,
+          userId: record.employee.userId,
+          eventType: 'PERFORMANCE_REVIEW_PENDING',
+          title: 'Manager Review Completed',
+          message: `Your manager evaluation for ${record.reviewPeriod} was completed with score ${updated.score ?? 'N/A'} and forwarded for HR sign-off.`,
+          entityType: 'PERFORMANCE_REVIEW',
+          entityId: record.id,
+          actionUrl: `/performance/${record.id}`,
+        });
+      }
+    } catch (notifErr) {
+      logger.warn('PerformanceService', `Failed to dispatch manager review notification: ${notifErr.message}`);
+    }
+
     return updated;
   },
 
@@ -444,15 +459,12 @@ export const performanceService = {
 
     // Notify employee of completed appraisal
     if (record.employee?.userId) {
-      await notificationService.createSystemNotification({
+      await notificationService.notifyPerformanceApproved({
         orgId: currentUser.orgId,
-        userId: record.employee.userId,
-        eventType: 'GENERAL_ALERT',
-        title: 'Performance Review Approved',
-        message: `Your performance review for ${record.reviewPeriod} has been approved by HR. Final Rating: ${updated.rating || 'N/A'}/5.0`,
-        entityType: 'PERFORMANCE_REVIEW',
-        entityId: record.id,
-        actionUrl: `/performance/${record.id}`,
+        appraisalId: record.id,
+        reviewPeriod: record.reviewPeriod,
+        employeeUserId: record.employee.userId,
+        rating: updated.rating,
       });
     }
 
@@ -518,15 +530,12 @@ export const performanceService = {
 
     // Notify employee of returned appraisal
     if (record.employee?.userId) {
-      await notificationService.createSystemNotification({
+      await notificationService.notifyPerformanceReturned({
         orgId: currentUser.orgId,
-        userId: record.employee.userId,
-        eventType: 'GENERAL_ALERT',
-        title: 'Performance Review Returned for Revision',
-        message: `Your review for ${record.reviewPeriod} was returned: "${finalReason}". Please revise and resubmit.`,
-        entityType: 'PERFORMANCE_REVIEW',
-        entityId: record.id,
-        actionUrl: `/performance/${record.id}`,
+        appraisalId: record.id,
+        reviewPeriod: record.reviewPeriod,
+        employeeUserId: record.employee.userId,
+        reason: finalReason,
       });
     }
 
@@ -592,15 +601,12 @@ export const performanceService = {
 
     // Notify employee of rejected appraisal
     if (record.employee?.userId) {
-      await notificationService.createSystemNotification({
+      await notificationService.notifyPerformanceRejected({
         orgId: currentUser.orgId,
-        userId: record.employee.userId,
-        eventType: 'GENERAL_ALERT',
-        title: 'Performance Review Rejected',
-        message: `Your review for ${record.reviewPeriod} was rejected: "${reason}".`,
-        entityType: 'PERFORMANCE_REVIEW',
-        entityId: record.id,
-        actionUrl: `/performance/${record.id}`,
+        appraisalId: record.id,
+        reviewPeriod: record.reviewPeriod,
+        employeeUserId: record.employee.userId,
+        reason,
       });
     }
 

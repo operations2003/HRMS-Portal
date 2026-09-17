@@ -58,6 +58,16 @@ export const managerService = {
     return res.data;
   },
 
+  async approveTeamLeave(leaveId, payload = {}) {
+    const res = await http.post(`/v1/manager/team/leaves/${leaveId}/approve`, payload);
+    return res.data;
+  },
+
+  async rejectTeamLeave(leaveId, payload = {}) {
+    const res = await http.post(`/v1/manager/team/leaves/${leaveId}/reject`, payload);
+    return res.data;
+  },
+
   async getTeamPerformance(params = {}) {
     const query = new URLSearchParams();
     if (params.status) query.append('status', params.status);

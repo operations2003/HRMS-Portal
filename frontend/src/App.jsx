@@ -268,6 +268,11 @@ export const App = () => {
                 }
               />
 
+              <Route
+                path="hr"
+                element={<Navigate to="/hr-operations" replace />}
+              />
+
               <Route path="forbidden" element={<ForbiddenPage />} />
               <Route path="*" element={<NotFoundPage />} />
             </Route>

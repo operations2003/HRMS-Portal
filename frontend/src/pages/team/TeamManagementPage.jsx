@@ -699,7 +699,7 @@ export const TeamManagementPage = () => {
                 ),
               },
               {
-                header: 'Status',
+                header: 'Current Status',
                 render: (row) => (
                   <Badge variant={row.status === 'APPROVED' ? 'success' : row.status === 'REJECTED' ? 'danger' : 'warning'} size="sm">
                     {row.status}
@@ -707,32 +707,57 @@ export const TeamManagementPage = () => {
                 ),
               },
               {
+                header: 'Submitted Date',
+                render: (row) => {
+                  const d = row.appliedDate || row.appliedAt || row.createdAt || row.created_at;
+                  return (
+                    <span className="text-xs text-slate-500 font-medium">
+                      {d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recent'}
+                    </span>
+                  );
+                },
+              },
+              {
                 header: 'Action',
                 className: 'text-right',
-                render: (row) => (
-                  <div className="flex items-center justify-end gap-1.5">
-                    {row.status === 'PENDING' && (
-                      <>
-                        <Button
-                          size="sm"
-                          variant="success"
-                          icon={CheckCircle2}
-                          onClick={() => setApprovalAction({ isOpen: true, item: row, type: 'APPROVE' })}
-                        >
-                          Approve
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="danger"
-                          icon={XCircle}
-                          onClick={() => setApprovalAction({ isOpen: true, item: row, type: 'REJECT' })}
-                        >
-                          Reject
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                ),
+                render: (row) => {
+                  const isSelf =
+                    (user?.employeeId && row.employeeId === user.employeeId) ||
+                    (user?.id && (row.requesterUserId === user.id || row.employee?.userId === user.id));
+
+                  return (
+                    <div className="flex items-center justify-end gap-1.5">
+                      {row.status === 'PENDING' && (
+                        <>
+                          {isSelf ? (
+                            <span className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 italic">
+                              Self-request
+                            </span>
+                          ) : (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="success"
+                                icon={CheckCircle2}
+                                onClick={() => setApprovalAction({ isOpen: true, item: row, type: 'APPROVE' })}
+                              >
+                                Approve
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="danger"
+                                icon={XCircle}
+                                onClick={() => setApprovalAction({ isOpen: true, item: row, type: 'REJECT' })}
+                              >
+                                Reject
+                              </Button>
+                            </>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  );
+                },
               },
             ]}
             data={paginatedLeaves}

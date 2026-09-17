@@ -87,6 +87,7 @@ const mapLeaveRequestRow = (row) => {
           lastName: row.emp_last_name,
           email: row.emp_email,
           deptId: row.emp_dept_id,
+          managerId: row.emp_manager_id || null,
           departmentName: row.dept_name || '',
           designationTitle: row.desig_title || '',
         }
@@ -135,6 +136,7 @@ const BASE_LEAVE_REQUEST_SELECT = `
     e.last_name AS emp_last_name,
     e.email AS emp_email,
     e.dept_id AS emp_dept_id,
+    e.manager_id AS emp_manager_id,
     d.name AS dept_name,
     ds.title AS desig_title,
     ae.id AS appr_id,
@@ -378,14 +380,20 @@ export const leaveRepository = {
   },
 
   /**
-   * Find team leaves for department manager
+   * Find team leaves for department manager or direct reports manager
    */
-  async findTeamLeaves(deptId, orgId, { status = '', search = '', startDate = '', endDate = '', page = 1, limit = 20 } = {}) {
+  async findTeamLeaves(deptId, orgId, { status = '', search = '', startDate = '', endDate = '', page = 1, limit = 20, managerId = null } = {}) {
     const conditions = ['lr.org_id = $1'];
     const values = [orgId];
     let paramIndex = 2;
 
-    if (deptId) {
+    if (managerId && deptId) {
+      conditions.push(`(e.manager_id = $${paramIndex++} OR e.dept_id = $${paramIndex++})`);
+      values.push(managerId, deptId);
+    } else if (managerId) {
+      conditions.push(`e.manager_id = $${paramIndex++}`);
+      values.push(managerId);
+    } else if (deptId) {
       conditions.push(`e.dept_id = $${paramIndex++}`);
       values.push(deptId);
     }

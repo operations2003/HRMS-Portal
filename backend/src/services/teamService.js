@@ -4,6 +4,7 @@ import { attendanceRepository } from '../repositories/attendanceRepository.js';
 import { performanceRepository } from '../repositories/performanceRepository.js';
 import { pool } from '../config/db.js';
 import { logger } from '../utils/logger.js';
+import { notificationService } from './notificationService.js';
 import { validateEmployeeId } from '../validators/managerValidator.js';
 
 const normalizeRole = (r) => (r || '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -1047,6 +1048,21 @@ export const teamService = {
 
     const updated = await employeeRepository.assignManager(employee.id, managerId ? managerId.trim() : null);
     logger.info('TeamService', `Admin ${currentUser.id} assigned manager ${managerId || 'None'} to employee ${employeeId}`);
+
+    // Notify employee and manager
+    try {
+      const manager = managerId ? await employeeRepository.findById(managerId.trim()) : null;
+      await notificationService.notifyManagerAssigned({
+        orgId: currentUser.orgId,
+        employeeName: `${employee.firstName || ''} ${employee.lastName || ''}`.trim(),
+        managerName: manager ? `${manager.firstName || ''} ${manager.lastName || ''}`.trim() : 'None',
+        employeeUserId: employee.userId,
+        managerUserId: manager?.userId || null,
+      });
+    } catch (notifErr) {
+      logger.warn('TeamService', `Failed to dispatch manager assignment notification: ${notifErr.message}`);
+    }
+
     return updated;
   },
 };

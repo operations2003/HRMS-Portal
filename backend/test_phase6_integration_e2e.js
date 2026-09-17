@@ -191,7 +191,7 @@ async function runE2ETests() {
     const leaveTypesRes = await request('GET', '/v1/leaves/types', null, employeeToken);
     const leaveTypeId = leaveTypesRes.body.data?.[0]?.id || 'lt-annual';
 
-    const randFutureYear = 2033 + Math.floor(Math.random() * 5);
+    const randFutureYear = 2040 + Math.floor(Math.random() * 20);
     const randMonth = String(1 + Math.floor(Math.random() * 11)).padStart(2, '0');
     const randDay = String(10 + Math.floor(Math.random() * 10)).padStart(2, '0');
     const startDate = `${randFutureYear}-${randMonth}-${randDay}`;
@@ -208,7 +208,7 @@ async function runE2ETests() {
       },
       employeeToken
     );
-    assert(applyLeaveRes.status === 201 && applyLeaveRes.body.success, 'Leave: Employee applied for leave using Phase 4 engine');
+    assert(applyLeaveRes.status === 201 && applyLeaveRes.body.success, 'Leave: Employee applied for leave using Phase 4 engine', applyLeaveRes);
     const leaveId = applyLeaveRes.body.data?.id;
 
     // Verify automatic workflow tracking

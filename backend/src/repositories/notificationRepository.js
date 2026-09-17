@@ -34,8 +34,17 @@ export const notificationRepository = {
       RETURNING *;
     `;
     const values = [notifId, orgId, userId, eventType, title, message, entityType, entityId, actionUrl];
-    const { rows } = await pool.query(query, values);
-    return mapNotificationRow(rows[0]);
+    try {
+      const { rows } = await pool.query(query, values);
+      return mapNotificationRow(rows[0]);
+    } catch (err) {
+      if (err.constraint === 'notifications_event_type_check') {
+        values[3] = 'GENERAL_ALERT';
+        const { rows } = await pool.query(query, values);
+        return mapNotificationRow(rows[0]);
+      }
+      throw err;
+    }
   },
 
   /**

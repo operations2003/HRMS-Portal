@@ -761,7 +761,7 @@ export const managerService = {
       await notificationService.createSystemNotification({
         orgId: currentUser.orgId,
         userId: emp.userId,
-        eventType: 'GENERAL_ALERT',
+        eventType: 'LEAVE_APPROVED',
         title: 'Leave Request Approved',
         message: `Your leave request from ${leave.startDate} to ${leave.endDate} has been approved by your manager.${comments ? ` Note: ${comments}` : ''}`,
         entityType: 'LEAVE',
@@ -825,7 +825,7 @@ export const managerService = {
       await notificationService.createSystemNotification({
         orgId: currentUser.orgId,
         userId: emp.userId,
-        eventType: 'GENERAL_ALERT',
+        eventType: 'LEAVE_REJECTED',
         title: 'Leave Request Rejected',
         message: `Your leave request from ${leave.startDate} to ${leave.endDate} was rejected by your manager: "${rejectionReason.trim()}"`,
         entityType: 'LEAVE',

@@ -11,11 +11,14 @@ import {
   Send,
   MessageSquare,
   ShieldCheck,
+  RotateCcw,
+  XCircle,
 } from 'lucide-react';
 import { Modal } from '../common/Modal.jsx';
 import { Button } from '../common/Button.jsx';
 import { Badge } from '../common/Badge.jsx';
 import { Alert } from '../common/Alert.jsx';
+import { ConfirmDialog } from '../common/ConfirmDialog.jsx';
 import { WorkflowAuditTimeline } from './WorkflowAuditTimeline.jsx';
 import { performanceService } from '../../services/performanceService.js';
 import { useToast } from '../../context/ToastContext.jsx';
@@ -26,6 +29,7 @@ export const AppraisalDetailModal = ({
   onClose,
   recordId,
   onUpdate,
+  onOpenReviewModal,
 }) => {
   const toast = useToast();
   const { user, hasRole } = useAuth();
@@ -33,6 +37,8 @@ export const AppraisalDetailModal = ({
   const [history, setHistory] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isActing, setIsActing] = useState(false);
+  const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
+  const [showConfirmHrApprove, setShowConfirmHrApprove] = useState(false);
   const [activeTab, setActiveTab] = useState('details'); // 'details' | 'audit'
   const [error, setError] = useState(null);
 
@@ -41,6 +47,8 @@ export const AppraisalDetailModal = ({
       loadDetails();
       setActiveTab('details');
       setError(null);
+      setShowConfirmSubmit(false);
+      setShowConfirmHrApprove(false);
     }
   }, [isOpen, recordId]);
 
@@ -48,14 +56,15 @@ export const AppraisalDetailModal = ({
     try {
       setIsLoading(true);
       const data = await performanceService.getRecordById(recordId);
-      setRecord(data);
+      const rec = data.data || data;
+      setRecord(rec);
 
       try {
         const hist = await performanceService.getRecordHistory(recordId);
         setHistory(hist.items || hist.data || (Array.isArray(hist) ? hist : []));
       } catch (e) {
         // Fallback: use record.history if present
-        setHistory(data.history || []);
+        setHistory(rec.history || []);
       }
     } catch (err) {
       setError(err.message || 'Failed to load appraisal details.');
@@ -68,9 +77,10 @@ export const AppraisalDetailModal = ({
     try {
       setIsActing(true);
       await performanceService.hrApprove(recordId, {
-        comments: 'HR sign-off completed.',
+        comments: 'HR sign-off completed and appraisal finalized.',
       });
-      toast.success('Appraisal approved and closed successfully by HR!');
+      toast.success('Appraisal approved and completed successfully by HR!');
+      setShowConfirmHrApprove(false);
       onUpdate?.();
       loadDetails();
     } catch (err) {
@@ -83,10 +93,11 @@ export const AppraisalDetailModal = ({
   const handleSubmitSelfReview = async () => {
     try {
       setIsActing(true);
-      await performanceService.submitAppraisal(recordId, {
-        comment: 'Appraisal submitted for manager review.',
+      await performanceService.submitRecord(recordId, {
+        comments: 'Appraisal submitted for manager review.',
       });
       toast.success('Appraisal submitted for manager evaluation!');
+      setShowConfirmSubmit(false);
       onUpdate?.();
       loadDetails();
     } catch (err) {
@@ -183,6 +194,28 @@ export const AppraisalDetailModal = ({
           {/* Tab 1: Details */}
           {activeTab === 'details' && (
             <div className="space-y-4">
+              {/* Returned Alert Banner */}
+              {record.status === 'RETURNED' && (
+                <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-3.5 text-xs flex items-start gap-2.5">
+                  <RotateCcw className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold block">Appraisal Returned for Revision:</span>
+                    <p className="mt-0.5">{record.rejectionReason || 'Please review your goals or self-ratings and resubmit for evaluation.'}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Rejected Alert Banner */}
+              {record.status === 'REJECTED' && (
+                <div className="bg-rose-50 border border-rose-200 text-rose-900 rounded-xl p-3.5 text-xs flex items-start gap-2.5">
+                  <XCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold block">Appraisal Rejected:</span>
+                    <p className="mt-0.5">{record.rejectionReason || 'This performance appraisal submission was rejected.'}</p>
+                  </div>
+                </div>
+              )}
+
               {/* Employee Self-Review */}
               <div className="bg-slate-50/80 rounded-xl p-4 border border-slate-200/80 space-y-2.5">
                 <div className="flex items-center justify-between">
@@ -195,7 +228,7 @@ export const AppraisalDetailModal = ({
                   </span>
                 </div>
                 <p className="text-xs text-slate-700 whitespace-pre-line">
-                  {record.selfSummary || record.selfReview?.summary || 'No summary provided.'}
+                  {record.selfComments || record.selfSummary || record.selfReview?.summary || 'No summary provided.'}
                 </p>
                 {(record.selfReview?.achievements || record.selfReview?.challenges) && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-200/60 text-xs">
@@ -224,14 +257,29 @@ export const AppraisalDetailModal = ({
                   </h5>
                   <div className="grid grid-cols-1 gap-2">
                     {record.goals.map((g, idx) => (
-                      <div key={g.id || idx} className="p-3 bg-white border border-slate-200 rounded-xl flex items-start justify-between gap-3 text-xs">
-                        <div>
-                          <p className="font-semibold text-slate-800">{g.title}</p>
-                          {g.description && <p className="text-slate-500 mt-0.5">{g.description}</p>}
+                      <div key={g.id || idx} className="p-3 bg-white border border-slate-200 rounded-xl space-y-1 text-xs">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-semibold text-slate-800">{g.title}</p>
+                            {g.description && <p className="text-slate-500 mt-0.5">{g.description}</p>}
+                          </div>
+                          <Badge variant={g.status === 'COMPLETED' ? 'success' : 'neutral'} size="sm">
+                            {g.status || 'IN_PROGRESS'}
+                          </Badge>
                         </div>
-                        <Badge variant={g.status === 'COMPLETED' ? 'success' : 'neutral'} size="sm">
-                          {g.status || 'IN_PROGRESS'}
-                        </Badge>
+                        {(g.metricTarget || g.weightage) && (
+                          <div className="flex items-center gap-3 pt-1 text-[11px] text-slate-500 border-t border-slate-100 mt-1">
+                            {g.weightage > 0 && (
+                              <span>Weightage: <strong>{g.weightage}%</strong></span>
+                            )}
+                            {g.metricTarget && (
+                              <span>Target: <strong>{g.metricTarget}</strong></span>
+                            )}
+                            {g.metricAchieved && (
+                              <span>Achieved: <strong>{g.metricAchieved}</strong></span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -292,9 +340,23 @@ export const AppraisalDetailModal = ({
                   variant="primary"
                   icon={Send}
                   isLoading={isActing}
-                  onClick={handleSubmitSelfReview}
+                  onClick={() => setShowConfirmSubmit(true)}
                 >
                   Submit for Manager Review
+                </Button>
+              )}
+
+              {/* If manager/HR and record is awaiting evaluation */}
+              {onOpenReviewModal && !isEmployeeOwner && ['SUBMITTED', 'PENDING'].includes(record.status) && (
+                <Button
+                  variant="primary"
+                  icon={Award}
+                  onClick={() => {
+                    onClose();
+                    onOpenReviewModal(record);
+                  }}
+                >
+                  Evaluate Direct Report
                 </Button>
               )}
 
@@ -304,7 +366,7 @@ export const AppraisalDetailModal = ({
                   variant="success"
                   icon={ShieldCheck}
                   isLoading={isActing}
-                  onClick={handleHrApprove}
+                  onClick={() => setShowConfirmHrApprove(true)}
                 >
                   Authorize & Finalize HR Approval
                 </Button>
@@ -313,6 +375,30 @@ export const AppraisalDetailModal = ({
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={showConfirmSubmit}
+        onClose={() => setShowConfirmSubmit(false)}
+        onConfirm={handleSubmitSelfReview}
+        title="Submit Appraisal for Review"
+        message="Are you sure you want to submit your appraisal to your manager for evaluation? You will not be able to modify self-ratings or goals while under review."
+        confirmText="Submit for Review"
+        cancelText="Cancel"
+        variant="primary"
+        isLoading={isActing}
+      />
+
+      <ConfirmDialog
+        isOpen={showConfirmHrApprove}
+        onClose={() => setShowConfirmHrApprove(false)}
+        onConfirm={handleHrApprove}
+        title="Authorize HR Approval"
+        message={`Confirm granting final HR sign-off for ${empName}'s performance review? This will mark the appraisal as APPROVED and complete the review cycle.`}
+        confirmText="Authorize & Finalize"
+        cancelText="Cancel"
+        variant="primary"
+        isLoading={isActing}
+      />
     </Modal>
   );
 };

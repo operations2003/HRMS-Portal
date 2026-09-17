@@ -3,6 +3,7 @@ import { Target, Award, AlertCircle, Plus, Trash2, Send, Save, Star } from 'luci
 import { Modal } from '../common/Modal.jsx';
 import { Button } from '../common/Button.jsx';
 import { Alert } from '../common/Alert.jsx';
+import { ConfirmDialog } from '../common/ConfirmDialog.jsx';
 import { performanceService } from '../../services/performanceService.js';
 import { useToast } from '../../context/ToastContext.jsx';
 
@@ -11,6 +12,7 @@ export const CreateAppraisalModal = ({ isOpen, onClose, onSuccess }) => {
   const [periods, setPeriods] = useState([]);
   const [isLoadingPeriods, setIsLoadingPeriods] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
   const [error, setError] = useState(null);
 
   const [formData, setFormData] = useState({
@@ -29,6 +31,7 @@ export const CreateAppraisalModal = ({ isOpen, onClose, onSuccess }) => {
     if (isOpen) {
       loadPeriods();
       setError(null);
+      setShowConfirmSubmit(false);
       setFormData({
         period_id: '',
         self_rating: 4.0,
@@ -91,25 +94,37 @@ export const CreateAppraisalModal = ({ isOpen, onClose, onSuccess }) => {
 
     try {
       setIsSubmitting(true);
+      const selectedPeriod = periods.find((p) => p.id === formData.period_id);
+      const reviewPeriod = selectedPeriod?.name || selectedPeriod?.code || 'Quarterly Review';
+
       const payload = {
-        period_id: formData.period_id,
-        self_rating: Number(formData.self_rating),
-        self_summary: formData.self_summary.trim(),
+        periodId: formData.period_id,
+        reviewPeriod: reviewPeriod,
+        selfComments: formData.self_summary.trim(),
+        selfRating: Number(formData.self_rating),
         self_review: {
           summary: formData.self_summary.trim(),
           achievements: formData.achievements.trim(),
           challenges: formData.challenges.trim(),
           rating: Number(formData.self_rating),
         },
-        goals: goals.filter((g) => g.title.trim()),
+        goals: goals
+          .filter((g) => g.title.trim())
+          .map((g) => ({
+            title: g.title.trim(),
+            description: g.description.trim(),
+            targetDate: g.target_date || null,
+            weightage: Number(g.weightage) || 0,
+            status: 'IN_PROGRESS',
+          })),
       };
 
       const res = await performanceService.createRecord(payload);
       const recordId = res.id || res.record?.id;
 
       if (shouldSubmitDirectly && recordId) {
-        await performanceService.submitAppraisal(recordId, {
-          comment: 'Self appraisal submitted directly.',
+        await performanceService.submitRecord(recordId, {
+          comments: 'Self-appraisal submitted for manager review.',
         });
         toast.success('Appraisal self-evaluation submitted for manager review!');
       } else {
@@ -122,6 +137,12 @@ export const CreateAppraisalModal = ({ isOpen, onClose, onSuccess }) => {
       setError(err.message || 'Failed to save appraisal record.');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleOpenSubmitConfirm = () => {
+    if (validate()) {
+      setShowConfirmSubmit(true);
     }
   };
 
@@ -308,13 +329,28 @@ export const CreateAppraisalModal = ({ isOpen, onClose, onSuccess }) => {
               variant="primary"
               icon={Send}
               isLoading={isSubmitting}
-              onClick={() => handleSubmit(true)}
+              onClick={handleOpenSubmitConfirm}
             >
               Submit for Review
             </Button>
           </div>
         </div>
       </form>
+
+      <ConfirmDialog
+        isOpen={showConfirmSubmit}
+        onClose={() => setShowConfirmSubmit(false)}
+        onConfirm={() => {
+          setShowConfirmSubmit(false);
+          handleSubmit(true);
+        }}
+        title="Submit Self-Appraisal for Review"
+        message="Are you sure you want to submit your self-appraisal for manager evaluation? Once submitted, it will enter the SUBMITTED stage and cannot be modified until reviewed or returned by your manager."
+        confirmText="Submit for Review"
+        cancelText="Keep Editing"
+        variant="primary"
+        isLoading={isSubmitting}
+      />
     </Modal>
   );
 };

@@ -101,27 +101,65 @@ export const RejectLeaveModal = ({
         )}
 
         {/* Target Request Summary */}
-        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
+        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-3">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
               <span className="text-xs font-bold text-slate-900 block truncate">
                 {leaveRecord.employee?.firstName} {leaveRecord.employee?.lastName}
                 <span className="ml-1 text-slate-500 font-normal">
-                  ({leaveRecord.employee?.employeeCode || 'Employee'})
+                  ({leaveRecord.employee?.employeeCode || 'Employee'}{leaveRecord.employee?.departmentName ? ` • ${leaveRecord.employee.departmentName}` : ''})
                 </span>
               </span>
               <span className="text-[11px] text-slate-500">
-                {leaveRecord.leaveType?.name} • {leaveRecord.totalDays} {leaveRecord.totalDays === 1 ? 'day' : 'days'} ({startDateFormatted}
-                {!leaveRecord.isHalfDay && startDateFormatted !== endDateFormatted && ` → ${endDateFormatted}`})
+                {leaveRecord.leaveType?.name} ({leaveRecord.leaveType?.code || 'LEAVE'})
               </span>
             </div>
             <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 shrink-0">
-              PENDING
+              {leaveRecord.status || 'PENDING'}
             </span>
           </div>
 
+          <div className="grid grid-cols-2 gap-2 text-[11px] pt-2 border-t border-slate-200/60">
+            <div>
+              <span className="text-slate-400 block">Schedule</span>
+              <span className="font-semibold text-slate-800">
+                {startDateFormatted} {startDateFormatted !== endDateFormatted ? `→ ${endDateFormatted}` : ''}
+              </span>
+            </div>
+            <div>
+              <span className="text-slate-400 block">Duration</span>
+              <span className="font-semibold text-slate-800">
+                {leaveRecord.totalDays} {leaveRecord.totalDays === 1 ? 'day' : 'days'}
+                {leaveRecord.isHalfDay && (
+                  <span className="text-amber-600 font-normal ml-1">
+                    ({leaveRecord.halfDayPeriod === 'FIRST_HALF' ? 'Morning' : 'Afternoon'})
+                  </span>
+                )}
+              </span>
+            </div>
+            <div>
+              <span className="text-slate-400 block">Submitted On</span>
+              <span className="font-semibold text-slate-700">
+                {leaveRecord.appliedDate || leaveRecord.createdAt
+                  ? new Date(leaveRecord.appliedDate || leaveRecord.createdAt).toLocaleDateString(undefined, {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                    })
+                  : 'Recent'}
+              </span>
+            </div>
+            <div>
+              <span className="text-slate-400 block">Decision</span>
+              <span className="font-bold text-rose-600">Rejection</span>
+            </div>
+          </div>
+
           {leaveRecord.reason && (
-            <div className="mt-2 text-[11px] text-slate-600 bg-white p-2 rounded-lg border border-slate-200/60 italic">
+            <div className="text-[11px] text-slate-600 bg-white p-2.5 rounded-lg border border-slate-200/60 leading-relaxed">
+              <span className="text-slate-400 font-semibold block mb-0.5 text-[10px] uppercase tracking-wider">
+                Employee Reason:
+              </span>
               "{leaveRecord.reason}"
             </div>
           )}

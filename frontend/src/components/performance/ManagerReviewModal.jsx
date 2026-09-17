@@ -4,6 +4,7 @@ import { Modal } from '../common/Modal.jsx';
 import { Button } from '../common/Button.jsx';
 import { Alert } from '../common/Alert.jsx';
 import { Badge } from '../common/Badge.jsx';
+import { ConfirmDialog } from '../common/ConfirmDialog.jsx';
 import { performanceService } from '../../services/performanceService.js';
 import { useToast } from '../../context/ToastContext.jsx';
 
@@ -23,6 +24,9 @@ export const ManagerReviewModal = ({
   const [rejectReason, setRejectReason] = useState('');
   const [mode, setMode] = useState('review'); // 'review' | 'return' | 'reject'
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showConfirmEvaluate, setShowConfirmEvaluate] = useState(false);
+  const [showConfirmReturn, setShowConfirmReturn] = useState(false);
+  const [showConfirmReject, setShowConfirmReject] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -34,6 +38,9 @@ export const ManagerReviewModal = ({
       setReturnReason('');
       setRejectReason('');
       setMode('review');
+      setShowConfirmEvaluate(false);
+      setShowConfirmReturn(false);
+      setShowConfirmReject(false);
       setError(null);
     }
   }, [isOpen, record]);
@@ -49,15 +56,24 @@ export const ManagerReviewModal = ({
     (currentUser?.employeeId && record.employeeId === currentUser.employeeId) ||
     (currentUser?.id && record.employee?.userId === currentUser.id);
 
-  const handleReviewSubmit = async () => {
+  const validateReview = () => {
     if (isSelf) {
       setError('Self-review violation: You cannot review your own appraisal.');
-      return;
+      return false;
     }
     if (rating < 1.0 || rating > 5.0) {
       setError('Manager rating must be between 1.00 and 5.00.');
-      return;
+      return false;
     }
+    if (!reviewerComments.trim()) {
+      setError('Reviewer comments / evaluation notes are required.');
+      return false;
+    }
+    return true;
+  };
+
+  const handleReviewSubmit = async () => {
+    if (!validateReview()) return;
 
     try {
       setIsSubmitting(true);
@@ -70,6 +86,7 @@ export const ManagerReviewModal = ({
         comments: reviewerComments.trim() || 'Manager review completed.',
       });
       toast.success(`Evaluation for ${empName} submitted and forwarded to HR!`);
+      setShowConfirmEvaluate(false);
       onSuccess?.(res);
       onClose();
     } catch (err) {
@@ -88,10 +105,11 @@ export const ManagerReviewModal = ({
     try {
       setIsSubmitting(true);
       setError(null);
-      const res = await performanceService.returnAppraisal(record.id, {
+      const res = await performanceService.returnRecord(record.id, {
         reason: returnReason.trim(),
       });
       toast.success(`Appraisal returned to ${empName} for revision.`);
+      setShowConfirmReturn(false);
       onSuccess?.(res);
       onClose();
     } catch (err) {
@@ -110,10 +128,11 @@ export const ManagerReviewModal = ({
     try {
       setIsSubmitting(true);
       setError(null);
-      const res = await performanceService.rejectAppraisal(record.id, {
+      const res = await performanceService.rejectRecord(record.id, {
         reason: rejectReason.trim(),
       });
       toast.success(`Appraisal for ${empName} rejected.`);
+      setShowConfirmReject(false);
       onSuccess?.(res);
       onClose();
     } catch (err) {
@@ -291,7 +310,11 @@ export const ManagerReviewModal = ({
                 icon={CheckCircle2}
                 isLoading={isSubmitting}
                 disabled={isSelf}
-                onClick={handleReviewSubmit}
+                onClick={() => {
+                  if (validateReview()) {
+                    setShowConfirmEvaluate(true);
+                  }
+                }}
               >
                 Forward to HR Sign-Off
               </Button>
@@ -332,7 +355,13 @@ export const ManagerReviewModal = ({
                 icon={RotateCcw}
                 isLoading={isSubmitting}
                 disabled={isSelf || returnReason.trim().length < 5}
-                onClick={handleReturnSubmit}
+                onClick={() => {
+                  if (returnReason.trim().length >= 5) {
+                    setShowConfirmReturn(true);
+                  } else {
+                    setError('A return reason of at least 5 characters is mandatory.');
+                  }
+                }}
               >
                 Return to Employee
               </Button>
@@ -372,7 +401,13 @@ export const ManagerReviewModal = ({
                 icon={XCircle}
                 isLoading={isSubmitting}
                 disabled={isSelf || rejectReason.trim().length < 5}
-                onClick={handleRejectSubmit}
+                onClick={() => {
+                  if (rejectReason.trim().length >= 5) {
+                    setShowConfirmReject(true);
+                  } else {
+                    setError('A rejection reason of at least 5 characters is mandatory.');
+                  }
+                }}
               >
                 Confirm Rejection
               </Button>
@@ -380,6 +415,42 @@ export const ManagerReviewModal = ({
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        isOpen={showConfirmEvaluate}
+        onClose={() => setShowConfirmEvaluate(false)}
+        onConfirm={handleReviewSubmit}
+        title="Forward Evaluation to HR"
+        message={`Confirm submitting manager evaluation with rating ${parseFloat(rating).toFixed(1)}/5.0 for ${empName}? This will advance the record to the UNDER_REVIEW stage for HR approval.`}
+        confirmText="Confirm & Forward"
+        cancelText="Cancel"
+        variant="primary"
+        isLoading={isSubmitting}
+      />
+
+      <ConfirmDialog
+        isOpen={showConfirmReturn}
+        onClose={() => setShowConfirmReturn(false)}
+        onConfirm={handleReturnSubmit}
+        title="Return Appraisal to Employee"
+        message={`Are you sure you want to return ${empName}'s appraisal for revision? They will be notified to revise and resubmit.`}
+        confirmText="Return for Revision"
+        cancelText="Cancel"
+        variant="warning"
+        isLoading={isSubmitting}
+      />
+
+      <ConfirmDialog
+        isOpen={showConfirmReject}
+        onClose={() => setShowConfirmReject(false)}
+        onConfirm={handleRejectSubmit}
+        title="Reject Performance Appraisal"
+        message={`Are you sure you want to reject ${empName}'s performance appraisal? This will mark the appraisal as REJECTED and conclude the cycle.`}
+        confirmText="Reject Appraisal"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={isSubmitting}
+      />
     </Modal>
   );
 };

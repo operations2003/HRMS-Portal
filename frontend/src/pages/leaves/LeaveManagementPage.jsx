@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   CalendarDays,
   Plus,
@@ -16,10 +17,13 @@ import {
   Eye,
   AlertTriangle,
   Info,
+  ShieldCheck,
+  Check,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { leaveService } from '../../services/leaveService.js';
+import { managerService } from '../../services/managerService.js';
 import { ApplyLeaveModal } from '../../components/leave/ApplyLeaveModal.jsx';
 import { LeaveBalanceCards } from '../../components/leave/LeaveBalanceCards.jsx';
 import { ApproveLeaveModal } from '../../components/leave/ApproveLeaveModal.jsx';
@@ -29,7 +33,6 @@ import { Button } from '../../components/common/Button.jsx';
 import { Badge } from '../../components/common/Badge.jsx';
 import { DataTable } from '../../components/common/DataTable.jsx';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
-import { EmptyState } from '../../components/common/EmptyState.jsx';
 import { Modal } from '../../components/common/Modal.jsx';
 import { Input } from '../../components/common/Input.jsx';
 import { Select } from '../../components/common/Select.jsx';
@@ -38,13 +41,17 @@ import { Alert } from '../../components/common/Alert.jsx';
 export const LeaveManagementPage = () => {
   const { user, hasRole, hasPermission } = useAuth();
   const toast = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const canApply = hasPermission('leave:write');
-  const canApprove = hasPermission('leave:approve');
+  const canApprove = hasPermission('leave:approve') || hasRole(['Manager', 'HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin']);
   const canViewTeam = hasRole(['Manager', 'HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin']);
 
-  // Active Tab: 'my' | 'team'
-  const [activeTab, setActiveTab] = useState('my');
+  // Active Tab: 'my' | 'team' (synced with ?tab= query param)
+  const tabParam = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState(
+    (tabParam === 'team' || tabParam === 'approvals') && canViewTeam ? 'team' : 'my'
+  );
 
   // Leave data
   const [leaveTypes, setLeaveTypes] = useState([]);
@@ -56,8 +63,18 @@ export const LeaveManagementPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Team summary metrics for managers
+  const [teamStats, setTeamStats] = useState({
+    pending: 0,
+    approved: 0,
+    rejected: 0,
+    onLeaveToday: 0,
+  });
+
   // Status Filter
-  const [statusFilter, setStatusFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState(
+    (tabParam === 'team' || tabParam === 'approvals') ? 'PENDING' : ''
+  );
 
   // Modals state
   const [isApplyModalOpen, setIsApplyModalOpen] = useState(false);
@@ -65,10 +82,22 @@ export const LeaveManagementPage = () => {
   const [approvingRecord, setApprovingRecord] = useState(null);
   const [rejectingRecord, setRejectingRecord] = useState(null);
 
-  // Cancellation Modal state
+  // Cancellation Modal state (for employee withdrawing own request)
   const [cancellingRecord, setCancellingRecord] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
   const [isSubmittingCancel, setIsSubmittingCancel] = useState(false);
+
+  // Synchronize tab changes with URL search params
+  const handleTabChange = (newTab) => {
+    setActiveTab(newTab);
+    setSearchParams({ tab: newTab });
+    // Default team view to PENDING for fast approval actioning
+    if (newTab === 'team') {
+      setStatusFilter('PENDING');
+    } else {
+      setStatusFilter('');
+    }
+  };
 
   // Fetch Leave Types and Balances directly from backend API
   const fetchMetadata = useCallback(async () => {
@@ -87,6 +116,33 @@ export const LeaveManagementPage = () => {
       setLoadingBalances(false);
     }
   }, []);
+
+  // Fetch Team KPI stats for manager
+  const fetchTeamStats = useCallback(async () => {
+    if (!canViewTeam) return;
+    try {
+      const [leavesRes, summaryRes] = await Promise.allSettled([
+        managerService.getTeamLeaves(),
+        managerService.getTeamSummary(),
+      ]);
+
+      const items = leavesRes.status === 'fulfilled'
+        ? (leavesRes.value?.items || leavesRes.value?.data || (Array.isArray(leavesRes.value) ? leavesRes.value : []))
+        : [];
+      const summary = summaryRes.status === 'fulfilled'
+        ? summaryRes.value || {}
+        : {};
+
+      const pending = items.filter((l) => (l.status || '').toUpperCase() === 'PENDING').length;
+      const approved = items.filter((l) => (l.status || '').toUpperCase() === 'APPROVED').length;
+      const rejected = items.filter((l) => (l.status || '').toUpperCase() === 'REJECTED').length;
+      const onLeaveToday = summary.onLeaveToday || 0;
+
+      setTeamStats({ pending, approved, rejected, onLeaveToday });
+    } catch {
+      // Non-blocking
+    }
+  }, [canViewTeam]);
 
   // Fetch Leave Records
   const fetchRecords = useCallback(
@@ -123,7 +179,10 @@ export const LeaveManagementPage = () => {
 
   useEffect(() => {
     fetchMetadata();
-  }, [fetchMetadata]);
+    if (canViewTeam) {
+      fetchTeamStats();
+    }
+  }, [fetchMetadata, fetchTeamStats, canViewTeam]);
 
   useEffect(() => {
     fetchRecords(1);
@@ -134,15 +193,17 @@ export const LeaveManagementPage = () => {
     toast.success('Leave application submitted successfully! Status: PENDING.');
     fetchMetadata();
     fetchRecords(1);
+    fetchTeamStats();
   };
 
   // Handle successful approve/reject
   const handleActionSuccess = () => {
     fetchMetadata();
     fetchRecords(pagination?.page || 1);
+    fetchTeamStats();
   };
 
-  // Handle Cancel Leave
+  // Handle Cancel Leave (Employee own pending request)
   const handleConfirmCancel = async () => {
     if (!cancellingRecord) return;
     try {
@@ -155,6 +216,7 @@ export const LeaveManagementPage = () => {
       setCancelReason('');
       fetchMetadata();
       fetchRecords(pagination?.page || 1);
+      fetchTeamStats();
     } catch (err) {
       toast.error(err.message || 'Failed to cancel leave request.');
     } finally {
@@ -198,111 +260,165 @@ export const LeaveManagementPage = () => {
     }
   };
 
-  // Columns definition
-  const columns = [
+  // =========================================================================
+  // Columns for Team Leave Approvals (Manager Scope)
+  // Displaying all 8 mandatory fields: Employee, Leave type, Start date,
+  // End date, Duration, Reason, Current status, Submitted date
+  // =========================================================================
+  const teamColumns = [
     {
-      header: 'Leave Type',
-      key: 'leaveType',
-      render: (row) => (
-        <div>
-          <div className="font-bold text-slate-900">{row.leaveType?.name || 'Leave'}</div>
-          <div className="text-[11px] text-slate-400 font-semibold">{row.leaveType?.code}</div>
-        </div>
-      ),
-    },
-    ...(activeTab !== 'my'
-      ? [
-          {
-            header: 'Employee',
-            key: 'employee',
-            render: (row) => {
-              const isSelfRow =
-                (user?.email && row.employee?.email === user.email) ||
-                (user?.employeeId && row.employeeId === user.employeeId) ||
-                (user?.id && row.employee?.userId === user.id);
-
-              return (
-                <div>
-                  <div className="font-bold text-slate-900 flex items-center gap-1.5">
-                    <span>
-                      {row.employee?.firstName} {row.employee?.lastName}
-                    </span>
-                    {isSelfRow && (
-                      <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded border border-slate-200 font-normal">
-                        You
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-xs text-slate-400 flex items-center gap-1">
-                    <span>{row.employee?.employeeCode}</span>
-                    {row.employee?.departmentName && (
-                      <>
-                        <span>•</span>
-                        <span>{row.employee.departmentName}</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-              );
-            },
-          },
-        ]
-      : []),
-    {
-      header: 'Duration & Dates',
-      key: 'dates',
+      header: 'Employee',
+      key: 'employee',
       render: (row) => {
-        const startStr = row.startDate
-          ? new Date(row.startDate).toLocaleDateString(undefined, {
-              month: 'short',
-              day: 'numeric',
-              year: 'numeric',
-            })
-          : '';
-        const endStr = row.endDate
-          ? new Date(row.endDate).toLocaleDateString(undefined, {
-              month: 'short',
-              day: 'numeric',
-              year: 'numeric',
-            })
-          : '';
+        const isSelfRow =
+          (user?.email && row.employee?.email === user.email) ||
+          (user?.employeeId && row.employeeId === user.employeeId) ||
+          (user?.id && row.employee?.userId === user.id);
+
+        const initials = `${row.employee?.firstName?.[0] || 'E'}${row.employee?.lastName?.[0] || ''}`;
 
         return (
-          <div>
-            <div className="font-semibold text-slate-800 flex items-center gap-1.5">
-              <span>{startStr}</span>
-              {!row.isHalfDay && startStr !== endStr && <span>→ {endStr}</span>}
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-brand-600 to-indigo-600 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-xs">
+              {initials}
             </div>
-            <div className="text-xs text-slate-500 mt-0.5">
-              <span className="font-bold text-brand-600">
-                {row.totalDays} {row.totalDays === 1 ? 'day' : 'days'}
-              </span>
-              {row.isHalfDay && (
-                <span className="ml-1 text-amber-600 font-medium">
-                  ({row.halfDayPeriod === 'FIRST_HALF' ? 'Morning Half' : 'Afternoon Half'})
+            <div>
+              <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                <span>
+                  {row.employee?.firstName} {row.employee?.lastName}
                 </span>
-              )}
+                {isSelfRow && (
+                  <span
+                    className="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.2 rounded border border-amber-300 font-semibold"
+                    title="Self-approval forbidden: A supervisor or HR must approve your request"
+                  >
+                    You (Self)
+                  </span>
+                )}
+              </div>
+              <div className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5">
+                <span className="font-mono">{row.employee?.employeeCode || '—'}</span>
+                {row.employee?.departmentName && (
+                  <>
+                    <span>•</span>
+                    <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[10px]">
+                      {row.employee.departmentName}
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         );
       },
     },
     {
-      header: 'Reason',
-      key: 'reason',
+      header: 'Leave Type',
+      key: 'leaveType',
       render: (row) => (
-        <div className="max-w-xs truncate text-xs text-slate-700" title={row.reason}>
-          {row.reason || '—'}
+        <div>
+          <div className="font-bold text-slate-900 text-xs">
+            {row.leaveType?.name || 'Leave'}
+          </div>
+          <div className="flex items-center gap-1 mt-0.5">
+            <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-700 px-1.5 py-0.2 rounded">
+              {row.leaveType?.code || 'LEAVE'}
+            </span>
+            {row.leaveType?.isPaid !== undefined && (
+              <span
+                className={`text-[10px] px-1.5 py-0.2 rounded font-medium ${
+                  row.leaveType.isPaid
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    : 'bg-slate-50 text-slate-500'
+                }`}
+              >
+                {row.leaveType.isPaid ? 'Paid' : 'Unpaid'}
+              </span>
+            )}
+          </div>
         </div>
       ),
     },
     {
-      header: 'Status',
+      header: 'Start Date',
+      key: 'startDate',
+      render: (row) => (
+        <span className="text-xs font-semibold text-slate-800">
+          {row.startDate
+            ? new Date(row.startDate).toLocaleDateString(undefined, {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+              })
+            : '—'}
+        </span>
+      ),
+    },
+    {
+      header: 'End Date',
+      key: 'endDate',
+      render: (row) => (
+        <span className="text-xs font-semibold text-slate-800">
+          {row.endDate
+            ? new Date(row.endDate).toLocaleDateString(undefined, {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+              })
+            : '—'}
+        </span>
+      ),
+    },
+    {
+      header: 'Duration',
+      key: 'duration',
+      render: (row) => (
+        <div>
+          <span className="font-bold text-xs text-brand-700">
+            {row.totalDays} {row.totalDays === 1 ? 'day' : 'days'}
+          </span>
+          {row.isHalfDay && (
+            <span className="block text-[10px] font-medium text-amber-600">
+              {row.halfDayPeriod === 'FIRST_HALF' ? 'Morning Half' : 'Afternoon Half'}
+            </span>
+          )}
+        </div>
+      ),
+    },
+    {
+      header: 'Reason',
+      key: 'reason',
+      render: (row) => (
+        <div className="max-w-xs truncate text-xs text-slate-700" title={row.reason}>
+          {row.reason || <span className="text-slate-400 italic">None provided</span>}
+        </div>
+      ),
+    },
+    {
+      header: 'Current Status',
       key: 'status',
       render: (row) => renderStatusBadge(row.status),
     },
     {
-      header: 'Actions',
+      header: 'Submitted Date',
+      key: 'submittedDate',
+      render: (row) => {
+        const d = row.appliedDate || row.createdAt;
+        return (
+          <span className="text-xs text-slate-500 font-medium">
+            {d
+              ? new Date(d).toLocaleDateString(undefined, {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                })
+              : 'Recent'}
+          </span>
+        );
+      },
+    },
+    {
+      header: 'Manager Actions',
       key: 'actions',
       className: 'text-right',
       cellClassName: 'text-right',
@@ -315,34 +431,22 @@ export const LeaveManagementPage = () => {
 
         return (
           <div className="flex items-center justify-end gap-1.5">
-            {/* View Details Button */}
+            {/* View Details Modal Trigger */}
             <Button
               variant="secondary"
               size="sm"
               icon={Eye}
               onClick={() => setSelectedDetailRecord(row)}
-              title="View full request details"
+              title="View complete leave details"
             />
 
-            {/* Employee cancel own pending */}
-            {activeTab === 'my' && isPending && (
-              <Button
-                variant="danger"
-                size="sm"
-                onClick={() => setCancellingRecord(row)}
-                title="Cancel Leave Request"
-              >
-                Cancel
-              </Button>
-            )}
-
-            {/* Manager/HR Approve & Reject on Team / Org tabs */}
-            {activeTab !== 'my' && canApprove && isPending && (
+            {/* Manager Approve / Reject Actions (Strictly gated to pending & non-self) */}
+            {canApprove && isPending && (
               <>
                 {isSelfRow ? (
                   <span
-                    className="text-[11px] text-slate-400 italic px-2 py-1"
-                    title="Self-approval violation: You cannot approve your own leave request."
+                    className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 italic"
+                    title="Self-approval restriction: You cannot approve or reject your own leave request."
                   >
                     Self-request
                   </span>
@@ -353,6 +457,7 @@ export const LeaveManagementPage = () => {
                       size="sm"
                       icon={CheckCircle2}
                       onClick={() => setApprovingRecord(row)}
+                      title="Approve leave request"
                     >
                       Approve
                     </Button>
@@ -362,6 +467,7 @@ export const LeaveManagementPage = () => {
                       className="text-rose-600 hover:bg-rose-50"
                       icon={XCircle}
                       onClick={() => setRejectingRecord(row)}
+                      title="Reject leave request"
                     >
                       Reject
                     </Button>
@@ -375,9 +481,137 @@ export const LeaveManagementPage = () => {
     },
   ];
 
+  // =========================================================================
+  // Columns for Employee's Own Leave History
+  // (Standard employee sees only own requests & cancellation, no manager actions)
+  // =========================================================================
+  const myColumns = [
+    {
+      header: 'Leave Type',
+      key: 'leaveType',
+      render: (row) => (
+        <div>
+          <div className="font-bold text-slate-900">{row.leaveType?.name || 'Leave'}</div>
+          <div className="text-[11px] text-slate-400 font-semibold">{row.leaveType?.code}</div>
+        </div>
+      ),
+    },
+    {
+      header: 'Start Date',
+      key: 'startDate',
+      render: (row) => (
+        <span className="text-xs font-semibold text-slate-800">
+          {row.startDate
+            ? new Date(row.startDate).toLocaleDateString(undefined, {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+              })
+            : '—'}
+        </span>
+      ),
+    },
+    {
+      header: 'End Date',
+      key: 'endDate',
+      render: (row) => (
+        <span className="text-xs font-semibold text-slate-800">
+          {row.endDate
+            ? new Date(row.endDate).toLocaleDateString(undefined, {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+              })
+            : '—'}
+        </span>
+      ),
+    },
+    {
+      header: 'Duration',
+      key: 'duration',
+      render: (row) => (
+        <div>
+          <span className="font-bold text-xs text-brand-600">
+            {row.totalDays} {row.totalDays === 1 ? 'day' : 'days'}
+          </span>
+          {row.isHalfDay && (
+            <span className="block text-[10px] font-medium text-amber-600">
+              {row.halfDayPeriod === 'FIRST_HALF' ? 'Morning Half' : 'Afternoon Half'}
+            </span>
+          )}
+        </div>
+      ),
+    },
+    {
+      header: 'Reason',
+      key: 'reason',
+      render: (row) => (
+        <div className="max-w-xs truncate text-xs text-slate-700" title={row.reason}>
+          {row.reason || '—'}
+        </div>
+      ),
+    },
+    {
+      header: 'Current Status',
+      key: 'status',
+      render: (row) => renderStatusBadge(row.status),
+    },
+    {
+      header: 'Submitted Date',
+      key: 'submittedDate',
+      render: (row) => {
+        const d = row.appliedDate || row.createdAt;
+        return (
+          <span className="text-xs text-slate-500 font-medium">
+            {d
+              ? new Date(d).toLocaleDateString(undefined, {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                })
+              : 'Recent'}
+          </span>
+        );
+      },
+    },
+    {
+      header: 'Actions',
+      key: 'actions',
+      className: 'text-right',
+      cellClassName: 'text-right',
+      render: (row) => {
+        const isPending = (row.status || '').toUpperCase() === 'PENDING';
+
+        return (
+          <div className="flex items-center justify-end gap-1.5">
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={Eye}
+              onClick={() => setSelectedDetailRecord(row)}
+              title="View request details"
+            />
+
+            {/* Employee can cancel own pending request */}
+            {isPending && (
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => setCancellingRecord(row)}
+                title="Cancel Leave Request"
+              >
+                Cancel
+              </Button>
+            )}
+          </div>
+        );
+      },
+    },
+  ];
+
   const statusOptions = [
     { value: '', label: 'All Statuses' },
-    { value: 'PENDING', label: 'Pending' },
+    { value: 'PENDING', label: 'Pending Approvals' },
     { value: 'APPROVED', label: 'Approved' },
     { value: 'REJECTED', label: 'Rejected' },
     { value: 'CANCELLED', label: 'Cancelled' },
@@ -393,14 +627,12 @@ export const LeaveManagementPage = () => {
             <span>Time Off & Leave Management</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
-            {activeTab === 'team'
-              ? 'Team Leave Approvals'
-              : 'Leave Applications'}
+            {activeTab === 'team' ? 'Manager Leave Approvals' : 'Leave Applications'}
           </h1>
           <p className="mt-1 text-sm text-slate-500 leading-relaxed">
             {activeTab === 'team'
-              ? 'Review, approve, or reject authorized team leave applications with real-time balance checks.'
-              : 'Apply for annual, sick, or casual leaves, track status, and view available entitlement balances.'}
+              ? 'Review, approve, or reject authorized pending leave requests from your reporting team.'
+              : 'Apply for annual, sick, or casual leaves, monitor request progress, and track entitlement balances.'}
           </p>
         </div>
 
@@ -412,6 +644,7 @@ export const LeaveManagementPage = () => {
             onClick={() => {
               fetchMetadata();
               fetchRecords(pagination?.page || 1);
+              if (canViewTeam) fetchTeamStats();
             }}
           >
             Refresh
@@ -431,21 +664,12 @@ export const LeaveManagementPage = () => {
         </div>
       </div>
 
-      {/* Leave Balances Display (Prompt 5: Using ONLY data provided by backend) */}
-      <LeaveBalanceCards
-        balances={leaveBalances}
-        isLoading={loadingBalances}
-        error={balanceError}
-        onApplyClick={() => setIsApplyModalOpen(true)}
-        canApply={canApply}
-      />
-
-      {/* Navigation Tabs */}
+      {/* Navigation Tabs (Employee sees only 'My Leaves'; Manager/HR sees both) */}
       <div className="border-b border-slate-200">
         <nav className="-mb-px flex space-x-6">
           <button
             type="button"
-            onClick={() => setActiveTab('my')}
+            onClick={() => handleTabChange('my')}
             className={`pb-4 px-1 border-b-2 font-semibold text-sm transition-colors flex items-center gap-2 ${
               activeTab === 'my'
                 ? 'border-brand-500 text-brand-600 font-bold'
@@ -459,7 +683,7 @@ export const LeaveManagementPage = () => {
           {canViewTeam && (
             <button
               type="button"
-              onClick={() => setActiveTab('team')}
+              onClick={() => handleTabChange('team')}
               className={`pb-4 px-1 border-b-2 font-semibold text-sm transition-colors flex items-center gap-2 ${
                 activeTab === 'team'
                   ? 'border-brand-500 text-brand-600 font-bold'
@@ -467,22 +691,141 @@ export const LeaveManagementPage = () => {
               }`}
             >
               <Users className="w-4 h-4" />
-              <span>Team Requests</span>
+              <span>Team Leave Approvals</span>
+              {teamStats.pending > 0 && (
+                <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300 animate-pulse">
+                  {teamStats.pending} pending
+                </span>
+              )}
             </button>
           )}
         </nav>
       </div>
 
-      {/* Filter Bar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          <div className="w-full sm:w-48">
-            <Select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              options={statusOptions}
-            />
+      {/* When on My Tab: Show Personal Leave Balances Display */}
+      {activeTab === 'my' && (
+        <LeaveBalanceCards
+          balances={leaveBalances}
+          isLoading={loadingBalances}
+          error={balanceError}
+          onApplyClick={() => setIsApplyModalOpen(true)}
+          canApply={canApply}
+        />
+      )}
+
+      {/* When on Team Tab: Show Real-time Manager KPI Counters */}
+      {activeTab === 'team' && canViewTeam && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+              <Clock className="w-5 h-5" />
+            </div>
+            <div>
+              <span className="text-[11px] uppercase font-bold text-slate-400 block tracking-wider">
+                Pending Reviews
+              </span>
+              <span className="text-xl font-black text-slate-900">{teamStats.pending}</span>
+            </div>
           </div>
+
+          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+            <div>
+              <span className="text-[11px] uppercase font-bold text-slate-400 block tracking-wider">
+                Approved Leaves
+              </span>
+              <span className="text-xl font-black text-slate-900">{teamStats.approved}</span>
+            </div>
+          </div>
+
+          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
+              <XCircle className="w-5 h-5" />
+            </div>
+            <div>
+              <span className="text-[11px] uppercase font-bold text-slate-400 block tracking-wider">
+                Rejected Requests
+              </span>
+              <span className="text-xl font-black text-slate-900">{teamStats.rejected}</span>
+            </div>
+          </div>
+
+          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center shrink-0">
+              <Users className="w-5 h-5" />
+            </div>
+            <div>
+              <span className="text-[11px] uppercase font-bold text-slate-400 block tracking-wider">
+                On Leave Today
+              </span>
+              <span className="text-xl font-black text-slate-900">{teamStats.onLeaveToday}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Filter Bar & Quick Status Pills */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center flex-wrap gap-2.5">
+          {activeTab === 'team' ? (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setStatusFilter('PENDING')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${
+                  statusFilter === 'PENDING'
+                    ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                    : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
+                }`}
+              >
+                Pending Approvals ({teamStats.pending})
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter('')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
+                  statusFilter === ''
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
+                }`}
+              >
+                All Team Requests
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter('APPROVED')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
+                  statusFilter === 'APPROVED'
+                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                    : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
+                }`}
+              >
+                Approved
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter('REJECTED')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
+                  statusFilter === 'REJECTED'
+                    ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                    : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
+                }`}
+              >
+                Rejected
+              </button>
+            </div>
+          ) : (
+            <div className="w-full sm:w-48">
+              <Select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                options={statusOptions}
+              />
+            </div>
+          )}
+
           {statusFilter && (
             <Button
               variant="secondary"
@@ -496,14 +839,14 @@ export const LeaveManagementPage = () => {
         </div>
 
         <div className="text-xs text-slate-500 font-medium">
-          Showing {records.length} {records.length === 1 ? 'record' : 'records'}
+          Showing {records.length} {records.length === 1 ? 'request' : 'requests'}
           {pagination?.total ? ` of ${pagination.total}` : ''}
         </div>
       </div>
 
-      {/* Main Leave Table */}
+      {/* Main Leave Table (Team columns for managers, My columns for employees) */}
       <DataTable
-        columns={columns}
+        columns={activeTab === 'team' ? teamColumns : myColumns}
         data={records}
         isLoading={loading}
         error={error}
@@ -514,7 +857,7 @@ export const LeaveManagementPage = () => {
         }
         emptyDescription={
           activeTab === 'team'
-            ? 'There are no pending or historic leave requests from your authorized team members.'
+            ? 'There are no pending or historic leave requests matching this filter from your authorized team members.'
             : 'You have not submitted any leave requests matching the current filter.'
         }
         pagination={pagination}
@@ -611,3 +954,5 @@ export const LeaveManagementPage = () => {
     </div>
   );
 };
+
+export default LeaveManagementPage;

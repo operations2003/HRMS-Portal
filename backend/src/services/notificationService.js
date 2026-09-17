@@ -228,6 +228,186 @@ export const notificationService = {
       actionUrl: `/requests/${requestId}`,
     });
   },
+
+  // =========================================================================
+  // Phase 6 Domain Event Dispatchers (Performance, Leaves, Manager, HR)
+  // =========================================================================
+
+  /**
+   * 7. Event: Performance Review Pending Manager Evaluation
+   */
+  async notifyPerformanceSubmitted({ orgId, appraisalId, reviewPeriod, employeeName, reviewerUserId }) {
+    if (!reviewerUserId) return null;
+
+    logger.info('NotificationService', `Dispatching PERFORMANCE_REVIEW_PENDING for ${reviewPeriod} (${employeeName}) to reviewer ${reviewerUserId}`);
+
+    return notificationRepository.create({
+      orgId,
+      userId: reviewerUserId,
+      eventType: 'PERFORMANCE_REVIEW_PENDING',
+      title: 'Performance Review Awaiting Your Evaluation',
+      message: `${employeeName || 'An employee'} has submitted their performance self-review for ${reviewPeriod}.`,
+      entityType: 'PERFORMANCE_REVIEW',
+      entityId: appraisalId,
+      actionUrl: `/performance/${appraisalId}`,
+    });
+  },
+
+  /**
+   * 8. Event: Performance Review Approved (HR Final Sign-off)
+   */
+  async notifyPerformanceApproved({ orgId, appraisalId, reviewPeriod, employeeUserId, rating }) {
+    if (!employeeUserId) return null;
+
+    logger.info('NotificationService', `Dispatching PERFORMANCE_APPROVED for ${reviewPeriod} to user ${employeeUserId}`);
+
+    return notificationRepository.create({
+      orgId,
+      userId: employeeUserId,
+      eventType: 'PERFORMANCE_APPROVED',
+      title: 'Performance Review Approved',
+      message: `Your performance review for ${reviewPeriod} has been approved by HR. Final Rating: ${rating || 'N/A'}/5.0`,
+      entityType: 'PERFORMANCE_REVIEW',
+      entityId: appraisalId,
+      actionUrl: `/performance/${appraisalId}`,
+    });
+  },
+
+  /**
+   * 9. Event: Performance Review Returned for Revision
+   */
+  async notifyPerformanceReturned({ orgId, appraisalId, reviewPeriod, employeeUserId, reason }) {
+    if (!employeeUserId) return null;
+
+    logger.info('NotificationService', `Dispatching PERFORMANCE_RETURNED for ${reviewPeriod} to user ${employeeUserId}`);
+
+    return notificationRepository.create({
+      orgId,
+      userId: employeeUserId,
+      eventType: 'PERFORMANCE_RETURNED',
+      title: 'Performance Review Returned for Revision',
+      message: `Your review for ${reviewPeriod} was returned: "${reason}". Please revise and resubmit.`,
+      entityType: 'PERFORMANCE_REVIEW',
+      entityId: appraisalId,
+      actionUrl: `/performance/${appraisalId}`,
+    });
+  },
+
+  /**
+   * 10. Event: Performance Review Rejected
+   */
+  async notifyPerformanceRejected({ orgId, appraisalId, reviewPeriod, employeeUserId, reason }) {
+    if (!employeeUserId) return null;
+
+    logger.info('NotificationService', `Dispatching PERFORMANCE_REJECTED for ${reviewPeriod} to user ${employeeUserId}`);
+
+    return notificationRepository.create({
+      orgId,
+      userId: employeeUserId,
+      eventType: 'PERFORMANCE_REJECTED',
+      title: 'Performance Review Rejected',
+      message: `Your review for ${reviewPeriod} was rejected: "${reason}".`,
+      entityType: 'PERFORMANCE_REVIEW',
+      entityId: appraisalId,
+      actionUrl: `/performance/${appraisalId}`,
+    });
+  },
+
+  /**
+   * 11. Event: Leave Approval Pending (Notification to Manager)
+   */
+  async notifyLeaveApprovalPending({ orgId, leaveId, employeeName, startDate, endDate, managerUserId }) {
+    if (!managerUserId) return null;
+
+    logger.info('NotificationService', `Dispatching LEAVE_APPROVAL_PENDING for ${employeeName} to manager ${managerUserId}`);
+
+    return notificationRepository.create({
+      orgId,
+      userId: managerUserId,
+      eventType: 'LEAVE_APPROVAL_PENDING',
+      title: 'Leave Request Pending Your Approval',
+      message: `${employeeName || 'A team member'} has applied for leave from ${startDate} to ${endDate}.`,
+      entityType: 'LEAVE_REQUEST',
+      entityId: leaveId,
+      actionUrl: '/approvals',
+    });
+  },
+
+  /**
+   * 12. Event: Leave Request Approved
+   */
+  async notifyLeaveApproved({ orgId, leaveId, startDate, endDate, employeeUserId, comments }) {
+    if (!employeeUserId) return null;
+
+    logger.info('NotificationService', `Dispatching LEAVE_APPROVED for leave ${leaveId} to user ${employeeUserId}`);
+
+    return notificationRepository.create({
+      orgId,
+      userId: employeeUserId,
+      eventType: 'LEAVE_APPROVED',
+      title: 'Leave Request Approved',
+      message: `Your leave request from ${startDate} to ${endDate} has been approved.${comments ? ` Note: "${comments}"` : ''}`,
+      entityType: 'LEAVE_REQUEST',
+      entityId: leaveId,
+      actionUrl: '/leaves',
+    });
+  },
+
+  /**
+   * 13. Event: Leave Request Rejected
+   */
+  async notifyLeaveRejected({ orgId, leaveId, startDate, endDate, employeeUserId, reason }) {
+    if (!employeeUserId) return null;
+
+    logger.info('NotificationService', `Dispatching LEAVE_REJECTED for leave ${leaveId} to user ${employeeUserId}`);
+
+    return notificationRepository.create({
+      orgId,
+      userId: employeeUserId,
+      eventType: 'LEAVE_REJECTED',
+      title: 'Leave Request Rejected',
+      message: `Your leave request from ${startDate} to ${endDate} was rejected: "${reason}".`,
+      entityType: 'LEAVE_REQUEST',
+      entityId: leaveId,
+      actionUrl: '/leaves',
+    });
+  },
+
+  /**
+   * 14. Event: Manager Assigned to Employee
+   */
+  async notifyManagerAssigned({ orgId, employeeName, managerName, employeeUserId, managerUserId }) {
+    const notifications = [];
+
+    if (employeeUserId) {
+      notifications.push({
+        orgId,
+        userId: employeeUserId,
+        eventType: 'MANAGER_ASSIGNED',
+        title: 'Reporting Manager Assigned',
+        message: `${managerName || 'A manager'} is now assigned as your reporting manager.`,
+        entityType: 'TEAM',
+        entityId: 'manager_assignment',
+        actionUrl: '/dashboard',
+      });
+    }
+
+    if (managerUserId) {
+      notifications.push({
+        orgId,
+        userId: managerUserId,
+        eventType: 'MANAGER_ASSIGNED',
+        title: 'New Direct Report Assigned',
+        message: `${employeeName || 'A new member'} has been assigned to your team roster.`,
+        entityType: 'TEAM',
+        entityId: 'team_assignment',
+        actionUrl: '/team',
+      });
+    }
+
+    if (notifications.length === 0) return [];
+    return notificationRepository.createBatch(notifications);
+  },
 };
 
 export default notificationService;

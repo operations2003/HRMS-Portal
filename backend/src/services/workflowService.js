@@ -271,10 +271,17 @@ export const workflowService = {
         let notifMsg = `Your ${wf.entityType.replace('_', ' ').toLowerCase()} has transitioned to status '${toStatus}'.`;
         if (reason) notifMsg += ` Reason/Notes: "${reason}".`;
 
+        let semanticEventType = 'GENERAL_ALERT';
+        if (wf.entityType === 'LEAVE_REQUEST') {
+          semanticEventType = action === 'APPROVE' ? 'LEAVE_APPROVED' : action === 'REJECT' ? 'LEAVE_REJECTED' : 'LEAVE_APPROVAL_PENDING';
+        } else if (wf.entityType === 'PERFORMANCE_REVIEW') {
+          semanticEventType = action === 'APPROVE' ? 'PERFORMANCE_APPROVED' : action === 'RETURN' ? 'PERFORMANCE_RETURNED' : action === 'REJECT' ? 'PERFORMANCE_REJECTED' : 'PERFORMANCE_REVIEW_PENDING';
+        }
+
         await notificationService.createSystemNotification({
           orgId: currentUser.orgId,
           userId: targetEmp.userId,
-          eventType: 'GENERAL_ALERT',
+          eventType: semanticEventType,
           title: notifTitle,
           message: notifMsg,
           entityType: wf.entityType,
