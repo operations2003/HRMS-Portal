@@ -11,11 +11,27 @@ export const attendanceService = {
   },
 
   /**
-   * Record Check-Out punch
+   * Record Logout (Check-Out) punch
    * @param {Object} data - { breakDurationMinutes, notes, location, employeeId }
    */
   async checkOut(data = {}) {
     const res = await http.post('/v1/attendance/check-out', data);
+    return res.data;
+  },
+
+  /**
+   * Pause shift for break
+   */
+  async pauseBreak() {
+    const res = await http.post('/v1/attendance/pause-break', {});
+    return res.data;
+  },
+
+  /**
+   * Resume shift after break
+   */
+  async resumeBreak() {
+    const res = await http.post('/v1/attendance/resume-break', {});
     return res.data;
   },
 
@@ -37,6 +53,7 @@ export const attendanceService = {
       records: res.data || [],
       statistics: res.meta?.statistics || {},
       pagination: res.meta?.pagination || {},
+      employeeProfile: res.meta?.employeeProfile || null,
     };
   },
 

@@ -36,8 +36,10 @@ export const AttendanceDashboardPage = () => {
 
   // Today's attendance state for punch card
   const [todayRecord, setTodayRecord] = useState(null);
+  const [employeeProfile, setEmployeeProfile] = useState(null);
   const [isPunchingIn, setIsPunchingIn] = useState(false);
   const [isPunchingOut, setIsPunchingOut] = useState(false);
+  const [isBreakLoading, setIsBreakLoading] = useState(false);
   const [punchError, setPunchError] = useState(null);
 
   // History & Metrics state
@@ -71,6 +73,9 @@ export const AttendanceDashboardPage = () => {
   const fetchTodayRecord = useCallback(async () => {
     try {
       const res = await attendanceService.getMyAttendance({ limit: 5 });
+      if (res?.employeeProfile) {
+        setEmployeeProfile(res.employeeProfile);
+      }
       const records = res.records || [];
       const localToday = new Date().toLocaleDateString('en-CA'); // "YYYY-MM-DD"
       const rec =
@@ -147,7 +152,7 @@ export const AttendanceDashboardPage = () => {
     fetchTableData(1);
   }, [fetchTableData]);
 
-  // Handle Punch In (Prevent duplicate/parallel clicks)
+  // Handle Login (Punch In)
   const handleCheckIn = async (punchData) => {
     if (isPunchingIn || isPunchingOut) return;
     try {
@@ -156,7 +161,7 @@ export const AttendanceDashboardPage = () => {
       const record = await attendanceService.checkIn(punchData);
       setTodayRecord(record);
       toast.success(
-        `Checked in successfully at ${new Date(record.checkIn).toLocaleTimeString([], {
+        `Logged in successfully at ${new Date(record.checkIn).toLocaleTimeString([], {
           hour: '2-digit',
           minute: '2-digit',
         })}!`
@@ -165,7 +170,7 @@ export const AttendanceDashboardPage = () => {
       fetchTodayRecord();
       fetchTableData(1);
     } catch (err) {
-      const msg = err.message || 'Check-in failed. Please try again.';
+      const msg = err.message || 'Login failed. Please try again.';
       setPunchError(msg);
       toast.error(msg);
     } finally {
@@ -173,7 +178,7 @@ export const AttendanceDashboardPage = () => {
     }
   };
 
-  // Handle Punch Out (Prevent duplicate/parallel clicks)
+  // Handle Logout (Punch Out)
   const handleCheckOut = async (punchData) => {
     if (isPunchingIn || isPunchingOut) return;
     try {
@@ -182,17 +187,55 @@ export const AttendanceDashboardPage = () => {
       const record = await attendanceService.checkOut(punchData);
       setTodayRecord(record);
       toast.success(
-        `Checked out successfully! Total work time: ${record.totalHours || 0} hrs.`
+        `Logged out successfully! Total work time: ${record.totalHours || 0} hrs.`
       );
       // Refresh backend attendance state
       fetchTodayRecord();
       fetchTableData(1);
     } catch (err) {
-      const msg = err.message || 'Check-out failed. Please try again.';
+      const msg = err.message || 'Logout failed. Please try again.';
       setPunchError(msg);
       toast.error(msg);
     } finally {
       setIsPunchingOut(false);
+    }
+  };
+
+  // Handle Pause for Break
+  const handlePauseBreak = async () => {
+    if (isBreakLoading || isPunchingOut) return;
+    try {
+      setIsBreakLoading(true);
+      setPunchError(null);
+      const record = await attendanceService.pauseBreak();
+      setTodayRecord(record);
+      toast.success('Shift paused for break. Timer paused.');
+      fetchTodayRecord();
+    } catch (err) {
+      const msg = err.message || 'Failed to pause for break.';
+      setPunchError(msg);
+      toast.error(msg);
+    } finally {
+      setIsBreakLoading(false);
+    }
+  };
+
+  // Handle Resume Work (End Break)
+  const handleResumeBreak = async () => {
+    if (isBreakLoading || isPunchingOut) return;
+    try {
+      setIsBreakLoading(true);
+      setPunchError(null);
+      const record = await attendanceService.resumeBreak();
+      setTodayRecord(record);
+      toast.success('Break ended. Work session resumed!');
+      fetchTodayRecord();
+    } catch (err) {
+      const msg = err.message || 'Failed to resume work.';
+      setPunchError(msg);
+      toast.error(msg);
+    } finally {
+      setIsBreakLoading(false);
     }
   };
 
@@ -265,10 +308,14 @@ export const AttendanceDashboardPage = () => {
         <div className="lg:col-span-5 flex flex-col">
           <AttendancePunchCard
             todayRecord={todayRecord}
+            assignedShift={employeeProfile?.shiftTiming || todayRecord?.employee?.shiftTiming || '11:00 AM - 07:00 PM'}
             onCheckIn={handleCheckIn}
             onCheckOut={handleCheckOut}
+            onPauseBreak={handlePauseBreak}
+            onResumeBreak={handleResumeBreak}
             isPunchingIn={isPunchingIn}
             isPunchingOut={isPunchingOut}
+            isBreakLoading={isBreakLoading}
             error={punchError}
             onClearError={() => setPunchError(null)}
           />
@@ -279,13 +326,15 @@ export const AttendanceDashboardPage = () => {
           <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-3xl p-6 text-white shadow-md border border-slate-700 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
               <div className="text-xs font-semibold text-brand-400 uppercase tracking-wider">
-                Shift & Policy Overview
+                Assigned Shift & Policy Overview
               </div>
               <h2 className="text-lg font-bold text-white mt-1">
-                Standard General Shift (09:00 AM – 06:00 PM)
+                {employeeProfile?.shiftTiming
+                  ? `Assigned Shift: ${employeeProfile.shiftTiming}`
+                  : 'Standard Shift (11:00 AM – 07:00 PM)'}
               </h2>
               <p className="text-xs text-slate-300 mt-1 max-w-md">
-                Grace period till 09:30 AM. Overtime accrued automatically for work exceeding 8.0 net hours.
+                Standard schedule with break tracking. Overtime accrued automatically for work exceeding 8.0 net hours.
               </p>
             </div>
             <div className="shrink-0">

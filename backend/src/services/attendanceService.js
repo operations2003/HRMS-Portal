@@ -180,12 +180,41 @@ export const attendanceService = {
       throw error;
     }
 
-    // Calculate total hours worked
-    const breakMinutes = data.breakDurationMinutes !== undefined ? parseInt(data.breakDurationMinutes, 10) : existing.breakDurationMinutes || 0;
-    const durationMs = serverNow.getTime() - checkInTime.getTime();
-    const grossHours = durationMs / (1000 * 60 * 60);
-    const netHours = Math.max(0, grossHours - breakMinutes / 60);
-    const totalHours = parseFloat(netHours.toFixed(2));
+    // If currently on break, finalize the break duration
+    let breakHistory = Array.isArray(existing.breakHistory) ? [...existing.breakHistory] : [];
+    if (existing.isOnBreak && existing.currentBreakStart) {
+      const breakStart = new Date(existing.currentBreakStart);
+      const diffMs = Math.max(0, serverNow.getTime() - breakStart.getTime());
+      const elapsedSeconds = Math.round(diffMs / 1000);
+      const elapsedMinutes = Math.max(0, Math.round(diffMs / 60000));
+      breakHistory.push({
+        startTime: breakStart.toISOString(),
+        endTime: serverNow.toISOString(),
+        durationSeconds: elapsedSeconds,
+        durationMinutes: elapsedMinutes,
+      });
+    }
+
+    // Accurately compute total break from all break sessions
+    const totalBreakSeconds = breakHistory.reduce(
+      (sum, item) => sum + (item.durationSeconds !== undefined ? Number(item.durationSeconds) : ((Number(item.durationMinutes) || 0) * 60)),
+      0
+    );
+    const calculatedBreakMinutes = Math.round(totalBreakSeconds / 60);
+
+    // If caller explicitly passed a custom break duration override (e.g. admin regularization), use it, otherwise dynamically calculated:
+    const breakMinutes = (data.breakDurationMinutes !== undefined && data.breakDurationMinutes !== null && data.breakDurationMinutes !== '')
+      ? parseInt(data.breakDurationMinutes, 10)
+      : calculatedBreakMinutes;
+
+    // Calculate total net working hours down to the second
+    const grossDurationMs = Math.max(0, serverNow.getTime() - checkInTime.getTime());
+    const grossSeconds = Math.floor(grossDurationMs / 1000);
+    const effectiveBreakSeconds = (data.breakDurationMinutes !== undefined && data.breakDurationMinutes !== null && data.breakDurationMinutes !== '')
+      ? breakMinutes * 60
+      : totalBreakSeconds;
+    const netSeconds = Math.max(0, grossSeconds - effectiveBreakSeconds);
+    const totalHours = parseFloat((netSeconds / 3600).toFixed(2));
 
     // Calculate overtime if applicable (> 8 hours standard work day)
     const overtimeHours = totalHours > 8.0 ? parseFloat((totalHours - 8.0).toFixed(2)) : 0.0;
@@ -211,10 +240,105 @@ export const attendanceService = {
       checkOut: serverNow,
       totalHours,
       status: finalStatus,
+      isOnBreak: false,
+      currentBreakStart: null,
+      breakHistory,
       breakDurationMinutes: breakMinutes,
       overtimeHours,
       notes: updatedNotes,
       location: data.location || existing.location,
+    });
+  },
+
+  /**
+   * Pause working session for a break
+   */
+  async pauseBreak(user) {
+    const targetEmployee = await resolveRequesterEmployee(user);
+    if (!targetEmployee) {
+      const error = new Error('No employee profile found for your user account.');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const todayDate = new Date().toISOString().split('T')[0];
+    const existing = await attendanceRepository.findByEmployeeAndDate(targetEmployee.id, todayDate, targetEmployee.orgId);
+
+    if (!existing || !existing.checkIn) {
+      const error = new Error('Cannot pause: You must log in first before taking a break.');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    if (existing.checkOut) {
+      const error = new Error('Cannot pause: You have already logged out for today.');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    if (existing.isOnBreak) {
+      const error = new Error('You are already on break.');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    return attendanceRepository.update(existing.id, {
+      isOnBreak: true,
+      currentBreakStart: new Date(),
+    });
+  },
+
+  /**
+   * Resume working session after break
+   */
+  async resumeBreak(user) {
+    const targetEmployee = await resolveRequesterEmployee(user);
+    if (!targetEmployee) {
+      const error = new Error('No employee profile found for your user account.');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const todayDate = new Date().toISOString().split('T')[0];
+    const existing = await attendanceRepository.findByEmployeeAndDate(targetEmployee.id, todayDate, targetEmployee.orgId);
+
+    if (!existing || !existing.checkIn) {
+      const error = new Error('Cannot resume: No active login session found.');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    if (!existing.isOnBreak) {
+      const error = new Error('You are not currently on break.');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const serverNow = new Date();
+    const breakStart = existing.currentBreakStart ? new Date(existing.currentBreakStart) : serverNow;
+    const diffMs = Math.max(0, serverNow.getTime() - breakStart.getTime());
+    const elapsedSeconds = Math.round(diffMs / 1000);
+    const elapsedMinutes = Math.max(0, Math.round(diffMs / 60000));
+
+    const breakHistory = Array.isArray(existing.breakHistory) ? [...existing.breakHistory] : [];
+    breakHistory.push({
+      startTime: breakStart.toISOString(),
+      endTime: serverNow.toISOString(),
+      durationSeconds: elapsedSeconds,
+      durationMinutes: elapsedMinutes,
+    });
+
+    const totalBreakSeconds = breakHistory.reduce(
+      (sum, item) => sum + (item.durationSeconds !== undefined ? Number(item.durationSeconds) : ((Number(item.durationMinutes) || 0) * 60)),
+      0
+    );
+    const totalBreakMinutes = Math.round(totalBreakSeconds / 60);
+
+    return attendanceRepository.update(existing.id, {
+      isOnBreak: false,
+      currentBreakStart: null,
+      breakDurationMinutes: totalBreakMinutes,
+      breakHistory,
     });
   },
 
@@ -229,7 +353,17 @@ export const attendanceService = {
       throw error;
     }
 
-    return attendanceRepository.findByEmployeeHistory(employee.id, employee.orgId, query);
+    const history = await attendanceRepository.findByEmployeeHistory(employee.id, employee.orgId, query);
+    return {
+      ...history,
+      employeeProfile: {
+        id: employee.id,
+        firstName: employee.firstName,
+        lastName: employee.lastName,
+        employeeCode: employee.employeeCode,
+        shiftTiming: employee.shiftTiming || '11:00 AM - 07:00 PM',
+      },
+    };
   },
 
   /**

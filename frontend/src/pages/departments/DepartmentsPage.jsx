@@ -14,7 +14,7 @@ import { ConfirmDialog } from '../../components/common/ConfirmDialog.jsx';
 
 export const DepartmentsPage = () => {
   const { hasPermission, hasRole } = useAuth();
-  const canManage = hasPermission('dept:write') || hasRole(['Admin', 'SuperAdmin']);
+  const canManage = hasPermission(['dept:write', 'employee:write']) || hasRole(['Admin', 'SuperAdmin', 'OrgAdmin', 'HRManager', 'HR']);
 
   const [metadata, setMetadata] = useState({ departments: [], designations: [], organizations: [] });
   const [loading, setLoading] = useState(true);
@@ -73,10 +73,6 @@ export const DepartmentsPage = () => {
     e.preventDefault();
     if (!formData.name.trim()) {
       setFormError('Department name is required.');
-      return;
-    }
-    if (!formData.code.trim()) {
-      setFormError('Department code is required.');
       return;
     }
 
@@ -435,13 +431,12 @@ export const DepartmentsPage = () => {
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Department Code <span className="text-rose-500">*</span>
+              Department Code <span className="text-slate-400 font-normal">(Optional)</span>
             </label>
             <Input
-              placeholder="e.g. FIN"
+              placeholder="e.g. FIN (auto-generated if empty)"
               value={formData.code}
               onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
-              required
             />
             <p className="text-[11px] text-slate-400 mt-1">
               Unique uppercase abbreviation for this department (e.g. OPS, HR, IT).
