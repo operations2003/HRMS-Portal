@@ -12,6 +12,12 @@ import { UserListPage } from './pages/users/UserListPage.jsx';
 import { DepartmentsPage } from './pages/departments/DepartmentsPage.jsx';
 import { OnboardingDashboardPage } from './pages/onboarding/OnboardingDashboardPage.jsx';
 import { OnboardingDetailPage } from './pages/onboarding/OnboardingDetailPage.jsx';
+import { PayrollDashboardPage } from './pages/payroll/PayrollDashboardPage.jsx';
+import { PayslipsPage } from './pages/payroll/PayslipsPage.jsx';
+import { EmployeeDocumentsPage } from './pages/documents/EmployeeDocumentsPage.jsx';
+import { HelpdeskPage } from './pages/helpdesk/HelpdeskPage.jsx';
+import { EmployeeRequestsPage } from './pages/requests/EmployeeRequestsPage.jsx';
+import { NotificationsPage } from './pages/notifications/NotificationsPage.jsx';
 import { ForbiddenPage } from './pages/common/ForbiddenPage.jsx';
 import { NotFoundPage } from './pages/common/NotFoundPage.jsx';
 import { AppLayout } from './layouts/AppLayout.jsx';
@@ -113,6 +119,60 @@ export const App = () => {
                 element={
                   <PermissionRoute permission="employee:read">
                     <EmployeeListPage />
+                  </PermissionRoute>
+                }
+              />
+
+              <Route
+                path="payroll"
+                element={
+                  <PermissionRoute permission={['payroll:read', 'payslip:read']}>
+                    <PayrollDashboardPage />
+                  </PermissionRoute>
+                }
+              />
+
+              <Route
+                path="payslips"
+                element={
+                  <PermissionRoute permission="payslip:read">
+                    <PayslipsPage />
+                  </PermissionRoute>
+                }
+              />
+
+              <Route
+                path="documents"
+                element={
+                  <PermissionRoute permission={['document:read', 'employee:read']}>
+                    <EmployeeDocumentsPage />
+                  </PermissionRoute>
+                }
+              />
+
+              <Route
+                path="helpdesk"
+                element={
+                  <PermissionRoute permission={['helpdesk:read', 'employee:read']}>
+                    <HelpdeskPage />
+                  </PermissionRoute>
+                }
+              />
+
+              <Route
+                path="requests"
+                element={
+                  <PermissionRoute permission={['request:read', 'employee:read']}>
+                    <EmployeeRequestsPage />
+                  </PermissionRoute>
+                }
+              />
+
+              <Route
+                path="notifications"
+                element={
+                  <PermissionRoute permission={['notification:read', 'employee:read']}>
+                    <NotificationsPage />
                   </PermissionRoute>
                 }
               />

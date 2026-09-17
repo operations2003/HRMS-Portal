@@ -13,9 +13,11 @@ import {
   Check,
   X,
   ShieldAlert,
+  CheckCircle2,
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext.jsx';
 import { onboardingService } from '../../services/onboardingService.js';
+import { documentService } from '../../services/documentService.js';
 import { Badge } from '../common/Badge.jsx';
 import { Button } from '../common/Button.jsx';
 import { Modal } from '../common/Modal.jsx';
@@ -46,6 +48,12 @@ export const DocumentVaultUploader = ({
   documents = [],
   canVerify = false,
   canUpload = false,
+  canAcknowledge = false,
+  onUpload,
+  onVerify,
+  onAcknowledge,
+  titlePrefix = 'Document Vault',
+  subtitle = 'Securely stored verification documents and contract terms.',
   onDocumentsUpdated,
 }) => {
   const { showSuccess, showError } = useToast();
@@ -63,6 +71,7 @@ export const DocumentVaultUploader = ({
   const [rejectingDoc, setRejectingDoc] = useState(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [verifyingDocId, setVerifyingDocId] = useState(null);
+  const [acknowledgingDocId, setAcknowledgingDocId] = useState(null);
 
   // Drag & Drop Handlers
   const handleDragOver = (e) => {
@@ -104,7 +113,13 @@ export const DocumentVaultUploader = ({
       formData.append('title', title || selectedFile.name);
       formData.append('documentType', documentType);
 
-      await onboardingService.uploadDocument(candidateId, formData);
+      if (onUpload) {
+        await onUpload(formData);
+      } else if (candidateId) {
+        await onboardingService.uploadDocument(candidateId, formData);
+      } else {
+        await documentService.uploadMyDocument(formData);
+      }
       showSuccess(`Document '${title || selectedFile.name}' uploaded successfully.`);
 
       // Reset form
@@ -125,10 +140,19 @@ export const DocumentVaultUploader = ({
   const handleVerify = async (docId, status, reason = '') => {
     try {
       setVerifyingDocId(docId);
-      await onboardingService.verifyDocument(docId, {
-        verificationStatus: status,
-        rejectionReason: reason,
-      });
+      if (onVerify) {
+        await onVerify(docId, status, reason);
+      } else if (candidateId) {
+        await onboardingService.verifyDocument(docId, {
+          verificationStatus: status,
+          rejectionReason: reason,
+        });
+      } else {
+        await documentService.verifyDocument(docId, {
+          verificationStatus: status,
+          rejectionReason: reason,
+        });
+      }
 
       showSuccess(`Document status marked as ${status}.`);
       setRejectingDoc(null);
@@ -141,6 +165,25 @@ export const DocumentVaultUploader = ({
       showError(err.message || 'Failed to update document verification status.');
     } finally {
       setVerifyingDocId(null);
+    }
+  };
+
+  const handleAcknowledge = async (docId) => {
+    try {
+      setAcknowledgingDocId(docId);
+      if (onAcknowledge) {
+        await onAcknowledge(docId);
+      } else {
+        await documentService.acknowledgeDocument(docId);
+      }
+      showSuccess('Document acknowledgement recorded.');
+      if (onDocumentsUpdated) {
+        onDocumentsUpdated();
+      }
+    } catch (err) {
+      showError(err.message || 'Failed to acknowledge document.');
+    } finally {
+      setAcknowledgingDocId(null);
     }
   };
 
@@ -292,10 +335,10 @@ export const DocumentVaultUploader = ({
           <div>
             <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <FileText className="w-5 h-5 text-brand-600" />
-              Document Vault ({documents.length})
+              {titlePrefix} ({documents.length})
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Securely stored verification documents and contract terms.
+              {subtitle}
             </p>
           </div>
         </div>
@@ -304,16 +347,20 @@ export const DocumentVaultUploader = ({
           <div className="p-12 text-center">
             <File className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
             <p className="text-sm font-medium text-slate-600 dark:text-slate-400">
-              No documents uploaded yet.
+              No documents found in vault.
             </p>
             <p className="text-xs text-slate-400 mt-1">
-              Upload pre-joining compliance documents above to initiate verification.
+              Upload documents using the form above to securely store and verify them.
             </p>
           </div>
         ) : (
           <div className="divide-y divide-slate-100 dark:divide-slate-800">
             {documents.map((doc) => {
               const isVerifying = verifyingDocId === doc.id;
+              const isAcknowledging = acknowledgingDocId === doc.id;
+              const acks = doc.acknowledgementLog || doc.acknowledgement_log || [];
+              const isAcknowledged = Array.isArray(acks) && acks.length > 0;
+
               return (
                 <div
                   key={doc.id}
@@ -330,15 +377,32 @@ export const DocumentVaultUploader = ({
                           {doc.title}
                         </h4>
                         <Badge variant="secondary">{doc.category}</Badge>
+                        {doc.documentType && doc.documentType !== doc.category && (
+                          <Badge variant="outline">{doc.documentType}</Badge>
+                        )}
                         {getStatusBadge(doc.verificationStatus)}
+                        {isAcknowledged && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            Acknowledged
+                          </span>
+                        )}
                       </div>
 
-                      <div className="flex items-center gap-3 text-xs text-slate-400 mt-1">
+                      <div className="flex items-center gap-3 text-xs text-slate-400 mt-1 flex-wrap">
                         <span>{formatBytes(doc.fileSize)}</span>
                         <span>•</span>
                         <span>{doc.mimeType || 'Document'}</span>
                         <span>•</span>
-                        <span>{new Date(doc.createdAt).toLocaleDateString()}</span>
+                        <span>Uploaded {new Date(doc.createdAt).toLocaleDateString()}</span>
+                        {isAcknowledged && acks[0]?.acknowledgedAt && (
+                          <>
+                            <span>•</span>
+                            <span className="text-blue-600 dark:text-blue-400">
+                              Acknowledged {new Date(acks[0].acknowledgedAt).toLocaleDateString()}
+                            </span>
+                          </>
+                        )}
                       </div>
 
                       {/* Rejection alert if rejected */}
@@ -352,8 +416,8 @@ export const DocumentVaultUploader = ({
                   </div>
 
                   {/* Actions */}
-                  <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-                    {/* View / Download */}
+                  <div className="flex items-center gap-2 shrink-0 self-end sm:self-center flex-wrap">
+                    {/* View */}
                     <a
                       href={doc.fileUrl}
                       target="_blank"
@@ -363,6 +427,31 @@ export const DocumentVaultUploader = ({
                       <Eye className="w-3.5 h-3.5" />
                       View
                     </a>
+
+                    {/* Download */}
+                    <a
+                      href={doc.fileUrl}
+                      download={doc.title}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      Download
+                    </a>
+
+                    {/* Acknowledgement Action */}
+                    {canAcknowledge && !isAcknowledged && (
+                      <Button
+                        variant="secondary"
+                        size="xs"
+                        icon={CheckCircle2}
+                        loading={isAcknowledging}
+                        onClick={() => handleAcknowledge(doc.id)}
+                      >
+                        Acknowledge
+                      </Button>
+                    )}
 
                     {/* HR Verification Controls */}
                     {canVerify && doc.verificationStatus !== 'APPROVED' && (

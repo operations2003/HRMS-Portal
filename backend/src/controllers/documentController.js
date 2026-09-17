@@ -1,4 +1,5 @@
 import { documentService } from '../services/documentService.js';
+import { employeeRepository } from '../repositories/employeeRepository.js';
 import { sendSuccess, sendError } from '../utils/apiResponse.js';
 
 export const documentController = {
@@ -23,11 +24,79 @@ export const documentController = {
   },
 
   /**
+   * GET /api/v1/documents/my
+   * Employee self-service: retrieve own documents from Document Vault (IDOR protected)
+   */
+  async getMyDocuments(req, res, next) {
+    try {
+      const orgId = req.user.orgId || 'org-1';
+      const employee = await employeeRepository.findByUserId(req.user.id, orgId);
+      if (!employee) {
+        return sendSuccess(res, 'No employee record associated with this account.', []);
+      }
+      const docs = await documentService.getDocumentsByOwner('EMPLOYEE', employee.id);
+      return sendSuccess(res, 'Your documents retrieved successfully.', docs);
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  /**
+   * POST /api/v1/documents/my/upload
+   * Employee self-service: upload compliance/identification document to Document Vault
+   */
+  async uploadMyDocument(req, res, next) {
+    try {
+      const orgId = req.user.orgId || 'org-1';
+      const employee = await employeeRepository.findByUserId(req.user.id, orgId);
+      if (!employee) {
+        return sendError(res, 'No employee record found for your user account.', 404);
+      }
+      if (!req.file) {
+        return sendError(res, 'No document file was uploaded.', 400);
+      }
+
+      const fileUrl = `/uploads/onboarding_documents/${req.file.filename}`;
+      const payload = {
+        orgId,
+        ownerType: 'EMPLOYEE',
+        ownerId: employee.id,
+        category: req.body.category || 'OTHER',
+        documentType: req.body.documentType || req.body.category || 'OTHER',
+        title: req.body.title || req.file.originalname,
+        fileUrl,
+        fileSize: req.file.size,
+        mimeType: req.file.mimetype,
+        verificationStatus: 'PENDING',
+      };
+
+      const doc = await documentService.addDocument(payload);
+      return sendSuccess(res, 'Document uploaded to Document Vault successfully.', doc, null, 201);
+    } catch (error) {
+      if (error.statusCode === 400) {
+        return sendError(res, error.message, 400);
+      }
+      next(error);
+    }
+  },
+
+  /**
    * GET /api/v1/documents/owner/:ownerType/:ownerId
    */
   async getDocumentsByOwner(req, res, next) {
     try {
       const { ownerType, ownerId } = req.params;
+      const isHrOrAdmin = ['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin'].includes(req.user?.roleName);
+
+      // IDOR Protection: Employees can only access their own documents
+      if (!isHrOrAdmin && ownerType.toUpperCase() === 'EMPLOYEE') {
+        const orgId = req.user.orgId || 'org-1';
+        const employee = await employeeRepository.findByUserId(req.user.id, orgId);
+        if (!employee || employee.id !== ownerId) {
+          return sendError(res, 'Access Forbidden: You are not authorized to access documents of another employee.', 403);
+        }
+      }
+
       const docs = await documentService.getDocumentsByOwner(ownerType, ownerId);
       return sendSuccess(res, 'Owner documents retrieved successfully.', docs);
     } catch (error) {
@@ -42,6 +111,17 @@ export const documentController = {
     try {
       const { id } = req.params;
       const doc = await documentService.getDocumentById(id);
+
+      // IDOR Protection: If employee document, non-HR/Admin users can only view their own
+      const isHrOrAdmin = ['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin'].includes(req.user?.roleName);
+      if (!isHrOrAdmin && doc.ownerType === 'EMPLOYEE') {
+        const orgId = req.user.orgId || 'org-1';
+        const employee = await employeeRepository.findByUserId(req.user.id, orgId);
+        if (!employee || doc.ownerId !== employee.id) {
+          return sendError(res, 'Access Forbidden: You cannot access documents of another employee.', 403);
+        }
+      }
+
       return sendSuccess(res, 'Document retrieved successfully.', doc);
     } catch (error) {
       if (error.statusCode === 404) {
