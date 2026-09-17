@@ -83,6 +83,16 @@ export const workflowRepository = {
     try {
       await client.query('BEGIN');
 
+      const existing = await client.query(
+        `SELECT id FROM approval_workflows WHERE entity_type = $1 AND entity_id = $2;`,
+        [data.entityType, data.entityId]
+      );
+      if (existing.rows[0]) {
+        const err = new Error(`Duplicate workflow error: An approval workflow instance already exists for ${data.entityType} '${data.entityId}'.`);
+        err.statusCode = 409;
+        throw err;
+      }
+
       const id = data.id || `wf-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
       const wfQuery = `
         INSERT INTO approval_workflows (
@@ -143,7 +153,46 @@ export const workflowRepository = {
   },
 
   /**
-   * 2. Find Workflow by Entity Type & ID
+   * 2. Find Workflow by ID
+   */
+  async findById(id) {
+    if (!id || typeof id !== 'string') return null;
+
+    const query = `
+      SELECT 
+        w.*,
+        req.id AS req_id, req.employee_code AS req_code, req.first_name AS req_first_name, req.last_name AS req_last_name, req.email AS req_email,
+        mgr.id AS mgr_id, mgr.employee_code AS mgr_code, mgr.first_name AS mgr_first_name, mgr.last_name AS mgr_last_name, mgr.email AS mgr_email,
+        hr.id AS hr_id, hr.first_name AS hr_first_name, hr.last_name AS hr_last_name, hr.email AS hr_email
+      FROM approval_workflows w
+      JOIN employees req ON w.requester_id = req.id
+      LEFT JOIN employees mgr ON w.manager_id = mgr.id
+      LEFT JOIN users hr ON w.hr_user_id = hr.id
+      WHERE w.id = $1;
+    `;
+    const { rows } = await pool.query(query, [id]);
+    if (!rows[0]) return null;
+
+    const wf = rows[0];
+
+    // Fetch action history
+    const actionsRes = await pool.query(
+      `SELECT 
+         a.*,
+         u.id AS u_id, u.first_name AS u_first_name, u.last_name AS u_last_name, u.email AS u_email
+       FROM approval_workflow_actions a
+       JOIN users u ON a.actor_user_id = u.id
+       WHERE a.workflow_id = $1
+       ORDER BY a.created_at ASC;`,
+      [wf.id]
+    );
+    wf.actions = actionsRes.rows;
+
+    return mapWorkflowRow(wf);
+  },
+
+  /**
+   * 3. Find Workflow by Entity Type & ID
    */
   async findByEntity(entityType, entityId) {
     const query = `

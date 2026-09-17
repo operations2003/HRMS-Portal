@@ -1,5 +1,7 @@
 import { leaveRepository } from '../repositories/leaveRepository.js';
 import { employeeRepository } from '../repositories/employeeRepository.js';
+import { workflowRepository } from '../repositories/workflowRepository.js';
+import { logger } from '../utils/logger.js';
 
 const normalizeRole = (r) => (r || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -316,6 +318,33 @@ export const leaveService = {
       await leaveRepository.adjustBalance(emp.id, leaveType.id, startYear, { pendingDelta: totalDays });
     }
 
+    // Initialize Phase 6 approval workflow tracking instance
+    try {
+      await workflowRepository.createWorkflowInstance(
+        {
+          orgId: emp.orgId,
+          entityType: 'LEAVE_REQUEST',
+          entityId: request.id,
+          workflowType: 'EMPLOYEE_MANAGER_HR',
+          currentStage: 'MANAGER_REVIEW',
+          currentStatus: 'PENDING',
+          requesterId: emp.id,
+          managerId: emp.managerId || null,
+        },
+        {
+          stage: 'EMPLOYEE_SUBMISSION',
+          actorUserId: user.id,
+          actorRole: user.roleName || 'Employee',
+          action: 'SUBMIT',
+          fromStatus: 'PENDING',
+          toStatus: 'PENDING',
+          comments: data.reason || 'Leave request submitted.',
+        }
+      );
+    } catch (wfErr) {
+      logger.warn('LeaveService', `Failed to initialize workflow instance for leave ${request.id}: ${wfErr.message}`);
+    }
+
     return request;
   },
 
@@ -524,10 +553,12 @@ export const leaveService = {
       throw error;
     }
 
-    // Manager scope check: can only approve within own department
+    // Manager scope check: can only approve within own department or direct team
     if (normRole === 'manager') {
-      if (!approverEmp || !approverEmp.deptId || !record.employee || record.employee.deptId !== approverEmp.deptId) {
-        const error = new Error('Access denied: Managers can only approve leave requests for employees in their department.');
+      const isDirectReport = approverEmp && record.employee && record.employee.managerId === approverEmp.id;
+      const isDeptMatch = approverEmp && approverEmp.deptId && record.employee && record.employee.deptId === approverEmp.deptId;
+      if (!isDirectReport && !isDeptMatch) {
+        const error = new Error('Access denied: Managers can only approve leave requests for employees in their team or department.');
         error.statusCode = 403;
         throw error;
       }
@@ -553,6 +584,25 @@ export const leaveService = {
       pendingDelta: -record.totalDays,
       usedDelta: record.totalDays,
     });
+
+    // Advance workflow state machine if tracking instance exists
+    try {
+      const wf = await workflowRepository.findByEntity('LEAVE_REQUEST', id);
+      if (wf) {
+        await workflowRepository.recordAction(wf.id, {
+          stage: wf.currentStage || 'MANAGER_REVIEW',
+          actorUserId: user.id,
+          actorRole: user.roleName || 'Approver',
+          action: 'APPROVE',
+          fromStatus: 'PENDING',
+          toStatus: 'APPROVED',
+          nextStage: 'COMPLETED',
+          comments: 'Leave request approved.',
+        });
+      }
+    } catch (wfErr) {
+      logger.warn('LeaveService', `Failed to advance workflow audit for leave ${id}: ${wfErr.message}`);
+    }
 
     return updated;
   },
@@ -593,10 +643,12 @@ export const leaveService = {
       throw error;
     }
 
-    // Manager scope check
+    // Manager scope check: can only reject within own department or direct team
     if (normRole === 'manager') {
-      if (!approverEmp || !approverEmp.deptId || !record.employee || record.employee.deptId !== approverEmp.deptId) {
-        const error = new Error('Access denied: Managers can only reject leave requests for employees in their department.');
+      const isDirectReport = approverEmp && record.employee && record.employee.managerId === approverEmp.id;
+      const isDeptMatch = approverEmp && approverEmp.deptId && record.employee && record.employee.deptId === approverEmp.deptId;
+      if (!isDirectReport && !isDeptMatch) {
+        const error = new Error('Access denied: Managers can only reject leave requests for employees in their team or department.');
         error.statusCode = 403;
         throw error;
       }
@@ -610,7 +662,7 @@ export const leaveService = {
     }
 
     // Rejection reason is required
-    const rejectionReason = data.rejectionReason?.trim();
+    const rejectionReason = (data.rejectionReason || data.reason || data.comments || '').trim();
     if (!rejectionReason) {
       const error = new Error('Rejection reason is required to reject a leave request.');
       error.statusCode = 400;
@@ -630,6 +682,25 @@ export const leaveService = {
     await leaveRepository.adjustBalance(record.employeeId, record.leaveTypeId, year, {
       pendingDelta: -record.totalDays,
     });
+
+    // Advance workflow state machine if tracking instance exists
+    try {
+      const wf = await workflowRepository.findByEntity('LEAVE_REQUEST', id);
+      if (wf) {
+        await workflowRepository.recordAction(wf.id, {
+          stage: wf.currentStage || 'MANAGER_REVIEW',
+          actorUserId: user.id,
+          actorRole: user.roleName || 'Approver',
+          action: 'REJECT',
+          fromStatus: 'PENDING',
+          toStatus: 'REJECTED',
+          nextStage: 'REJECTED',
+          comments: rejectionReason,
+        });
+      }
+    } catch (wfErr) {
+      logger.warn('LeaveService', `Failed to advance workflow audit for leave ${id}: ${wfErr.message}`);
+    }
 
     return updated;
   },
