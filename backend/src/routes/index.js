@@ -16,6 +16,10 @@ import payslipRoutes from './payslipRoutes.js';
 import helpdeskRoutes from './helpdeskRoutes.js';
 import employeeRequestRoutes from './employeeRequestRoutes.js';
 import notificationRoutes from './notificationRoutes.js';
+import managerRoutes from './managerRoutes.js';
+import performanceRoutes from './performanceRoutes.js';
+import workflowRoutes from './workflowRoutes.js';
+import hrOperationsRoutes from './hrOperationsRoutes.js';
 import { sendSuccess } from '../utils/apiResponse.js';
 
 const router = Router();
@@ -47,5 +51,9 @@ router.use('/v1/payslips', payslipRoutes);
 router.use('/v1/helpdesk', helpdeskRoutes);
 router.use('/v1/requests', employeeRequestRoutes);
 router.use('/v1/notifications', notificationRoutes);
+router.use('/v1/manager', managerRoutes);
+router.use('/v1/performance', performanceRoutes);
+router.use('/v1/workflows', workflowRoutes);
+router.use('/v1/hr/operations', hrOperationsRoutes);
 
 export default router;

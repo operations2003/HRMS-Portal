@@ -78,7 +78,7 @@ export const employeeRepository = {
   /**
    * Find all employees with filtering and pagination
    */
-  async findAll({ search = '', orgId = '', deptId = '', status = '', page = 1, limit = 20 } = {}) {
+  async findAll({ search = '', orgId = '', deptId = '', status = '', managerId = '', page = 1, limit = 20 } = {}) {
     const conditions = [];
     const values = [];
     let paramIndex = 1;
@@ -96,6 +96,11 @@ export const employeeRepository = {
     if (status) {
       conditions.push(`LOWER(e.status) = LOWER($${paramIndex++})`);
       values.push(status);
+    }
+
+    if (managerId) {
+      conditions.push(`e.manager_id = $${paramIndex++}`);
+      values.push(managerId);
     }
 
     if (search) {
@@ -374,6 +379,56 @@ export const employeeRepository = {
 
     const res = await pool.query('DELETE FROM employees WHERE id = $1;', [id]);
     return res.rowCount > 0;
+  },
+
+  /**
+   * Find direct reports belonging to a manager
+   */
+  async findDirectReports(managerId, orgId = null) {
+    if (!managerId) return [];
+    let sql = `${BASE_EMPLOYEE_SELECT} WHERE e.manager_id = $1`;
+    const values = [managerId];
+    if (orgId) {
+      sql += ' AND e.org_id = $2';
+      values.push(orgId);
+    }
+    sql += ' ORDER BY e.first_name ASC, e.last_name ASC;';
+    const res = await pool.query(sql, values);
+    return res.rows.map(mapEmployeeRow);
+  },
+
+  /**
+   * Assign or reassign an employee's reporting manager
+   */
+  async assignManager(employeeId, managerId) {
+    const res = await pool.query(
+      'UPDATE employees SET manager_id = $1, updated_at = NOW() WHERE id = $2 RETURNING id;',
+      [managerId || null, employeeId]
+    );
+    if (res.rows.length === 0) return null;
+    return this.findById(employeeId);
+  },
+
+  /**
+   * Get team headcount summary for a manager
+   */
+  async getTeamSummary(managerId, orgId = null) {
+    if (!managerId) return { totalReports: 0, activeCount: 0, onLeaveCount: 0 };
+    let sql = `
+      SELECT 
+        COUNT(*)::int AS "totalReports",
+        COUNT(*) FILTER (WHERE LOWER(status) = 'active')::int AS "activeCount",
+        COUNT(*) FILTER (WHERE LOWER(status) = 'on leave')::int AS "onLeaveCount"
+      FROM employees
+      WHERE manager_id = $1
+    `;
+    const values = [managerId];
+    if (orgId) {
+      sql += ' AND org_id = $2';
+      values.push(orgId);
+    }
+    const res = await pool.query(sql, values);
+    return res.rows[0] || { totalReports: 0, activeCount: 0, onLeaveCount: 0 };
   },
 
   /**

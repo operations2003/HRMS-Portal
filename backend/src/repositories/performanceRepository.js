@@ -520,6 +520,119 @@ export const performanceRepository = {
       createdAt: new Date(r.created_at).toISOString(),
     }));
   },
+
+  async updatePeriod(id, orgId, updates = {}) {
+    const fields = [];
+    const values = [id, orgId];
+    let idx = 3;
+
+    if (updates.name) {
+      fields.push(`name = $${idx++}`);
+      values.push(updates.name);
+    }
+    if (updates.status) {
+      fields.push(`status = $${idx++}`);
+      values.push(updates.status);
+    }
+    if (updates.dueDate) {
+      fields.push(`due_date = $${idx++}`);
+      values.push(updates.dueDate);
+    }
+
+    if (fields.length === 0) return this.findPeriodById(id, orgId);
+
+    const query = `
+      UPDATE performance_periods
+      SET ${fields.join(', ')}
+      WHERE id = $1 AND org_id = $2
+      RETURNING *;
+    `;
+    const { rows } = await pool.query(query, values);
+    return mapPeriodRow(rows[0]);
+  },
+
+  // ==========================================
+  // 4. GOALS CRUD
+  // ==========================================
+
+  async addGoal(recordId, employeeId, goalData) {
+    const id = goalData.id || `goal-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const query = `
+      INSERT INTO performance_goals (
+        id, performance_record_id, employee_id, title, description,
+        metric_target, metric_achieved, weightage, rating, status
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      RETURNING *;
+    `;
+    const values = [
+      id,
+      recordId,
+      employeeId,
+      goalData.title,
+      goalData.description || '',
+      goalData.metricTarget || '',
+      goalData.metricAchieved || '',
+      goalData.weightage || 0.0,
+      goalData.rating || null,
+      goalData.status || 'IN_PROGRESS',
+    ];
+    const { rows } = await pool.query(query, values);
+    return mapGoalRow(rows[0]);
+  },
+
+  async updateGoal(goalId, updates = {}) {
+    const fields = [];
+    const values = [goalId];
+    let idx = 2;
+
+    if (updates.title) {
+      fields.push(`title = $${idx++}`);
+      values.push(updates.title);
+    }
+    if (updates.description !== undefined) {
+      fields.push(`description = $${idx++}`);
+      values.push(updates.description);
+    }
+    if (updates.metricTarget !== undefined) {
+      fields.push(`metric_target = $${idx++}`);
+      values.push(updates.metricTarget);
+    }
+    if (updates.metricAchieved !== undefined) {
+      fields.push(`metric_achieved = $${idx++}`);
+      values.push(updates.metricAchieved);
+    }
+    if (updates.weightage !== undefined) {
+      fields.push(`weightage = $${idx++}`);
+      values.push(updates.weightage);
+    }
+    if (updates.rating !== undefined) {
+      fields.push(`rating = $${idx++}`);
+      values.push(updates.rating);
+    }
+    if (updates.status) {
+      fields.push(`status = $${idx++}`);
+      values.push(updates.status);
+    }
+
+    if (fields.length === 0) {
+      const { rows } = await pool.query('SELECT * FROM performance_goals WHERE id = $1;', [goalId]);
+      return mapGoalRow(rows[0]);
+    }
+
+    const query = `
+      UPDATE performance_goals
+      SET ${fields.join(', ')}
+      WHERE id = $1
+      RETURNING *;
+    `;
+    const { rows } = await pool.query(query, values);
+    return mapGoalRow(rows[0]);
+  },
+
+  async deleteGoal(goalId) {
+    const res = await pool.query('DELETE FROM performance_goals WHERE id = $1;', [goalId]);
+    return res.rowCount > 0;
+  },
 };
 
 export default performanceRepository;
