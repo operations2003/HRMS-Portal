@@ -5,6 +5,8 @@ node_modules/
 
 # Testing
 coverage/
+backend/test_*.js
+test_*.js
 
 # Production & Build outputs
 dist/

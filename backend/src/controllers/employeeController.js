@@ -7,7 +7,10 @@ export const employeeController = {
    */
   async list(req, res, next) {
     try {
-      const { search, orgId, deptId, status, page, limit } = req.query;
+      const { search, deptId, status, page, limit } = req.query;
+      const isSuperAdmin = (req.user?.roleName || '').toLowerCase().includes('admin') && !req.user?.orgId;
+      const orgId = isSuperAdmin ? (req.query.orgId || null) : (req.user?.orgId || req.query.orgId);
+
       const result = await employeeService.listEmployees({
         search,
         orgId,
@@ -41,6 +44,14 @@ export const employeeController = {
   async getById(req, res, next) {
     try {
       const employee = await employeeService.getEmployeeById(req.params.id);
+      if (req.user?.orgId && employee.orgId !== req.user.orgId) {
+        const isSuperAdmin = (req.user?.roleName || '').toLowerCase().includes('admin') && !req.user.orgId;
+        if (!isSuperAdmin) {
+          const error = new Error('Access denied: Employee not found in your organization.');
+          error.statusCode = 404;
+          throw error;
+        }
+      }
       return sendSuccess(res, 'Employee details retrieved.', employee);
     } catch (error) {
       next(error);
@@ -64,6 +75,15 @@ export const employeeController = {
    */
   async update(req, res, next) {
     try {
+      const existing = await employeeService.getEmployeeById(req.params.id);
+      if (req.user?.orgId && existing.orgId !== req.user.orgId) {
+        const isSuperAdmin = (req.user?.roleName || '').toLowerCase().includes('admin') && !req.user.orgId;
+        if (!isSuperAdmin) {
+          const error = new Error('Access denied: Employee not found in your organization.');
+          error.statusCode = 404;
+          throw error;
+        }
+      }
       const updated = await employeeService.updateEmployee(req.params.id, req.body);
       return sendSuccess(res, 'Employee updated successfully.', updated);
     } catch (error) {
@@ -76,6 +96,15 @@ export const employeeController = {
    */
   async delete(req, res, next) {
     try {
+      const existing = await employeeService.getEmployeeById(req.params.id);
+      if (req.user?.orgId && existing.orgId !== req.user.orgId) {
+        const isSuperAdmin = (req.user?.roleName || '').toLowerCase().includes('admin') && !req.user.orgId;
+        if (!isSuperAdmin) {
+          const error = new Error('Access denied: Employee not found in your organization.');
+          error.statusCode = 404;
+          throw error;
+        }
+      }
       await employeeService.deleteEmployee(req.params.id);
       return sendSuccess(res, 'Employee deleted successfully.', null);
     } catch (error) {
