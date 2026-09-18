@@ -276,7 +276,13 @@ export const workflowRepository = {
       const updateValues = [workflowId, actionData.nextStage || wf.current_stage, actionData.toStatus];
       let paramIdx = 4;
 
-      if (actionData.toStatus === 'APPROVED' || actionData.toStatus === 'REJECTED') {
+      const isTerminalStatus =
+        actionData.toStatus === 'COMPLETED' ||
+        actionData.nextStage === 'COMPLETED' ||
+        actionData.toStatus === 'REJECTED' ||
+        (wf.entity_type !== 'EXIT_REQUEST' && actionData.toStatus === 'APPROVED');
+
+      if (isTerminalStatus) {
         updateFields.push('completed_at = NOW()');
       }
 
@@ -322,12 +328,15 @@ export const workflowRepository = {
       values.push(managerEmployeeId);
       idx++;
     } else if (isHrOrAdmin) {
-      // HR sees all items at HR_REVIEW stage (and active MANAGER_REVIEW items)
-      conditions.push(`w.current_stage IN ('HR_REVIEW', 'MANAGER_REVIEW')`);
+      // HR sees all items at HR_REVIEW, MANAGER_REVIEW, and active offboarding stages
+      conditions.push(`w.current_stage IN ('HR_REVIEW', 'MANAGER_REVIEW', 'CLEARANCE_IN_PROGRESS', 'FNF_PENDING')`);
     }
 
     // Always filter to non-finalized pending approvals in the queue
-    conditions.push(`w.current_status NOT IN ('APPROVED', 'REJECTED', 'CANCELLED')`);
+    conditions.push(`(
+      (w.entity_type = 'EXIT_REQUEST' AND w.current_status NOT IN ('COMPLETED', 'REJECTED', 'CANCELLED')) OR
+      (w.entity_type != 'EXIT_REQUEST' AND w.current_status NOT IN ('APPROVED', 'REJECTED', 'CANCELLED'))
+    )`);
     conditions.push(`w.current_stage NOT IN ('COMPLETED', 'REJECTED')`);
 
     const query = `

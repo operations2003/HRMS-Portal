@@ -718,6 +718,11 @@ export const payrollRepository = {
       sql += ` AND payslip_status = $${params.length}`;
     }
 
+    if (filters.year) {
+      params.push(parseInt(filters.year, 10));
+      sql += ` AND (EXTRACT(YEAR FROM issue_date) = $${params.length} OR period_code LIKE $${params.length} || '%')`;
+    }
+
     if (filters.search) {
       params.push(`%${filters.search.trim()}%`);
       sql += ` AND (employee_name ILIKE $${params.length} OR employee_code ILIKE $${params.length} OR payslip_number ILIKE $${params.length})`;
@@ -748,6 +753,16 @@ export const payrollRepository = {
       sql += ` AND period_id = $${params.length}`;
     }
 
+    if (filters.status) {
+      params.push(filters.status.toUpperCase());
+      sql += ` AND payslip_status = $${params.length}`;
+    }
+
+    if (filters.year) {
+      params.push(parseInt(filters.year, 10));
+      sql += ` AND (EXTRACT(YEAR FROM issue_date) = $${params.length} OR period_code LIKE $${params.length} || '%')`;
+    }
+
     sql += ' ORDER BY issue_date DESC, created_at DESC';
 
     if (filters.limit) {
@@ -755,12 +770,17 @@ export const payrollRepository = {
       sql += ` LIMIT $${params.length}`;
     }
 
+    if (filters.offset) {
+      params.push(parseInt(filters.offset, 10));
+      sql += ` OFFSET $${params.length}`;
+    }
+
     const res = await pool.query(sql, params);
     return res.rows;
   },
 
   async findPayslipById(id, orgId, employeeId = null) {
-    let sql = 'SELECT * FROM v_employee_payslips WHERE (payslip_id = $1 OR payslip_number = $1) AND org_id = $2';
+    let sql = 'SELECT * FROM v_employee_payslips WHERE (payslip_id = $1 OR payslip_number = $1 OR payroll_record_id = $1) AND org_id = $2';
     const params = [id, orgId];
 
     if (employeeId) {
@@ -790,7 +810,7 @@ export const payrollRepository = {
     const sql = `
       UPDATE payslips
       SET download_count = download_count + 1, updated_at = NOW()
-      WHERE (id = $1 OR payslip_number = $1) AND org_id = $2
+      WHERE (id = $1 OR payslip_number = $1 OR payroll_record_id = $1) AND org_id = $2
       RETURNING id, download_count;
     `;
     const res = await pool.query(sql, [id, orgId]);

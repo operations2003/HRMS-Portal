@@ -13,7 +13,7 @@ router.use(authenticate);
 // =====================================================================
 // 1. View Team Members & Manager's Team
 // =====================================================================
-router.get('/', teamController.getTeamMembers);
+router.get(['/', '/members'], teamController.getTeamMembers);
 router.get('/members/:id', teamController.getTeamEmployeeDetails);
 
 // =====================================================================

@@ -408,7 +408,149 @@ export const notificationService = {
     if (notifications.length === 0) return [];
     return notificationRepository.createBatch(notifications);
   },
+
+  // =========================================================================
+  // Phase 7 Domain Event Dispatchers (Exit & Offboarding Lifecycle)
+  // =========================================================================
+
+  /**
+   * 15. Event: Resignation Submitted (to Manager)
+   */
+  async notifyResignationSubmitted({ orgId, exitId, employeeName, managerUserId }) {
+    if (!managerUserId) return null;
+    return notificationRepository.create({
+      orgId,
+      userId: managerUserId,
+      eventType: 'RESIGNATION_SUBMITTED',
+      title: 'Team Resignation Submitted',
+      message: `${employeeName || 'A team member'} has submitted their resignation. Please review.`,
+      entityType: 'EXIT_REQUEST',
+      entityId: exitId,
+      actionUrl: `/exit/${exitId}`,
+    });
+  },
+
+  /**
+   * 16. Event: Exit Review Pending (to HR)
+   */
+  async notifyExitReviewPending({ orgId, exitId, employeeName, hrUserIds = [] }) {
+    if (!hrUserIds || hrUserIds.length === 0) return [];
+    const notifications = hrUserIds.map((userId) => ({
+      orgId,
+      userId,
+      eventType: 'EXIT_REVIEW_PENDING',
+      title: 'Resignation Pending HR Review',
+      message: `${employeeName || 'An employee'} has been reviewed by their manager and requires HR approval.`,
+      entityType: 'EXIT_REQUEST',
+      entityId: exitId,
+      actionUrl: `/exit/${exitId}`,
+    }));
+    return notificationRepository.createBatch(notifications);
+  },
+
+  /**
+   * 17. Event: Exit Approved (to Exiting Employee)
+   */
+  async notifyExitApproved({ orgId, exitId, approvedLwd, employeeUserId }) {
+    if (!employeeUserId) return null;
+    return notificationRepository.create({
+      orgId,
+      userId: employeeUserId,
+      eventType: 'EXIT_APPROVED',
+      title: 'Resignation Approved - Notice Period Active',
+      message: `Your resignation has been approved. Your approved last working day is ${approvedLwd}. Departmental clearance tasks are now active.`,
+      entityType: 'EXIT_REQUEST',
+      entityId: exitId,
+      actionUrl: `/exit/${exitId}`,
+    });
+  },
+
+  /**
+   * 18. Event: Exit Rejected (to Exiting Employee)
+   */
+  async notifyExitRejected({ orgId, exitId, reason, employeeUserId }) {
+    if (!employeeUserId) return null;
+    return notificationRepository.create({
+      orgId,
+      userId: employeeUserId,
+      eventType: 'EXIT_REJECTED',
+      title: 'Resignation Request Rejected',
+      message: `Your resignation request has been rejected: "${reason}".`,
+      entityType: 'EXIT_REQUEST',
+      entityId: exitId,
+      actionUrl: `/exit/${exitId}`,
+    });
+  },
+
+  /**
+   * 19. Event: Clearance Task Assigned (to Department / Assignee)
+   */
+  async notifyClearanceTaskAssigned({ orgId, taskId, taskTitle, assignedToUserId, employeeName }) {
+    if (!assignedToUserId) return null;
+    return notificationRepository.create({
+      orgId,
+      userId: assignedToUserId,
+      eventType: 'CLEARANCE_TASK_ASSIGNED',
+      title: 'Exit Clearance Task Assigned',
+      message: `You have been assigned clearance task "${taskTitle}" for exiting employee ${employeeName || 'staff'}.`,
+      entityType: 'EXIT_CLEARANCE',
+      entityId: taskId,
+      actionUrl: `/exit/clearances/${taskId}`,
+    });
+  },
+
+  /**
+   * 20. Event: Deprovisioning Executed (to Exiting Employee)
+   */
+  async notifyDeprovisioningExecuted({ orgId, exitId, employeeUserId }) {
+    if (!employeeUserId) return null;
+    return notificationRepository.create({
+      orgId,
+      userId: employeeUserId,
+      eventType: 'DEPROVISIONING_EXECUTED',
+      title: 'System Access Deprovisioned',
+      message: 'Your system access credentials have been deactivated as part of your exit handover.',
+      entityType: 'EXIT_REQUEST',
+      entityId: exitId,
+      actionUrl: `/exit/${exitId}`,
+    });
+  },
+
+  /**
+   * 21. Event: Full & Final Settlement Processed
+   */
+  async notifyFnfSettlementProcessed({ orgId, exitId, employeeUserId, netAmount }) {
+    if (!employeeUserId) return null;
+    return notificationRepository.create({
+      orgId,
+      userId: employeeUserId,
+      eventType: 'FNF_SETTLEMENT_PROCESSED',
+      title: 'Full & Final Settlement Ready',
+      message: `Your Full & Final settlement has been processed with net amount ₹${Number(netAmount).toLocaleString()}.`,
+      entityType: 'EXIT_REQUEST',
+      entityId: exitId,
+      actionUrl: `/exit/${exitId}/fnf`,
+    });
+  },
+
+  /**
+   * 22. Event: Exit Completed
+   */
+  async notifyExitCompleted({ orgId, exitId, employeeUserId }) {
+    if (!employeeUserId) return null;
+    return notificationRepository.create({
+      orgId,
+      userId: employeeUserId,
+      eventType: 'EXIT_COMPLETED',
+      title: 'Exit Formalities Completed',
+      message: 'All offboarding, departmental clearances, and final settlements have been successfully concluded.',
+      entityType: 'EXIT_REQUEST',
+      entityId: exitId,
+      actionUrl: `/exit/${exitId}`,
+    });
+  },
 };
 
 export default notificationService;
+
 

@@ -278,4 +278,26 @@ export const employeeService = {
   async getMetadata() {
     return await employeeRepository.getMetadata();
   },
+
+  /**
+   * Deprovision and mark employee profile as Exited (with associated user deactivation)
+   */
+  async deactivateEmployee(id, reason = 'Employee marked as exited') {
+    const existing = await employeeRepository.findById(id);
+    if (!existing) {
+      const error = new Error(`Employee with ID '${id}' not found.`);
+      error.statusCode = 404;
+      throw error;
+    }
+
+    // Mark employee as Exited
+    const updatedEmp = await employeeRepository.update(id, { status: 'Exited' });
+
+    // Mark associated portal user account as Inactive
+    if (existing.userId) {
+      await userRepository.update(existing.userId, { status: 'Inactive' });
+    }
+
+    return updatedEmp;
+  },
 };

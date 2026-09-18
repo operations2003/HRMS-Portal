@@ -1,5 +1,6 @@
 import { helpdeskRepository } from '../repositories/helpdeskRepository.js';
 import { employeeRepository } from '../repositories/employeeRepository.js';
+import { userRepository } from '../repositories/userRepository.js';
 import { notificationService } from './notificationService.js';
 
 const createError = (message, statusCode = 400) => {
@@ -8,23 +9,30 @@ const createError = (message, statusCode = 400) => {
   return err;
 };
 
-const HR_ADMIN_ROLES = ['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin'];
-
 export const helpdeskService = {
   /**
-   * Resolve employee record for logged-in user
+   * Resolve employee record for logged-in user with email fallback
    */
   async resolveEmployee(user) {
     const orgId = user.orgId || 'org-1';
-    const employee = await employeeRepository.findByUserId(user.id, orgId);
+    let employee = await employeeRepository.findByUserId(user.id, orgId);
+    if (!employee && user.email) {
+      employee = await employeeRepository.findByEmail(user.email, orgId);
+    }
     if (!employee) {
       throw createError('No employee profile associated with your user account.', 404);
     }
     return employee;
   },
 
+  /**
+   * Helper: Normalized check whether user has HR / Admin / Support privileges
+   */
   isSupportStaff(user) {
-    return HR_ADMIN_ROLES.includes(user.roleName) || (user.permissions && user.permissions.includes('helpdesk:manage'));
+    const normRole = (user?.roleName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const isStaffRole = ['admin', 'superadmin', 'hr', 'hrmanager', 'orgadmin'].includes(normRole);
+    const hasManagePerm = Array.isArray(user?.permissions) && user.permissions.includes('helpdesk:manage');
+    return isStaffRole || hasManagePerm;
   },
 
   // ==========================================
@@ -34,7 +42,7 @@ export const helpdeskService = {
   async getTickets(user, filters = {}) {
     const orgId = user.orgId || 'org-1';
 
-    // If regular employee, automatically constrain to own tickets
+    // If regular employee, automatically constrain to own tickets (ignore any passed filters.employeeId)
     if (!this.isSupportStaff(user)) {
       const emp = await this.resolveEmployee(user);
       filters.employeeId = emp.id;
@@ -52,7 +60,11 @@ export const helpdeskService = {
 
   async getTicketById(user, id) {
     const orgId = user.orgId || 'org-1';
-    const ticket = await helpdeskRepository.findTicketById(id, orgId);
+    if (!id || typeof id !== 'string' || !id.trim()) {
+      throw createError('Valid ticket ID is required.', 400);
+    }
+
+    const ticket = await helpdeskRepository.findTicketById(id.trim(), orgId);
     if (!ticket) {
       throw createError('Helpdesk ticket not found.', 404);
     }
@@ -80,11 +92,22 @@ export const helpdeskService = {
 
   async createTicket(user, data) {
     const orgId = user.orgId || 'org-1';
-    const emp = await this.resolveEmployee(user);
+    let employeeId = null;
+
+    if (this.isSupportStaff(user) && data.employeeId) {
+      const targetEmp = await employeeRepository.findById(data.employeeId, orgId);
+      if (!targetEmp || (targetEmp.orgId !== orgId && targetEmp.orgId !== 'org-1')) {
+        throw createError('Valid employee is required. Specified employee does not exist in your organization.', 400);
+      }
+      employeeId = targetEmp.id;
+    } else {
+      const emp = await this.resolveEmployee(user);
+      employeeId = emp.id;
+    }
 
     const ticket = await helpdeskRepository.createTicket({
       orgId,
-      employeeId: emp.id,
+      employeeId,
       category: data.category,
       subject: data.subject,
       description: data.description,
@@ -111,7 +134,11 @@ export const helpdeskService = {
 
   async addComment(user, ticketId, data) {
     const orgId = user.orgId || 'org-1';
-    const ticket = await helpdeskRepository.findTicketById(ticketId, orgId);
+    if (!ticketId || typeof ticketId !== 'string' || !ticketId.trim()) {
+      throw createError('Valid ticket ID is required.', 400);
+    }
+
+    const ticket = await helpdeskRepository.findTicketById(ticketId.trim(), orgId);
     if (!ticket) {
       throw createError('Helpdesk ticket not found.', 404);
     }
@@ -167,7 +194,11 @@ export const helpdeskService = {
 
   async cancelTicket(user, id) {
     const orgId = user.orgId || 'org-1';
-    const ticket = await helpdeskRepository.findTicketById(id, orgId);
+    if (!id || typeof id !== 'string' || !id.trim()) {
+      throw createError('Valid ticket ID is required.', 400);
+    }
+
+    const ticket = await helpdeskRepository.findTicketById(id.trim(), orgId);
     if (!ticket) {
       throw createError('Helpdesk ticket not found.', 404);
     }
@@ -212,13 +243,24 @@ export const helpdeskService = {
 
   async assignTicket(user, id, data) {
     const orgId = user.orgId || 'org-1';
-    const ticket = await helpdeskRepository.findTicketById(id, orgId);
+    if (!id || typeof id !== 'string' || !id.trim()) {
+      throw createError('Valid ticket ID is required.', 400);
+    }
+
+    const ticket = await helpdeskRepository.findTicketById(id.trim(), orgId);
     if (!ticket) {
       throw createError('Helpdesk ticket not found.', 404);
     }
 
     if (['CLOSED', 'CANCELLED'].includes(ticket.status)) {
       throw createError(`Cannot assign a ${ticket.status} ticket.`, 400);
+    }
+
+    if (data.assignedTo) {
+      const assigneeUser = await userRepository.findById(data.assignedTo);
+      if (!assigneeUser || (assigneeUser.orgId !== orgId && assigneeUser.orgId !== 'org-1')) {
+        throw createError('Invalid assignee: User does not exist in this organization.', 400);
+      }
     }
 
     const assigned = await helpdeskRepository.assignTicket(
@@ -248,12 +290,26 @@ export const helpdeskService = {
 
   async updateStatus(user, id, status) {
     const orgId = user.orgId || 'org-1';
-    const ticket = await helpdeskRepository.findTicketById(id, orgId);
+    if (!id || typeof id !== 'string' || !id.trim()) {
+      throw createError('Valid ticket ID is required.', 400);
+    }
+
+    const ticket = await helpdeskRepository.findTicketById(id.trim(), orgId);
     if (!ticket) {
       throw createError('Helpdesk ticket not found.', 404);
     }
 
-    const upperStatus = status.toUpperCase();
+    if (ticket.status === 'CLOSED') {
+      throw createError('Cannot modify a CLOSED ticket.', 400);
+    }
+    if (ticket.status === 'CANCELLED') {
+      throw createError('Cannot modify a CANCELLED ticket.', 400);
+    }
+
+    const upperStatus = (status || '').toUpperCase();
+    if (!['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED', 'CANCELLED'].includes(upperStatus)) {
+      throw createError('Invalid ticket status. Must be one of: OPEN, IN_PROGRESS, RESOLVED, CLOSED, CANCELLED.', 400);
+    }
 
     if (upperStatus === 'RESOLVED') {
       throw createError('Please use the resolve ticket endpoint with resolution notes.', 400);
@@ -287,13 +343,21 @@ export const helpdeskService = {
 
   async resolveTicket(user, id, resolution) {
     const orgId = user.orgId || 'org-1';
-    const ticket = await helpdeskRepository.findTicketById(id, orgId);
+    if (!id || typeof id !== 'string' || !id.trim()) {
+      throw createError('Valid ticket ID is required.', 400);
+    }
+
+    const ticket = await helpdeskRepository.findTicketById(id.trim(), orgId);
     if (!ticket) {
       throw createError('Helpdesk ticket not found.', 404);
     }
 
     if (['CLOSED', 'CANCELLED'].includes(ticket.status)) {
       throw createError(`Cannot resolve a ${ticket.status} ticket.`, 400);
+    }
+
+    if (!resolution || typeof resolution !== 'string' || !resolution.trim()) {
+      throw createError('Resolution description is required to resolve a ticket.', 400);
     }
 
     const resolved = await helpdeskRepository.resolveTicket(ticket.id, orgId, resolution, user.id);
@@ -318,9 +382,20 @@ export const helpdeskService = {
 
   async closeTicket(user, id) {
     const orgId = user.orgId || 'org-1';
-    const ticket = await helpdeskRepository.findTicketById(id, orgId);
+    if (!id || typeof id !== 'string' || !id.trim()) {
+      throw createError('Valid ticket ID is required.', 400);
+    }
+
+    const ticket = await helpdeskRepository.findTicketById(id.trim(), orgId);
     if (!ticket) {
       throw createError('Helpdesk ticket not found.', 404);
+    }
+
+    if (ticket.status === 'CLOSED') {
+      throw createError('Ticket is already closed.', 400);
+    }
+    if (ticket.status === 'CANCELLED') {
+      throw createError('Cannot close a CANCELLED ticket.', 400);
     }
 
     const closed = await helpdeskRepository.closeTicket(ticket.id, orgId);
@@ -360,3 +435,4 @@ export const helpdeskService = {
     return await helpdeskRepository.getTicketStats(orgId, employeeId);
   },
 };
+

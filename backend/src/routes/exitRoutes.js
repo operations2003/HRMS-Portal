@@ -7,8 +7,12 @@ import {
   validateResignation,
   validateManagerReview,
   validateHrApproval,
+  validateHrReject,
   validateClearanceUpdate,
+  validateCustomClearanceTask,
   validateFnfSettlement,
+  validateAccessRemoval,
+  validateOffboardingUpdate,
 } from '../validators/exitValidator.js';
 
 const router = Router();
@@ -24,6 +28,12 @@ router.post(
   authorize(['exit:write']),
   validate(validateResignation),
   exitController.submitResignation
+);
+
+router.post(
+  '/requests/:id/withdraw',
+  authorize(['exit:write']),
+  exitController.withdrawResignation
 );
 
 router.get(
@@ -54,6 +64,13 @@ router.post(
 // 3. HR & Admin Organization-Wide Exit Management
 // =========================================================================
 router.get(
+  '/admin/stats',
+  requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']),
+  authorize(['exit:admin', 'exit:read']),
+  exitController.getAdminStats
+);
+
+router.get(
   ['/requests', '/all'],
   requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']),
   authorize(['exit:admin', 'exit:read']),
@@ -74,6 +91,14 @@ router.post(
   exitController.hrApprove
 );
 
+router.post(
+  '/requests/:id/hr-reject',
+  requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']),
+  authorize(['exit:admin']),
+  validate(validateHrReject),
+  exitController.hrReject
+);
+
 // =========================================================================
 // 4. Departmental Clearances
 // =========================================================================
@@ -81,6 +106,14 @@ router.get(
   '/requests/:id/clearances',
   authorize(['exit:read']),
   exitController.getClearances
+);
+
+router.post(
+  '/requests/:id/clearances',
+  requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']),
+  authorize(['exit:admin']),
+  validate(validateCustomClearanceTask),
+  exitController.createClearanceTask
 );
 
 router.patch(
@@ -91,7 +124,35 @@ router.patch(
 );
 
 // =========================================================================
-// 5. Full & Final (FnF) Settlement Operations
+// 5. Offboarding Dossier & Milestone Tracking
+// =========================================================================
+router.get(
+  '/requests/:id/offboarding',
+  authorize(['exit:read']),
+  exitController.getOffboarding
+);
+
+router.patch(
+  '/requests/:id/offboarding',
+  requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']),
+  authorize(['exit:admin']),
+  validate(validateOffboardingUpdate),
+  exitController.updateOffboarding
+);
+
+// =========================================================================
+// 6. Access Removal (Granular Step)
+// =========================================================================
+router.post(
+  '/requests/:id/access-removal',
+  requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']),
+  authorize(['deprovision:manage', 'exit:admin']),
+  validate(validateAccessRemoval),
+  exitController.removeAccess
+);
+
+// =========================================================================
+// 7. Full & Final (FnF) Settlement Operations
 // =========================================================================
 router.get(
   '/requests/:id/fnf',
@@ -107,9 +168,30 @@ router.post(
   exitController.calculateFnf
 );
 
+router.post(
+  '/requests/:id/fnf/approve',
+  requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']),
+  authorize(['fnf:manage']),
+  exitController.approveFnf
+);
+
+router.post(
+  '/requests/:id/fnf/disburse',
+  requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']),
+  authorize(['fnf:manage']),
+  exitController.disburseFnf
+);
+
 // =========================================================================
-// 6. Access Deprovisioning & Final Sign-Off
+// 8. Exit Final Completion & Unified Deprovisioning
 // =========================================================================
+router.post(
+  '/requests/:id/complete',
+  requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']),
+  authorize(['exit:admin']),
+  exitController.completeExit
+);
+
 router.post(
   '/requests/:id/deprovision',
   requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']),
@@ -118,4 +200,3 @@ router.post(
 );
 
 export default router;
-

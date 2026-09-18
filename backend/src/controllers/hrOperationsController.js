@@ -136,6 +136,22 @@ export const hrOperationsController = {
       next(error);
     }
   },
+
+  /**
+   * GET /api/v1/hr/operations/exit/summary
+   */
+  async getExitSummary(req, res, next) {
+    try {
+      const summary = await hrOperationsService.getExitSummary(req.user);
+      return sendSuccess(res, 'Exit and offboarding summary fetched successfully.', summary);
+    } catch (error) {
+      if (error.statusCode) {
+        return sendError(res, error.message, error.statusCode);
+      }
+      next(error);
+    }
+  },
 };
 
 export default hrOperationsController;
+

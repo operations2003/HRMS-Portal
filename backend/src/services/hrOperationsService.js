@@ -1,4 +1,5 @@
 import { pool } from '../config/db.js';
+import { exitRepository } from '../repositories/exitRepository.js';
 import { notificationService } from './notificationService.js';
 import { logger } from '../utils/logger.js';
 
@@ -82,6 +83,16 @@ export const hrOperationsService = {
         WHERE org_id = $1 AND onboarding_status NOT IN ('COMPLETED', 'CANCELLED');`,
         [orgId]
       ),
+
+      // 7. Active exits & offboarding
+      pool.query(
+        `SELECT 
+          COUNT(*) FILTER (WHERE status IN ('SUBMITTED', 'UNDER_REVIEW'))::int AS "pendingExits",
+          COUNT(*) FILTER (WHERE status = 'APPROVED')::int AS "noticePeriodExits"
+        FROM exit_requests
+        WHERE org_id = $1;`,
+        [orgId]
+      ),
     ]);
 
     const empStats = empStatsRes.rows[0] || { totalEmployees: 0, activeEmployees: 0, onLeaveCount: 0 };
@@ -90,12 +101,22 @@ export const hrOperationsService = {
     const openTickets = openTicketsRes.rows[0]?.openTickets || 0;
     const pendingAppraisals = pendingAppraisalsRes.rows[0]?.pendingAppraisals || 0;
     const activeOnboardings = onboardingRes.rows[0]?.activeOnboardings || 0;
+    const exitStats = (arguments.length > 0 && arguments[0]) || {};
+    const pendingExits = empStatsRes && empStatsRes.length ? 0 : 0; // fallback safety
+    const exitRow = (await pool.query(
+      `SELECT 
+        COUNT(*) FILTER (WHERE status IN ('SUBMITTED', 'UNDER_REVIEW'))::int AS "pendingExits",
+        COUNT(*) FILTER (WHERE status = 'APPROVED')::int AS "noticePeriodExits"
+      FROM exit_requests WHERE org_id = $1;`,
+      [orgId]
+    )).rows[0] || { pendingExits: 0, noticePeriodExits: 0 };
 
     return {
       workforce: {
         totalEmployees: empStats.totalEmployees,
         activeEmployees: empStats.activeEmployees,
         onLeaveToday: empStats.onLeaveCount,
+        noticePeriodCount: exitRow.noticePeriodExits,
       },
       actionItems: {
         pendingLeaves,
@@ -103,7 +124,9 @@ export const hrOperationsService = {
         openTickets,
         pendingAppraisals,
         activeOnboardings,
-        totalPendingActions: pendingLeaves + pendingRequests + openTickets + pendingAppraisals,
+        pendingExits: exitRow.pendingExits,
+        noticePeriodExits: exitRow.noticePeriodExits,
+        totalPendingActions: pendingLeaves + pendingRequests + openTickets + pendingAppraisals + exitRow.pendingExits,
       },
       lastUpdated: new Date().toISOString(),
     };
@@ -662,6 +685,14 @@ export const hrOperationsService = {
       totalRequests: stats.totalLeavesLogged || 0,
       leavesByType: byTypeRes.rows,
     };
+  },
+
+  /**
+   * Organization Exit & Offboarding Analytics Summary
+   */
+  async getExitSummary(currentUser) {
+    this.assertHrAdmin(currentUser);
+    return exitRepository.getExitStats(currentUser.orgId);
   },
 };
 

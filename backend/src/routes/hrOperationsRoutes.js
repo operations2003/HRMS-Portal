@@ -26,6 +26,7 @@ router.get('/teams/:managerId', hrOperationsController.getTeamByManager);
 router.get('/performance/summary', hrOperationsController.getPerformanceSummary);
 router.get('/attendance/summary', hrOperationsController.getAttendanceSummary);
 router.get('/leaves/summary', hrOperationsController.getLeaveSummary);
+router.get('/exit/summary', hrOperationsController.getExitSummary);
 
 // Individual employee operational 360 profile
 router.get('/employees/:id', hrOperationsController.getEmployeeProfile);

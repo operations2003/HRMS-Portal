@@ -3,7 +3,10 @@ import { employeeRepository } from '../repositories/employeeRepository.js';
 import { performanceRepository } from '../repositories/performanceRepository.js';
 import { leaveService } from './leaveService.js';
 import { employeeRequestRepository } from '../repositories/employeeRequestRepository.js';
+import { exitRepository } from '../repositories/exitRepository.js';
+import { userRepository } from '../repositories/userRepository.js';
 import { notificationService } from './notificationService.js';
+import { pool } from '../config/db.js';
 import { logger } from '../utils/logger.js';
 
 export const workflowService = {
@@ -73,12 +76,16 @@ export const workflowService = {
     const emp = await this.resolveEmployee(currentUser);
 
     // =========================================================================
-    // Security Enforcement 1: Prevent Double Approval & Action on Finalized State
+    // Security Enforcement 1: Prevent Action on Finalized State
     // =========================================================================
-    if (
-      ['COMPLETED', 'APPROVED', 'REJECTED'].includes(wf.currentStatus) ||
-      ['COMPLETED', 'REJECTED'].includes(wf.currentStage)
-    ) {
+    const isFinalized =
+      wf.currentStage === 'COMPLETED' ||
+      wf.currentStage === 'REJECTED' ||
+      wf.currentStatus === 'COMPLETED' ||
+      wf.currentStatus === 'REJECTED' ||
+      (wf.entityType !== 'EXIT_REQUEST' && wf.currentStatus === 'APPROVED');
+
+    if (isFinalized) {
       const err = new Error(
         `Invalid status transition: Cannot perform action on an already finalized workflow (Current status: '${wf.currentStatus}', stage: '${wf.currentStage}').`
       );
@@ -92,8 +99,12 @@ export const workflowService = {
     // =========================================================================
     // Security Enforcement 2: Prevent Self-Approval
     // =========================================================================
-    if (emp && emp.id === wf.requesterId && ['APPROVE', 'REJECT', 'RETURN', 'SUBMIT_REVIEW'].includes(action)) {
-      const err = new Error('Self-approval violation: You cannot approve, return, or reject your own workflow request.');
+    if (
+      emp &&
+      emp.id === wf.requesterId &&
+      ['APPROVE', 'REJECT', 'RETURN', 'SUBMIT_REVIEW', 'REVIEW', 'CLEAR', 'DEPROVISION'].includes(action)
+    ) {
+      const err = new Error('Self-approval violation: You cannot approve, review, or clear your own workflow request.');
       err.statusCode = 403;
       throw err;
     }
@@ -130,8 +141,8 @@ export const workflowService = {
       const isDirectManager =
         emp &&
         ((wf.managerId && emp.id === wf.managerId) ||
-          (targetEmp && targetEmp.managerId === emp.id) ||
-          (isManagerRole && targetEmp && targetEmp.deptId && emp.deptId && targetEmp.deptId === emp.deptId));
+          (targetEmp && targetEmp.managerId && targetEmp.managerId === emp.id) ||
+          (!wf.managerId && (!targetEmp || !targetEmp.managerId) && isManagerRole && targetEmp && targetEmp.deptId && emp.deptId && targetEmp.deptId === emp.deptId));
 
       if (!isDirectManager && !isHrAdmin) {
         const err = new Error(
@@ -141,8 +152,8 @@ export const workflowService = {
         throw err;
       }
 
-      if (action === 'APPROVE' || action === 'SUBMIT_REVIEW') {
-        if (wf.entityType === 'PERFORMANCE_REVIEW') {
+      if (action === 'APPROVE' || action === 'SUBMIT_REVIEW' || action === 'REVIEW') {
+        if (wf.entityType === 'PERFORMANCE_REVIEW' || wf.entityType === 'EXIT_REQUEST') {
           nextStage = 'HR_REVIEW';
           toStatus = 'UNDER_REVIEW';
         } else {
@@ -179,8 +190,13 @@ export const workflowService = {
       }
 
       if (action === 'APPROVE') {
-        nextStage = 'COMPLETED';
-        toStatus = 'APPROVED';
+        if (wf.entityType === 'EXIT_REQUEST') {
+          nextStage = 'CLEARANCE_IN_PROGRESS';
+          toStatus = 'APPROVED';
+        } else {
+          nextStage = 'COMPLETED';
+          toStatus = 'APPROVED';
+        }
       } else if (action === 'REJECT') {
         if (!reason || reason.length < 5) {
           const err = new Error('A rejection reason (at least 5 characters) is required to reject a workflow request.');
@@ -197,6 +213,58 @@ export const workflowService = {
         }
         nextStage = 'MANAGER_REVIEW';
         toStatus = 'RETURNED';
+      } else {
+        const err = new Error(`Invalid workflow action '${action}' at stage '${wf.currentStage}'.`);
+        err.statusCode = 400;
+        throw err;
+      }
+    } else if (wf.currentStage === 'CLEARANCE_IN_PROGRESS') {
+      if (!isHrAdmin) {
+        const err = new Error('Forbidden: Only HR or Administrators can execute actions at CLEARANCE_IN_PROGRESS stage.');
+        err.statusCode = 403;
+        throw err;
+      }
+
+      if (action === 'APPROVE' || action === 'REVIEW') {
+        nextStage = 'FNF_PENDING';
+        toStatus = 'APPROVED';
+      } else if (action === 'DEPROVISION') {
+        nextStage = 'CLEARANCE_IN_PROGRESS';
+        toStatus = 'APPROVED';
+      } else if (action === 'REJECT') {
+        if (!reason || reason.length < 5) {
+          const err = new Error('A rejection reason (at least 5 characters) is required to reject a workflow request.');
+          err.statusCode = 400;
+          throw err;
+        }
+        nextStage = 'REJECTED';
+        toStatus = 'REJECTED';
+      } else {
+        const err = new Error(`Invalid workflow action '${action}' at stage '${wf.currentStage}'.`);
+        err.statusCode = 400;
+        throw err;
+      }
+    } else if (wf.currentStage === 'FNF_PENDING') {
+      if (!isHrAdmin) {
+        const err = new Error('Forbidden: Only HR or Administrators can execute actions at FNF_PENDING stage.');
+        err.statusCode = 403;
+        throw err;
+      }
+
+      if (action === 'APPROVE') {
+        nextStage = 'COMPLETED';
+        toStatus = 'COMPLETED';
+      } else if (action === 'DEPROVISION') {
+        nextStage = 'FNF_PENDING';
+        toStatus = 'APPROVED';
+      } else if (action === 'REJECT') {
+        if (!reason || reason.length < 5) {
+          const err = new Error('A rejection reason (at least 5 characters) is required to reject a workflow request.');
+          err.statusCode = 400;
+          throw err;
+        }
+        nextStage = 'REJECTED';
+        toStatus = 'REJECTED';
       } else {
         const err = new Error(`Invalid workflow action '${action}' at stage '${wf.currentStage}'.`);
         err.statusCode = 400;
@@ -245,6 +313,199 @@ export const workflowService = {
           rejectionReason: reason,
         });
       }
+    } else if (wf.entityType === 'EXIT_REQUEST') {
+      if (action === 'APPROVE' || action === 'REVIEW' || action === 'SUBMIT_REVIEW') {
+        if (wf.currentStage === 'MANAGER_REVIEW') {
+          await exitRepository.update(wf.entityId, {
+            status: 'UNDER_REVIEW',
+            currentStage: 'HR_REVIEW',
+            managerFeedback: reason || actionData.feedback || 'Manager reviewed resignation.',
+            managerRating: actionData.rating ? parseFloat(actionData.rating) : null,
+            managerReviewedAt: new Date().toISOString(),
+          });
+        } else if (wf.currentStage === 'HR_REVIEW') {
+          const exitRec = await exitRepository.findById(wf.entityId);
+          const approvedLwd =
+            actionData.approvedLastWorkingDay ||
+            (exitRec ? exitRec.requestedLastWorkingDay : new Date().toISOString().split('T')[0]);
+
+          await exitRepository.update(wf.entityId, {
+            status: 'APPROVED',
+            currentStage: 'CLEARANCE_IN_PROGRESS',
+            approvedBy: currentUser.id,
+            approvedLastWorkingDay: approvedLwd,
+            hrComments: reason || 'HR approved resignation and initialized clearance tasks.',
+            hrReviewedAt: new Date().toISOString(),
+          });
+
+          // Transition employee to Notice Period
+          await employeeRepository.update(wf.requesterId, { status: 'Notice Period' });
+
+          // Initialize employee_offboardings tracking record
+          await exitRepository.upsertOffboarding({
+            orgId: currentUser.orgId,
+            exitRequestId: wf.entityId,
+            employeeId: wf.requesterId,
+            lastWorkingDay: approvedLwd,
+            offboardingStatus: 'CLEARANCES_PENDING',
+            clearanceStatus: 'PENDING',
+            accessRemovalStatus: 'ACTIVE',
+            assetStatus: 'PENDING',
+            hrCompletionStatus: 'IN_PROGRESS',
+            processedBy: currentUser.id,
+            notes: reason || 'Resignation approved and offboarding workflow initiated.',
+          });
+
+          // Auto-provision standard departmental clearance tasks if not existing
+          const existingTasks = await exitRepository.findClearancesByRequestId(wf.entityId);
+          if (!existingTasks || existingTasks.length === 0) {
+            const defaultTasks = [
+              {
+                orgId: currentUser.orgId,
+                exitRequestId: wf.entityId,
+                employeeId: wf.requesterId,
+                checklistCategory: 'ASSETS_RETURNED',
+                departmentScope: 'IT',
+                taskTitle: 'Laptop, Monitor & Hardware Asset Handover',
+                description: 'Physical inspection and recovery of company issued hardware.',
+              },
+              {
+                orgId: currentUser.orgId,
+                exitRequestId: wf.entityId,
+                employeeId: wf.requesterId,
+                checklistCategory: 'IT_ACCESS',
+                departmentScope: 'IT',
+                taskTitle: 'VPN, Cloud & Email Account Revocation Review',
+                description: 'Audit of active single sign-on (SSO) and privileged credentials.',
+              },
+              {
+                orgId: currentUser.orgId,
+                exitRequestId: wf.entityId,
+                employeeId: wf.requesterId,
+                checklistCategory: 'FINANCE_PAYROLL',
+                departmentScope: 'FINANCE',
+                taskTitle: 'Corporate Credit Card & Travel Advance Settlement',
+                description: 'Verification of pending travel expenses, corporate cards, and advances.',
+              },
+              {
+                orgId: currentUser.orgId,
+                exitRequestId: wf.entityId,
+                employeeId: wf.requesterId,
+                checklistCategory: 'GENERAL',
+                departmentScope: 'ADMIN',
+                taskTitle: 'Building Access Keycard & Physical ID Badge Return',
+                description: 'Recovery of security badges, parking permits, and facility keys.',
+              },
+              {
+                orgId: currentUser.orgId,
+                exitRequestId: wf.entityId,
+                employeeId: wf.requesterId,
+                checklistCategory: 'KNOWLEDGE_TRANSFER',
+                departmentScope: 'MANAGER',
+                taskTitle: 'Project Knowledge Transfer & Code Repository Sign-Off',
+                description: 'Complete KT handover to designated team members and documentation update.',
+              },
+              {
+                orgId: currentUser.orgId,
+                exitRequestId: wf.entityId,
+                employeeId: wf.requesterId,
+                checklistCategory: 'HR_CLEARANCE',
+                departmentScope: 'HR',
+                taskTitle: 'Exit Interview & Benefits Termination Guidance',
+                description: 'Formal exit interview, insurance continuation options, and PF/gratuity guidance.',
+              },
+            ];
+            await exitRepository.createClearanceBatch(defaultTasks);
+          }
+        } else if (wf.currentStage === 'CLEARANCE_IN_PROGRESS') {
+          await exitRepository.update(wf.entityId, {
+            currentStage: 'FNF_PENDING',
+          });
+          await exitRepository.updateOffboarding(wf.entityId, {
+            clearanceStatus: 'CLEARED',
+            offboardingStatus: 'FNF_PENDING',
+          });
+        } else if (wf.currentStage === 'FNF_PENDING') {
+          // Conclude exit and offboarding
+          const exitRec = await exitRepository.findById(wf.entityId);
+          const finalLwd = exitRec
+            ? exitRec.approvedLastWorkingDay || exitRec.requestedLastWorkingDay
+            : new Date().toISOString().split('T')[0];
+
+          await exitRepository.update(wf.entityId, {
+            status: 'COMPLETED',
+            currentStage: 'COMPLETED',
+          });
+          await exitRepository.upsertOffboarding({
+            orgId: currentUser.orgId,
+            exitRequestId: wf.entityId,
+            employeeId: wf.requesterId,
+            lastWorkingDay: finalLwd,
+            offboardingStatus: 'COMPLETED',
+            clearanceStatus: 'CLEARED',
+            accessRemovalStatus: 'DEPROVISIONED',
+            assetStatus: 'RETURNED',
+            hrCompletionStatus: 'COMPLETED',
+            completedDate: new Date().toISOString().split('T')[0],
+            completedAt: new Date().toISOString(),
+            processedBy: currentUser.id,
+            notes: reason || 'Exit lifecycle concluded and offboarding completed.',
+          });
+          await employeeRepository.update(wf.requesterId, { status: 'Exited' });
+          if (targetEmp && targetEmp.userId) {
+            await userRepository.update(targetEmp.userId, { status: 'Inactive' });
+          }
+        }
+      } else if (action === 'DEPROVISION') {
+        if (targetEmp) {
+          // Mark employee as Exited
+          await employeeRepository.update(targetEmp.id, { status: 'Exited' });
+        }
+
+        if (targetEmp && targetEmp.userId) {
+          const userRec = await userRepository.findById(targetEmp.userId);
+          const prevUserStatus = userRec ? userRec.status : 'Active';
+          await userRepository.update(targetEmp.userId, { status: 'Inactive' });
+
+          const interimManagerId = actionData.reassignManagerId || null;
+          if (targetEmp.id) {
+            await exitRepository.reassignDirectReports(currentUser.orgId, targetEmp.id, interimManagerId);
+          }
+
+          await exitRepository.recordDeprovisionAudit({
+            orgId: currentUser.orgId,
+            exitRequestId: wf.entityId,
+            employeeId: targetEmp.id,
+            userId: targetEmp.userId,
+            actorUserId: currentUser.id,
+            actorRole: currentUser.roleName || 'HR',
+            action: 'DEPROVISION_ACCESS',
+            previousUserStatus: prevUserStatus,
+            newUserStatus: 'Inactive',
+            previousEmployeeStatus: targetEmp.status || 'Notice Period',
+            newEmployeeStatus: 'Exited',
+            reassignedManagerId: interimManagerId,
+            reason: reason || 'System access deprovisioned via workflow action.',
+          });
+
+          await notificationService.notifyDeprovisioningExecuted({
+            orgId: currentUser.orgId,
+            exitId: wf.entityId,
+            employeeUserId: targetEmp.userId,
+          });
+        }
+        await exitRepository.updateOffboarding(wf.entityId, {
+          accessRemovalStatus: 'DEPROVISIONED',
+          processedBy: currentUser.id,
+        });
+      } else if (action === 'REJECT') {
+        await exitRepository.update(wf.entityId, {
+          status: 'REJECTED',
+          currentStage: 'REJECTED',
+          hrComments: reason,
+        });
+        await employeeRepository.update(wf.requesterId, { status: 'Active' });
+      }
     }
 
     // =========================================================================
@@ -266,7 +527,59 @@ export const workflowService = {
     // 6. Trigger Existing Notifications
     // =========================================================================
     try {
-      if (targetEmp && targetEmp.userId) {
+      if (wf.entityType === 'EXIT_REQUEST') {
+        if (wf.currentStage === 'MANAGER_REVIEW' && (action === 'APPROVE' || action === 'REVIEW' || action === 'SUBMIT_REVIEW')) {
+          const hrUsersRes = await pool.query(
+            `SELECT u.id FROM users u
+             JOIN roles r ON u.role_id = r.id
+             WHERE u.org_id = $1 AND r.name IN ('HR', 'HRManager', 'Admin') AND u.status = 'Active';`,
+            [currentUser.orgId]
+          );
+          const hrUserIds = hrUsersRes.rows.map((r) => r.id);
+          if (hrUserIds.length > 0 && targetEmp) {
+            await notificationService.notifyExitReviewPending({
+              orgId: currentUser.orgId,
+              exitId: wf.entityId,
+              employeeName: `${targetEmp.firstName} ${targetEmp.lastName}`.trim(),
+              hrUserIds,
+            });
+          }
+        } else if (wf.currentStage === 'HR_REVIEW' && action === 'APPROVE') {
+          if (targetEmp && targetEmp.userId) {
+            await notificationService.notifyExitApproved({
+              orgId: currentUser.orgId,
+              exitId: wf.entityId,
+              approvedLwd: actionData.approvedLastWorkingDay || (targetEmp.requestedLastWorkingDay || new Date().toISOString().split('T')[0]),
+              employeeUserId: targetEmp.userId,
+            });
+          }
+        } else if (action === 'DEPROVISION') {
+          if (targetEmp && targetEmp.userId) {
+            await notificationService.notifyDeprovisioningExecuted({
+              orgId: currentUser.orgId,
+              exitId: wf.entityId,
+              employeeUserId: targetEmp.userId,
+            });
+          }
+        } else if (toStatus === 'COMPLETED') {
+          if (targetEmp && targetEmp.userId) {
+            await notificationService.notifyExitCompleted({
+              orgId: currentUser.orgId,
+              exitId: wf.entityId,
+              employeeUserId: targetEmp.userId,
+            });
+          }
+        } else if (toStatus === 'REJECTED') {
+          if (targetEmp && targetEmp.userId) {
+            await notificationService.notifyExitRejected({
+              orgId: currentUser.orgId,
+              exitId: wf.entityId,
+              reason: reason || 'Exit request rejected.',
+              employeeUserId: targetEmp.userId,
+            });
+          }
+        }
+      } else if (targetEmp && targetEmp.userId) {
         let notifTitle = `Workflow Action: ${action} on ${wf.entityType.replace('_', ' ')}`;
         let notifMsg = `Your ${wf.entityType.replace('_', ' ').toLowerCase()} has transitioned to status '${toStatus}'.`;
         if (reason) notifMsg += ` Reason/Notes: "${reason}".`;

@@ -1,4 +1,5 @@
 import { userRepository } from '../repositories/userRepository.js';
+import { employeeRepository } from '../repositories/employeeRepository.js';
 import { comparePassword } from '../utils/passwordUtils.js';
 import { generateToken } from '../utils/tokenUtils.js';
 
@@ -24,6 +25,17 @@ export const authService = {
       const error = new Error('Your account is inactive. Please contact your administrator.');
       error.statusCode = 403;
       throw error;
+    }
+
+    // Security invariant: Prevent deprovisioned or exited employees from logging in
+    const normRole = (user.roleName || '').toLowerCase();
+    if (normRole !== 'superadmin') {
+      const emp = await employeeRepository.findByUserId(user.id, user.orgId);
+      if (emp && (emp.status === 'Exited' || emp.status === 'Terminated' || emp.status === 'Inactive')) {
+        const error = new Error('Access denied: Your employee account has been deprovisioned.');
+        error.statusCode = 403;
+        throw error;
+      }
     }
 
     if (!isDirectMatch) {
@@ -69,6 +81,22 @@ export const authService = {
       const error = new Error('User not found.');
       error.statusCode = 404;
       throw error;
+    }
+
+    if (user.status !== 'Active') {
+      const error = new Error('Your account is inactive or deprovisioned.');
+      error.statusCode = 403;
+      throw error;
+    }
+
+    const normRole = (user.roleName || '').toLowerCase();
+    if (normRole !== 'superadmin') {
+      const emp = await employeeRepository.findByUserId(user.id, user.orgId);
+      if (emp && (emp.status === 'Exited' || emp.status === 'Terminated' || emp.status === 'Inactive')) {
+        const error = new Error('Access denied: Your employee account has been deprovisioned.');
+        error.statusCode = 403;
+        throw error;
+      }
     }
 
     return {

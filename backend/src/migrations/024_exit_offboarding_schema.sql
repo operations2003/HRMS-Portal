@@ -230,6 +230,11 @@ ALTER TABLE exit_clearance_checklists ADD CONSTRAINT exit_clearance_checklists_s
     status IN ('PENDING', 'IN_PROGRESS', 'CLEARED', 'COMPLETED', 'REJECTED', 'WAIVED', 'NOT_APPLICABLE')
 );
 
+ALTER TABLE exit_clearance_checklists DROP CONSTRAINT IF EXISTS exit_clearance_checklists_department_scope_check;
+ALTER TABLE exit_clearance_checklists ADD CONSTRAINT exit_clearance_checklists_department_scope_check CHECK (
+    department_scope IN ('IT', 'FINANCE', 'ADMIN', 'MANAGER', 'HR', 'OPERATIONS', 'LEGAL')
+);
+
 -- Trigger for exit_clearance_checklists updated_at
 DROP TRIGGER IF EXISTS trg_exit_clearance_updated_at ON exit_clearance_checklists;
 CREATE TRIGGER trg_exit_clearance_updated_at

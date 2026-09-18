@@ -19,6 +19,7 @@ router.use(authenticate);
 // =====================================================================
 // 1. Employee Own Tickets (Self-Service with IDOR Guard)
 // =====================================================================
+router.get('/my', authorize('helpdesk:read'), helpdeskController.getMyTickets);
 router.get('/my/tickets', authorize('helpdesk:read'), helpdeskController.getMyTickets);
 router.post(
   '/tickets',

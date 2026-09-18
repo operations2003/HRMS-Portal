@@ -22,6 +22,7 @@ import performanceRoutes from './performanceRoutes.js';
 import workflowRoutes from './workflowRoutes.js';
 import hrOperationsRoutes from './hrOperationsRoutes.js';
 import exitRoutes from './exitRoutes.js';
+import adminRoutes from './adminRoutes.js';
 import { sendSuccess } from '../utils/apiResponse.js';
 
 const router = Router();
@@ -59,5 +60,6 @@ router.use('/v1/performance', performanceRoutes);
 router.use('/v1/workflows', workflowRoutes);
 router.use('/v1/hr/operations', hrOperationsRoutes);
 router.use('/v1/exit', exitRoutes);
+router.use('/v1/admin', adminRoutes);
 
 export default router;

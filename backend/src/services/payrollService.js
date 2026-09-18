@@ -19,11 +19,22 @@ export const payrollService = {
    */
   async resolveEmployee(user) {
     const orgId = user.orgId || 'org-1';
-    const employee = await employeeRepository.findByUserId(user.id, orgId);
+    let employee = await employeeRepository.findByUserId(user.id, orgId);
+    if (!employee && user.email) {
+      employee = await employeeRepository.findByEmail(user.email, orgId);
+    }
     if (!employee) {
       throw createError('No employee record associated with your user account.', 404);
     }
     return employee;
+  },
+
+  /**
+   * Helper: Check whether user has HR or Admin privileges
+   */
+  isHrOrAdmin(user) {
+    const role = (user?.roleName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    return ['admin', 'superadmin', 'hr', 'hrmanager', 'orgadmin'].includes(role);
   },
 
   // ==========================================
@@ -399,9 +410,9 @@ export const payrollService = {
 
   async getPayslips(user, filters = {}) {
     const orgId = user.orgId || 'org-1';
-    const isHrOrAdmin = ['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin'].includes(user.roleName);
+    const isHrAdmin = this.isHrOrAdmin(user);
 
-    if (!isHrOrAdmin) {
+    if (!isHrAdmin) {
       const employee = await this.resolveEmployee(user);
       return await payrollRepository.findPayslipsByEmployeeId(employee.id, orgId, filters);
     }
@@ -411,10 +422,10 @@ export const payrollService = {
 
   async getPayslipById(user, id) {
     const orgId = user.orgId || 'org-1';
-    const isHrOrAdmin = ['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin'].includes(user.roleName);
+    const isHrAdmin = this.isHrOrAdmin(user);
 
     let employeeId = null;
-    if (!isHrOrAdmin) {
+    if (!isHrAdmin) {
       const employee = await this.resolveEmployee(user);
       employeeId = employee.id;
     }

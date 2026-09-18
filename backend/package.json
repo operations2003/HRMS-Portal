@@ -8,7 +8,13 @@
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "db:migrate": "node src/migrations/migrate.js",
-    "db:seed": "node src/seeds/seed.js"
+    "db:seed": "node src/seeds/seed.js",
+    "test:exit": "node src/tests/test_phase7_exit_lifecycle.js",
+    "test:workflow": "node src/tests/test_phase7_offboarding_workflow.js",
+    "test:deprovision": "node src/tests/test_phase7_deprovisioning_security.js",
+    "test:payslips": "node src/tests/test_phase5_payslips.js",
+    "test:helpdesk": "node src/tests/test_phase5_helpdesk.js",
+    "test:admin": "node src/tests/test_phase7_admin_rbac.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

@@ -44,6 +44,13 @@ export const validateResignation = (body) => {
 export const validateManagerReview = (body) => {
   const errors = [];
 
+  if (body.decision !== undefined && body.decision !== null) {
+    const d = body.decision.toUpperCase();
+    if (!['APPROVE', 'REJECT', 'RECOMMEND_APPROVAL', 'RECOMMEND_REJECTION'].includes(d)) {
+      errors.push("Decision must be either 'APPROVE' or 'REJECT'.");
+    }
+  }
+
   if (!body.managerFeedback || typeof body.managerFeedback !== 'string' || !body.managerFeedback.trim()) {
     errors.push('Manager evaluation feedback is required.');
   } else if (body.managerFeedback.trim().length < 5) {
@@ -88,12 +95,61 @@ export const validateHrApproval = (body) => {
   return errors;
 };
 
+export const validateHrReject = (body) => {
+  const errors = [];
+
+  if (!body.rejectionReason || typeof body.rejectionReason !== 'string' || !body.rejectionReason.trim()) {
+    errors.push('Rejection reason is required.');
+  } else if (body.rejectionReason.trim().length < 5) {
+    errors.push('Rejection reason must be at least 5 characters long.');
+  }
+
+  return errors;
+};
+
 export const validateClearanceUpdate = (body) => {
   const errors = [];
-  const validStatuses = ['PENDING', 'CLEARED', 'REJECTED', 'NOT_APPLICABLE'];
+  const validStatuses = ['PENDING', 'IN_PROGRESS', 'CLEARED', 'COMPLETED', 'REJECTED', 'WAIVED', 'NOT_APPLICABLE'];
 
   if (!body.status || typeof body.status !== 'string' || !validStatuses.includes(body.status.toUpperCase())) {
     errors.push(`Status must be one of: ${validStatuses.join(', ')}.`);
+  }
+
+  if (body.recoveryAmount !== undefined && body.recoveryAmount !== null) {
+    const amt = parseFloat(body.recoveryAmount);
+    if (isNaN(amt) || amt < 0) {
+      errors.push('Recovery amount must be a non-negative number.');
+    }
+  }
+
+  return errors;
+};
+
+export const validateCustomClearanceTask = (body) => {
+  const errors = [];
+  const validDepts = ['IT', 'FINANCE', 'ADMIN', 'MANAGER', 'HR', 'OPERATIONS', 'LEGAL'];
+  const validCategories = [
+    'MANAGER_HANDOVER',
+    'HR_CLEARANCE',
+    'IT_ACCESS',
+    'ASSETS_RETURNED',
+    'DOCUMENTS',
+    'KNOWLEDGE_TRANSFER',
+    'FINANCE_PAYROLL',
+    'FINAL_APPROVAL',
+    'GENERAL',
+  ];
+
+  if (!body.taskTitle || typeof body.taskTitle !== 'string' || body.taskTitle.trim().length < 3) {
+    errors.push('Task title is required (minimum 3 characters).');
+  }
+
+  if (!body.departmentScope || typeof body.departmentScope !== 'string' || !validDepts.includes(body.departmentScope.toUpperCase())) {
+    errors.push(`Department scope must be one of: ${validDepts.join(', ')}.`);
+  }
+
+  if (body.checklistCategory && !validCategories.includes(body.checklistCategory.toUpperCase())) {
+    errors.push(`Checklist category must be one of: ${validCategories.join(', ')}.`);
   }
 
   if (body.recoveryAmount !== undefined && body.recoveryAmount !== null) {
@@ -116,7 +172,17 @@ export const validateFnfSettlement = (body) => {
     }
   }
 
-  const numericFields = ['bonusGratuity', 'noticePeriodRecovery', 'assetRecoveryDeduction', 'taxDeduction'];
+  const numericFields = [
+    'dailyRate',
+    'salaryPayable',
+    'bonusGratuity',
+    'otherAllowances',
+    'reimbursements',
+    'noticePeriodRecovery',
+    'assetRecoveryDeduction',
+    'taxDeduction',
+    'otherDeductions',
+  ];
   for (const f of numericFields) {
     if (body[f] !== undefined && body[f] !== null) {
       const val = parseFloat(body[f]);
@@ -129,3 +195,21 @@ export const validateFnfSettlement = (body) => {
   return errors;
 };
 
+export const validateAccessRemoval = (body) => {
+  const errors = [];
+  if (body.reassignManagerId && typeof body.reassignManagerId !== 'string') {
+    errors.push('reassignManagerId must be a valid ID string.');
+  }
+  return errors;
+};
+
+export const validateOffboardingUpdate = (body) => {
+  const errors = [];
+  const validAssetStatuses = ['PENDING', 'RETURNED', 'RETAINED', 'DAMAGED_DEDUCTED', 'WAIVED'];
+
+  if (body.assetStatus && !validAssetStatuses.includes(body.assetStatus.toUpperCase())) {
+    errors.push(`Asset status must be one of: ${validAssetStatuses.join(', ')}.`);
+  }
+
+  return errors;
+};

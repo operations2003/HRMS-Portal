@@ -1,5 +1,6 @@
 import { verifyToken } from '../utils/tokenUtils.js';
 import { userRepository } from '../repositories/userRepository.js';
+import { employeeRepository } from '../repositories/employeeRepository.js';
 import { sendError } from '../utils/apiResponse.js';
 
 /**
@@ -31,10 +32,23 @@ export const authenticate = async (req, res, next) => {
       return sendError(res, 'Invalid authentication token.', 401, ['Token verification failed']);
     }
 
-    // Verify user still exists in the system
+    // 1. Verify user exists and is actively enabled
     const user = await userRepository.findById(decoded.id);
-    if (!user || user.status === 'Inactive') {
-      return sendError(res, 'User account not found or deactivated.', 401, ['Inactive or deleted account']);
+    if (!user || user.status !== 'Active') {
+      return sendError(res, 'User account not found, deactivated, or disabled.', 401, [
+        'Inactive or disabled account',
+      ]);
+    }
+
+    // 2. Verify associated employee profile has not been deprovisioned / exited
+    const normRole = (user.roleName || '').toLowerCase();
+    if (normRole !== 'superadmin') {
+      const emp = await employeeRepository.findByUserId(user.id, user.orgId);
+      if (emp && (emp.status === 'Exited' || emp.status === 'Terminated' || emp.status === 'Inactive')) {
+        return sendError(res, 'Access denied: Your employee account has been deprovisioned.', 401, [
+          `Employment status is '${emp.status}'`,
+        ]);
+      }
     }
 
     // Attach sanitized user information to request

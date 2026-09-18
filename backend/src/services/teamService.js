@@ -100,6 +100,13 @@ export const teamService = {
       throw err;
     }
 
+    // Security invariant: Exited or deprovisioned employee cannot access team data
+    if (requesterEmp.status === 'Exited' || requesterEmp.status === 'Terminated' || requesterEmp.status === 'Inactive') {
+      const err = new Error('Access denied: Your employee profile has been deprovisioned.');
+      err.statusCode = 403;
+      throw err;
+    }
+
     // Self-access is always authorized
     if (targetEmp.id === requesterEmp.id) {
       return targetEmp;
@@ -159,6 +166,13 @@ export const teamService = {
     const isHrAdmin = this.isHrOrAdmin(currentUser);
     const requesterEmp = await this.resolveEmployee(currentUser);
 
+    // Security invariant: Exited or deprovisioned employee/manager cannot access team members
+    if (requesterEmp && (requesterEmp.status === 'Exited' || requesterEmp.status === 'Terminated' || requesterEmp.status === 'Inactive') && !isHrAdmin) {
+      const err = new Error('Access denied: Your employee profile has been deprovisioned.');
+      err.statusCode = 403;
+      throw err;
+    }
+
     let targetManagerId = null;
 
     if (isHrAdmin) {
@@ -193,7 +207,10 @@ export const teamService = {
     let members = [];
     if (targetManagerId) {
       members = await employeeRepository.findDirectReports(targetManagerId, currentUser.orgId);
-      // If user is employee, also include their manager info if requested
+      // Filter out deprovisioned/exited team members from active manager roster unless explicitly requested
+      if (!status) {
+        members = members.filter((m) => !['exited', 'terminated'].includes((m.status || '').toLowerCase()));
+      }
     } else if (isHrAdmin) {
       // Organization-wide team roster
       const result = await employeeRepository.findAll({
@@ -252,6 +269,13 @@ export const teamService = {
   async getTeamSummary(currentUser, { managerId = null } = {}) {
     const isHrAdmin = this.isHrOrAdmin(currentUser);
     const requesterEmp = await this.resolveEmployee(currentUser);
+
+    // Security invariant: Exited or deprovisioned employee/manager cannot access team summary
+    if (requesterEmp && (requesterEmp.status === 'Exited' || requesterEmp.status === 'Terminated' || requesterEmp.status === 'Inactive') && !isHrAdmin) {
+      const err = new Error('Access denied: Your employee profile has been deprovisioned.');
+      err.statusCode = 403;
+      throw err;
+    }
 
     let targetManagerId = null;
 

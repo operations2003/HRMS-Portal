@@ -6,10 +6,12 @@ const VALID_WORKFLOW_ACTIONS = [
   'SUBMIT',
   'START_REVIEW',
   'SUBMIT_REVIEW',
+  'REVIEW',
   'APPROVE',
   'REJECT',
   'RETURN',
   'CANCEL',
+  'DEPROVISION',
 ];
 
 export const validateWorkflowAction = (body) => {

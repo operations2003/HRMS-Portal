@@ -37,8 +37,16 @@ export const validateCreateTicket = (body) => {
     errors.push('Description must not exceed 5000 characters.');
   }
 
-  if (body.priority && (!VALID_PRIORITIES.includes(body.priority.toUpperCase()))) {
-    errors.push(`Priority must be one of: ${VALID_PRIORITIES.join(', ')}.`);
+  if (body.priority !== undefined && body.priority !== null) {
+    if (typeof body.priority !== 'string' || !VALID_PRIORITIES.includes(body.priority.toUpperCase())) {
+      errors.push(`Priority must be one of: ${VALID_PRIORITIES.join(', ')}.`);
+    }
+  }
+
+  if (body.employeeId !== undefined && body.employeeId !== null) {
+    if (typeof body.employeeId !== 'string' || !body.employeeId.trim()) {
+      errors.push('Employee ID must be a valid non-empty string.');
+    }
   }
 
   return errors;
@@ -98,4 +106,14 @@ export const validateResolveTicket = (body) => {
   }
 
   return errors;
+};
+
+/**
+ * Validate ticket ID parameter
+ */
+export const validateTicketId = (id) => {
+  if (!id || typeof id !== 'string' || !id.trim() || id.trim().length < 2) {
+    return 'Valid ticket ID is required.';
+  }
+  return null;
 };

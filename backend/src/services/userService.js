@@ -141,4 +141,18 @@ export const userService = {
   async getPermissions() {
     return await roleRepository.findAllPermissions();
   },
+
+  /**
+   * Deactivate/disable user account during access deprovisioning
+   */
+  async deactivateUser(id, reason = 'Account deactivated during deprovisioning') {
+    const user = await userRepository.findById(id);
+    if (!user) {
+      const error = new Error(`User with ID '${id}' not found.`);
+      error.statusCode = 404;
+      throw error;
+    }
+    const updated = await userRepository.update(id, { status: 'Inactive' });
+    return sanitizeUser(updated);
+  },
 };
