@@ -21,6 +21,7 @@ import teamRoutes from './teamRoutes.js';
 import performanceRoutes from './performanceRoutes.js';
 import workflowRoutes from './workflowRoutes.js';
 import hrOperationsRoutes from './hrOperationsRoutes.js';
+import exitRoutes from './exitRoutes.js';
 import { sendSuccess } from '../utils/apiResponse.js';
 
 const router = Router();
@@ -57,5 +58,6 @@ router.use('/v1/team', teamRoutes);
 router.use('/v1/performance', performanceRoutes);
 router.use('/v1/workflows', workflowRoutes);
 router.use('/v1/hr/operations', hrOperationsRoutes);
+router.use('/v1/exit', exitRoutes);
 
 export default router;
