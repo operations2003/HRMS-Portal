@@ -173,9 +173,14 @@ export const employeeRepository = {
       values.push(orgId);
     }
 
-    sql += ' LIMIT 1;';
-    const res = await pool.query(sql, values);
-    return res.rows.length > 0 ? mapEmployeeRow(res.rows[0]) : null;
+    try {
+      sql += ' LIMIT 1;';
+      const res = await pool.query(sql, values);
+      return res.rows.length > 0 ? mapEmployeeRow(res.rows[0]) : null;
+    } catch (err) {
+      console.warn('Database findByUserId query failed:', err.message);
+      return null;
+    }
   },
 
   /**

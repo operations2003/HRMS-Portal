@@ -18,6 +18,10 @@ import {
   ClipboardList,
   Award,
   CheckCircle2,
+  LogOut,
+  UserMinus,
+  Sliders,
+  KeyRound,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { TaskNeraLogo } from '../components/common/TaskNeraLogo.jsx';
@@ -133,6 +137,42 @@ export const Sidebar = ({ isOpen, onClose }) => {
       path: '/users',
       icon: UserCheck,
       permission: 'user:write',
+    },
+    {
+      name: 'Resignation',
+      path: '/resignation',
+      icon: LogOut,
+      permission: ['exit:read', 'exit:write', 'employee:read'],
+    },
+    {
+      name: 'Exit Checklist',
+      path: '/exit-checklist',
+      icon: ClipboardList,
+      permission: ['exit:read', 'exit:write', 'employee:read'],
+    },
+    {
+      name: 'Offboarding',
+      path: '/offboarding',
+      icon: UserMinus,
+      permission: ['exit:read', 'exit:admin', 'employee:read'],
+    },
+    {
+      name: 'Full & Final',
+      path: '/fnf',
+      icon: Wallet,
+      permission: ['exit:read', 'employee:read'],
+    },
+    {
+      name: 'Roles & RBAC',
+      path: '/roles',
+      icon: KeyRound,
+      roles: ['Admin', 'SuperAdmin', 'OrgAdmin'],
+    },
+    {
+      name: 'Admin Settings',
+      path: '/admin-settings',
+      icon: Sliders,
+      roles: ['Admin', 'SuperAdmin', 'OrgAdmin'],
     },
   ];
 

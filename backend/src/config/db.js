@@ -13,7 +13,12 @@ if (!config.db.databaseUrl) {
 /**
  * Standard SSL configuration for Supabase PostgreSQL
  */
-const sslConfig = {
+const isLocalDb = !config.db.databaseUrl || 
+  config.db.databaseUrl.includes('localhost') || 
+  config.db.databaseUrl.includes('127.0.0.1') || 
+  process.env.DB_SSL === 'false';
+
+const sslConfig = isLocalDb ? false : {
   rejectUnauthorized: false,
 };
 

@@ -23,6 +23,12 @@ import { TeamManagementPage } from './pages/team/TeamManagementPage.jsx';
 import { PerformancePage } from './pages/performance/PerformancePage.jsx';
 import { ApprovalsPage } from './pages/approvals/ApprovalsPage.jsx';
 import { HROperationsPage } from './pages/hr/HROperationsPage.jsx';
+import { ResignationPage } from './pages/exit/ResignationPage.jsx';
+import { ExitChecklistPage } from './pages/exit/ExitChecklistPage.jsx';
+import { OffboardingPage } from './pages/exit/OffboardingPage.jsx';
+import { FnFSettlementPage } from './pages/exit/FnFSettlementPage.jsx';
+import { AdminSettingsPage } from './pages/admin/AdminSettingsPage.jsx';
+import { RolesPermissionsPage } from './pages/admin/RolesPermissionsPage.jsx';
 import { ForbiddenPage } from './pages/common/ForbiddenPage.jsx';
 import { NotFoundPage } from './pages/common/NotFoundPage.jsx';
 import { AppLayout } from './layouts/AppLayout.jsx';
@@ -271,6 +277,66 @@ export const App = () => {
               <Route
                 path="hr"
                 element={<Navigate to="/hr-operations" replace />}
+              />
+
+              {/* Phase 7 Routes */}
+              <Route
+                path="resignation"
+                element={
+                  <PermissionRoute permission={['exit:read', 'exit:write', 'employee:read']}>
+                    <ResignationPage />
+                  </PermissionRoute>
+                }
+              />
+
+              <Route
+                path="exit-checklist"
+                element={
+                  <PermissionRoute permission={['exit:read', 'exit:write', 'employee:read']}>
+                    <ExitChecklistPage />
+                  </PermissionRoute>
+                }
+              />
+
+              <Route
+                path="offboarding"
+                element={
+                  <PermissionRoute permission={['exit:read', 'exit:admin', 'employee:read']}>
+                    <OffboardingPage />
+                  </PermissionRoute>
+                }
+              />
+
+              <Route
+                path="fnf"
+                element={
+                  <PermissionRoute permission={['exit:read', 'employee:read']}>
+                    <FnFSettlementPage />
+                  </PermissionRoute>
+                }
+              />
+
+              <Route
+                path="fnf-settlement"
+                element={<Navigate to="/fnf" replace />}
+              />
+
+              <Route
+                path="admin-settings"
+                element={
+                  <PermissionRoute roles={['Admin', 'SuperAdmin', 'OrgAdmin']}>
+                    <AdminSettingsPage />
+                  </PermissionRoute>
+                }
+              />
+
+              <Route
+                path="roles"
+                element={
+                  <PermissionRoute roles={['Admin', 'SuperAdmin', 'OrgAdmin']}>
+                    <RolesPermissionsPage />
+                  </PermissionRoute>
+                }
               />
 
               <Route path="forbidden" element={<ForbiddenPage />} />

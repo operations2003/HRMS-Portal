@@ -23,6 +23,8 @@ import { Modal } from '../../components/common/Modal.jsx';
 import { Alert } from '../../components/common/Alert.jsx';
 import { Can } from '../../components/rbac/Can.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
+import { UserStatusModal } from '../../components/admin/UserStatusModal.jsx';
+import { UserRoleAssignModal } from '../../components/admin/UserRoleAssignModal.jsx';
 
 export const UserListPage = () => {
   const toast = useToast();
@@ -40,6 +42,8 @@ export const UserListPage = () => {
 
   // View Permissions Modal State
   const [viewingUser, setViewingUser] = useState(null);
+  const [targetUserForStatus, setTargetUserForStatus] = useState(null);
+  const [targetUserForRole, setTargetUserForRole] = useState(null);
 
   // Add User Modal State
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -239,6 +243,33 @@ export const UserListPage = () => {
       header: 'Status',
       accessor: 'status',
       render: (row) => <Badge>{row.status}</Badge>,
+    },
+    {
+      header: 'Actions',
+      render: (row) => (
+        <div className="flex items-center justify-end gap-1.5">
+          <Can permission="admin:write">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setTargetUserForStatus(row)}
+              title="Change user status"
+            >
+              Status
+            </Button>
+          </Can>
+          <Can permission="admin:rbac">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setTargetUserForRole(row)}
+              title="Assign system role"
+            >
+              Role
+            </Button>
+          </Can>
+        </div>
+      ),
     },
   ];
 
@@ -469,6 +500,33 @@ export const UserListPage = () => {
           </div>
         </form>
       </Modal>
+
+      {/* User Status Modal */}
+      {targetUserForStatus && (
+        <UserStatusModal
+          isOpen={!!targetUserForStatus}
+          onClose={() => setTargetUserForStatus(null)}
+          targetUser={targetUserForStatus}
+          onSuccess={() => {
+            fetchUsersAndRoles();
+            setTargetUserForStatus(null);
+          }}
+        />
+      )}
+
+      {/* User Role Assignment Modal */}
+      {targetUserForRole && (
+        <UserRoleAssignModal
+          isOpen={!!targetUserForRole}
+          onClose={() => setTargetUserForRole(null)}
+          targetUser={targetUserForRole}
+          roles={roles}
+          onSuccess={() => {
+            fetchUsersAndRoles();
+            setTargetUserForRole(null);
+          }}
+        />
+      )}
     </div>
   );
 };
