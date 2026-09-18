@@ -202,7 +202,7 @@ export const PayslipsPage = () => {
           />
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start print:block print:w-full">
           {/* Left Column: Payslip Selector / List */}
           <div className="lg:col-span-4 space-y-3 print:hidden">
             {/* Search Filter */}
@@ -280,7 +280,7 @@ export const PayslipsPage = () => {
           </div>
 
           {/* Right Column: Full Payslip Document Viewer */}
-          <div className="lg:col-span-8">
+          <div className="lg:col-span-8 print:w-full print:m-0 print:p-0">
             {loadingDetail ? (
               <div className="bg-white rounded-2xl border border-slate-200 p-16">
                 <LoadingSpinner message="Rendering official payslip statement..." />

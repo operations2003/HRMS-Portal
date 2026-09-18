@@ -16,11 +16,13 @@ export const TaskNeraLogo = ({
   size = 'md',
   showText = false,
   showSubtitle = true,
+  colorScheme = 'indigo', // 'indigo' | 'terracotta'
   className = '',
   alt = 'TaskNera',
 }) => {
-  // Scalable SVG for the TaskNera Official Emblem in Royal Indigo & Slate
+  // Scalable SVG for the TaskNera Official Emblem
   const renderEmblem = (sizeClasses = 'w-12 h-12') => {
+    const isTerracotta = colorScheme === 'terracotta';
     return (
       <svg
         viewBox="0 0 100 100"
@@ -30,29 +32,29 @@ export const TaskNeraLogo = ({
         aria-label="TaskNera Icon"
       >
         <defs>
-          <linearGradient id="tnIndigo" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#6366F1" />
-            <stop offset="100%" stopColor="#4338CA" />
+          <linearGradient id={isTerracotta ? "tnCoralTop" : "tnIndigo"} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor={isTerracotta ? "#FBAA82" : "#6366F1"} />
+            <stop offset="100%" stopColor={isTerracotta ? "#E86947" : "#4338CA"} />
           </linearGradient>
-          <linearGradient id="tnSlate" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#475569" />
-            <stop offset="100%" stopColor="#1E293B" />
+          <linearGradient id={isTerracotta ? "tnCoralFold" : "tnSlate"} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor={isTerracotta ? "#C86A4B" : "#475569"} />
+            <stop offset="100%" stopColor={isTerracotta ? "#A7462B" : "#1E293B"} />
           </linearGradient>
         </defs>
         {/* Top curved horizontal bar */}
         <path
           d="M10 8 C10 8, 30 8, 88 8 C92 8, 94 10, 92 14 L78 32 C77 34, 75 35, 72 35 L26 35 C17 35, 10 28, 10 19 Z"
-          fill="url(#tnIndigo)"
+          fill={isTerracotta ? "url(#tnCoralTop)" : "url(#tnIndigo)"}
         />
         {/* Left rounded vertical stem */}
         <path
           d="M20 38 C29 38, 48 38, 48 38 C49 38, 49 39, 48 41 L40 54 C39 56, 38 58, 38 61 L38 92 C38 95, 35 97, 32 97 L24 97 C20 97, 17 94, 17 90 L17 48 C17 42, 20 38, 20 38 Z"
-          fill="url(#tnSlate)"
+          fill={isTerracotta ? "url(#tnCoralFold)" : "url(#tnSlate)"}
         />
         {/* Right angled checkmark */}
         <path
           d="M48 64 C47 62, 49 59, 52 61 L61 68 C63 70, 66 69, 68 67 L95 38 C97 36, 100 37, 99 40 L73 89 C70 94, 63 94, 60 90 L48 64 Z"
-          fill="url(#tnIndigo)"
+          fill={isTerracotta ? "url(#tnCoralTop)" : "url(#tnIndigo)"}
         />
       </svg>
     );
