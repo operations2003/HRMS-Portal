@@ -61,30 +61,30 @@ export const EmployeeListPage = () => {
 
   // Leave Quotas & Entitlements State (Decided by Admin) - 11 Standard Company Categories
   const [leaveTypes, setLeaveTypes] = useState([
-    { id: 'lt-pl', name: 'Planned Leave', code: 'PL', daysPerYear: 15, description: 'Pre-planned annual leave and scheduled vacations', genderEligibility: 'ALL' },
-    { id: 'lt-upl', name: 'Unplanned Leave', code: 'UPL', daysPerYear: 5, description: 'Sudden urgent or emergency unplanned absence', genderEligibility: 'ALL' },
-    { id: 'lt-cl', name: 'Casual Leave', code: 'CL', daysPerYear: 12, description: 'Casual leave for personal affairs and short breaks', genderEligibility: 'ALL' },
-    { id: 'lt-sl', name: 'Sick Leave', code: 'SL', daysPerYear: 10, description: 'Medical leave for illness or health recovery', genderEligibility: 'ALL' },
-    { id: 'lt-hl', name: 'Holiday', code: 'HL', daysPerYear: 10, description: 'Official public holiday or declared company day-off', genderEligibility: 'ALL' },
-    { id: 'lt-hdl', name: 'Half Day', code: 'HDL', daysPerYear: 6, description: 'Half-day leave for morning or afternoon session (0.5 day)', genderEligibility: 'ALL' },
+    { id: 'lt-pl', name: 'Planned Leave', code: 'PL', daysPerYear: 0, description: 'Pre-planned annual leave and scheduled vacations', genderEligibility: 'ALL' },
+    { id: 'lt-upl', name: 'Unplanned Leave', code: 'UPL', daysPerYear: 0, description: 'Sudden urgent or emergency unplanned absence', genderEligibility: 'ALL' },
+    { id: 'lt-cl', name: 'Casual Leave', code: 'CL', daysPerYear: 0, description: 'Casual leave for personal affairs and short breaks', genderEligibility: 'ALL' },
+    { id: 'lt-sl', name: 'Sick Leave', code: 'SL', daysPerYear: 0, description: 'Medical leave for illness or health recovery', genderEligibility: 'ALL' },
+    { id: 'lt-hl', name: 'Holiday', code: 'HL', daysPerYear: 0, description: 'Official public holiday or declared company day-off', genderEligibility: 'ALL' },
+    { id: 'lt-hdl', name: 'Half Day', code: 'HDL', daysPerYear: 0, description: 'Half-day leave for morning or afternoon session (0.5 day)', genderEligibility: 'ALL' },
     { id: 'lt-awol', name: 'Absent Without Leave(AWOL)', code: 'AWOL', daysPerYear: 0, description: 'Unauthorized absence without prior notice or approved leave', genderEligibility: 'ALL' },
     { id: 'lt-lop', name: 'Leave without pay (LOP)', code: 'LOP', daysPerYear: 0, description: 'Loss of pay / unpaid leave of absence', genderEligibility: 'ALL' },
-    { id: 'lt-ml', name: 'Maternity Leave', code: 'ML', daysPerYear: 180, description: 'Maternity leave for prenatal, postnatal, and childcare recovery', genderEligibility: 'FEMALE' },
-    { id: 'lt-sbl', name: 'Sabbatical Leave', code: 'SBL', daysPerYear: 30, description: 'Extended leave for research, education, or personal enrichment', genderEligibility: 'ALL' },
-    { id: 'lt-ptl', name: 'Paternity Leave', code: 'PTL', daysPerYear: 15, description: 'Paternity leave for new fathers upon birth or adoption', genderEligibility: 'MALE' },
+    { id: 'lt-ml', name: 'Maternity Leave', code: 'ML', daysPerYear: 0, description: 'Maternity leave for prenatal, postnatal, and childcare recovery', genderEligibility: 'FEMALE' },
+    { id: 'lt-sbl', name: 'Sabbatical Leave', code: 'SBL', daysPerYear: 0, description: 'Extended leave for research, education, or personal enrichment', genderEligibility: 'ALL' },
+    { id: 'lt-ptl', name: 'Paternity Leave', code: 'PTL', daysPerYear: 0, description: 'Paternity leave for new fathers upon birth or adoption', genderEligibility: 'MALE' },
   ]);
   const [leaveAllocations, setLeaveAllocations] = useState({
-    'lt-pl': 15,
-    'lt-upl': 5,
-    'lt-cl': 12,
-    'lt-sl': 10,
-    'lt-hl': 10,
-    'lt-hdl': 6,
+    'lt-pl': 0,
+    'lt-upl': 0,
+    'lt-cl': 0,
+    'lt-sl': 0,
+    'lt-hl': 0,
+    'lt-hdl': 0,
     'lt-awol': 0,
     'lt-lop': 0,
-    'lt-ml': 180,
-    'lt-sbl': 30,
-    'lt-ptl': 15,
+    'lt-ml': 0,
+    'lt-sbl': 0,
+    'lt-ptl': 0,
   });
   const [loadingLeaveBalances, setLoadingLeaveBalances] = useState(false);
   const [viewingLeaveBalances, setViewingLeaveBalances] = useState([]);
@@ -196,7 +196,7 @@ export const EmployeeListPage = () => {
   const [quickLTName, setQuickLTName] = useState('');
   const [quickLTCode, setQuickLTCode] = useState('');
   const [quickLTDesc, setQuickLTDesc] = useState('');
-  const [quickLTDays, setQuickLTDays] = useState(10);
+  const [quickLTDays, setQuickLTDays] = useState(0);
   const [quickLTGender, setQuickLTGender] = useState('ALL');
   const [quickLTLoading, setQuickLTLoading] = useState(false);
   const [quickLTError, setQuickLTError] = useState(null);
@@ -214,7 +214,7 @@ export const EmployeeListPage = () => {
         name: quickLTName.trim(),
         code: (quickLTCode.trim() || quickLTName.trim().replace(/[^a-zA-Z]/g, '').slice(0, 4)).toUpperCase(),
         description: quickLTDesc.trim(),
-        daysPerYear: parseFloat(quickLTDays) || 10,
+        daysPerYear: parseFloat(quickLTDays) || 0,
         genderEligibility: quickLTGender,
         isPaid: true,
         requiresApproval: true,
@@ -226,7 +226,7 @@ export const EmployeeListPage = () => {
         if (newId) {
           setLeaveAllocations((prev) => ({
             ...prev,
-            [newId]: parseFloat(quickLTDays) || 10,
+            [newId]: parseFloat(quickLTDays) || 0,
           }));
         }
       }
@@ -234,7 +234,7 @@ export const EmployeeListPage = () => {
       setQuickLTName('');
       setQuickLTCode('');
       setQuickLTDesc('');
-      setQuickLTDays(10);
+      setQuickLTDays(0);
       setQuickLTGender('ALL');
       toast?.success?.(`Leave category "${quickLTName.trim()}" added successfully!`);
     } catch (err) {
@@ -374,10 +374,10 @@ export const EmployeeListPage = () => {
     setShiftToTime('07:00');
     setShiftToPeriod('PM');
 
-    // Reset leave allocations to defaults
+    // Reset leave allocations to 0 (admin decides the exact numbers)
     const initialAlloc = {};
     leaveTypes.forEach((lt) => {
-      initialAlloc[lt.id] = parseFloat(lt.daysPerYear ?? lt.days_per_year ?? 10);
+      initialAlloc[lt.id] = 0;
     });
     setLeaveAllocations(initialAlloc);
 
@@ -426,7 +426,7 @@ export const EmployeeListPage = () => {
         });
         leaveTypes.forEach((lt) => {
           if (allocMap[lt.id] === undefined) {
-            allocMap[lt.id] = parseFloat(lt.daysPerYear ?? lt.days_per_year ?? 10);
+            allocMap[lt.id] = 0;
           }
         });
         setLeaveAllocations(allocMap);
@@ -1176,7 +1176,7 @@ export const EmployeeListPage = () => {
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {leaveTypes.map((lt) => {
-                  const currentVal = leaveAllocations[lt.id] ?? lt.daysPerYear ?? 10;
+                  const currentVal = leaveAllocations[lt.id] !== undefined ? leaveAllocations[lt.id] : 0;
                   const isFemaleOnly = lt.genderEligibility === 'FEMALE' || lt.code === 'ML';
                   const isMaleOnly = lt.genderEligibility === 'MALE' || lt.code === 'PTL' || lt.code === 'PATL';
                   const isEligibleForThisGender = 
@@ -1226,7 +1226,7 @@ export const EmployeeListPage = () => {
                               [lt.id]: val,
                             }));
                           }}
-                          placeholder="e.g. 12"
+                          placeholder="0"
                           className="block w-full rounded-lg border text-sm py-1.5 px-3 bg-white border-slate-300 text-slate-900 font-semibold focus:border-brand-500 focus:ring-1 focus:ring-brand-500 disabled:bg-slate-100 disabled:text-slate-400"
                           required
                         />

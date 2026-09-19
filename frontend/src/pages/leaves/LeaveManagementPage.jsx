@@ -93,7 +93,7 @@ export const LeaveManagementPage = () => {
   const [newTypeName, setNewTypeName] = useState('');
   const [newTypeCode, setNewTypeCode] = useState('');
   const [newTypeDesc, setNewTypeDesc] = useState('');
-  const [newTypeDays, setNewTypeDays] = useState(10);
+  const [newTypeDays, setNewTypeDays] = useState(0);
   const [newTypeGender, setNewTypeGender] = useState('ALL');
   const [newTypeLoading, setNewTypeLoading] = useState(false);
   const [newTypeError, setNewTypeError] = useState(null);
@@ -111,7 +111,7 @@ export const LeaveManagementPage = () => {
         name: newTypeName.trim(),
         code: (newTypeCode.trim() || newTypeName.trim().replace(/[^a-zA-Z]/g, '').slice(0, 4)).toUpperCase(),
         description: newTypeDesc.trim(),
-        daysPerYear: parseFloat(newTypeDays) || 10,
+        daysPerYear: parseFloat(newTypeDays) || 0,
         genderEligibility: newTypeGender,
         isPaid: true,
         requiresApproval: true,
@@ -121,7 +121,7 @@ export const LeaveManagementPage = () => {
       setNewTypeName('');
       setNewTypeCode('');
       setNewTypeDesc('');
-      setNewTypeDays(10);
+      setNewTypeDays(0);
       setNewTypeGender('ALL');
       toast?.success?.(`Leave category "${newTypeName.trim()}" added successfully!`);
     } catch (err) {
