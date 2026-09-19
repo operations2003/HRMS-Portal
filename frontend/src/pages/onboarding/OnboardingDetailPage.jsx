@@ -162,7 +162,7 @@ export const OnboardingDetailPage = () => {
                 </span>
                 <span>•</span>
                 <span className="font-medium text-slate-700 dark:text-slate-300">
-                  {candidate.designation?.title || 'Senior Software Engineer'}
+                  {candidate.designation?.title || 'Operations Executive'}
                 </span>
                 <span>•</span>
                 <span className="flex items-center gap-1.5">

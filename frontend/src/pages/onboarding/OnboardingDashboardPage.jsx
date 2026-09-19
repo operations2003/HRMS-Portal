@@ -511,7 +511,7 @@ export const OnboardingDashboardPage = () => {
                             <div className="flex items-center gap-1.5">
                               <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                               <span className="truncate">
-                                {candidate.department?.name || 'Engineering'}
+                                {candidate.department?.name || 'Operations'}
                               </span>
                             </div>
                             <div className="flex items-center gap-1.5">

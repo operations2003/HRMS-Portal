@@ -17,6 +17,32 @@ import { Button } from '../common/Button.jsx';
 import { Input } from '../common/Input.jsx';
 import { Select } from '../common/Select.jsx';
 
+const STANDARD_DEPARTMENTS = [
+  'Operations',
+  'HR',
+  'Talent Acquisition',
+  'Learning & Development',
+  'IT',
+  'Business Development',
+];
+
+const STANDARD_DESIGNATIONS = [
+  'Operations Team Leader',
+  'HR Executive',
+  'Operations Executive',
+  'Talent Acquisition Intern',
+  'Talent Acquisition Specialist',
+  'HR Intern',
+  'IT Executive',
+  'IT Intern',
+  'BDM Support',
+  'BDM Executive',
+  'Talent Acquisition Head',
+  'Operations Head',
+  'Account Executive',
+  'Talent Acquisition Team Leader',
+];
+
 export const AtsHandoffModal = ({ isOpen, onClose, onHandoffSuccess }) => {
   const { user } = useAuth();
   const { showSuccess, showError } = useToast();
@@ -26,8 +52,10 @@ export const AtsHandoffModal = ({ isOpen, onClose, onHandoffSuccess }) => {
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [departmentName, setDepartmentName] = useState('Engineering');
-  const [designationTitle, setDesignationTitle] = useState('Software Engineer');
+  const [departmentName, setDepartmentName] = useState('Operations');
+  const [isCustomDept, setIsCustomDept] = useState(false);
+  const [designationTitle, setDesignationTitle] = useState('Operations Executive');
+  const [isCustomDesig, setIsCustomDesig] = useState(false);
   const [dateOfJoining, setDateOfJoining] = useState('');
   const [salary, setSalary] = useState('1200000');
   const [location, setLocation] = useState('Bangalore / Hybrid');
@@ -133,18 +161,105 @@ export const AtsHandoffModal = ({ isOpen, onClose, onHandoffSuccess }) => {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input
-            label="Department"
-            value={departmentName}
-            onChange={(e) => setDepartmentName(e.target.value)}
-            placeholder="Engineering"
-          />
-          <Input
-            label="Designation / Role"
-            value={designationTitle}
-            onChange={(e) => setDesignationTitle(e.target.value)}
-            placeholder="Senior Product Designer"
-          />
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+              Department
+            </label>
+            {!isCustomDept ? (
+              <select
+                value={departmentName}
+                onChange={(e) => {
+                  if (e.target.value === '__custom__') {
+                    setIsCustomDept(true);
+                    setDepartmentName('');
+                  } else {
+                    setDepartmentName(e.target.value);
+                  }
+                }}
+                className="block w-full rounded-lg border text-sm py-2.5 px-3.5 bg-white border-slate-300 text-slate-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors"
+              >
+                {STANDARD_DEPARTMENTS.map((dept) => (
+                  <option key={dept} value={dept}>
+                    {dept}
+                  </option>
+                ))}
+                <option value="__custom__" className="font-semibold text-brand-600 bg-brand-50">
+                  + Add Custom Department...
+                </option>
+              </select>
+            ) : (
+              <div className="flex gap-1.5">
+                <Input
+                  value={departmentName}
+                  onChange={(e) => setDepartmentName(e.target.value)}
+                  placeholder="Enter custom department"
+                  required
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setIsCustomDept(false);
+                    setDepartmentName('Operations');
+                  }}
+                  className="shrink-0 text-xs"
+                >
+                  Presets
+                </Button>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+              Designation / Role
+            </label>
+            {!isCustomDesig ? (
+              <select
+                value={designationTitle}
+                onChange={(e) => {
+                  if (e.target.value === '__custom__') {
+                    setIsCustomDesig(true);
+                    setDesignationTitle('');
+                  } else {
+                    setDesignationTitle(e.target.value);
+                  }
+                }}
+                className="block w-full rounded-lg border text-sm py-2.5 px-3.5 bg-white border-slate-300 text-slate-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors"
+              >
+                {STANDARD_DESIGNATIONS.map((desig) => (
+                  <option key={desig} value={desig}>
+                    {desig}
+                  </option>
+                ))}
+                <option value="__custom__" className="font-semibold text-brand-600 bg-brand-50">
+                  + Add Custom Designation...
+                </option>
+              </select>
+            ) : (
+              <div className="flex gap-1.5">
+                <Input
+                  value={designationTitle}
+                  onChange={(e) => setDesignationTitle(e.target.value)}
+                  placeholder="Enter custom designation"
+                  required
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setIsCustomDesig(false);
+                    setDesignationTitle('Operations Executive');
+                  }}
+                  className="shrink-0 text-xs"
+                >
+                  Presets
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
