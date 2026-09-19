@@ -15,6 +15,7 @@ const mapLeaveTypeRow = (row) => {
     isPaid: Boolean(row.is_paid),
     requiresApproval: Boolean(row.requires_approval),
     carryForwardDays: parseFloat(row.carry_forward_days) || 0.0,
+    genderEligibility: row.gender_eligibility || 'ALL',
     status: row.status || 'Active',
     createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
     updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : null,
@@ -160,23 +161,40 @@ export const leaveRepository = {
   /**
    * Find all active leave types for an organization
    */
-  async findLeaveTypes(orgId) {
-    const sql = `
+  async findLeaveTypes(orgId, gender = null) {
+    let sql = `
       SELECT * FROM leave_types
-      WHERE org_id = $1 AND status = 'Active'
+      WHERE (org_id = $1 OR org_id = 'org-1') AND status = 'Active'
+    `;
+    const values = [orgId || 'org-1'];
+    if (gender) {
+      const normGender = String(gender).trim().toUpperCase();
+      sql += ` AND (
+        gender_eligibility = 'ALL'
+        OR (gender_eligibility = 'FEMALE' AND $2 = 'FEMALE')
+        OR (gender_eligibility = 'MALE' AND $2 = 'MALE')
+      )`;
+      values.push(normGender);
+    }
+    sql += `
       ORDER BY 
         CASE 
-          WHEN UPPER(code) = 'EL' OR UPPER(name) LIKE '%EMERGENCY%' THEN 1
-          WHEN UPPER(code) = 'SL' OR UPPER(name) LIKE '%SICK%' THEN 2
-          WHEN UPPER(code) = 'CL' OR UPPER(name) LIKE '%CASUAL%' THEN 3
-          ELSE 4
+          WHEN UPPER(code) = 'PL' THEN 1
+          WHEN UPPER(code) = 'UPL' THEN 2
+          WHEN UPPER(code) = 'CL' THEN 3
+          WHEN UPPER(code) = 'SL' THEN 4
+          WHEN UPPER(code) = 'HL' THEN 5
+          WHEN UPPER(code) = 'HDL' THEN 6
+          WHEN UPPER(code) = 'AWOL' THEN 7
+          WHEN UPPER(code) = 'LOP' THEN 8
+          WHEN UPPER(code) = 'ML' THEN 9
+          WHEN UPPER(code) = 'SBL' THEN 10
+          WHEN UPPER(code) = 'PTL' THEN 11
+          ELSE 12
         END,
         name ASC;
     `;
-    let res = await pool.query(sql, [orgId]);
-    if (res.rows.length === 0 && orgId && orgId !== 'org-1') {
-      res = await pool.query(sql, ['org-1']);
-    }
+    const res = await pool.query(sql, values);
     return res.rows.map(mapLeaveTypeRow);
   },
 
@@ -608,36 +626,109 @@ export const leaveRepository = {
   },
 
   /**
-   * Fetch leave balances for an employee in a given year
+   * Fetch leave balances for an employee in a given year, filtered by gender eligibility
    */
-  async getLeaveBalances(employeeId, year = new Date().getFullYear()) {
+  async getLeaveBalances(employeeId, year = new Date().getFullYear(), gender = null) {
+    let normGender = gender ? String(gender).trim().toUpperCase() : null;
+    if (!normGender) {
+      const empRes = await pool.query('SELECT gender FROM employees WHERE id = $1', [employeeId]);
+      normGender = empRes.rows[0]?.gender ? String(empRes.rows[0].gender).toUpperCase() : 'MALE';
+    }
+
     const sql = `
       SELECT
         lb.*,
         lt.name AS lt_name,
-        lt.code AS lt_code
+        lt.code AS lt_code,
+        lt.gender_eligibility AS lt_gender_eligibility
       FROM leave_balances lb
       JOIN leave_types lt ON lt.id = lb.leave_type_id
       WHERE lb.employee_id = $1 AND lb.year = $2 AND lt.status = 'Active'
+        AND (
+          lt.gender_eligibility = 'ALL'
+          OR (lt.gender_eligibility = 'FEMALE' AND $3 = 'FEMALE')
+          OR (lt.gender_eligibility = 'MALE' AND $3 = 'MALE')
+        )
       ORDER BY 
         CASE 
-          WHEN UPPER(lt.code) = 'EL' OR UPPER(lt.name) LIKE '%EMERGENCY%' THEN 1
-          WHEN UPPER(lt.code) = 'SL' OR UPPER(lt.name) LIKE '%SICK%' THEN 2
-          WHEN UPPER(lt.code) = 'CL' OR UPPER(lt.name) LIKE '%CASUAL%' THEN 3
-          ELSE 4
+          WHEN UPPER(lt.code) = 'PL' THEN 1
+          WHEN UPPER(lt.code) = 'UPL' THEN 2
+          WHEN UPPER(lt.code) = 'CL' THEN 3
+          WHEN UPPER(lt.code) = 'SL' THEN 4
+          WHEN UPPER(lt.code) = 'HL' THEN 5
+          WHEN UPPER(lt.code) = 'HDL' THEN 6
+          WHEN UPPER(lt.code) = 'AWOL' THEN 7
+          WHEN UPPER(lt.code) = 'LOP' THEN 8
+          WHEN UPPER(lt.code) = 'ML' THEN 9
+          WHEN UPPER(lt.code) = 'SBL' THEN 10
+          WHEN UPPER(lt.code) = 'PTL' THEN 11
+          ELSE 12
         END,
         lt.name ASC;
     `;
-    const res = await pool.query(sql, [employeeId, year]);
+    const res = await pool.query(sql, [employeeId, year, normGender]);
     return res.rows.map(mapLeaveBalanceRow);
+  },
+
+  /**
+   * Create a new custom leave type
+   */
+  async createLeaveType(data) {
+    const id = data.id || `lt-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+    const orgId = data.orgId || 'org-1';
+    const name = data.name.trim();
+    const code = (data.code || name.replace(/[^a-zA-Z]/g, '').slice(0, 4)).toUpperCase();
+    const description = data.description || '';
+    const daysPerYear = parseFloat(data.daysPerYear) || 0.0;
+    const isPaid = data.isPaid !== undefined ? Boolean(data.isPaid) : true;
+    const requiresApproval = data.requiresApproval !== undefined ? Boolean(data.requiresApproval) : true;
+    const carryForwardDays = parseFloat(data.carryForwardDays) || 0.0;
+    const genderEligibility = (data.genderEligibility || 'ALL').toUpperCase();
+
+    const sql = `
+      INSERT INTO leave_types (
+        id, org_id, name, code, description,
+        days_per_year, is_paid, requires_approval, carry_forward_days, gender_eligibility, status,
+        created_at, updated_at
+      ) VALUES (
+        $1, $2, $3, $4, $5,
+        $6, $7, $8, $9, $10, 'Active',
+        NOW(), NOW()
+      )
+      ON CONFLICT (org_id, code) DO UPDATE
+      SET name = EXCLUDED.name,
+          description = EXCLUDED.description,
+          days_per_year = EXCLUDED.days_per_year,
+          is_paid = EXCLUDED.is_paid,
+          requires_approval = EXCLUDED.requires_approval,
+          carry_forward_days = EXCLUDED.carry_forward_days,
+          gender_eligibility = EXCLUDED.gender_eligibility,
+          status = 'Active',
+          updated_at = NOW()
+      RETURNING *;
+    `;
+    const res = await pool.query(sql, [
+      id, orgId, name, code, description,
+      daysPerYear, isPaid, requiresApproval, carryForwardDays, genderEligibility
+    ]);
+    return mapLeaveTypeRow(res.rows[0]);
   },
 
   /**
    * Initialize leave balances for employee if missing
    */
-  async initializeBalancesForEmployee(employeeId, orgId, year = new Date().getFullYear()) {
+  async initializeBalancesForEmployee(employeeId, orgId, year = new Date().getFullYear(), gender = null) {
+    let normGender = gender ? String(gender).trim().toUpperCase() : null;
+    if (!normGender) {
+      const empRes = await pool.query('SELECT gender FROM employees WHERE id = $1', [employeeId]);
+      normGender = empRes.rows[0]?.gender ? String(empRes.rows[0].gender).toUpperCase() : 'MALE';
+    }
+
     const types = await this.findLeaveTypes(orgId);
     for (const lt of types) {
+      if (lt.genderEligibility === 'FEMALE' && normGender === 'MALE') continue;
+      if (lt.genderEligibility === 'MALE' && normGender === 'FEMALE') continue;
+
       const balanceId = `lb-${employeeId}-${lt.id}-${year}`;
       const sql = `
         INSERT INTO leave_balances (id, org_id, employee_id, leave_type_id, year, allocated_days, used_days, pending_days)
@@ -646,7 +737,7 @@ export const leaveRepository = {
       `;
       await pool.query(sql, [balanceId, orgId, employeeId, lt.id, year, lt.daysPerYear]);
     }
-    return this.getLeaveBalances(employeeId, year);
+    return this.getLeaveBalances(employeeId, year, normGender);
   },
 
   /**
@@ -670,6 +761,12 @@ export const leaveRepository = {
    * Set or update custom leave allocations for an employee
    */
   async setEmployeeLeaveAllocations(employeeId, orgId, year = new Date().getFullYear(), allocations = {}) {
+    const empRes = await pool.query('SELECT gender FROM employees WHERE id = $1', [employeeId]);
+    const normGender = empRes.rows[0]?.gender ? String(empRes.rows[0].gender).toUpperCase() : 'MALE';
+
+    const types = await this.findLeaveTypes(orgId);
+    const typeMap = new Map(types.map((t) => [t.id, t]));
+
     let list = [];
     if (Array.isArray(allocations)) {
       list = allocations.map((a) => ({
@@ -685,6 +782,12 @@ export const leaveRepository = {
 
     for (const item of list) {
       if (!item.leaveTypeId || isNaN(item.days)) continue;
+      const lt = typeMap.get(item.leaveTypeId);
+      if (lt) {
+        if (lt.genderEligibility === 'FEMALE' && normGender === 'MALE') continue;
+        if (lt.genderEligibility === 'MALE' && normGender === 'FEMALE') continue;
+      }
+
       const balanceId = `lb-${employeeId}-${item.leaveTypeId}-${year}`;
       const sql = `
         INSERT INTO leave_balances (id, org_id, employee_id, leave_type_id, year, allocated_days, used_days, pending_days, updated_at)
@@ -695,6 +798,6 @@ export const leaveRepository = {
       await pool.query(sql, [balanceId, orgId, employeeId, item.leaveTypeId, year, Math.max(0, item.days)]);
     }
 
-    return this.getLeaveBalances(employeeId, year);
+    return this.getLeaveBalances(employeeId, year, normGender);
   },
 };

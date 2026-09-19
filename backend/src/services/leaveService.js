@@ -256,14 +256,37 @@ export const leaveService = {
   /**
    * Get active leave types for organization
    */
-  async getLeaveTypes(user) {
+  async getLeaveTypes(user, options = {}) {
     const emp = await resolveRequesterEmployee(user);
     const orgId = emp?.orgId || user?.orgId || 'org-1';
-    let types = await leaveRepository.findLeaveTypes(orgId);
+    
+    let gender = options.gender || null;
+    if (!options.all && !gender) {
+      gender = emp?.gender || null;
+    }
+
+    let types = await leaveRepository.findLeaveTypes(orgId, options.all ? null : gender);
     if (!types || types.length === 0) {
-      types = await leaveRepository.findLeaveTypes('org-1');
+      types = await leaveRepository.findLeaveTypes('org-1', options.all ? null : gender);
     }
     return types;
+  },
+
+  /**
+   * Create a new custom leave type (Admin / HR)
+   */
+  async createLeaveType(user, data) {
+    if (!data.name || !data.name.trim()) {
+      const error = new Error('Leave type name is required.');
+      error.statusCode = 400;
+      throw error;
+    }
+    const emp = await resolveRequesterEmployee(user);
+    const orgId = emp?.orgId || user?.orgId || 'org-1';
+    return leaveRepository.createLeaveType({
+      ...data,
+      orgId,
+    });
   },
 
   /**
@@ -277,9 +300,10 @@ export const leaveService = {
       throw error;
     }
 
-    let balances = await leaveRepository.getLeaveBalances(emp.id, year);
-    if (balances.length === 0) {
-      balances = await leaveRepository.initializeBalancesForEmployee(emp.id, emp.orgId, year);
+    let balances = await leaveRepository.getLeaveBalances(emp.id, year, emp.gender);
+    const types = await leaveRepository.findLeaveTypes(emp.orgId, emp.gender);
+    if (balances.length < types.length) {
+      balances = await leaveRepository.initializeBalancesForEmployee(emp.id, emp.orgId, year, emp.gender);
     }
     return balances;
   },
@@ -306,6 +330,20 @@ export const leaveService = {
     const leaveType = await leaveRepository.findLeaveTypeById(data.leaveTypeId, emp.orgId);
     if (!leaveType) {
       const error = new Error('Selected leave type does not exist or is not available for your organization.');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    // Gender eligibility verification
+    const empGender = String(emp.gender || 'Male').trim().toUpperCase();
+    const ltGender = String(leaveType.genderEligibility || 'ALL').trim().toUpperCase();
+    if (ltGender === 'FEMALE' && empGender === 'MALE') {
+      const error = new Error('Maternity leave is only applicable to female employees.');
+      error.statusCode = 400;
+      throw error;
+    }
+    if (ltGender === 'MALE' && empGender === 'FEMALE') {
+      const error = new Error('Paternity leave is only applicable to male employees.');
       error.statusCode = 400;
       throw error;
     }

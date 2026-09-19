@@ -21,6 +21,7 @@ const mapEmployeeRow = (row) => {
     status: row.status || 'Active',
     salary: parseFloat(row.salary) || 0,
     shiftTiming: row.shiftTiming || '11:00 AM - 07:00 PM',
+    gender: row.gender || 'Male',
     createdAt: row.createdAt ? new Date(row.createdAt).toISOString() : new Date().toISOString(),
     updatedAt: row.updatedAt ? new Date(row.updatedAt).toISOString() : new Date().toISOString(),
     organization: row.o_id ? { id: row.o_id, name: row.o_name, code: row.o_code } : null,
@@ -52,6 +53,7 @@ const BASE_EMPLOYEE_SELECT = `
     e.last_name AS "lastName",
     e.email,
     e.phone,
+    e.gender,
     TO_CHAR(e.date_of_joining, 'YYYY-MM-DD') AS "dateOfJoining",
     e.employment_type AS "employmentType",
     e.status,
@@ -240,14 +242,15 @@ export const employeeRepository = {
     const status = data.status || 'Active';
     const salary = data.salary ? Number(data.salary) : 0;
     const shiftTiming = data.shiftTiming ? data.shiftTiming.trim() : '11:00 AM - 07:00 PM';
+    const gender = data.gender ? data.gender.trim() : 'Male';
     const managerId = data.managerId || null;
 
     const sql = `
       INSERT INTO employees (
         id, org_id, dept_id, desig_id, user_id, employee_code,
         first_name, last_name, email, phone, date_of_joining,
-        employment_type, status, salary, shift_timing, manager_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+        employment_type, status, salary, shift_timing, gender, manager_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
       RETURNING id;
     `;
 
@@ -267,6 +270,7 @@ export const employeeRepository = {
       status,
       salary,
       shiftTiming,
+      gender,
       managerId,
     ]);
 
@@ -351,6 +355,11 @@ export const employeeRepository = {
     if (data.shiftTiming !== undefined) {
       setClauses.push(`shift_timing = $${paramIndex++}`);
       values.push(data.shiftTiming ? data.shiftTiming.trim() : '11:00 AM - 07:00 PM');
+    }
+
+    if (data.gender !== undefined) {
+      setClauses.push(`gender = $${paramIndex++}`);
+      values.push(data.gender ? data.gender.trim() : 'Male');
     }
 
     if (data.managerId !== undefined) {

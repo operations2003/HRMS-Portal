@@ -183,7 +183,8 @@ export const employeeService = {
         await leaveRepository.initializeBalancesForEmployee(
           newEmployee.id,
           newEmployee.orgId,
-          new Date().getFullYear()
+          new Date().getFullYear(),
+          newEmployee.gender
         );
       }
 

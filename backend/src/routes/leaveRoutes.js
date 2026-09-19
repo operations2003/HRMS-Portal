@@ -16,6 +16,11 @@ router.use(authenticate);
 
 // 1. Leave metadata & balances
 router.get('/types', authorize('leave:read'), leaveController.getLeaveTypes);
+router.post(
+  '/types',
+  requireRoles(['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin']),
+  leaveController.createLeaveType
+);
 router.get('/balances', authorize('leave:read'), leaveController.getMyBalances);
 router.get(
   '/employee/:employeeId/balances',

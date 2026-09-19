@@ -4,9 +4,19 @@ export const leaveService = {
   /**
    * Fetch available leave types for current organization
    */
-  async getLeaveTypes() {
-    const res = await http.get('/v1/leaves/types');
+  async getLeaveTypes(params = {}) {
+    const query = new URLSearchParams(params).toString();
+    const res = await http.get(`/v1/leaves/types${query ? `?${query}` : ''}`);
     return res.data || [];
+  },
+
+  /**
+   * Create a new custom leave type (Admin/HR)
+   * @param {Object} data
+   */
+  async createLeaveType(data) {
+    const res = await http.post('/v1/leaves/types', data);
+    return res.data;
   },
 
   /**

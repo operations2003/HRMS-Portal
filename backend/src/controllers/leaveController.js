@@ -10,8 +10,25 @@ export const leaveController = {
    */
   async getLeaveTypes(req, res, next) {
     try {
-      const types = await leaveService.getLeaveTypes(req.user);
+      const isAll = req.query.all === 'true';
+      const types = await leaveService.getLeaveTypes(req.user, { all: isAll, gender: req.query.gender });
       return sendSuccess(res, 'Leave types fetched successfully.', types);
+    } catch (error) {
+      if (error.statusCode) {
+        return sendError(res, error.message, error.statusCode);
+      }
+      next(error);
+    }
+  },
+
+  /**
+   * POST /api/v1/leaves/types
+   * Create a new custom leave type (Admin/HR)
+   */
+  async createLeaveType(req, res, next) {
+    try {
+      const newType = await leaveService.createLeaveType(req.user, req.body);
+      return sendSuccess(res, 'Leave type created successfully.', newType, 201);
     } catch (error) {
       if (error.statusCode) {
         return sendError(res, error.message, error.statusCode);

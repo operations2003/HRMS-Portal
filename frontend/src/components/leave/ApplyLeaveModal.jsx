@@ -18,11 +18,20 @@ import { Input } from '../common/Input.jsx';
 import { Select } from '../common/Select.jsx';
 import { Alert } from '../common/Alert.jsx';
 import { leaveService } from '../../services/leaveService.js';
+import { useAuth } from '../../context/AuthContext.jsx';
 
 const DEFAULT_LEAVE_CATEGORIES = [
-  { id: 'lt-el', name: 'Emergency', code: 'EL', description: 'Leave for unforeseen emergencies and urgent personal matters' },
-  { id: 'lt-sl', name: 'Sick', code: 'SL', description: 'Leave for medical and health recovery' },
-  { id: 'lt-cl', name: 'Casual', code: 'CL', description: 'Casual leave for personal matters' },
+  { id: 'lt-pl', name: 'Planned Leave', code: 'PL', description: 'Pre-planned annual leave and scheduled vacations', genderEligibility: 'ALL' },
+  { id: 'lt-upl', name: 'Unplanned Leave', code: 'UPL', description: 'Sudden urgent or emergency unplanned absence', genderEligibility: 'ALL' },
+  { id: 'lt-cl', name: 'Casual Leave', code: 'CL', description: 'Casual leave for personal affairs and short breaks', genderEligibility: 'ALL' },
+  { id: 'lt-sl', name: 'Sick Leave', code: 'SL', description: 'Medical leave for illness or health recovery', genderEligibility: 'ALL' },
+  { id: 'lt-hl', name: 'Holiday', code: 'HL', description: 'Official public holiday or declared company day-off', genderEligibility: 'ALL' },
+  { id: 'lt-hdl', name: 'Half Day', code: 'HDL', description: 'Half-day leave for morning or afternoon session (0.5 day)', genderEligibility: 'ALL' },
+  { id: 'lt-awol', name: 'Absent Without Leave(AWOL)', code: 'AWOL', description: 'Unauthorized absence without prior notice or approved leave', genderEligibility: 'ALL' },
+  { id: 'lt-lop', name: 'Leave without pay (LOP)', code: 'LOP', description: 'Loss of pay / unpaid leave of absence', genderEligibility: 'ALL' },
+  { id: 'lt-ml', name: 'Maternity Leave', code: 'ML', description: 'Maternity leave for prenatal, postnatal, and childcare recovery', genderEligibility: 'FEMALE' },
+  { id: 'lt-sbl', name: 'Sabbatical Leave', code: 'SBL', description: 'Extended leave for research, education, or personal enrichment', genderEligibility: 'ALL' },
+  { id: 'lt-ptl', name: 'Paternity Leave', code: 'PTL', description: 'Paternity leave for new fathers upon birth or adoption', genderEligibility: 'MALE' },
 ];
 
 /**
@@ -51,7 +60,21 @@ export const ApplyLeaveModal = ({
   leaveTypes = [],
   leaveBalances = [],
 }) => {
-  const effectiveLeaveTypes = leaveTypes && leaveTypes.length > 0 ? leaveTypes : DEFAULT_LEAVE_CATEGORIES;
+  const { user } = useAuth();
+  const userGender = String(user?.gender || user?.employee?.gender || '').toUpperCase();
+
+  const allAvailableTypes = leaveTypes && leaveTypes.length > 0 ? leaveTypes : DEFAULT_LEAVE_CATEGORIES;
+  const effectiveLeaveTypes = allAvailableTypes.filter((lt) => {
+    const ge = String(lt.genderEligibility || lt.gender_eligibility || 'ALL').toUpperCase();
+    const code = String(lt.code || '').toUpperCase();
+    if (ge === 'FEMALE' || code === 'ML') {
+      return userGender !== 'MALE';
+    }
+    if (ge === 'MALE' || code === 'PTL' || code === 'PATL') {
+      return userGender !== 'FEMALE';
+    }
+    return true;
+  });
 
   const [formData, setFormData] = useState({
     leaveTypeId: '',

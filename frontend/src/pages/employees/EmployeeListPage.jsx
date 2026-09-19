@@ -59,16 +59,32 @@ export const EmployeeListPage = () => {
   const [loadingViewProfile, setLoadingViewProfile] = useState(false);
   const [timelineEmployee, setTimelineEmployee] = useState(null);
 
-  // Leave Quotas & Entitlements State (Decided by Admin)
+  // Leave Quotas & Entitlements State (Decided by Admin) - 11 Standard Company Categories
   const [leaveTypes, setLeaveTypes] = useState([
-    { id: 'lt-cl', name: 'Casual', code: 'CL', daysPerYear: 12, description: 'Casual leave for personal matters' },
-    { id: 'lt-sl', name: 'Sick', code: 'SL', daysPerYear: 10, description: 'Leave for medical and health recovery' },
-    { id: 'lt-el', name: 'Emergency', code: 'EL', daysPerYear: 10, description: 'Leave for unforeseen emergencies' },
+    { id: 'lt-pl', name: 'Planned Leave', code: 'PL', daysPerYear: 15, description: 'Pre-planned annual leave and scheduled vacations', genderEligibility: 'ALL' },
+    { id: 'lt-upl', name: 'Unplanned Leave', code: 'UPL', daysPerYear: 5, description: 'Sudden urgent or emergency unplanned absence', genderEligibility: 'ALL' },
+    { id: 'lt-cl', name: 'Casual Leave', code: 'CL', daysPerYear: 12, description: 'Casual leave for personal affairs and short breaks', genderEligibility: 'ALL' },
+    { id: 'lt-sl', name: 'Sick Leave', code: 'SL', daysPerYear: 10, description: 'Medical leave for illness or health recovery', genderEligibility: 'ALL' },
+    { id: 'lt-hl', name: 'Holiday', code: 'HL', daysPerYear: 10, description: 'Official public holiday or declared company day-off', genderEligibility: 'ALL' },
+    { id: 'lt-hdl', name: 'Half Day', code: 'HDL', daysPerYear: 6, description: 'Half-day leave for morning or afternoon session (0.5 day)', genderEligibility: 'ALL' },
+    { id: 'lt-awol', name: 'Absent Without Leave(AWOL)', code: 'AWOL', daysPerYear: 0, description: 'Unauthorized absence without prior notice or approved leave', genderEligibility: 'ALL' },
+    { id: 'lt-lop', name: 'Leave without pay (LOP)', code: 'LOP', daysPerYear: 0, description: 'Loss of pay / unpaid leave of absence', genderEligibility: 'ALL' },
+    { id: 'lt-ml', name: 'Maternity Leave', code: 'ML', daysPerYear: 180, description: 'Maternity leave for prenatal, postnatal, and childcare recovery', genderEligibility: 'FEMALE' },
+    { id: 'lt-sbl', name: 'Sabbatical Leave', code: 'SBL', daysPerYear: 30, description: 'Extended leave for research, education, or personal enrichment', genderEligibility: 'ALL' },
+    { id: 'lt-ptl', name: 'Paternity Leave', code: 'PTL', daysPerYear: 15, description: 'Paternity leave for new fathers upon birth or adoption', genderEligibility: 'MALE' },
   ]);
   const [leaveAllocations, setLeaveAllocations] = useState({
+    'lt-pl': 15,
+    'lt-upl': 5,
     'lt-cl': 12,
     'lt-sl': 10,
-    'lt-el': 10,
+    'lt-hl': 10,
+    'lt-hdl': 6,
+    'lt-awol': 0,
+    'lt-lop': 0,
+    'lt-ml': 180,
+    'lt-sbl': 30,
+    'lt-ptl': 15,
   });
   const [loadingLeaveBalances, setLoadingLeaveBalances] = useState(false);
   const [viewingLeaveBalances, setViewingLeaveBalances] = useState([]);
@@ -175,6 +191,59 @@ export const EmployeeListPage = () => {
     }
   };
 
+  // Quick Add Leave Category Modal
+  const [isQuickAddLeaveTypeOpen, setIsQuickAddLeaveTypeOpen] = useState(false);
+  const [quickLTName, setQuickLTName] = useState('');
+  const [quickLTCode, setQuickLTCode] = useState('');
+  const [quickLTDesc, setQuickLTDesc] = useState('');
+  const [quickLTDays, setQuickLTDays] = useState(10);
+  const [quickLTGender, setQuickLTGender] = useState('ALL');
+  const [quickLTLoading, setQuickLTLoading] = useState(false);
+  const [quickLTError, setQuickLTError] = useState(null);
+
+  const handleQuickAddLeaveType = async (e) => {
+    e.preventDefault();
+    if (!quickLTName.trim()) {
+      setQuickLTError('Leave category name is required.');
+      return;
+    }
+    try {
+      setQuickLTLoading(true);
+      setQuickLTError(null);
+      const res = await leaveService.createLeaveType({
+        name: quickLTName.trim(),
+        code: (quickLTCode.trim() || quickLTName.trim().replace(/[^a-zA-Z]/g, '').slice(0, 4)).toUpperCase(),
+        description: quickLTDesc.trim(),
+        daysPerYear: parseFloat(quickLTDays) || 10,
+        genderEligibility: quickLTGender,
+        isPaid: true,
+        requiresApproval: true,
+      });
+      const freshTypes = await leaveService.getLeaveTypes({ all: true });
+      if (freshTypes && freshTypes.length > 0) {
+        setLeaveTypes(freshTypes);
+        const newId = res?.id || freshTypes[freshTypes.length - 1]?.id;
+        if (newId) {
+          setLeaveAllocations((prev) => ({
+            ...prev,
+            [newId]: parseFloat(quickLTDays) || 10,
+          }));
+        }
+      }
+      setIsQuickAddLeaveTypeOpen(false);
+      setQuickLTName('');
+      setQuickLTCode('');
+      setQuickLTDesc('');
+      setQuickLTDays(10);
+      setQuickLTGender('ALL');
+      toast?.success?.(`Leave category "${quickLTName.trim()}" added successfully!`);
+    } catch (err) {
+      setQuickLTError(err.message || 'Failed to create leave category.');
+    } finally {
+      setQuickLTLoading(false);
+    }
+  };
+
   const [formData, setFormData] = useState({
     orgId: '',
     deptId: '',
@@ -186,6 +255,7 @@ export const EmployeeListPage = () => {
     lastName: '',
     email: '',
     phone: '',
+    gender: 'Male',
     dateOfJoining: '',
     employmentType: 'Full-Time',
     status: 'Active',
@@ -230,7 +300,7 @@ export const EmployeeListPage = () => {
     }
 
     try {
-      const types = await leaveService.getLeaveTypes();
+      const types = await leaveService.getLeaveTypes({ all: true });
       if (Array.isArray(types) && types.length > 0) {
         const active = types.filter((t) => t.status === 'Active');
         if (active.length > 0) {
@@ -292,6 +362,7 @@ export const EmployeeListPage = () => {
       lastName: '',
       email: '',
       phone: '',
+      gender: 'Male',
       dateOfJoining: new Date().toISOString().split('T')[0],
       employmentType: 'Full-Time',
       status: 'Active',
@@ -332,6 +403,7 @@ export const EmployeeListPage = () => {
       lastName: emp.lastName || '',
       email: emp.email || '',
       phone: emp.phone || '',
+      gender: emp.gender || 'Male',
       dateOfJoining: emp.dateOfJoining || '',
       employmentType: emp.employmentType || 'Full-Time',
       status: emp.status || 'Active',
@@ -484,6 +556,13 @@ export const EmployeeListPage = () => {
               </span>
               <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
                 {row.employeeCode}
+              </span>
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+                row.gender === 'Female'
+                  ? 'bg-pink-50 text-pink-700 border-pink-200'
+                  : 'bg-blue-50 text-blue-700 border-blue-200'
+              }`}>
+                {row.gender || 'Male'}
               </span>
               {row.user?.roleName && (
                 <span className="text-[10px] font-semibold text-brand-700 bg-brand-50 px-1.5 py-0.5 rounded border border-brand-100 flex items-center gap-1">
@@ -723,7 +802,19 @@ export const EmployeeListPage = () => {
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <Select
+              label="Gender"
+              value={formData.gender || 'Male'}
+              onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
+              options={[
+                { value: 'Male', label: 'Male' },
+                { value: 'Female', label: 'Female' },
+                { value: 'Other', label: 'Other' },
+              ]}
+              required
+              helperText="Determines Maternity / Paternity leave eligibility"
+            />
             <Input
               label="Work Email"
               type="email"
@@ -1059,9 +1150,19 @@ export const EmployeeListPage = () => {
                   Annual Leave Quotas & Entitlements
                 </span>
               </div>
-              <span className="text-[11px] text-amber-800 bg-amber-100/90 border border-amber-200/70 px-2.5 py-0.5 rounded-full font-bold">
-                Decided by Admin
-              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsQuickAddLeaveTypeOpen(true)}
+                  className="inline-flex items-center gap-1 text-[11px] text-amber-800 bg-amber-100 hover:bg-amber-200 border border-amber-300 px-2.5 py-0.5 rounded-full font-bold transition-colors cursor-pointer"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>Add Category</span>
+                </button>
+                <span className="text-[11px] text-amber-800 bg-amber-100/90 border border-amber-200/70 px-2.5 py-0.5 rounded-full font-bold">
+                  Decided by Admin
+                </span>
+              </div>
             </div>
 
             <p className="text-[11px] text-slate-600 leading-relaxed">
@@ -1076,14 +1177,37 @@ export const EmployeeListPage = () => {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {leaveTypes.map((lt) => {
                   const currentVal = leaveAllocations[lt.id] ?? lt.daysPerYear ?? 10;
+                  const isFemaleOnly = lt.genderEligibility === 'FEMALE' || lt.code === 'ML';
+                  const isMaleOnly = lt.genderEligibility === 'MALE' || lt.code === 'PTL' || lt.code === 'PATL';
+                  const isEligibleForThisGender = 
+                    (!isFemaleOnly && !isMaleOnly) ||
+                    (isFemaleOnly && formData.gender === 'Female') ||
+                    (isMaleOnly && formData.gender === 'Male');
+
                   return (
                     <div
                       key={lt.id}
-                      className="p-3 bg-white rounded-xl border border-slate-200/80 shadow-xs space-y-1.5 transition-all hover:border-amber-300"
+                      className={`p-3 rounded-xl border shadow-xs space-y-1.5 transition-all ${
+                        !isEligibleForThisGender
+                          ? 'opacity-50 border-slate-200 bg-slate-100/70'
+                          : 'bg-white border-slate-200/80 hover:border-amber-300'
+                      }`}
                     >
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-slate-800">{lt.name}</span>
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
+                        <div className="flex items-center gap-1.5 truncate">
+                          <span className="text-xs font-bold text-slate-800 truncate">{lt.name}</span>
+                          {isFemaleOnly && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-pink-100 text-pink-700 shrink-0">
+                              Female Only
+                            </span>
+                          )}
+                          {isMaleOnly && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 shrink-0">
+                              Male Only
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 shrink-0">
                           {lt.code}
                         </span>
                       </div>
@@ -1094,6 +1218,7 @@ export const EmployeeListPage = () => {
                           min="0"
                           max="365"
                           value={currentVal}
+                          disabled={!isEligibleForThisGender}
                           onChange={(e) => {
                             const val = e.target.value === '' ? '' : parseFloat(e.target.value);
                             setLeaveAllocations((prev) => ({
@@ -1102,13 +1227,15 @@ export const EmployeeListPage = () => {
                             }));
                           }}
                           placeholder="e.g. 12"
-                          className="block w-full rounded-lg border text-sm py-1.5 px-3 bg-white border-slate-300 text-slate-900 font-semibold focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                          className="block w-full rounded-lg border text-sm py-1.5 px-3 bg-white border-slate-300 text-slate-900 font-semibold focus:border-brand-500 focus:ring-1 focus:ring-brand-500 disabled:bg-slate-100 disabled:text-slate-400"
                           required
                         />
                         <span className="text-xs text-slate-500 font-medium shrink-0">days</span>
                       </div>
                       <p className="text-[10px] text-slate-400 truncate" title={lt.description}>
-                        {lt.description || 'Annual entitlement'}
+                        {!isEligibleForThisGender
+                          ? `Not applicable to ${formData.gender} employees`
+                          : (lt.description || 'Annual entitlement')}
                       </p>
                     </div>
                   );
@@ -1268,6 +1395,110 @@ export const EmployeeListPage = () => {
         </form>
       </Modal>
 
+      {/* Quick Add Leave Category Modal */}
+      <Modal
+        isOpen={isQuickAddLeaveTypeOpen}
+        onClose={() => setIsQuickAddLeaveTypeOpen(false)}
+        title="Add New Leave Category"
+        subtitle="Define a new company leave type, default annual days, and policy."
+        maxWidth="max-w-md"
+      >
+        <form onSubmit={handleQuickAddLeaveType} className="space-y-4">
+          {quickLTError && (
+            <Alert variant="danger">
+              {quickLTError}
+            </Alert>
+          )}
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Category Name <span className="text-rose-500">*</span>
+            </label>
+            <Input
+              placeholder="e.g. Bereavement Leave"
+              value={quickLTName}
+              onChange={(e) => setQuickLTName(e.target.value)}
+              required
+              autoFocus
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Category Code <span className="text-slate-400 font-normal">(Optional)</span>
+              </label>
+              <Input
+                placeholder="e.g. BL"
+                value={quickLTCode}
+                onChange={(e) => setQuickLTCode(e.target.value.toUpperCase())}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Default Days / Year <span className="text-rose-500">*</span>
+              </label>
+              <Input
+                type="number"
+                min="0"
+                max="365"
+                step="0.5"
+                value={quickLTDays}
+                onChange={(e) => setQuickLTDays(e.target.value)}
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Gender Eligibility
+            </label>
+            <select
+              value={quickLTGender}
+              onChange={(e) => setQuickLTGender(e.target.value)}
+              className="block w-full rounded-lg border text-sm py-2.5 px-3 bg-white border-slate-300 text-slate-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+            >
+              <option value="ALL">All Employees (Male & Female)</option>
+              <option value="FEMALE">Female Employees Only (e.g. Maternity)</option>
+              <option value="MALE">Male Employees Only (e.g. Paternity)</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Description <span className="text-slate-400 font-normal">(Optional)</span>
+            </label>
+            <Input
+              placeholder="Brief description of when this leave is applicable..."
+              value={quickLTDesc}
+              onChange={(e) => setQuickLTDesc(e.target.value)}
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              onClick={() => setIsQuickAddLeaveTypeOpen(false)}
+              disabled={quickLTLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              size="md"
+              isLoading={quickLTLoading}
+              icon={Plus}
+            >
+              Add Category
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
       {/* View Employee Detail Modal */}
       <Modal
         isOpen={!!viewingEmployee}
@@ -1298,6 +1529,9 @@ export const EmployeeListPage = () => {
                   <Badge>{viewingEmployee.status}</Badge>
                   <span className="text-xs text-slate-500 font-medium">
                     Code: {viewingEmployee.employeeCode}
+                  </span>
+                  <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                    {viewingEmployee.gender || 'Male'}
                   </span>
                 </div>
               </div>

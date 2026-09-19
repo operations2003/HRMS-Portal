@@ -46,6 +46,7 @@ export const LeaveManagementPage = () => {
   const canApply = hasPermission('leave:write');
   const canApprove = hasPermission('leave:approve') || hasRole(['Manager', 'HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin']);
   const canViewTeam = hasRole(['Manager', 'HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin']);
+  const canManageTypes = hasRole(['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin']);
 
   // Active Tab: 'my' | 'team' (synced with ?tab= query param)
   const tabParam = searchParams.get('tab');
@@ -86,6 +87,49 @@ export const LeaveManagementPage = () => {
   const [cancellingRecord, setCancellingRecord] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
   const [isSubmittingCancel, setIsSubmittingCancel] = useState(false);
+
+  // Add Leave Category Modal (Admin/HR)
+  const [isAddTypeModalOpen, setIsAddTypeModalOpen] = useState(false);
+  const [newTypeName, setNewTypeName] = useState('');
+  const [newTypeCode, setNewTypeCode] = useState('');
+  const [newTypeDesc, setNewTypeDesc] = useState('');
+  const [newTypeDays, setNewTypeDays] = useState(10);
+  const [newTypeGender, setNewTypeGender] = useState('ALL');
+  const [newTypeLoading, setNewTypeLoading] = useState(false);
+  const [newTypeError, setNewTypeError] = useState(null);
+
+  const handleCreateLeaveType = async (e) => {
+    e.preventDefault();
+    if (!newTypeName.trim()) {
+      setNewTypeError('Leave category name is required.');
+      return;
+    }
+    try {
+      setNewTypeLoading(true);
+      setNewTypeError(null);
+      await leaveService.createLeaveType({
+        name: newTypeName.trim(),
+        code: (newTypeCode.trim() || newTypeName.trim().replace(/[^a-zA-Z]/g, '').slice(0, 4)).toUpperCase(),
+        description: newTypeDesc.trim(),
+        daysPerYear: parseFloat(newTypeDays) || 10,
+        genderEligibility: newTypeGender,
+        isPaid: true,
+        requiresApproval: true,
+      });
+      await fetchMetadata();
+      setIsAddTypeModalOpen(false);
+      setNewTypeName('');
+      setNewTypeCode('');
+      setNewTypeDesc('');
+      setNewTypeDays(10);
+      setNewTypeGender('ALL');
+      toast?.success?.(`Leave category "${newTypeName.trim()}" added successfully!`);
+    } catch (err) {
+      setNewTypeError(err.message || 'Failed to create leave category.');
+    } finally {
+      setNewTypeLoading(false);
+    }
+  };
 
   // Synchronize tab changes with URL search params
   const handleTabChange = (newTab) => {
@@ -650,6 +694,17 @@ export const LeaveManagementPage = () => {
             Refresh
           </Button>
 
+          {canManageTypes && (
+            <Button
+              variant="outline"
+              size="md"
+              icon={Plus}
+              onClick={() => setIsAddTypeModalOpen(true)}
+            >
+              Add Leave Category
+            </Button>
+          )}
+
           {canApply && (
             <Button
               variant="primary"
@@ -950,6 +1005,110 @@ export const LeaveManagementPage = () => {
             </Button>
           </div>
         </div>
+      </Modal>
+
+      {/* Add Leave Category Modal (Admin/HR) */}
+      <Modal
+        isOpen={isAddTypeModalOpen}
+        onClose={() => setIsAddTypeModalOpen(false)}
+        title="Add New Leave Category"
+        subtitle="Define a new company leave type, default annual days, and approval policy."
+        maxWidth="max-w-md"
+      >
+        <form onSubmit={handleCreateLeaveType} className="space-y-4">
+          {newTypeError && (
+            <Alert variant="danger" dismissible onDismiss={() => setNewTypeError(null)}>
+              {newTypeError}
+            </Alert>
+          )}
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Category Name <span className="text-rose-500">*</span>
+            </label>
+            <Input
+              placeholder="e.g. Bereavement Leave"
+              value={newTypeName}
+              onChange={(e) => setNewTypeName(e.target.value)}
+              required
+              autoFocus
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Category Code <span className="text-slate-400 font-normal">(Optional)</span>
+              </label>
+              <Input
+                placeholder="e.g. BL"
+                value={newTypeCode}
+                onChange={(e) => setNewTypeCode(e.target.value.toUpperCase())}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Default Days / Year <span className="text-rose-500">*</span>
+              </label>
+              <Input
+                type="number"
+                min="0"
+                max="365"
+                step="0.5"
+                value={newTypeDays}
+                onChange={(e) => setNewTypeDays(e.target.value)}
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Gender Eligibility
+            </label>
+            <select
+              value={newTypeGender}
+              onChange={(e) => setNewTypeGender(e.target.value)}
+              className="block w-full rounded-lg border text-sm py-2.5 px-3 bg-white border-slate-300 text-slate-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+            >
+              <option value="ALL">All Employees (Male & Female)</option>
+              <option value="FEMALE">Female Employees Only (e.g. Maternity)</option>
+              <option value="MALE">Male Employees Only (e.g. Paternity)</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Description <span className="text-slate-400 font-normal">(Optional)</span>
+            </label>
+            <Input
+              placeholder="Brief description of when this leave is applicable..."
+              value={newTypeDesc}
+              onChange={(e) => setNewTypeDesc(e.target.value)}
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              onClick={() => setIsAddTypeModalOpen(false)}
+              disabled={newTypeLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              size="md"
+              isLoading={newTypeLoading}
+              icon={Plus}
+            >
+              Add Category
+            </Button>
+          </div>
+        </form>
       </Modal>
     </div>
   );
