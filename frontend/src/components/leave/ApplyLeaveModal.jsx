@@ -5,6 +5,7 @@ import {
   Clock,
   FileText,
   AlertCircle,
+  AlertTriangle,
   Info,
   CheckCircle2,
   Sparkles,
@@ -23,6 +24,25 @@ const DEFAULT_LEAVE_CATEGORIES = [
   { id: 'lt-sl', name: 'Sick', code: 'SL', description: 'Leave for medical and health recovery' },
   { id: 'lt-cl', name: 'Casual', code: 'CL', description: 'Casual leave for personal matters' },
 ];
+
+/**
+ * Returns the next upcoming business day (Mon - Fri) formatted as YYYY-MM-DD.
+ * If today is Saturday (6), advances to Monday (+2 days).
+ * If today is Sunday (0), advances to Monday (+1 day).
+ */
+const getNextWorkingDay = (baseDate = new Date()) => {
+  const d = new Date(baseDate);
+  const day = d.getDay(); // 0 = Sun, 6 = Sat
+  if (day === 6) {
+    d.setDate(d.getDate() + 2);
+  } else if (day === 0) {
+    d.setDate(d.getDate() + 1);
+  }
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const date = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${date}`;
+};
 
 export const ApplyLeaveModal = ({
   isOpen,
@@ -50,15 +70,15 @@ export const ApplyLeaveModal = ({
   const [durationPreview, setDurationPreview] = useState(null);
   const [isCalculating, setIsCalculating] = useState(false);
 
-  // Initialize or reset form on open
+  // Initialize or reset form on open (defaults to next working business day)
   useEffect(() => {
     if (isOpen) {
       const defaultType = effectiveLeaveTypes[0]?.id || '';
-      const todayStr = new Date().toISOString().split('T')[0];
+      const defaultWorkingDay = getNextWorkingDay();
       setFormData({
         leaveTypeId: defaultType,
-        startDate: todayStr,
-        endDate: todayStr,
+        startDate: defaultWorkingDay,
+        endDate: defaultWorkingDay,
         isHalfDay: false,
         halfDayPeriod: 'FIRST_HALF',
         reason: '',
@@ -95,7 +115,13 @@ export const ApplyLeaveModal = ({
           setDurationPreview(result);
         }
       } catch (err) {
-        // Suppress live calculation error if dates are invalid
+        if (isMounted) {
+          setDurationPreview({
+            isNonWorkingPeriod: true,
+            totalDays: 0,
+            warning: err.message || 'Cannot calculate duration for selected dates.',
+          });
+        }
       } finally {
         if (isMounted) setIsCalculating(false);
       }
@@ -113,7 +139,7 @@ export const ApplyLeaveModal = ({
     const errs = {};
 
     if (!formData.leaveTypeId) {
-      errs.leaveTypeId = 'Please select a leave type.';
+      errs.leaveTypeId = 'Please select a leave category.';
     }
 
     if (!formData.startDate) {
@@ -126,6 +152,10 @@ export const ApplyLeaveModal = ({
       } else if (formData.startDate && formData.endDate && formData.startDate > formData.endDate) {
         errs.endDate = 'End date cannot be earlier than start date.';
       }
+    }
+
+    if (durationPreview && (durationPreview.isNonWorkingPeriod || durationPreview.totalDays === 0)) {
+      errs.startDate = durationPreview.warning || 'Selected dates contain no working business days (Mon–Fri).';
     }
 
     if (formData.isHalfDay && !formData.halfDayPeriod) {
@@ -319,21 +349,33 @@ export const ApplyLeaveModal = ({
 
         {/* 4. Backend-Calculated Duration Preview */}
         {durationPreview && (
-          <div className="p-3.5 rounded-2xl bg-brand-50/60 border border-brand-100 flex items-center justify-between text-xs">
-            <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-brand-600" />
-              <span className="font-semibold text-brand-900">
-                Calculated Duration:{' '}
-                <strong className="text-brand-700 font-bold">
-                  {durationPreview.totalDays} {durationPreview.totalDays === 1 ? 'day' : 'days'}
-                </strong>
-              </span>
+          durationPreview.isNonWorkingPeriod || durationPreview.totalDays === 0 ? (
+            <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200/80 flex items-start gap-2.5 text-xs text-amber-900">
+              <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <div className="font-bold text-amber-900">Non-Working Day Selected</div>
+                <div className="text-amber-800 mt-0.5 leading-relaxed">
+                  {durationPreview.warning || 'Selected dates fall on a weekend or public holiday. Standard leaves only deduct working business days (Monday to Friday). Please select a working day.'}
+                </div>
+              </div>
             </div>
-            <div className="text-slate-500">
-              {durationPreview.weekendDays > 0 && `(Excludes ${durationPreview.weekendDays} weekend days)`}
-              {durationPreview.holidayDays > 0 && `(Excludes ${durationPreview.holidayDays} holiday days)`}
+          ) : (
+            <div className="p-3.5 rounded-2xl bg-brand-50/60 border border-brand-100 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-brand-600" />
+                <span className="font-semibold text-brand-900">
+                  Calculated Duration:{' '}
+                  <strong className="text-brand-700 font-bold">
+                    {durationPreview.totalDays} {durationPreview.totalDays === 1 ? 'day' : 'days'}
+                  </strong>
+                </span>
+              </div>
+              <div className="text-slate-500">
+                {durationPreview.weekendDays > 0 && `(Excludes ${durationPreview.weekendDays} weekend days)`}
+                {durationPreview.holidayDays > 0 && `(Excludes ${durationPreview.holidayDays} holiday days)`}
+              </div>
             </div>
-          </div>
+          )
         )}
 
         {/* 5. Reason for Leave */}
@@ -373,7 +415,7 @@ export const ApplyLeaveModal = ({
             size="md"
             icon={CalendarDays}
             isLoading={isSubmitting}
-            disabled={isSubmitting}
+            disabled={isSubmitting || durationPreview?.isNonWorkingPeriod || durationPreview?.totalDays === 0}
           >
             {isSubmitting ? 'Submitting Application...' : 'Submit Leave Request'}
           </Button>
