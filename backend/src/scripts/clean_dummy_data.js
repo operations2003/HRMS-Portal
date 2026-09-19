@@ -58,6 +58,13 @@ const REAL_PAYROLL_PERIOD_IDS = [
   'pp-1789562790815-347'
 ];
 
+const REAL_ROLE_IDS = [
+  'role-admin',
+  'role-hr',
+  'role-manager',
+  'role-employee'
+];
+
 async function runCleanup() {
   console.log('====================================================');
   console.log(`🧹 HRMS Database Test / Dummy Data Cleanup Utility`);
@@ -281,6 +288,27 @@ async function runCleanup() {
       'organizations (test organizations)',
       `DELETE FROM organizations WHERE id != $1;`,
       [REAL_ORG_ID]
+    );
+
+    console.log('\nStep 12: Cleaning Custom Test Roles & Permissions...');
+    await runDelete(
+      'role_permissions (test roles)',
+      `DELETE FROM role_permissions WHERE NOT (role_id = ANY($1));`,
+      [REAL_ROLE_IDS]
+    );
+    await runDelete(
+      'user_roles (test roles)',
+      `DELETE FROM user_roles WHERE NOT (role_id = ANY($1));`,
+      [REAL_ROLE_IDS]
+    );
+    await client.query(
+      `UPDATE users SET role_id = 'role-employee' WHERE NOT (role_id = ANY($1));`,
+      [REAL_ROLE_IDS]
+    );
+    await runDelete(
+      'roles (custom test roles like Custom Auditor)',
+      `DELETE FROM roles WHERE NOT (id = ANY($1));`,
+      [REAL_ROLE_IDS]
     );
 
     if (isDryRun) {
