@@ -72,53 +72,11 @@ export const notificationService = {
   },
 
   // =========================================================================
-  // Phase 5 Domain Event Dispatchers (Payroll, Payslips, Helpdesk, Requests)
+  // Domain Event Dispatchers (Helpdesk, Requests, Workflows, Exit, etc.)
   // =========================================================================
 
   /**
-   * 1. Event: Payroll Processed
-   */
-  async notifyPayrollProcessed({ orgId, periodId, periodName, userIds = [] }) {
-    if (!userIds || userIds.length === 0) return [];
-
-    logger.info('NotificationService', `Dispatching PAYROLL_PROCESSED for period ${periodName} to ${userIds.length} users`);
-
-    const notifications = userIds.map((userId) => ({
-      orgId,
-      userId,
-      eventType: 'PAYROLL_PROCESSED',
-      title: `Payroll Processed for ${periodName}`,
-      message: `The payroll cycle for ${periodName} has been processed successfully.`,
-      entityType: 'PAYROLL_PERIOD',
-      entityId: periodId,
-      actionUrl: '/payroll',
-    }));
-
-    return notificationRepository.createBatch(notifications);
-  },
-
-  /**
-   * 2. Event: Payslip Available
-   */
-  async notifyPayslipAvailable({ orgId, userId, payslipNumber, periodName, payslipId }) {
-    if (!userId) return null;
-
-    logger.info('NotificationService', `Dispatching PAYSLIP_AVAILABLE for payslip ${payslipNumber} to user ${userId}`);
-
-    return notificationRepository.create({
-      orgId,
-      userId,
-      eventType: 'PAYSLIP_AVAILABLE',
-      title: `Payslip Available: ${periodName}`,
-      message: `Your payslip ${payslipNumber} for ${periodName} is now ready for view and download.`,
-      entityType: 'PAYSLIP',
-      entityId: payslipId,
-      actionUrl: `/payslips/${payslipId}`,
-    });
-  },
-
-  /**
-   * 3. Event: Helpdesk Ticket Created
+   * 1. Event: Helpdesk Ticket Created
    */
   async notifyTicketCreated({ orgId, ticketId, ticketNumber, subject, requesterUserId, assigneeUserId = null }) {
     const notifications = [];

@@ -48,7 +48,7 @@ export const notificationRepository = {
   },
 
   /**
-   * Create multiple notifications (e.g. for payroll batch processing across company)
+   * Create multiple notifications in batch (e.g. for broadcast announcements or mass events)
    */
   async createBatch(notifications) {
     if (!notifications || notifications.length === 0) return [];

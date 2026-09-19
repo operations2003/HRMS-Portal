@@ -135,7 +135,7 @@ export const validateUpdateConfig = (body) => {
   }
 
   if (body.category !== undefined) {
-    const validCats = ['EXIT_OFFBOARDING', 'SECURITY_RBAC', 'PAYROLL', 'GENERAL'];
+    const validCats = ['EXIT_OFFBOARDING', 'SECURITY_RBAC', 'GENERAL'];
     if (!validCats.includes(body.category)) {
       errors.push(`Category must be one of: ${validCats.join(', ')}.`);
     }

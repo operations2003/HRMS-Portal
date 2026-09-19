@@ -11,8 +11,6 @@ import attendanceRoutes from './attendanceRoutes.js';
 import leaveRoutes from './leaveRoutes.js';
 import departmentRoutes from './departmentRoutes.js';
 import designationRoutes from './designationRoutes.js';
-import payrollRoutes from './payrollRoutes.js';
-import payslipRoutes from './payslipRoutes.js';
 import helpdeskRoutes from './helpdeskRoutes.js';
 import employeeRequestRoutes from './employeeRequestRoutes.js';
 import notificationRoutes from './notificationRoutes.js';
@@ -36,7 +34,7 @@ router.get('/health', (req, res) => {
   });
 });
 
-// API v1 Modules
+// API v1 Modules (All 21 non-payroll modules mounted)
 router.use('/v1/auth', authRoutes);
 router.use('/v1/organizations', orgRoutes);
 router.use('/v1/employees', employeeRoutes);
@@ -49,8 +47,6 @@ router.use('/v1/attendance', attendanceRoutes);
 router.use('/v1/leaves', leaveRoutes);
 router.use('/v1/departments', departmentRoutes);
 router.use('/v1/designations', designationRoutes);
-router.use('/v1/payroll', payrollRoutes);
-router.use('/v1/payslips', payslipRoutes);
 router.use('/v1/helpdesk', helpdeskRoutes);
 router.use('/v1/requests', employeeRequestRoutes);
 router.use('/v1/notifications', notificationRoutes);
