@@ -5,21 +5,11 @@ const isDryRun = process.argv.includes('--dry-run');
 const REAL_ORG_ID = 'org-1';
 
 const REAL_USER_IDS = [
-  'user-superadmin-shubham',
-  'user-1789558456935',
-  'user-1789565075726',
-  'user-1789637937505',
-  'user-1789638224824',
-  'user-1789638386425'
+  'user-superadmin-shubham'
 ];
 
 const REAL_EMPLOYEE_IDS = [
-  'emp-shubham-admin',
-  'emp-1789558457030',
-  'emp-1789565076012',
-  'emp-1789637937697',
-  'emp-1789638224986',
-  'emp-1789638386697'
+  'emp-shubham-admin'
 ];
 
 const REAL_DEPT_IDS = [
