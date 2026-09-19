@@ -80,94 +80,27 @@ async function runCleanup() {
     await runDelete('admin_configurations (non-org-1)', 'DELETE FROM admin_configurations WHERE org_id != $1;', [REAL_ORG_ID]);
 
     console.log('\nStep 3: Cleaning Helpdesk ticket test records...');
-    await runDelete(
-      'ticket_comments (from test users/tickets)',
-      `DELETE FROM ticket_comments 
-       WHERE org_id != $1 
-          OR NOT (user_id = ANY($2))
-          OR ticket_id IN (SELECT id FROM helpdesk_tickets WHERE subject LIKE 'Regression Verification%' OR NOT (employee_id = ANY($3)));`,
-      [REAL_ORG_ID, REAL_USER_IDS, REAL_EMPLOYEE_IDS]
-    );
-    await runDelete(
-      'helpdesk_tickets (regression tests & test employees)',
-      `DELETE FROM helpdesk_tickets 
-       WHERE org_id != $1 
-          OR subject LIKE 'Regression Verification%'
-          OR NOT (employee_id = ANY($2));`,
-      [REAL_ORG_ID, REAL_EMPLOYEE_IDS]
-    );
+    await runDelete('ticket_comments', 'DELETE FROM ticket_comments;');
+    await runDelete('helpdesk_tickets', 'DELETE FROM helpdesk_tickets;');
 
     console.log('\nStep 4: Cleaning Employee Requests test updates & test requests...');
-    await runDelete(
-      'employee_request_updates (test orgs / test users)',
-      `DELETE FROM employee_request_updates 
-       WHERE org_id != $1 OR NOT (user_id = ANY($2));`,
-      [REAL_ORG_ID, REAL_USER_IDS]
-    );
-    await runDelete(
-      'employee_requests (test orgs / test employees)',
-      `DELETE FROM employee_requests 
-       WHERE org_id != $1 OR NOT (employee_id = ANY($2));`,
-      [REAL_ORG_ID, REAL_EMPLOYEE_IDS]
-    );
+    await runDelete('employee_request_updates', 'DELETE FROM employee_request_updates;');
+    await runDelete('employee_requests', 'DELETE FROM employee_requests;');
 
     console.log('\nStep 5: Cleaning Performance module test data...');
-    await runDelete(
-      'performance_goals (test employees)',
-      `DELETE FROM performance_goals 
-       WHERE NOT (employee_id = ANY($1)) 
-          OR performance_record_id IN (SELECT id FROM performance_records WHERE NOT (employee_id = ANY($1)));`,
-      [REAL_EMPLOYEE_IDS]
-    );
-    await runDelete(
-      'performance_review_history (test employees / test actors)',
-      `DELETE FROM performance_review_history 
-       WHERE NOT (actor_user_id = ANY($1)) 
-          OR performance_record_id IN (SELECT id FROM performance_records WHERE NOT (employee_id = ANY($2)));`,
-      [REAL_USER_IDS, REAL_EMPLOYEE_IDS]
-    );
-    await runDelete(
-      'performance_records (test employees / test orgs)',
-      `DELETE FROM performance_records 
-       WHERE org_id != $1 OR NOT (employee_id = ANY($2));`,
-      [REAL_ORG_ID, REAL_EMPLOYEE_IDS]
-    );
-    await runDelete(
-      'performance_periods (unlinked test periods)',
-      `DELETE FROM performance_periods 
-       WHERE org_id != $1 
-          OR id NOT IN (SELECT DISTINCT period_id FROM performance_records WHERE period_id IS NOT NULL);`,
-      [REAL_ORG_ID]
-    );
+    await runDelete('performance_goals', 'DELETE FROM performance_goals;');
+    await runDelete('performance_review_history', 'DELETE FROM performance_review_history;');
+    await runDelete('performance_records', 'DELETE FROM performance_records;');
+    await runDelete('performance_periods', 'DELETE FROM performance_periods;');
 
     console.log('\nStep 6: Cleaning Approval Workflows & Notifications...');
-    await runDelete(
-      'approval_workflow_actions (test actors / test workflows)',
-      `DELETE FROM approval_workflow_actions 
-       WHERE NOT (actor_user_id = ANY($1))
-          OR workflow_id IN (SELECT id FROM approval_workflows WHERE org_id != $2 OR NOT (requester_id = ANY($3)));`,
-      [REAL_USER_IDS, REAL_ORG_ID, REAL_EMPLOYEE_IDS]
-    );
-    await runDelete(
-      'approval_workflows (test employees / test orgs)',
-      `DELETE FROM approval_workflows 
-       WHERE org_id != $1 OR NOT (requester_id = ANY($2));`,
-      [REAL_ORG_ID, REAL_EMPLOYEE_IDS]
-    );
-    await runDelete(
-      'notifications (test users / test orgs)',
-      `DELETE FROM notifications 
-       WHERE org_id != $1 OR NOT (user_id = ANY($2));`,
-      [REAL_ORG_ID, REAL_USER_IDS]
-    );
-
+    await runDelete('approval_workflow_actions', 'DELETE FROM approval_workflow_actions;');
+    await runDelete('approval_workflows', 'DELETE FROM approval_workflows;');
+    await runDelete('notifications', 'DELETE FROM notifications;');
 
     console.log('\nStep 8: Cleaning Leave and Attendance test records...');
-    await runDelete(
-      'leave_requests (test employees / test orgs)',
-      `DELETE FROM leave_requests WHERE org_id != $1 OR NOT (employee_id = ANY($2));`,
-      [REAL_ORG_ID, REAL_EMPLOYEE_IDS]
-    );
+    await runDelete('leave_requests', 'DELETE FROM leave_requests;');
+    await runDelete('attendance_records', 'DELETE FROM attendance_records;');
     await runDelete(
       'leave_balances (test employees / test orgs)',
       `DELETE FROM leave_balances WHERE org_id != $1 OR NOT (employee_id = ANY($2));`,
@@ -177,11 +110,6 @@ async function runCleanup() {
       'leave_types (test leave types)',
       `DELETE FROM leave_types WHERE org_id != $1 OR NOT (id = ANY($2));`,
       [REAL_ORG_ID, REAL_LEAVE_TYPE_IDS]
-    );
-    await runDelete(
-      'attendance_records (test employees / test orgs)',
-      `DELETE FROM attendance_records WHERE org_id != $1 OR NOT (employee_id = ANY($2));`,
-      [REAL_ORG_ID, REAL_EMPLOYEE_IDS]
     );
     await runDelete(
       'holidays (test orgs)',
@@ -204,61 +132,17 @@ async function runCleanup() {
     await runDelete('onboarding_candidates', 'DELETE FROM onboarding_candidates;');
 
     console.log('\nStep 9b: Cleaning HRMS v2 Modules test records...');
-    await runDelete(
-      'work_tasks (test tasks)',
-      `DELETE FROM work_tasks WHERE NOT (assignee_id = ANY($1) OR creator_id = ANY($1));`,
-      [REAL_EMPLOYEE_IDS]
-    );
-    await runDelete(
-      'expense_claims (test expense claims)',
-      `DELETE FROM expense_claims WHERE NOT (employee_id = ANY($1));`,
-      [REAL_EMPLOYEE_IDS]
-    );
-    await runDelete(
-      'course_enrollments (test enrollments)',
-      `DELETE FROM course_enrollments WHERE NOT (employee_id = ANY($1));`,
-      [REAL_EMPLOYEE_IDS]
-    );
-    await runDelete(
-      'employee_skills (test skills)',
-      `DELETE FROM employee_skills WHERE NOT (employee_id = ANY($1));`,
-      [REAL_EMPLOYEE_IDS]
-    );
-    await runDelete(
-      'courses (test courses)',
-      `DELETE FROM courses WHERE org_id != $1;`,
-      [REAL_ORG_ID]
-    );
-    await runDelete(
-      'announcement_read_receipts (test receipts)',
-      `DELETE FROM announcement_read_receipts WHERE NOT (user_id = ANY($1));`,
-      [REAL_USER_IDS]
-    );
-    await runDelete(
-      'announcements (test announcements)',
-      `DELETE FROM announcements WHERE org_id != $1;`,
-      [REAL_ORG_ID]
-    );
-    await runDelete(
-      'survey_responses (test survey responses)',
-      `DELETE FROM survey_responses WHERE NOT (respondent_id = ANY($1));`,
-      [REAL_USER_IDS]
-    );
-    await runDelete(
-      'engagement_surveys (test surveys)',
-      `DELETE FROM engagement_surveys WHERE org_id != $1;`,
-      [REAL_ORG_ID]
-    );
-    await runDelete(
-      'employee_recognitions (test recognitions)',
-      `DELETE FROM employee_recognitions WHERE NOT (sender_id = ANY($1) AND recipient_id = ANY($1));`,
-      [REAL_EMPLOYEE_IDS]
-    );
-    await runDelete(
-      'probation_evaluations (test evaluations)',
-      `DELETE FROM probation_evaluations WHERE NOT (employee_id = ANY($1));`,
-      [REAL_EMPLOYEE_IDS]
-    );
+    await runDelete('work_tasks', 'DELETE FROM work_tasks;');
+    await runDelete('expense_claims', 'DELETE FROM expense_claims;');
+    await runDelete('course_enrollments', 'DELETE FROM course_enrollments;');
+    await runDelete('employee_skills', 'DELETE FROM employee_skills;');
+    await runDelete('courses', 'DELETE FROM courses;');
+    await runDelete('announcement_read_receipts', 'DELETE FROM announcement_read_receipts;');
+    await runDelete('announcements', 'DELETE FROM announcements;');
+    await runDelete('survey_responses', 'DELETE FROM survey_responses;');
+    await runDelete('engagement_surveys', 'DELETE FROM engagement_surveys;');
+    await runDelete('employee_recognitions', 'DELETE FROM employee_recognitions;');
+    await runDelete('probation_evaluations', 'DELETE FROM probation_evaluations;');
 
     console.log('\nStep 10: Cleaning Employee & User test accounts and associations...');
     // Break any self-referencing manager_id links on employees first
