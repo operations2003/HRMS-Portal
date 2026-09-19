@@ -79,7 +79,7 @@ export const EngagementPage = () => {
 
   const fetchEmployees = useCallback(async () => {
     try {
-      const res = await employeeService.listEmployees({ limit: 100 });
+      const res = await employeeService.listEmployees({ status: 'Active', limit: 250 });
       const empList = res.employees || res.data?.employees || (Array.isArray(res) ? res : []);
       setEmployees(empList);
     } catch (err) {
