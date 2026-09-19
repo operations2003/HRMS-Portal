@@ -33,6 +33,11 @@ const mapLeaveBalanceRow = (row) => {
     leaveTypeId: row.leave_type_id,
     leaveTypeName: row.lt_name || '',
     leaveTypeCode: row.lt_code || '',
+    leaveType: {
+      id: row.leave_type_id,
+      name: row.lt_name || '',
+      code: row.lt_code || '',
+    },
     year: row.year,
     allocatedDays: parseFloat(row.allocated_days) || 0.0,
     usedDays: parseFloat(row.used_days) || 0.0,
@@ -659,5 +664,37 @@ export const leaveRepository = {
     `;
     const res = await pool.query(sql, [pendingDelta, usedDelta, employeeId, leaveTypeId, year]);
     return res.rows.length > 0 ? mapLeaveBalanceRow(res.rows[0]) : null;
+  },
+
+  /**
+   * Set or update custom leave allocations for an employee
+   */
+  async setEmployeeLeaveAllocations(employeeId, orgId, year = new Date().getFullYear(), allocations = {}) {
+    let list = [];
+    if (Array.isArray(allocations)) {
+      list = allocations.map((a) => ({
+        leaveTypeId: a.leaveTypeId || a.id,
+        days: parseFloat(a.days ?? a.allocatedDays ?? 0),
+      }));
+    } else if (allocations && typeof allocations === 'object') {
+      list = Object.entries(allocations).map(([leaveTypeId, days]) => ({
+        leaveTypeId,
+        days: parseFloat(days ?? 0),
+      }));
+    }
+
+    for (const item of list) {
+      if (!item.leaveTypeId || isNaN(item.days)) continue;
+      const balanceId = `lb-${employeeId}-${item.leaveTypeId}-${year}`;
+      const sql = `
+        INSERT INTO leave_balances (id, org_id, employee_id, leave_type_id, year, allocated_days, used_days, pending_days, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, 0.0, 0.0, NOW())
+        ON CONFLICT (employee_id, leave_type_id, year)
+        DO UPDATE SET allocated_days = EXCLUDED.allocated_days, updated_at = NOW();
+      `;
+      await pool.query(sql, [balanceId, orgId, employeeId, item.leaveTypeId, year, Math.max(0, item.days)]);
+    }
+
+    return this.getLeaveBalances(employeeId, year);
   },
 };
