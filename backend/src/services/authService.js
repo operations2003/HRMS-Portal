@@ -28,9 +28,9 @@ export const authService = {
     }
 
     // Security invariant: Prevent deprovisioned or exited employees from logging in
+    const emp = await employeeRepository.findByUserId(user.id, user.orgId);
     const normRole = (user.roleName || '').toLowerCase();
     if (normRole !== 'superadmin') {
-      const emp = await employeeRepository.findByUserId(user.id, user.orgId);
       if (emp && (emp.status === 'Exited' || emp.status === 'Terminated' || emp.status === 'Inactive')) {
         const error = new Error('Access denied: Your employee account has been deprovisioned.');
         error.statusCode = 403;
@@ -68,6 +68,8 @@ export const authService = {
         roleDescription: user.roleDescription,
         permissions: user.permissions,
         organization: user.organization,
+        employeeId: emp ? emp.id : null,
+        employeeCode: emp ? emp.employeeCode : null,
       },
     };
   },
@@ -89,9 +91,9 @@ export const authService = {
       throw error;
     }
 
+    const emp = await employeeRepository.findByUserId(user.id, user.orgId);
     const normRole = (user.roleName || '').toLowerCase();
     if (normRole !== 'superadmin') {
-      const emp = await employeeRepository.findByUserId(user.id, user.orgId);
       if (emp && (emp.status === 'Exited' || emp.status === 'Terminated' || emp.status === 'Inactive')) {
         const error = new Error('Access denied: Your employee account has been deprovisioned.');
         error.statusCode = 403;
@@ -110,6 +112,8 @@ export const authService = {
       roleDescription: user.roleDescription,
       permissions: user.permissions,
       organization: user.organization,
+      employeeId: emp ? emp.id : null,
+      employeeCode: emp ? emp.employeeCode : null,
     };
   },
 };

@@ -80,7 +80,7 @@ export const TasksPage = () => {
   useEffect(() => {
     // Fetch employees for assignment
     employeeService.listEmployees({ limit: 100 }).then((res) => {
-      setEmployees(res.data?.employees || []);
+      setEmployees(res.employees || res.data?.employees || (Array.isArray(res) ? res : []));
     }).catch(() => {});
   }, []);
 

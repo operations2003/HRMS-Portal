@@ -12,7 +12,17 @@ export const employeeService = {
     const queryString = query.toString() ? `?${query.toString()}` : '';
 
     const res = await http.get(`/v1/employees${queryString}`);
-    return res.data;
+    const raw = res?.data || {};
+    const employees = Array.isArray(raw)
+      ? raw
+      : (Array.isArray(raw.employees) ? raw.employees : (Array.isArray(res) ? res : []));
+    return {
+      ...raw,
+      employees,
+      items: employees,
+      data: { ...raw, employees },
+      pagination: raw.pagination || { total: employees.length, page: 1, limit: 20, totalPages: 1 },
+    };
   },
 
   async getMetadata() {

@@ -77,11 +77,19 @@ export const EngagementPage = () => {
     loadData();
   }, [loadData]);
 
-  useEffect(() => {
-    employeeService.listEmployees({ limit: 100 }).then((res) => {
-      setEmployees(res.data?.employees || []);
-    }).catch(() => {});
+  const fetchEmployees = useCallback(async () => {
+    try {
+      const res = await employeeService.listEmployees({ limit: 100 });
+      const empList = res.employees || res.data?.employees || (Array.isArray(res) ? res : []);
+      setEmployees(empList);
+    } catch (err) {
+      console.error('Failed to load employees for engagement:', err);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchEmployees();
+  }, [fetchEmployees]);
 
   const handleCreateAnnouncement = async (e) => {
     e.preventDefault();
@@ -135,7 +143,13 @@ export const EngagementPage = () => {
 
         <div className="flex items-center gap-3">
           {activeTab === 'kudos' && (
-            <Button onClick={() => setShowKudosModal(true)} icon={Heart}>
+            <Button
+              onClick={() => {
+                fetchEmployees();
+                setShowKudosModal(true);
+              }}
+              icon={Heart}
+            >
               Give Kudos
             </Button>
           )}
@@ -419,10 +433,14 @@ export const EngagementPage = () => {
                 >
                   <option value="">Select an employee...</option>
                   {employees
-                    .filter((emp) => emp.id !== user.employeeId)
+                    .filter((emp) => {
+                      if (user?.employeeId && emp.id === user.employeeId) return false;
+                      if (user?.id && (emp.userId === user.id || emp.user?.id === user.id)) return false;
+                      return true;
+                    })
                     .map((emp) => (
                       <option key={emp.id} value={emp.id}>
-                        {emp.firstName} {emp.lastName} ({emp.employeeCode})
+                        {emp.firstName} {emp.lastName} ({emp.employeeCode || emp.designation?.title || 'Employee'})
                       </option>
                     ))}
                 </select>
