@@ -41,22 +41,6 @@ const REAL_LEAVE_TYPE_IDS = [
   'lt-lwp'
 ];
 
-const REAL_PAYROLL_RECORD_IDS = [
-  'prec-1789562791039-274'
-];
-
-const REAL_PAYSLIP_IDS = [
-  'ps-1789562791915-216'
-];
-
-const REAL_PAYROLL_PROFILE_IDS = [
-  'pp-emp-shubham-admin'
-];
-
-const REAL_PAYROLL_PERIOD_IDS = [
-  'pp-org1-2026-09',
-  'pp-1789562790815-347'
-];
 
 const REAL_ROLE_IDS = [
   'role-admin',
@@ -177,32 +161,6 @@ async function runCleanup() {
       [REAL_ORG_ID, REAL_USER_IDS]
     );
 
-    console.log('\nStep 7: Cleaning Payroll test records & profiles...');
-    await runDelete(
-      'payslips (test payslips)',
-      `DELETE FROM payslips WHERE org_id != $1 OR NOT (id = ANY($2));`,
-      [REAL_ORG_ID, REAL_PAYSLIP_IDS]
-    );
-    await runDelete(
-      'payroll_items (test payroll records)',
-      `DELETE FROM payroll_items WHERE NOT (payroll_record_id = ANY($1));`,
-      [REAL_PAYROLL_RECORD_IDS]
-    );
-    await runDelete(
-      'payroll_records (test payroll records)',
-      `DELETE FROM payroll_records WHERE org_id != $1 OR NOT (id = ANY($2));`,
-      [REAL_ORG_ID, REAL_PAYROLL_RECORD_IDS]
-    );
-    await runDelete(
-      'payroll_profiles (test employee profiles)',
-      `DELETE FROM payroll_profiles WHERE org_id != $1 OR NOT (id = ANY($2));`,
-      [REAL_ORG_ID, REAL_PAYROLL_PROFILE_IDS]
-    );
-    await runDelete(
-      'payroll_periods (test periods)',
-      `DELETE FROM payroll_periods WHERE org_id != $1 OR NOT (id = ANY($2));`,
-      [REAL_ORG_ID, REAL_PAYROLL_PERIOD_IDS]
-    );
 
     console.log('\nStep 8: Cleaning Leave and Attendance test records...');
     await runDelete(
@@ -237,16 +195,70 @@ async function runCleanup() {
       'Clear document_vault_id references in employee_requests',
       `UPDATE employee_requests SET document_vault_id = NULL WHERE document_vault_id IS NOT NULL;`
     );
-    await runDelete(
-      'Clear document_vault_id references in payslips',
-      `UPDATE payslips SET document_vault_id = NULL WHERE document_vault_id IS NOT NULL;`
-    );
+
     await runDelete('document_vault (test uploaded files)', 'DELETE FROM document_vault;');
     await runDelete('new_hires (dummy / test hires)', 'DELETE FROM new_hires;');
     await runDelete('onboarding_documents', 'DELETE FROM onboarding_documents;');
     await runDelete('onboarding_checklists', 'DELETE FROM onboarding_checklists;');
     await runDelete('onboarding_it_setup', 'DELETE FROM onboarding_it_setup;');
     await runDelete('onboarding_candidates', 'DELETE FROM onboarding_candidates;');
+
+    console.log('\nStep 9b: Cleaning HRMS v2 Modules test records...');
+    await runDelete(
+      'work_tasks (test tasks)',
+      `DELETE FROM work_tasks WHERE NOT (assignee_id = ANY($1) OR creator_id = ANY($1));`,
+      [REAL_EMPLOYEE_IDS]
+    );
+    await runDelete(
+      'expense_claims (test expense claims)',
+      `DELETE FROM expense_claims WHERE NOT (employee_id = ANY($1));`,
+      [REAL_EMPLOYEE_IDS]
+    );
+    await runDelete(
+      'course_enrollments (test enrollments)',
+      `DELETE FROM course_enrollments WHERE NOT (employee_id = ANY($1));`,
+      [REAL_EMPLOYEE_IDS]
+    );
+    await runDelete(
+      'employee_skills (test skills)',
+      `DELETE FROM employee_skills WHERE NOT (employee_id = ANY($1));`,
+      [REAL_EMPLOYEE_IDS]
+    );
+    await runDelete(
+      'courses (test courses)',
+      `DELETE FROM courses WHERE org_id != $1;`,
+      [REAL_ORG_ID]
+    );
+    await runDelete(
+      'announcement_read_receipts (test receipts)',
+      `DELETE FROM announcement_read_receipts WHERE NOT (user_id = ANY($1));`,
+      [REAL_USER_IDS]
+    );
+    await runDelete(
+      'announcements (test announcements)',
+      `DELETE FROM announcements WHERE org_id != $1;`,
+      [REAL_ORG_ID]
+    );
+    await runDelete(
+      'survey_responses (test survey responses)',
+      `DELETE FROM survey_responses WHERE NOT (respondent_id = ANY($1));`,
+      [REAL_USER_IDS]
+    );
+    await runDelete(
+      'engagement_surveys (test surveys)',
+      `DELETE FROM engagement_surveys WHERE org_id != $1;`,
+      [REAL_ORG_ID]
+    );
+    await runDelete(
+      'employee_recognitions (test recognitions)',
+      `DELETE FROM employee_recognitions WHERE NOT (sender_id = ANY($1) AND recipient_id = ANY($1));`,
+      [REAL_EMPLOYEE_IDS]
+    );
+    await runDelete(
+      'probation_evaluations (test evaluations)',
+      `DELETE FROM probation_evaluations WHERE NOT (employee_id = ANY($1));`,
+      [REAL_EMPLOYEE_IDS]
+    );
 
     console.log('\nStep 10: Cleaning Employee & User test accounts and associations...');
     // Break any self-referencing manager_id links on employees first
@@ -328,7 +340,8 @@ async function runCleanup() {
         'organizations', 'departments', 'designations', 'roles', 'permissions',
         'users', 'employees', 'user_roles', 'holidays', 'leave_types',
         'leave_requests', 'leave_balances', 'attendance_records', 'helpdesk_tickets',
-        'employee_requests', 'payroll_profiles', 'payroll_records', 'payslips',
+        'employee_requests', 'probation_evaluations', 'courses', 'course_enrollments',
+        'announcements', 'work_tasks', 'expense_claims',
         'performance_records', 'performance_periods', 'approval_workflows',
         'notifications', 'admin_configurations', 'document_vault', 'new_hires'
       ];

@@ -550,4 +550,15 @@ export const adminService = {
   async getSystemOverview(orgId) {
     return await adminRepository.getAdminSystemOverview(orgId);
   },
+
+  /**
+   * Generic audit log recorder for all modules
+   */
+  async logAction(auditData) {
+    try {
+      return await adminRepository.recordAuditLog(auditData);
+    } catch (err) {
+      console.warn('Audit logging error:', err.message);
+    }
+  },
 };

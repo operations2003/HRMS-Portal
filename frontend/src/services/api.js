@@ -58,4 +58,42 @@ export const http = {
   delete: (endpoint, options) => apiClient(endpoint, { method: 'DELETE', ...options }),
   upload: (endpoint, formData, options) =>
     apiClient(endpoint, { method: 'POST', body: formData, ...options }),
+  download: async (endpoint, fallbackFilename = 'document.pdf') => {
+    const token = localStorage.getItem('hrms_token');
+    const url = `${BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+    const response = await fetch(url, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!response.ok) {
+      throw new Error('Failed to download document.');
+    }
+    const blob = await response.blob();
+    const disposition = response.headers.get('Content-Disposition');
+    let filename = fallbackFilename;
+    if (disposition && disposition.includes('filename=')) {
+      const match = disposition.match(/filename="?([^";]+)"?/);
+      if (match && match[1]) filename = decodeURIComponent(match[1]);
+    }
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(downloadUrl);
+  },
+  openInNewTab: async (endpoint) => {
+    const token = localStorage.getItem('hrms_token');
+    const url = `${BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+    const response = await fetch(url, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!response.ok) {
+      throw new Error('Failed to view document.');
+    }
+    const blob = await response.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+    window.open(blobUrl, '_blank');
+  },
 };

@@ -41,9 +41,9 @@ export const authenticate = async (req, res, next) => {
     }
 
     // 2. Verify associated employee profile has not been deprovisioned / exited
+    const emp = await employeeRepository.findByUserId(user.id, user.orgId);
     const normRole = (user.roleName || '').toLowerCase();
     if (normRole !== 'superadmin') {
-      const emp = await employeeRepository.findByUserId(user.id, user.orgId);
       if (emp && (emp.status === 'Exited' || emp.status === 'Terminated' || emp.status === 'Inactive')) {
         return sendError(res, 'Access denied: Your employee account has been deprovisioned.', 401, [
           `Employment status is '${emp.status}'`,
@@ -62,6 +62,10 @@ export const authenticate = async (req, res, next) => {
       roleName: user.roleName,
       permissions: user.permissions,
       organization: user.organization,
+      employeeId: emp ? emp.id : null,
+      employeeCode: emp ? emp.employeeCode : null,
+      deptId: emp ? emp.deptId : null,
+      managerId: emp ? emp.managerId : null,
     };
 
     next();

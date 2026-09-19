@@ -21,12 +21,18 @@ import workflowRoutes from './workflowRoutes.js';
 import hrOperationsRoutes from './hrOperationsRoutes.js';
 import exitRoutes from './exitRoutes.js';
 import adminRoutes from './adminRoutes.js';
+import probationRoutes from './probationRoutes.js';
+import trainingRoutes from './trainingRoutes.js';
+import engagementRoutes from './engagementRoutes.js';
+import taskRoutes from './taskRoutes.js';
+import expenseRoutes from './expenseRoutes.js';
+import analyticsRoutes from './analyticsRoutes.js';
 import { sendSuccess } from '../utils/apiResponse.js';
 
 const router = Router();
 
 // Health Check
-router.get('/health', (req, res) => {
+router.get(['/health', '/v1/health'], (req, res) => {
   return sendSuccess(res, 'HRMS Portal Backend API is running smoothly.', {
     status: 'healthy',
     timestamp: new Date().toISOString(),
@@ -34,7 +40,7 @@ router.get('/health', (req, res) => {
   });
 });
 
-// API v1 Modules (All 21 non-payroll modules mounted)
+// API v1 Modules (All 27 active non-payroll modules mounted)
 router.use('/v1/auth', authRoutes);
 router.use('/v1/organizations', orgRoutes);
 router.use('/v1/employees', employeeRoutes);
@@ -57,5 +63,13 @@ router.use('/v1/workflows', workflowRoutes);
 router.use('/v1/hr/operations', hrOperationsRoutes);
 router.use('/v1/exit', exitRoutes);
 router.use('/v1/admin', adminRoutes);
+
+// IT Mapping v2.1 Modules
+router.use('/v1/probation', probationRoutes);
+router.use('/v1/training', trainingRoutes);
+router.use('/v1/engagement', engagementRoutes);
+router.use('/v1/tasks', taskRoutes);
+router.use('/v1/expenses', expenseRoutes);
+router.use('/v1/analytics', analyticsRoutes);
 
 export default router;

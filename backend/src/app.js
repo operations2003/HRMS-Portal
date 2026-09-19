@@ -6,19 +6,30 @@ import { config } from './config/index.js';
 import apiRouter from './routes/index.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 
+import { apiRateLimiter, authRateLimiter } from './middleware/rateLimiter.js';
+
 const app = express();
 
 // Security Headers
 app.use(helmet());
 
-// CORS Configuration
+// CORS Configuration - Restrict to configured origins
+const allowedOrigins = [
+  config.clientUrl,
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:3000',
+].filter(Boolean);
+
 app.use(
   cors({
     origin: (origin, callback) => {
       // Allow requests with no origin (e.g. mobile apps, curl, server-to-server)
       if (!origin) return callback(null, true);
-      // In development or when origin matches clientUrl
-      return callback(null, true);
+      if (allowedOrigins.includes(origin) || config.nodeEnv === 'development') {
+        return callback(null, true);
+      }
+      return callback(new Error(`CORS origin '${origin}' is not authorized.`));
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
@@ -37,8 +48,8 @@ app.use(
   })
 );
 
-// Serve uploads directory statically for documents
-app.use('/uploads', express.static('uploads'));
+// SECURITY: Static /uploads route is REMOVED to protect HR documents.
+// All documents must be retrieved via authenticated endpoint GET /api/v1/documents/:id/download.
 
 // Request Logging
 if (config.nodeEnv !== 'test') {
@@ -48,6 +59,10 @@ if (config.nodeEnv !== 'test') {
 // Body Parsing
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Apply rate limiting
+app.use('/api/v1/auth/login', authRateLimiter);
+app.use('/api', apiRateLimiter);
 
 // Mount API Routes
 app.use('/api', apiRouter);

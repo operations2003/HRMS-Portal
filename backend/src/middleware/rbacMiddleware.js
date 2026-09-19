@@ -25,7 +25,11 @@ export const authorize = (requiredPermissions) => {
     const permissions = Array.isArray(requiredPermissions) ? requiredPermissions : [requiredPermissions];
     const userPermissions = req.user.permissions || [];
 
-    const hasPermission = permissions.some((perm) => userPermissions.includes(perm));
+    const hasPermission = permissions.some((perm) => {
+      if (userPermissions.includes(perm)) return true;
+      if (normalizeRole(req.user.roleName) === normalizeRole(perm)) return true;
+      return false;
+    });
 
     if (!hasPermission) {
       return sendError(

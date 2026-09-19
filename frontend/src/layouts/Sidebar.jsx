@@ -21,6 +21,13 @@ import {
   UserMinus,
   Sliders,
   KeyRound,
+  Wallet,
+  CheckSquare,
+  Receipt,
+  GraduationCap,
+  Megaphone,
+  Clock,
+  BarChart3,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { TaskNeraLogo } from '../components/common/TaskNeraLogo.jsx';
@@ -66,6 +73,18 @@ export const Sidebar = ({ isOpen, onClose }) => {
       roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
     },
     {
+      name: 'Probation',
+      path: '/probation',
+      icon: Clock,
+      roles: ['Manager', 'HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
+    },
+    {
+      name: 'HR Analytics',
+      path: '/analytics',
+      icon: BarChart3,
+      roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
+    },
+    {
       name: 'Attendance',
       path: '/attendance',
       icon: CalendarCheck,
@@ -76,6 +95,30 @@ export const Sidebar = ({ isOpen, onClose }) => {
       path: '/leaves',
       icon: CalendarDays,
       permission: 'leave:read',
+    },
+    {
+      name: 'Work Tasks',
+      path: '/tasks',
+      icon: CheckSquare,
+      permission: ['task:read', 'employee:read'],
+    },
+    {
+      name: 'Expenses',
+      path: '/expenses',
+      icon: Receipt,
+      permission: ['expense:read', 'employee:read'],
+    },
+    {
+      name: 'Training & Skills',
+      path: '/training',
+      icon: GraduationCap,
+      permission: ['training:read', 'employee:read'],
+    },
+    {
+      name: 'Engagement',
+      path: '/engagement',
+      icon: Megaphone,
+      permission: ['engagement:read', 'employee:read'],
     },
     {
       name: 'Organizations',

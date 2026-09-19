@@ -52,6 +52,13 @@ export const notificationService = {
   /**
    * Create system or custom notification
    */
+  async createNotification(params) {
+    return this.createSystemNotification(params);
+  },
+
+  /**
+   * Create system or custom notification
+   */
   async createSystemNotification({ orgId, userId, eventType = 'GENERAL_ALERT', title, message, entityType = 'GENERAL', entityId = 'system', actionUrl = '' }) {
     if (!userId || !title || !message) {
       const err = new Error('User ID, title, and message are required.');

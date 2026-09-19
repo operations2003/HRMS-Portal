@@ -11,6 +11,8 @@
     "db:seed": "node src/seeds/seed.js",
     "db:clean": "node src/scripts/clean_dummy_data.js",
     "db:clean:dry": "node src/scripts/clean_dummy_data.js --dry-run",
+    "test": "node src/tests/test_comprehensive_hrms_v2.js",
+    "test:v2": "node src/tests/test_comprehensive_hrms_v2.js",
     "test:exit": "node src/tests/test_phase7_exit_lifecycle.js",
     "test:workflow": "node src/tests/test_phase7_offboarding_workflow.js",
     "test:deprovision": "node src/tests/test_phase7_deprovisioning_security.js",

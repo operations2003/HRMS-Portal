@@ -13,6 +13,7 @@ router.use(authenticate);
 router.get('/metadata', authorize(['employee:read', 'employee:write']), employeeController.getMetadata);
 router.get('/', authorize('employee:read'), employeeController.list);
 router.get('/:id', authorize('employee:read'), employeeController.getById);
+router.get('/:id/timeline', authorize('employee:read'), employeeController.getTimeline);
 router.post('/', authorize('employee:write'), validate(validateCreateEmployee), employeeController.create);
 router.put('/:id', authorize('employee:write'), validate(validateUpdateEmployee), employeeController.update);
 router.delete('/:id', authorize('employee:delete'), employeeController.delete);

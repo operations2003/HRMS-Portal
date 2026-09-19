@@ -15,9 +15,10 @@ router.use(authenticate);
 router.get('/my', documentController.getMyDocuments);
 router.post('/my/upload', uploadSingleDocument('file'), documentController.uploadMyDocument);
 
-// 2. Document CRUD & Querying
+// 2. Document CRUD, Download & Querying
 router.post('/', authorize('document:write'), validate(validateAddDocument), documentController.addDocument);
 router.get('/owner/:ownerType/:ownerId', authorize(['document:read', 'employee:read']), documentController.getDocumentsByOwner);
+router.get('/:id/download', documentController.downloadDocument);
 router.get('/:id', authorize(['document:read', 'employee:read']), documentController.getDocumentById);
 router.delete('/:id', authorize('document:write'), documentController.deleteDocument);
 

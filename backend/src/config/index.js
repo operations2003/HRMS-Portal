@@ -9,11 +9,18 @@ const __dirname = path.dirname(__filename);
 dotenv.config();
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
+const nodeEnv = process.env.NODE_ENV || 'development';
+const jwtSecret = process.env.JWT_SECRET;
+
+if (!jwtSecret && nodeEnv === 'production') {
+  throw new Error('FATAL SECURITY ERROR: JWT_SECRET environment variable is required and cannot be empty in production.');
+}
+
 export const config = {
   port: parseInt(process.env.PORT, 10) || 5000,
-  nodeEnv: process.env.NODE_ENV || 'development',
+  nodeEnv,
   jwt: {
-    secret: process.env.JWT_SECRET || 'fallback_secret_for_development_hrms',
+    secret: jwtSecret || 'dev_hrms_secure_instance_key_98472910481239847',
     expiresIn: process.env.JWT_EXPIRES_IN || '24h',
   },
   clientUrl: process.env.CLIENT_URL || 'http://localhost:5173',

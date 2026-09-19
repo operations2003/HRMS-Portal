@@ -1,8 +1,75 @@
+import fs from 'fs';
+import path from 'path';
 import { documentService } from '../services/documentService.js';
 import { employeeRepository } from '../repositories/employeeRepository.js';
+import { adminService } from '../services/adminService.js';
 import { sendSuccess, sendError } from '../utils/apiResponse.js';
 
 export const documentController = {
+  /**
+   * GET /api/v1/documents/:id/download
+   * Authenticated, authorized document download & view stream
+   */
+  async downloadDocument(req, res, next) {
+    try {
+      const { id } = req.params;
+      const doc = await documentService.getDocumentById(id);
+      if (!doc) {
+        return sendError(res, 'Document not found.', 404);
+      }
+
+      // Check authorization
+      const isOwner = req.user.employeeId && doc.ownerId === req.user.employeeId;
+      const isPrivileged = req.user.roleName && ['admin', 'superadmin', 'orgadmin', 'hr', 'hrmanager'].includes(req.user.roleName.toLowerCase());
+      
+      let isManagerOfOwner = false;
+      if (!isOwner && !isPrivileged && req.user.employeeId && doc.ownerType === 'EMPLOYEE') {
+        const ownerEmp = await employeeRepository.findById(doc.ownerId);
+        if (ownerEmp && ownerEmp.managerId === req.user.employeeId) {
+          isManagerOfOwner = true;
+        }
+      }
+
+      if (!isOwner && !isPrivileged && !isManagerOfOwner) {
+        return sendError(res, 'Access denied: You do not have permission to access this document.', 403);
+      }
+
+      // Log audit for document access
+      try {
+        await adminService.logAction({
+          orgId: req.user.orgId,
+          actorUserId: req.user.id,
+          actorRole: req.user.roleName,
+          targetType: 'DOCUMENT',
+          targetId: doc.id,
+          action: 'DOWNLOAD',
+          details: { title: doc.title, documentType: doc.documentType },
+          ipAddress: req.ip,
+        });
+      } catch (logErr) {
+        // Non-blocking
+      }
+
+      // If document is stored locally
+      if (doc.fileUrl) {
+        const relativePath = doc.fileUrl.startsWith('/') ? doc.fileUrl.slice(1) : doc.fileUrl;
+        const absolutePath = path.resolve(process.cwd(), relativePath);
+
+        if (fs.existsSync(absolutePath)) {
+          res.setHeader('Content-Type', doc.mimeType || 'application/octet-stream');
+          res.setHeader(
+            'Content-Disposition',
+            `attachment; filename="${encodeURIComponent(doc.title || path.basename(absolutePath))}"`
+          );
+          return res.sendFile(absolutePath);
+        }
+      }
+
+      return sendError(res, 'Document binary file not found on server storage.', 404);
+    } catch (error) {
+      next(error);
+    }
+  },
   /**
    * POST /api/v1/documents
    */

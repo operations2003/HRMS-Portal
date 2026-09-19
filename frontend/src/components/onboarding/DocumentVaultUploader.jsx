@@ -418,27 +418,36 @@ export const DocumentVaultUploader = ({
                   {/* Actions */}
                   <div className="flex items-center gap-2 shrink-0 self-end sm:self-center flex-wrap">
                     {/* View */}
-                    <a
-                      href={doc.fileUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await documentService.viewDocument(doc.id);
+                        } catch (err) {
+                          showError(err.message || 'Failed to view document');
+                        }
+                      }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                     >
                       <Eye className="w-3.5 h-3.5" />
                       View
-                    </a>
+                    </button>
 
                     {/* Download */}
-                    <a
-                      href={doc.fileUrl}
-                      download={doc.title}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await documentService.downloadDocument(doc.id, doc.title || 'document');
+                        } catch (err) {
+                          showError(err.message || 'Failed to download document');
+                        }
+                      }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                     >
                       <Download className="w-3.5 h-3.5" />
                       Download
-                    </a>
+                    </button>
 
                     {/* Acknowledgement Action */}
                     {canAcknowledge && !isAcknowledged && (

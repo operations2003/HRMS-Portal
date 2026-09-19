@@ -34,6 +34,7 @@ import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
 import { Can } from '../../components/rbac/Can.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
+import { EmployeeTimelineModal } from '../../components/employees/EmployeeTimelineModal.jsx';
 
 export const EmployeeListPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -55,6 +56,7 @@ export const EmployeeListPage = () => {
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [viewingEmployee, setViewingEmployee] = useState(null);
   const [loadingViewProfile, setLoadingViewProfile] = useState(false);
+  const [timelineEmployee, setTimelineEmployee] = useState(null);
 
   // Quick Add Department Modal
   const [isQuickAddDeptOpen, setIsQuickAddDeptOpen] = useState(false);
@@ -1205,6 +1207,16 @@ export const EmployeeListPage = () => {
                   Edit Profile
                 </Button>
               </Can>
+              <Button
+                variant="neutral"
+                size="sm"
+                icon={Clock}
+                onClick={() => {
+                  setTimelineEmployee(viewingEmployee);
+                }}
+              >
+                Lifecycle Timeline
+              </Button>
               <div className="ml-auto">
                 <Button variant="primary" size="sm" onClick={() => setViewingEmployee(null)}>
                   Close
@@ -1214,6 +1226,14 @@ export const EmployeeListPage = () => {
           </div>
         ) : null}
       </Modal>
+
+      {/* Employee Lifecycle Timeline Modal */}
+      <EmployeeTimelineModal
+        isOpen={!!timelineEmployee}
+        onClose={() => setTimelineEmployee(null)}
+        employeeId={timelineEmployee?.id}
+        employeeName={`${timelineEmployee?.firstName || ''} ${timelineEmployee?.lastName || ''}`}
+      />
 
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog

@@ -75,4 +75,21 @@ export const documentService = {
     const res = await http.delete(`/v1/documents/${id}`);
     return res.data;
   },
+
+  /**
+   * Securely download document with auth headers
+   * @param {string} id - Document ID
+   * @param {string} filename - Fallback filename
+   */
+  async downloadDocument(id, filename) {
+    return await http.download(`/v1/documents/${id}/download`, filename);
+  },
+
+  /**
+   * Securely view document in new tab with auth headers
+   * @param {string} id - Document ID
+   */
+  async viewDocument(id) {
+    return await http.openInNewTab(`/v1/documents/${id}/download`);
+  },
 };

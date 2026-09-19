@@ -27,6 +27,12 @@ import { OffboardingPage } from './pages/exit/OffboardingPage.jsx';
 import { FnFSettlementPage } from './pages/exit/FnFSettlementPage.jsx';
 import { AdminSettingsPage } from './pages/admin/AdminSettingsPage.jsx';
 import { RolesPermissionsPage } from './pages/admin/RolesPermissionsPage.jsx';
+import { TasksPage } from './pages/tasks/TasksPage.jsx';
+import { ExpensesPage } from './pages/expenses/ExpensesPage.jsx';
+import { TrainingPage } from './pages/training/TrainingPage.jsx';
+import { EngagementPage } from './pages/engagement/EngagementPage.jsx';
+import { ProbationDashboardPage } from './pages/probation/ProbationDashboardPage.jsx';
+import { AnalyticsPage } from './pages/analytics/AnalyticsPage.jsx';
 import { ForbiddenPage } from './pages/common/ForbiddenPage.jsx';
 import { NotFoundPage } from './pages/common/NotFoundPage.jsx';
 import { AppLayout } from './layouts/AppLayout.jsx';
@@ -315,6 +321,66 @@ export const App = () => {
                 element={
                   <PermissionRoute roles={['Admin', 'SuperAdmin', 'OrgAdmin']}>
                     <RolesPermissionsPage />
+                  </PermissionRoute>
+                }
+              />
+
+              {/* Tasks & Work Management */}
+              <Route
+                path="tasks"
+                element={
+                  <PermissionRoute permission={['task:read', 'employee:read']}>
+                    <TasksPage />
+                  </PermissionRoute>
+                }
+              />
+
+              {/* Expenses & Reimbursement */}
+              <Route
+                path="expenses"
+                element={
+                  <PermissionRoute permission={['expense:read', 'employee:read']}>
+                    <ExpensesPage />
+                  </PermissionRoute>
+                }
+              />
+
+              {/* Learning & Skill Development */}
+              <Route
+                path="training"
+                element={
+                  <PermissionRoute permission={['training:read', 'employee:read']}>
+                    <TrainingPage />
+                  </PermissionRoute>
+                }
+              />
+
+              {/* Employee Engagement & Communication */}
+              <Route
+                path="engagement"
+                element={
+                  <PermissionRoute permission={['engagement:read', 'employee:read']}>
+                    <EngagementPage />
+                  </PermissionRoute>
+                }
+              />
+
+              {/* Probation & Confirmation */}
+              <Route
+                path="probation"
+                element={
+                  <PermissionRoute roles={['Manager', 'HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']}>
+                    <ProbationDashboardPage />
+                  </PermissionRoute>
+                }
+              />
+
+              {/* HR Analytics & Workforce Intelligence */}
+              <Route
+                path="analytics"
+                element={
+                  <PermissionRoute roles={['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']}>
+                    <AnalyticsPage />
                   </PermissionRoute>
                 }
               />

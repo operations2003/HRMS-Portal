@@ -1,4 +1,5 @@
 import { employeeService } from '../services/employeeService.js';
+import { employeeLifecycleService } from '../services/employeeLifecycleService.js';
 import { sendSuccess } from '../utils/apiResponse.js';
 
 export const employeeController = {
@@ -107,6 +108,27 @@ export const employeeController = {
       }
       await employeeService.deleteEmployee(req.params.id);
       return sendSuccess(res, 'Employee deleted successfully.', null);
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  /**
+   * GET /api/v1/employees/:id/timeline
+   * Module 1: Comprehensive Employee Lifecycle Timeline
+   */
+  async getTimeline(req, res, next) {
+    try {
+      const { id } = req.params;
+      const orgId = req.user?.orgId || 'org-1';
+      const filters = {
+        eventType: req.query.eventType,
+        startDate: req.query.startDate,
+        endDate: req.query.endDate,
+      };
+
+      const timeline = await employeeLifecycleService.getEmployeeTimeline(id, orgId, filters);
+      return sendSuccess(res, 'Employee lifecycle timeline retrieved.', timeline);
     } catch (error) {
       next(error);
     }
