@@ -58,6 +58,26 @@ export const EmployeeListPage = () => {
   const [loadingViewProfile, setLoadingViewProfile] = useState(false);
   const [timelineEmployee, setTimelineEmployee] = useState(null);
 
+  // Manual Shift Timing State (From & To with AM/PM)
+  const [shiftFromTime, setShiftFromTime] = useState('11:00');
+  const [shiftFromPeriod, setShiftFromPeriod] = useState('AM');
+  const [shiftToTime, setShiftToTime] = useState('07:00');
+  const [shiftToPeriod, setShiftToPeriod] = useState('PM');
+
+  const parseShiftTiming = (str) => {
+    if (!str) return { fromTime: '11:00', fromPeriod: 'AM', toTime: '07:00', toPeriod: 'PM' };
+    const match = str.match(/^(\d{1,2}:\d{2})\s*(AM|PM)\s*-\s*(\d{1,2}:\d{2})\s*(AM|PM)$/i);
+    if (match) {
+      return {
+        fromTime: match[1],
+        fromPeriod: match[2].toUpperCase(),
+        toTime: match[3],
+        toPeriod: match[4].toUpperCase(),
+      };
+    }
+    return { fromTime: '11:00', fromPeriod: 'AM', toTime: '07:00', toPeriod: 'PM' };
+  };
+
   // Quick Add Department Modal
   const [isQuickAddDeptOpen, setIsQuickAddDeptOpen] = useState(false);
   const [quickDeptName, setQuickDeptName] = useState('');
@@ -247,6 +267,10 @@ export const EmployeeListPage = () => {
       salary: '',
       shiftTiming: '11:00 AM - 07:00 PM',
     });
+    setShiftFromTime('11:00');
+    setShiftFromPeriod('AM');
+    setShiftToTime('07:00');
+    setShiftToPeriod('PM');
     setFormErrors({});
     setFormApiError(null);
     setIsFormOpen(true);
@@ -275,6 +299,11 @@ export const EmployeeListPage = () => {
       salary: emp.salary?.toString() || '',
       shiftTiming: emp.shiftTiming || '11:00 AM - 07:00 PM',
     });
+    const parsedShift = parseShiftTiming(emp.shiftTiming || '11:00 AM - 07:00 PM');
+    setShiftFromTime(parsedShift.fromTime);
+    setShiftFromPeriod(parsedShift.fromPeriod);
+    setShiftToTime(parsedShift.toTime);
+    setShiftToPeriod(parsedShift.toPeriod);
     setFormErrors({});
     setFormApiError(null);
     setIsFormOpen(true);
@@ -316,11 +345,17 @@ export const EmployeeListPage = () => {
 
     try {
       setIsSubmitting(true);
+      const computedShift = `${shiftFromTime.trim() || '11:00'} ${shiftFromPeriod} - ${shiftToTime.trim() || '07:00'} ${shiftToPeriod}`;
+      const payload = {
+        ...formData,
+        shiftTiming: computedShift,
+      };
+
       if (editingEmployee) {
-        await employeeService.updateEmployee(editingEmployee.id, formData);
+        await employeeService.updateEmployee(editingEmployee.id, payload);
         toast.success(`Profile for '${formData.firstName} ${formData.lastName}' updated successfully.`);
       } else {
-        await employeeService.createEmployee(formData);
+        await employeeService.createEmployee(payload);
         toast.success(`Employee '${formData.firstName} ${formData.lastName}' registered successfully with portal credentials.`);
       }
       setIsFormOpen(false);
@@ -859,49 +894,97 @@ export const EmployeeListPage = () => {
                   Assigned Work Shift & Time Slot
                 </span>
               </div>
-              <span className="text-[11px] text-brand-700 bg-brand-100/70 px-2 py-0.5 rounded-full font-medium">
-                Reflects on Employee Attendance Timer
+              <span className="text-[11px] text-brand-700 bg-brand-100/80 border border-brand-200/60 px-2.5 py-0.5 rounded-full font-bold">
+                {shiftFromTime || '--:--'} {shiftFromPeriod} – {shiftToTime || '--:--'} {shiftToPeriod}
               </span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Select
-                label="Shift Preset"
-                value={
-                  [
-                    '11:00 AM - 07:00 PM',
-                    '09:00 AM - 05:00 PM',
-                    '10:00 AM - 06:00 PM',
-                    '12:00 PM - 08:00 PM',
-                    '02:00 PM - 10:00 PM',
-                    '08:00 AM - 04:00 PM',
-                  ].includes(formData.shiftTiming)
-                    ? formData.shiftTiming
-                    : 'custom'
-                }
-                onChange={(e) => {
-                  if (e.target.value !== 'custom') {
-                    setFormData({ ...formData, shiftTiming: e.target.value });
-                  }
-                }}
-                options={[
-                  { value: '11:00 AM - 07:00 PM', label: '11:00 AM – 07:00 PM (General Shift • 8 hrs)' },
-                  { value: '09:00 AM - 05:00 PM', label: '09:00 AM – 05:00 PM (Morning Shift • 8 hrs)' },
-                  { value: '10:00 AM - 06:00 PM', label: '10:00 AM – 06:00 PM (Standard Day • 8 hrs)' },
-                  { value: '12:00 PM - 08:00 PM', label: '12:00 PM – 08:00 PM (Mid-Day Shift • 8 hrs)' },
-                  { value: '02:00 PM - 10:00 PM', label: '02:00 PM – 10:00 PM (Evening Shift • 8 hrs)' },
-                  { value: '08:00 AM - 04:00 PM', label: '08:00 AM – 04:00 PM (Early Shift • 8 hrs)' },
-                  { value: 'custom', label: 'Custom Time Slot (edit field below)' },
-                ]}
-              />
-              <Input
-                label="Time Slot (Customizable)"
-                value={formData.shiftTiming}
-                onChange={(e) => setFormData({ ...formData, shiftTiming: e.target.value })}
-                placeholder="e.g. 11:00 AM - 07:00 PM"
-                helperText="Active schedule shown on employee's login/logout page"
-              />
+              {/* From Time Slot */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                  From (Start Time)
+                </label>
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      value={shiftFromTime}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setShiftFromTime(val);
+                        setFormData((prev) => ({
+                          ...prev,
+                          shiftTiming: `${val.trim()} ${shiftFromPeriod} - ${shiftToTime.trim()} ${shiftToPeriod}`,
+                        }));
+                      }}
+                      placeholder="e.g. 11:00"
+                      className="block w-full rounded-lg border text-sm py-2.5 px-3.5 bg-white border-slate-300 text-slate-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors"
+                      required
+                    />
+                  </div>
+                  <select
+                    value={shiftFromPeriod}
+                    onChange={(e) => {
+                      const period = e.target.value;
+                      setShiftFromPeriod(period);
+                      setFormData((prev) => ({
+                        ...prev,
+                        shiftTiming: `${shiftFromTime.trim()} ${period} - ${shiftToTime.trim()} ${shiftToPeriod}`,
+                      }));
+                    }}
+                    className="rounded-lg border text-sm py-2.5 px-3 bg-white border-slate-300 text-slate-900 font-bold focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors"
+                  >
+                    <option value="AM">AM</option>
+                    <option value="PM">PM</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* To Time Slot */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                  To (End Time)
+                </label>
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      value={shiftToTime}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setShiftToTime(val);
+                        setFormData((prev) => ({
+                          ...prev,
+                          shiftTiming: `${shiftFromTime.trim()} ${shiftFromPeriod} - ${val.trim()} ${shiftToPeriod}`,
+                        }));
+                      }}
+                      placeholder="e.g. 07:00"
+                      className="block w-full rounded-lg border text-sm py-2.5 px-3.5 bg-white border-slate-300 text-slate-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors"
+                      required
+                    />
+                  </div>
+                  <select
+                    value={shiftToPeriod}
+                    onChange={(e) => {
+                      const period = e.target.value;
+                      setShiftToPeriod(period);
+                      setFormData((prev) => ({
+                        ...prev,
+                        shiftTiming: `${shiftFromTime.trim()} ${shiftFromPeriod} - ${shiftToTime.trim()} ${period}`,
+                      }));
+                    }}
+                    className="rounded-lg border text-sm py-2.5 px-3 bg-white border-slate-300 text-slate-900 font-bold focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors"
+                  >
+                    <option value="AM">AM</option>
+                    <option value="PM">PM</option>
+                  </select>
+                </div>
+              </div>
             </div>
+            <p className="text-[11px] text-slate-500">
+              Type the exact working hours manually. Active shift displays on employee's clock in/out timer.
+            </p>
           </div>
 
           <div className="mt-6 flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
