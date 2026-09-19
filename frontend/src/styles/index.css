@@ -101,7 +101,7 @@ h1, h2, h3, .font-heading {
   letter-spacing: -0.02em;
 }
 
-/* Official Payslip Print & PDF Export Formatting */
+/* Official Print & PDF Export Formatting */
 @media print {
   @page {
     size: A4 portrait;
@@ -120,16 +120,5 @@ h1, h2, h3, .font-heading {
   aside,
   .print\:hidden {
     display: none !important;
-  }
-
-  #official-payslip-document {
-    border: none !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-    margin: 0 auto !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
   }
 }

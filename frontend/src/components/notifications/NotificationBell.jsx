@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import {
   Bell,
   CheckCheck,
-  Wallet,
   FileText,
   LifeBuoy,
   ClipboardList,
@@ -27,22 +26,6 @@ export const getNotificationIcon = (eventType, title = '', entityType = '') => {
   const type = (eventType || '').toUpperCase();
   const lowerTitle = (title || '').toLowerCase();
   const ent = (entityType || '').toUpperCase();
-
-  // Phase 5: Payroll & Payslips
-  if (type === 'PAYROLL_PROCESSED') {
-    return {
-      icon: Wallet,
-      color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40',
-      route: '/payroll',
-    };
-  }
-  if (type === 'PAYSLIP_AVAILABLE') {
-    return {
-      icon: FileText,
-      color: 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40',
-      route: '/payslips',
-    };
-  }
 
   // Phase 5: Helpdesk Tickets
   if (type === 'TICKET_CREATED' || type === 'TICKET_STATUS_CHANGED') {

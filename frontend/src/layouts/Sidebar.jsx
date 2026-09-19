@@ -11,7 +11,6 @@ import {
   Sparkles,
   CalendarCheck,
   CalendarDays,
-  Wallet,
   FileText,
   FolderLock,
   LifeBuoy,
@@ -95,18 +94,6 @@ export const Sidebar = ({ isOpen, onClose }) => {
       path: '/employees',
       icon: Users,
       permission: 'employee:read',
-    },
-    {
-      name: 'Payroll',
-      path: '/payroll',
-      icon: Wallet,
-      permission: ['payroll:read', 'payslip:read'],
-    },
-    {
-      name: 'Payslips',
-      path: '/payslips',
-      icon: FileText,
-      permission: 'payslip:read',
     },
     {
       name: 'Documents',

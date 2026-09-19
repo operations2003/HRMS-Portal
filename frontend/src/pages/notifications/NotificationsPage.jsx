@@ -5,7 +5,6 @@ import {
   CheckCheck,
   Check,
   RefreshCw,
-  Wallet,
   FileText,
   LifeBuoy,
   ClipboardList,
@@ -130,16 +129,6 @@ export const NotificationsPage = () => {
       const title = (notif.title || '').toLowerCase();
       return type.includes('LEAVE') || ent.includes('LEAVE') || title.includes('leave');
     }
-    if (filter === 'payroll') {
-      const type = (notif.eventType || notif.event_type || '').toUpperCase();
-      const ent = (notif.entityType || notif.entity_type || '').toUpperCase();
-      return (
-        type.includes('PAYROLL') ||
-        type.includes('PAYSLIP') ||
-        ent.includes('PAYROLL') ||
-        ent.includes('PAYSLIP')
-      );
-    }
     if (filter === 'requests') {
       const type = (notif.eventType || notif.event_type || '').toUpperCase();
       const ent = (notif.entityType || notif.entity_type || '').toUpperCase();
@@ -166,7 +155,7 @@ export const NotificationsPage = () => {
               Notification Center
             </h1>
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              Activity alerts for leaves, performance reviews, manager approvals, payroll, and tickets.
+              Activity alerts for leaves, performance reviews, manager approvals, and tickets.
             </p>
           </div>
         </div>
@@ -249,16 +238,6 @@ export const NotificationsPage = () => {
           Leaves
         </button>
         <button
-          onClick={() => setFilter('payroll')}
-          className={`px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
-            filter === 'payroll'
-              ? 'bg-brand-600 text-white shadow-sm'
-              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-          }`}
-        >
-          Payroll
-        </button>
-        <button
           onClick={() => setFilter('requests')}
           className={`px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
             filter === 'requests'
@@ -300,7 +279,7 @@ export const NotificationsPage = () => {
               No notifications in this category.
             </p>
             <p className="text-xs text-slate-400 mt-1">
-              You will receive updates when leaves are actioned, performance reviews progress, or payroll cycles process.
+              You will receive updates when leaves are actioned, performance reviews progress, or requests are updated.
             </p>
           </div>
         ) : (

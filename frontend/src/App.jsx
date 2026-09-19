@@ -12,8 +12,6 @@ import { UserListPage } from './pages/users/UserListPage.jsx';
 import { DepartmentsPage } from './pages/departments/DepartmentsPage.jsx';
 import { OnboardingDashboardPage } from './pages/onboarding/OnboardingDashboardPage.jsx';
 import { OnboardingDetailPage } from './pages/onboarding/OnboardingDetailPage.jsx';
-import { PayrollDashboardPage } from './pages/payroll/PayrollDashboardPage.jsx';
-import { PayslipsPage } from './pages/payroll/PayslipsPage.jsx';
 import { EmployeeDocumentsPage } from './pages/documents/EmployeeDocumentsPage.jsx';
 import { HelpdeskPage } from './pages/helpdesk/HelpdeskPage.jsx';
 import { EmployeeRequestsPage } from './pages/requests/EmployeeRequestsPage.jsx';
@@ -134,24 +132,6 @@ export const App = () => {
                 element={
                   <PermissionRoute permission="employee:read">
                     <EmployeeListPage />
-                  </PermissionRoute>
-                }
-              />
-
-              <Route
-                path="payroll"
-                element={
-                  <PermissionRoute permission={['payroll:read', 'payslip:read']}>
-                    <PayrollDashboardPage />
-                  </PermissionRoute>
-                }
-              />
-
-              <Route
-                path="payslips"
-                element={
-                  <PermissionRoute permission="payslip:read">
-                    <PayslipsPage />
                   </PermissionRoute>
                 }
               />
