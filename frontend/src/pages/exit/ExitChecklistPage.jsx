@@ -77,7 +77,13 @@ export const ExitChecklistPage = () => {
     try {
       setIsLoadingManage(true);
       const res = await exitService.getAllExits({ limit: 50 });
-      const items = res.items || [];
+      const items = Array.isArray(res?.items)
+        ? res.items
+        : Array.isArray(res?.data)
+        ? res.data
+        : Array.isArray(res)
+        ? res
+        : [];
       // Prioritize exits that are in progress / clearance stage
       const activeExits = items.filter((e) =>
         ['APPROVED', 'NOTICE_PERIOD', 'CLEARANCE_IN_PROGRESS', 'EXIT_PROCESSING', 'SUBMITTED', 'UNDER_REVIEW'].includes(

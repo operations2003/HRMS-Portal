@@ -261,7 +261,8 @@ export const HROperationsPage = () => {
   // -------------------------------------------------------------
   // Filtered Lists
   // -------------------------------------------------------------
-  const filteredEmployees = allEmployees.filter((e) => {
+  const safeAllEmployees = Array.isArray(allEmployees) ? allEmployees : [];
+  const filteredEmployees = safeAllEmployees.filter((e) => {
     const q = searchEmployeeQuery.toLowerCase();
     const name = (e.fullName || `${e.firstName || ''} ${e.lastName || ''}`).toLowerCase();
     const email = (e.email || '').toLowerCase();
@@ -274,17 +275,20 @@ export const HROperationsPage = () => {
     return matchesQuery && matchesDept && matchesStatus;
   });
 
-  const filteredAttendanceRecords = attendanceRecords.filter((rec) => {
+  const safeAttendanceRecords = Array.isArray(attendanceRecords) ? attendanceRecords : [];
+  const filteredAttendanceRecords = safeAttendanceRecords.filter((rec) => {
     if (!attendanceStatusFilter) return true;
     return (rec.status || '').toUpperCase() === attendanceStatusFilter.toUpperCase();
   });
 
-  const filteredOrgLeaves = orgLeaves.filter((l) => {
+  const safeOrgLeaves = Array.isArray(orgLeaves) ? orgLeaves : [];
+  const filteredOrgLeaves = safeOrgLeaves.filter((l) => {
     if (leaveStatusFilter === 'ALL') return true;
     return (l.status || '').toUpperCase() === leaveStatusFilter.toUpperCase();
   });
 
-  const filteredApprovals = pendingApprovalsQueue.filter((item) => {
+  const safePendingApprovalsQueue = Array.isArray(pendingApprovalsQueue) ? pendingApprovalsQueue : [];
+  const filteredApprovals = safePendingApprovalsQueue.filter((item) => {
     if (approvalModuleFilter === 'ALL') return true;
     const type = (item.module || item.entityType || '').toUpperCase();
     if (approvalModuleFilter === 'LEAVE') return type.includes('LEAVE');
@@ -388,7 +392,7 @@ export const HROperationsPage = () => {
       header: 'Department',
       render: (row) => (
         <span className="text-xs text-slate-700 font-medium">
-          {row.department || row.departmentName || 'General'}
+          {(typeof row.department === 'object' ? row.department?.name : row.department) || row.departmentName || 'General'}
         </span>
       ),
     },
@@ -452,7 +456,7 @@ export const HROperationsPage = () => {
       header: 'Department',
       render: (row) => (
         <span className="text-xs text-slate-700">
-          {row.department || 'General'}
+          {(typeof row.department === 'object' ? row.department?.name : row.department) || 'General'}
         </span>
       ),
     },

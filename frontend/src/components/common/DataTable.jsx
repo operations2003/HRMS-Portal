@@ -32,7 +32,21 @@ export const DataTable = ({
     );
   }
 
-  if (!data || data.length === 0) {
+  const safeData = Array.isArray(data)
+    ? data
+    : Array.isArray(data?.items)
+    ? data.items
+    : Array.isArray(data?.data)
+    ? data.data
+    : Array.isArray(data?.employees)
+    ? data.employees
+    : Array.isArray(data?.records)
+    ? data.records
+    : Array.isArray(data?.results)
+    ? data.results
+    : [];
+
+  if (!safeData || safeData.length === 0) {
     return (
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6">
         <EmptyState icon={Inbox} title={emptyTitle} description={emptyDescription} />
@@ -58,7 +72,7 @@ export const DataTable = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white">
-            {data.map((row, rowIndex) => (
+            {safeData.map((row, rowIndex) => (
               <tr
                 key={row.id || rowIndex}
                 className="hover:bg-slate-50/60 transition-colors duration-100"
@@ -70,12 +84,19 @@ export const DataTable = ({
                       : row[col.accessor]
                     : null;
 
+                  let rendered = col.render ? col.render(row, rowIndex) : cellValue;
+
+                  // Safety guard against React child object crashes (e.g. raw department or designation objects)
+                  if (rendered && typeof rendered === 'object' && !React.isValidElement(rendered)) {
+                    rendered = rendered.name || rendered.title || rendered.label || rendered.code || '—';
+                  }
+
                   return (
                     <td
                       key={col.key || colIndex}
                       className={`px-6 py-4 whitespace-nowrap text-slate-700 ${col.cellClassName || ''}`}
                     >
-                      {col.render ? col.render(row, rowIndex) : cellValue ?? '—'}
+                      {rendered ?? '—'}
                     </td>
                   );
                 })}

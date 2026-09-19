@@ -357,7 +357,7 @@ export const RequestDetailModal = ({
                 </span>
                 {request.requester?.employeeCode && (
                   <span className="text-slate-400 block">
-                    {request.requester.employeeCode} • {request.requester.department || 'Department'}
+                    {request.requester.employeeCode} • {(typeof request.requester.department === 'object' ? request.requester.department?.name : request.requester.department) || 'Department'}
                   </span>
                 )}
               </div>

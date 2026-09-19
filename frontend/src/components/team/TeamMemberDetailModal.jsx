@@ -72,7 +72,7 @@ export const TeamMemberDetailModal = ({ isOpen, onClose, member }) => {
       isOpen={isOpen}
       onClose={onClose}
       title={fullName}
-      subtitle={`${m.designation || m.designationTitle || m.designation?.name || 'Staff'} &bull; ${m.department || m.departmentName || m.department?.name || 'Department'}`}
+      subtitle={`${(typeof m.designation === 'object' ? m.designation?.name : m.designation) || m.designationTitle || 'Staff'} • ${(typeof m.department === 'object' ? m.department?.name : m.department) || m.departmentName || 'Department'}`}
       maxWidth="max-w-2xl"
     >
       <div className="space-y-5 text-sm">
@@ -109,7 +109,7 @@ export const TeamMemberDetailModal = ({ isOpen, onClose, member }) => {
             <div className="min-w-0">
               <span className="text-slate-400 block text-[10px]">Designation</span>
               <span className="font-medium text-slate-800 truncate block">
-                {m.designation || m.designationTitle || m.designation?.name || 'Staff'}
+                {(typeof m.designation === 'object' ? m.designation?.name : m.designation) || m.designationTitle || 'Staff'}
               </span>
             </div>
           </div>

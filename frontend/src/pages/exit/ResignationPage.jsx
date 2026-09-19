@@ -122,7 +122,14 @@ export const ResignationPage = () => {
       setIsLoadingOrg(true);
       setOrgError(null);
       const res = await exitService.getAllExits({ limit: 50 });
-      setOrgExits(res.items || []);
+      const items = Array.isArray(res?.items)
+        ? res.items
+        : Array.isArray(res?.data)
+        ? res.data
+        : Array.isArray(res)
+        ? res
+        : [];
+      setOrgExits(items);
     } catch (err) {
       setOrgError(err.message || 'Failed to load organization exit requests.');
     } finally {

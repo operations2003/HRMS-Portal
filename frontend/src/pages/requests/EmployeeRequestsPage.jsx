@@ -175,7 +175,7 @@ export const EmployeeRequestsPage = () => {
             {row.requester?.fullName || 'Employee'}
           </p>
           <p className="text-[11px] text-slate-400">
-            {row.requester?.department || 'Staff'}
+            {(typeof row.requester?.department === 'object' ? row.requester?.department?.name : row.requester?.department) || 'Staff'}
           </p>
         </div>
       ),

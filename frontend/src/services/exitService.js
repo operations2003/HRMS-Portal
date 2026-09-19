@@ -37,7 +37,20 @@ export const exitService = {
     });
     const queryString = query.toString() ? `?${query.toString()}` : '';
     const res = await http.get(`/v1/exit/team${queryString}`);
-    return res.data;
+    const raw = res?.data || {};
+    const items = Array.isArray(raw)
+      ? raw
+      : Array.isArray(raw.items)
+      ? raw.items
+      : Array.isArray(res)
+      ? res
+      : [];
+    return {
+      items,
+      data: items,
+      total: raw.total || items.length,
+      pagination: { total: raw.total || items.length, page: 1, limit: 20 },
+    };
   },
 
   /**
@@ -68,9 +81,19 @@ export const exitService = {
     });
     const queryString = query.toString() ? `?${query.toString()}` : '';
     const res = await http.get(`/v1/exit/requests${queryString}`);
+    const raw = res?.data || {};
+    const items = Array.isArray(raw)
+      ? raw
+      : Array.isArray(raw.items)
+      ? raw.items
+      : Array.isArray(res)
+      ? res
+      : [];
     return {
-      items: res.data || [],
-      pagination: res.meta || { total: res.data?.length || 0, page: 1, limit: 20 },
+      items,
+      data: items,
+      total: raw.total || items.length,
+      pagination: res.meta || { total: raw.total || items.length, page: 1, limit: 20 },
     };
   },
 

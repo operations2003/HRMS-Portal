@@ -20,10 +20,15 @@ export const employeeService = {
       ...raw,
       employees,
       items: employees,
-      data: { ...raw, employees },
+      data: employees,
       pagination: raw.pagination || { total: employees.length, page: 1, limit: 20, totalPages: 1 },
     };
   },
+
+  async getAllEmployees(params = {}) {
+    return this.listEmployees({ limit: 1000, ...params });
+  },
+
 
   async getMetadata() {
     const res = await http.get('/v1/employees/metadata');

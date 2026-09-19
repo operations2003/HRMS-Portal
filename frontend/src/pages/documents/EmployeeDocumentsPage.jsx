@@ -79,13 +79,22 @@ export const EmployeeDocumentsPage = () => {
     if (!canManageDocuments) return;
     try {
       const res = await employeeService.listEmployees({ limit: 100 });
-      const empList = res.data || res.employees || (Array.isArray(res) ? res : []);
+      const empList = Array.isArray(res?.employees)
+        ? res.employees
+        : Array.isArray(res?.data)
+        ? res.data
+        : Array.isArray(res?.items)
+        ? res.items
+        : Array.isArray(res)
+        ? res
+        : [];
       setEmployees(empList);
       if (empList.length > 0 && !selectedEmployeeId) {
         setSelectedEmployeeId(empList[0].id);
       }
     } catch (err) {
       console.error('Error loading employees for document management:', err);
+      setEmployees([]);
     }
   }, [canManageDocuments, selectedEmployeeId]);
 
@@ -99,6 +108,7 @@ export const EmployeeDocumentsPage = () => {
     } catch (err) {
       console.error('Error loading selected employee docs:', err);
       toast.showError(err.message || 'Failed to load employee documents.');
+      setSelectedEmployeeDocs([]);
     } finally {
       setLoadingEmpDocs(false);
     }
@@ -132,24 +142,26 @@ export const EmployeeDocumentsPage = () => {
     );
   }
 
-  // Calculate statistics for current view
+  // Calculate statistics for current view with defensive array guards
   const currentDocs = activeTab === 'my' ? myDocuments : selectedEmployeeDocs;
-  const totalCount = currentDocs.length;
-  const approvedCount = currentDocs.filter((d) => d.verificationStatus === 'APPROVED').length;
-  const pendingCount = currentDocs.filter(
+  const safeCurrentDocs = Array.isArray(currentDocs) ? currentDocs : [];
+  const totalCount = safeCurrentDocs.length;
+  const approvedCount = safeCurrentDocs.filter((d) => d.verificationStatus === 'APPROVED').length;
+  const pendingCount = safeCurrentDocs.filter(
     (d) => !d.verificationStatus || d.verificationStatus === 'PENDING'
   ).length;
-  const acknowledgedCount = currentDocs.filter((d) => {
+  const acknowledgedCount = safeCurrentDocs.filter((d) => {
     const acks = d.acknowledgementLog || d.acknowledgement_log || [];
     return Array.isArray(acks) && acks.length > 0;
   }).length;
 
-  const filteredEmployees = employees.filter((emp) => {
+  const safeEmployees = Array.isArray(employees) ? employees : [];
+  const filteredEmployees = safeEmployees.filter((emp) => {
     const fullName = `${emp.firstName || ''} ${emp.lastName || ''} ${emp.email || ''}`.toLowerCase();
     return fullName.includes(searchTerm.toLowerCase());
   });
 
-  const selectedEmpObj = employees.find((e) => e.id === selectedEmployeeId);
+  const selectedEmpObj = safeEmployees.find((e) => e.id === selectedEmployeeId);
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">

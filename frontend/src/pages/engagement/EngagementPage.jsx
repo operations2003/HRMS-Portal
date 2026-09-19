@@ -58,13 +58,16 @@ export const EngagementPage = () => {
     try {
       if (activeTab === 'announcements') {
         const res = await engagementService.getAnnouncements();
-        setAnnouncements(res.data || []);
+        const list = Array.isArray(res?.data) ? res.data : Array.isArray(res?.items) ? res.items : Array.isArray(res) ? res : [];
+        setAnnouncements(list);
       } else if (activeTab === 'surveys') {
         const res = await engagementService.getSurveys();
-        setSurveys(res.data || []);
+        const list = Array.isArray(res?.data) ? res.data : Array.isArray(res?.items) ? res.items : Array.isArray(res) ? res : [];
+        setSurveys(list);
       } else if (activeTab === 'kudos') {
         const res = await engagementService.getRecognitions();
-        setRecognitions(res.data || []);
+        const list = Array.isArray(res?.data) ? res.data : Array.isArray(res?.items) ? res.items : Array.isArray(res) ? res : [];
+        setRecognitions(list);
       }
     } catch (err) {
       toast.error(err.message || 'Failed to load engagement data.');
@@ -80,7 +83,13 @@ export const EngagementPage = () => {
   const fetchEmployees = useCallback(async () => {
     try {
       const res = await employeeService.listEmployees({ status: 'Active', limit: 250 });
-      const empList = res.employees || res.data?.employees || (Array.isArray(res) ? res : []);
+      const empList = Array.isArray(res?.employees)
+        ? res.employees
+        : Array.isArray(res?.data)
+        ? res.data
+        : Array.isArray(res)
+        ? res
+        : [];
       setEmployees(empList);
     } catch (err) {
       console.error('Failed to load employees for engagement:', err);
@@ -199,18 +208,26 @@ export const EngagementPage = () => {
       </div>
 
       {/* Content */}
-      {loading ? (
-        <LoadingSpinner message="Loading engagement feed..." />
-      ) : activeTab === 'announcements' ? (
-        /* ANNOUNCEMENTS FEED */
-        <div className="space-y-4 max-w-4xl">
-          {announcements.map((a) => (
-            <div
-              key={a.id}
-              className={`bg-white p-5 rounded-xl border transition shadow-sm ${
-                a.is_pinned ? 'border-amber-300 bg-amber-50/20' : 'border-slate-200'
-              }`}
-            >
+      {(() => {
+        const safeAnnouncements = Array.isArray(announcements) ? announcements : [];
+        const safeSurveys = Array.isArray(surveys) ? surveys : [];
+        const safeRecognitions = Array.isArray(recognitions) ? recognitions : [];
+
+        if (loading) {
+          return <LoadingSpinner message="Loading engagement feed..." />;
+        }
+
+        if (activeTab === 'announcements') {
+          return (
+            /* ANNOUNCEMENTS FEED */
+            <div className="space-y-4 max-w-4xl">
+              {safeAnnouncements.map((a) => (
+                <div
+                  key={a.id}
+                  className={`bg-white p-5 rounded-xl border transition shadow-sm ${
+                    a.is_pinned ? 'border-amber-300 bg-amber-50/20' : 'border-slate-200'
+                  }`}
+                >
               <div className="flex items-start justify-between gap-3 mb-2">
                 <div className="flex items-center gap-2">
                   {a.is_pinned && (
@@ -258,48 +275,55 @@ export const EngagementPage = () => {
             </div>
           ))}
 
-          {announcements.length === 0 && (
-            <div className="bg-white p-12 text-center rounded-xl border border-slate-200 text-slate-400">
-              No announcements published.
-            </div>
-          )}
-        </div>
-      ) : activeTab === 'surveys' ? (
-        /* SURVEYS & POLLS */
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {surveys.map((s) => (
-            <div key={s.id} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
-              <div className="flex items-center justify-between">
-                <Badge variant="info">Active Survey</Badge>
-                <span className="text-[11px] text-slate-400">{s.total_responses} response(s)</span>
+            {safeAnnouncements.length === 0 && (
+              <div className="bg-white p-12 text-center rounded-xl border border-slate-200 text-slate-400">
+                No announcements published.
               </div>
+            )}
+          </div>
+        );
+      }
 
-              <h3 className="text-sm font-bold text-slate-800">{s.title}</h3>
-              <p className="text-xs text-slate-500 leading-relaxed">{s.description || 'Anonymous pulse survey.'}</p>
+      if (activeTab === 'surveys') {
+        return (
+          /* SURVEYS & POLLS */
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {safeSurveys.map((s) => (
+              <div key={s.id} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
+                <div className="flex items-center justify-between">
+                  <Badge variant="info">Active Survey</Badge>
+                  <span className="text-[11px] text-slate-400">{s.total_responses} response(s)</span>
+                </div>
 
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-                <span className="text-[11px] text-slate-400">
-                  {s.is_anonymous ? '🔒 Anonymous' : 'Named survey'}
-                </span>
-                {s.has_responded ? (
-                  <Badge variant="success">Submitted</Badge>
-                ) : (
-                  <Button size="sm">Participate</Button>
-                )}
+                <h3 className="text-sm font-bold text-slate-800">{s.title}</h3>
+                <p className="text-xs text-slate-500 leading-relaxed">{s.description || 'Anonymous pulse survey.'}</p>
+
+                <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                  <span className="text-[11px] text-slate-400">
+                    {s.is_anonymous ? '🔒 Anonymous' : 'Named survey'}
+                  </span>
+                  {s.has_responded ? (
+                    <Badge variant="success">Submitted</Badge>
+                  ) : (
+                    <Button size="sm">Participate</Button>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
 
-          {surveys.length === 0 && (
-            <div className="col-span-full bg-white p-12 text-center rounded-xl border border-slate-200 text-slate-400">
-              No active surveys or polls.
-            </div>
-          )}
-        </div>
-      ) : (
+            {safeSurveys.length === 0 && (
+              <div className="col-span-full bg-white p-12 text-center rounded-xl border border-slate-200 text-slate-400">
+                No active surveys or polls.
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      return (
         /* KUDOS WALL */
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {recognitions.map((r) => (
+          {safeRecognitions.map((r) => (
             <div
               key={r.id}
               className="bg-gradient-to-br from-white to-amber-50/30 p-5 rounded-xl border border-amber-200/70 shadow-sm hover:shadow transition space-y-3"
@@ -329,13 +353,14 @@ export const EngagementPage = () => {
             </div>
           ))}
 
-          {recognitions.length === 0 && (
+          {safeRecognitions.length === 0 && (
             <div className="col-span-full bg-white p-12 text-center rounded-xl border border-slate-200 text-slate-400">
               No Kudos posted yet. Be the first to recognize a colleague!
             </div>
           )}
         </div>
-      )}
+      );
+    })()}
 
       {/* BROADCAST MODAL */}
       {showAnnounceModal && (

@@ -6,6 +6,10 @@ export const departmentService = {
     return res.data;
   },
 
+  async getAllDepartments() {
+    return this.getDepartments();
+  },
+
   async getDepartmentById(id) {
     const res = await http.get(`/v1/departments/${id}`);
     return res.data;

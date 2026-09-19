@@ -106,14 +106,20 @@ export const ClearanceChecklistTable = ({
     ['CLEARED', 'COMPLETED', 'WAIVED', 'NOT_APPLICABLE'].includes((status || '').toUpperCase());
 
   // Metrics
-  const totalTasks = clearances.length;
-  const completedTasks = clearances.filter((t) => isCompleted(t.status)).length;
-  const pendingTasks = clearances.filter((t) => !isCompleted(t.status) && t.status !== 'REJECTED').length;
-  const rejectedTasks = clearances.filter((t) => t.status === 'REJECTED').length;
-  const completionPercentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-  const totalRecovery = clearances.reduce((sum, t) => sum + (parseFloat(t.recoveryAmount) || 0), 0);
+  const safeClearances = Array.isArray(clearances)
+    ? clearances
+    : Array.isArray(clearances?.clearances)
+    ? clearances.clearances
+    : [];
 
-  const filteredTasks = clearances.filter((t) => {
+  const totalTasks = safeClearances.length;
+  const completedTasks = safeClearances.filter((t) => isCompleted(t.status)).length;
+  const pendingTasks = safeClearances.filter((t) => !isCompleted(t.status) && t.status !== 'REJECTED').length;
+  const rejectedTasks = safeClearances.filter((t) => t.status === 'REJECTED').length;
+  const completionPercentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+  const totalRecovery = safeClearances.reduce((sum, t) => sum + (parseFloat(t.recoveryAmount) || 0), 0);
+
+  const filteredTasks = safeClearances.filter((t) => {
     if (activeCategory === 'ALL') return true;
     const cat = (t.checklistCategory || '').toUpperCase();
     const dept = (t.departmentScope || '').toUpperCase();

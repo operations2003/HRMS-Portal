@@ -282,9 +282,9 @@ export const AttendanceHistoryTable = ({
                           : (row.fullName || row.employeeName)}
                       </span>{' '}
                       <span className="text-slate-400">({row.employee?.employeeCode || row.employeeCode || '—'})</span>
-                      {(row.employee?.departmentName || row.employee?.department?.name || row.department) && (
+                      {(row.employee?.departmentName || row.employee?.department?.name || (typeof row.department === 'object' ? row.department?.name : row.department)) && (
                         <span className="text-slate-500 block text-[11px] mt-0.5">
-                          {row.employee?.departmentName || row.employee?.department?.name || row.department}
+                          {row.employee?.departmentName || row.employee?.department?.name || (typeof row.department === 'object' ? row.department?.name : row.department)}
                         </span>
                       )}
                     </div>
@@ -422,10 +422,10 @@ export const AttendanceHistoryTable = ({
                             </div>
                             <div className="text-xs text-slate-400 flex items-center gap-1.5">
                               <span>{row.employee?.employeeCode || row.employeeCode || '—'}</span>
-                              {(row.employee?.departmentName || row.employee?.department?.name || row.department) && (
+                              {(row.employee?.departmentName || row.employee?.department?.name || (typeof row.department === 'object' ? row.department?.name : row.department)) && (
                                 <>
                                   <span>•</span>
-                                  <span>{row.employee?.departmentName || row.employee?.department?.name || row.department}</span>
+                                  <span>{row.employee?.departmentName || row.employee?.department?.name || (typeof row.department === 'object' ? row.department?.name : row.department)}</span>
                                 </>
                               )}
                             </div>

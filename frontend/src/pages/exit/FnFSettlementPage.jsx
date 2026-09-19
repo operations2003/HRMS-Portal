@@ -77,7 +77,13 @@ export const FnFSettlementPage = () => {
       setError(null);
       if (isHrOrAdmin) {
         const res = await exitService.getAllExits({ limit: 100 });
-        const items = res?.items || (Array.isArray(res) ? res : []);
+        const items = Array.isArray(res?.items)
+          ? res.items
+          : Array.isArray(res?.data)
+          ? res.data
+          : Array.isArray(res)
+          ? res
+          : [];
         setExitsList(items);
 
         // Auto-select exit
@@ -181,11 +187,12 @@ export const FnFSettlementPage = () => {
     fetchData();
   };
 
-  // Filtered Exits for HR Master List
-  const filteredExits = exitsList.filter((e) => {
+  // Filtered Exits for HR Master List with defensive array guards
+  const safeExitsList = Array.isArray(exitsList) ? exitsList : [];
+  const filteredExits = safeExitsList.filter((e) => {
     const name = (e.employeeName || `${e.employee?.firstName || ''} ${e.employee?.lastName || ''}`).toLowerCase();
     const code = (e.employeeCode || e.employee?.employeeCode || '').toLowerCase();
-    const dept = (e.department || e.employee?.department || '').toLowerCase();
+    const dept = ((typeof e.department === 'object' ? e.department?.name : e.department) || (typeof e.employee?.department === 'object' ? e.employee?.department?.name : e.employee?.department) || '').toLowerCase();
     const q = searchQuery.toLowerCase();
 
     const matchesSearch = !q || name.includes(q) || code.includes(q) || dept.includes(q);
@@ -200,10 +207,10 @@ export const FnFSettlementPage = () => {
   });
 
   // KPI Calculations
-  const totalExitsCount = exitsList.length;
-  const needsCalcCount = exitsList.filter((e) => !e.fnf && e.currentStage !== 'COMPLETED').length;
-  const pendingApprovalCount = exitsList.filter((e) => e.fnf?.approvalStatus === 'PENDING').length;
-  const disbursedCount = exitsList.filter((e) => e.fnf?.paymentStatus === 'DISBURSED').length;
+  const totalExitsCount = safeExitsList.length;
+  const needsCalcCount = safeExitsList.filter((e) => !e.fnf && e.currentStage !== 'COMPLETED').length;
+  const pendingApprovalCount = safeExitsList.filter((e) => e.fnf?.approvalStatus === 'PENDING').length;
+  const disbursedCount = safeExitsList.filter((e) => e.fnf?.paymentStatus === 'DISBURSED').length;
 
   return (
     <div className="space-y-6 pb-12">
@@ -380,7 +387,7 @@ export const FnFSettlementPage = () => {
                               {empTitle}
                             </h4>
                             <p className="text-[11px] text-slate-500 font-mono mt-0.5">
-                              {empCode} • {item.department || item.employee?.department || 'Operations'}
+                              {empCode} • {(typeof item.department === 'object' ? item.department?.name : item.department) || (typeof item.employee?.department === 'object' ? item.employee?.department?.name : item.employee?.department) || 'Operations'}
                             </p>
                           </div>
                           <Badge

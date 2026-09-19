@@ -167,8 +167,8 @@ export const TeamManagementPage = () => {
         firstName: row.firstName || row.fullName?.split(' ')[0] || '',
         lastName: row.lastName || row.fullName?.split(' ').slice(1).join(' ') || '',
         employeeCode: row.employeeCode || row.employee_code || row.id?.slice(0, 8) || '',
-        departmentName: row.department || '',
-        designationTitle: row.designation || '',
+        departmentName: (typeof row.department === 'object' ? row.department?.name : row.department) || '',
+        designationTitle: (typeof row.designation === 'object' ? row.designation?.name : row.designation) || '',
       },
     });
   };
@@ -191,13 +191,17 @@ export const TeamManagementPage = () => {
     );
   }
 
-  // Filter members on frontend search
-  const filteredMembers = members.filter((m) => {
+  // Filter members on frontend search with defensive array guards
+  const safeMembers = Array.isArray(members) ? members : [];
+  const safeAttendance = Array.isArray(attendance) ? attendance : [];
+  const safeLeaves = Array.isArray(leaves) ? leaves : [];
+
+  const filteredMembers = safeMembers.filter((m) => {
     const q = searchQuery.toLowerCase();
     const name = (m.fullName || `${m.firstName || ''} ${m.lastName || ''}`).toLowerCase();
     const code = (m.employeeCode || m.employee_code || m.id || '').toLowerCase();
     const email = (m.email || '').toLowerCase();
-    const dept = (m.department?.name || m.department || '').toLowerCase();
+    const dept = (m.department?.name || (typeof m.department === 'string' ? m.department : '')).toLowerCase();
     return name.includes(q) || code.includes(q) || email.includes(q) || dept.includes(q);
   });
 
@@ -208,18 +212,18 @@ export const TeamManagementPage = () => {
     total: filteredMembers.length,
   };
 
-  const paginatedAttendance = attendance.slice((attendancePage - 1) * pageSize, attendancePage * pageSize);
+  const paginatedAttendance = safeAttendance.slice((attendancePage - 1) * pageSize, attendancePage * pageSize);
   const attendancePagination = {
     page: attendancePage,
-    totalPages: Math.ceil(attendance.length / pageSize) || 1,
-    total: attendance.length,
+    totalPages: Math.ceil(safeAttendance.length / pageSize) || 1,
+    total: safeAttendance.length,
   };
 
-  const paginatedLeaves = leaves.slice((leavePage - 1) * pageSize, leavePage * pageSize);
+  const paginatedLeaves = safeLeaves.slice((leavePage - 1) * pageSize, leavePage * pageSize);
   const leavePagination = {
     page: leavePage,
-    totalPages: Math.ceil(leaves.length / pageSize) || 1,
-    total: leaves.length,
+    totalPages: Math.ceil(safeLeaves.length / pageSize) || 1,
+    total: safeLeaves.length,
   };
 
   const memberColumns = [
@@ -246,10 +250,10 @@ export const TeamManagementPage = () => {
       render: (row) => (
         <div>
           <p className="text-xs font-medium text-slate-800">
-            {row.designation || row.designationTitle || row.designation?.name || row.jobTitle || 'Staff'}
+            {(typeof row.designation === 'object' ? row.designation?.name : row.designation) || row.designationTitle || row.jobTitle || 'Staff'}
           </p>
           <p className="text-[11px] text-slate-400">
-            {row.department || row.departmentName || row.department?.name || 'Department'}
+            {(typeof row.department === 'object' ? row.department?.name : row.department) || row.departmentName || 'Department'}
           </p>
         </div>
       ),
@@ -514,7 +518,7 @@ export const TeamManagementPage = () => {
           }`}
         >
           <CalendarDays className="w-4 h-4" />
-          Team Leaves ({leaves.filter((l) => l.status === 'PENDING').length} Pending)
+          Team Leaves ({safeLeaves.filter((l) => l.status === 'PENDING').length} Pending)
         </button>
       </div>
 
@@ -598,21 +602,21 @@ export const TeamManagementPage = () => {
             <div className="p-3.5 bg-emerald-50/70 border border-emerald-100 rounded-2xl shadow-xs">
               <span className="text-[10px] uppercase font-bold text-emerald-700 block">Present On-Time</span>
               <span className="text-xl font-bold text-emerald-900 mt-0.5 block">
-                {attendanceSummary.presentCount ?? attendance.filter((a) => a.attendance?.status === 'PRESENT').length}
+                {attendanceSummary.presentCount ?? safeAttendance.filter((a) => a.attendance?.status === 'PRESENT').length}
               </span>
             </div>
 
             <div className="p-3.5 bg-amber-50/70 border border-amber-100 rounded-2xl shadow-xs">
               <span className="text-[10px] uppercase font-bold text-amber-700 block">Late Arrivals</span>
               <span className="text-xl font-bold text-amber-900 mt-0.5 block">
-                {attendanceSummary.lateCount ?? attendance.filter((a) => a.attendance?.isLate || a.attendance?.status === 'LATE').length}
+                {attendanceSummary.lateCount ?? safeAttendance.filter((a) => a.attendance?.isLate || a.attendance?.status === 'LATE').length}
               </span>
             </div>
 
             <div className="p-3.5 bg-rose-50/70 border border-rose-100 rounded-2xl shadow-xs">
               <span className="text-[10px] uppercase font-bold text-rose-700 block">Absent / Un-punched</span>
               <span className="text-xl font-bold text-rose-900 mt-0.5 block">
-                {attendanceSummary.absentCount ?? attendance.filter((a) => !a.attendance?.id || a.attendance?.status === 'ABSENT').length}
+                {attendanceSummary.absentCount ?? safeAttendance.filter((a) => !a.attendance?.id || a.attendance?.status === 'ABSENT').length}
               </span>
             </div>
           </div>

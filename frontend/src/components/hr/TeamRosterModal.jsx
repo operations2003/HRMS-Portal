@@ -57,8 +57,12 @@ export const TeamRosterModal = ({ isOpen, onClose, managerId, managerName }) => 
       header: 'Department / Title',
       render: (row) => (
         <div>
-          <p className="text-xs font-medium text-slate-800">{row.designation || 'Staff'}</p>
-          <p className="text-[11px] text-slate-400">{row.department || 'Department'}</p>
+          <p className="text-xs font-medium text-slate-800">
+            {(typeof row.designation === 'object' ? row.designation?.name : row.designation) || 'Staff'}
+          </p>
+          <p className="text-[11px] text-slate-400">
+            {(typeof row.department === 'object' ? row.department?.name : row.department) || 'Department'}
+          </p>
         </div>
       ),
     },

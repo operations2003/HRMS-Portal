@@ -98,15 +98,28 @@ export const OffboardingPage = () => {
           search: searchQuery.trim() || undefined,
         };
         const res = await exitService.getAllExits(params);
-        setExits(res.items || []);
-        setPagination(res.pagination || { page: 1, limit: 20, total: res.items?.length || 0, totalPages: 1 });
+        const items = Array.isArray(res?.items)
+          ? res.items
+          : Array.isArray(res?.data)
+          ? res.data
+          : Array.isArray(res)
+          ? res
+          : [];
+        setExits(items);
+        setPagination(res.pagination || { page: 1, limit: 20, total: items.length, totalPages: 1 });
       } else if (isManager) {
         // Manager: Team exits
         const res = await exitService.getTeamExits({
           status: statusFilter === 'ALL' ? undefined : statusFilter,
           search: searchQuery.trim() || undefined,
         });
-        const items = Array.isArray(res) ? res : res.items || [];
+        const items = Array.isArray(res?.items)
+          ? res.items
+          : Array.isArray(res?.data)
+          ? res.data
+          : Array.isArray(res)
+          ? res
+          : [];
         setExits(items);
         setPagination({ page: 1, limit: 20, total: items.length, totalPages: 1 });
       }

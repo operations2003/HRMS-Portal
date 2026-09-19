@@ -374,7 +374,7 @@ export const TicketDetailModal = ({
                 </span>
                 {ticket.requester?.employeeCode && (
                   <span className="text-slate-400 block">
-                    {ticket.requester.employeeCode} • {ticket.requester.department || 'Staff'}
+                    {ticket.requester.employeeCode} • {(typeof ticket.requester.department === 'object' ? ticket.requester.department?.name : ticket.requester.department) || 'Staff'}
                   </span>
                 )}
               </div>
