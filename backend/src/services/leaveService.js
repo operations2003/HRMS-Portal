@@ -59,7 +59,7 @@ const formatLocalDate = (date) => {
  * Core calculation engine for Leave Duration
  * Excludes weekends (Sat/Sun) and active mandatory company/national holidays.
  */
-const calculateLeaveDuration = async (orgId, startDateStr, endDateStr, isHalfDay = false, halfDayPeriod = null) => {
+const calculateLeaveDuration = async (orgId, startDateStr, endDateStr, isHalfDay = false, halfDayPeriod = null, allowZeroWorkingDays = false) => {
   const sDate = parseLocalDate(startDateStr);
   const eDate = parseLocalDate(endDateStr);
 
@@ -138,11 +138,43 @@ const calculateLeaveDuration = async (orgId, startDateStr, endDateStr, isHalfDay
 
   if (isHalfDay) {
     if (weekendDaysCount > 0) {
-      const error = new Error('Cannot apply for half-day leave on a weekend.');
+      if (allowZeroWorkingDays) {
+        return {
+          startDate: startDateStr.trim(),
+          endDate: endDateStr.trim(),
+          isHalfDay: true,
+          halfDayPeriod,
+          totalCalendarDays: 1,
+          weekendDays: 1,
+          holidayDays: 0,
+          workingDays: 0,
+          totalDays: 0,
+          holidays: [],
+          isNonWorkingPeriod: true,
+          warning: 'Cannot apply for half-day leave on a weekend (Saturday or Sunday). Weekends are non-working days.',
+        };
+      }
+      const error = new Error('Cannot apply for half-day leave on a weekend (Saturday or Sunday).');
       error.statusCode = 400;
       throw error;
     }
     if (holidayDaysCount > 0) {
+      if (allowZeroWorkingDays) {
+        return {
+          startDate: startDateStr.trim(),
+          endDate: endDateStr.trim(),
+          isHalfDay: true,
+          halfDayPeriod,
+          totalCalendarDays: 1,
+          weekendDays: 0,
+          holidayDays: 1,
+          workingDays: 0,
+          totalDays: 0,
+          holidays: holidaysEncountered,
+          isNonWorkingPeriod: true,
+          warning: 'Cannot apply for half-day leave on an official public holiday.',
+        };
+      }
       const error = new Error('Cannot apply for half-day leave on an official public holiday.');
       error.statusCode = 400;
       throw error;
@@ -162,7 +194,23 @@ const calculateLeaveDuration = async (orgId, startDateStr, endDateStr, isHalfDay
   }
 
   if (workingDaysCount === 0) {
-    const error = new Error('The requested leave period contains no working days (all days are weekends or official public holidays).');
+    if (allowZeroWorkingDays) {
+      return {
+        startDate: startDateStr.trim(),
+        endDate: endDateStr.trim(),
+        isHalfDay: false,
+        halfDayPeriod: null,
+        totalCalendarDays,
+        weekendDays: weekendDaysCount,
+        holidayDays: holidayDaysCount,
+        workingDays: 0,
+        totalDays: 0,
+        holidays: holidaysEncountered,
+        isNonWorkingPeriod: true,
+        warning: 'The requested leave period contains no working days (all selected days are weekends or official public holidays). Standard leave only applies to working business days (Monday to Friday).',
+      };
+    }
+    const error = new Error('The requested leave period contains no working days (all days are weekends or official public holidays). Please select a working business day (Monday to Friday).');
     error.statusCode = 400;
     throw error;
   }
@@ -200,7 +248,8 @@ export const leaveService = {
       data.startDate,
       data.endDate,
       Boolean(data.isHalfDay),
-      data.halfDayPeriod
+      data.halfDayPeriod,
+      true // allowZeroWorkingDays for preview calculation
     );
   },
 
