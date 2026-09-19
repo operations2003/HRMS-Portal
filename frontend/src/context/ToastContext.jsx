@@ -25,15 +25,36 @@ export const ToastProvider = ({ children }) => {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
   }, []);
 
-  const toast = {
-    success: (message, title = 'Success', duration = 4000) =>
+  const showSuccess = useCallback(
+    (message, title = 'Success', duration = 4000) =>
       addToast({ type: 'success', title, message, duration }),
-    error: (message, title = 'Error', duration = 5000) =>
+    [addToast]
+  );
+  const showError = useCallback(
+    (message, title = 'Error', duration = 5000) =>
       addToast({ type: 'error', title, message, duration }),
-    warning: (message, title = 'Warning', duration = 4500) =>
+    [addToast]
+  );
+  const showWarning = useCallback(
+    (message, title = 'Warning', duration = 4500) =>
       addToast({ type: 'warning', title, message, duration }),
-    info: (message, title = 'Information', duration = 4000) =>
+    [addToast]
+  );
+  const showInfo = useCallback(
+    (message, title = 'Information', duration = 4000) =>
       addToast({ type: 'info', title, message, duration }),
+    [addToast]
+  );
+
+  const toast = {
+    success: showSuccess,
+    error: showError,
+    warning: showWarning,
+    info: showInfo,
+    showSuccess,
+    showError,
+    showWarning,
+    showInfo,
   };
 
   const icons = {
@@ -62,8 +83,15 @@ export const ToastProvider = ({ children }) => {
     },
   };
 
+  const contextValue = {
+    ...toast,
+    toast,
+    addToast,
+    removeToast,
+  };
+
   return (
-    <ToastContext.Provider value={{ toast, addToast, removeToast }}>
+    <ToastContext.Provider value={contextValue}>
       {children}
       {/* Toast floating container */}
       <div
@@ -110,5 +138,5 @@ export const useToast = () => {
   if (!context) {
     throw new Error('useToast must be used within a ToastProvider');
   }
-  return context.toast;
+  return context;
 };
