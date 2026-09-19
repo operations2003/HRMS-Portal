@@ -1,4 +1,6 @@
 import { leaveService } from '../services/leaveService.js';
+import { leaveRepository } from '../repositories/leaveRepository.js';
+import { employeeRepository } from '../repositories/employeeRepository.js';
 import { sendSuccess, sendError } from '../utils/apiResponse.js';
 
 export const leaveController = {
@@ -27,6 +29,53 @@ export const leaveController = {
       const year = req.query.year ? parseInt(req.query.year, 10) : new Date().getFullYear();
       const balances = await leaveService.getMyBalances(req.user, year);
       return sendSuccess(res, 'Leave balances fetched successfully.', balances);
+    } catch (error) {
+      if (error.statusCode) {
+        return sendError(res, error.message, error.statusCode);
+      }
+      next(error);
+    }
+  },
+
+  /**
+   * GET /api/v1/leaves/employee/:employeeId/balances
+   * Fetch leave balances for a specific employee (Admin / HR)
+   */
+  async getEmployeeBalances(req, res, next) {
+    try {
+      const { employeeId } = req.params;
+      const year = req.query.year ? parseInt(req.query.year, 10) : new Date().getFullYear();
+      let balances = await leaveRepository.getLeaveBalances(employeeId, year);
+      if (balances.length === 0) {
+        const emp = await employeeRepository.findById(employeeId);
+        if (emp) {
+          balances = await leaveRepository.initializeBalancesForEmployee(employeeId, emp.orgId, year);
+        }
+      }
+      return sendSuccess(res, 'Employee leave balances fetched successfully.', balances);
+    } catch (error) {
+      if (error.statusCode) {
+        return sendError(res, error.message, error.statusCode);
+      }
+      next(error);
+    }
+  },
+
+  /**
+   * PUT /api/v1/leaves/employee/:employeeId/balances
+   * Update or set custom leave allocations for a specific employee (Admin / HR)
+   */
+  async updateEmployeeBalances(req, res, next) {
+    try {
+      const { employeeId } = req.params;
+      const year = req.body.year ? parseInt(req.body.year, 10) : new Date().getFullYear();
+      const allocations = req.body.allocations || req.body;
+      const emp = await employeeRepository.findById(employeeId);
+      if (!emp) {
+        return sendError(res, `Employee with ID '${employeeId}' not found.`, 404);
+      }
+      const updated = await leaveRepository.setEmployeeLeaveAllocations(employeeId, emp.orgId, year, allocations);
+      return sendSuccess(res, 'Employee leave allocations updated successfully.', updated);
     } catch (error) {
       if (error.statusCode) {
         return sendError(res, error.message, error.statusCode);

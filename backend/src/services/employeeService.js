@@ -2,6 +2,7 @@ import { employeeRepository } from '../repositories/employeeRepository.js';
 import { orgRepository } from '../repositories/orgRepository.js';
 import { userRepository } from '../repositories/userRepository.js';
 import { roleRepository } from '../repositories/roleRepository.js';
+import { leaveRepository } from '../repositories/leaveRepository.js';
 import { hashPassword } from '../utils/passwordUtils.js';
 import { pool } from '../config/db.js';
 
@@ -165,10 +166,28 @@ export const employeeService = {
     }
 
     try {
-      return await employeeRepository.create({
+      const newEmployee = await employeeRepository.create({
         ...data,
         userId,
       });
+
+      // Initialize or set custom leave balances decided by Admin
+      if (data.leaveAllocations) {
+        await leaveRepository.setEmployeeLeaveAllocations(
+          newEmployee.id,
+          newEmployee.orgId,
+          new Date().getFullYear(),
+          data.leaveAllocations
+        );
+      } else {
+        await leaveRepository.initializeBalancesForEmployee(
+          newEmployee.id,
+          newEmployee.orgId,
+          new Date().getFullYear()
+        );
+      }
+
+      return newEmployee;
     } catch (err) {
       throw handlePostgresError(err, data);
     }
@@ -255,10 +274,21 @@ export const employeeService = {
     }
 
     try {
-      return await employeeRepository.update(id, {
+      const updated = await employeeRepository.update(id, {
         ...data,
         userId,
       });
+
+      if (data.leaveAllocations) {
+        await leaveRepository.setEmployeeLeaveAllocations(
+          id,
+          orgId,
+          new Date().getFullYear(),
+          data.leaveAllocations
+        );
+      }
+
+      return updated;
     } catch (err) {
       throw handlePostgresError(err, { ...existing, ...data });
     }
@@ -271,6 +301,9 @@ export const employeeService = {
       error.statusCode = 404;
       throw error;
     }
+
+    // Clean up dependent leave balances
+    await pool.query('DELETE FROM leave_balances WHERE employee_id = $1;', [id]);
 
     return await employeeRepository.delete(id);
   },

@@ -17,6 +17,16 @@ router.use(authenticate);
 // 1. Leave metadata & balances
 router.get('/types', authorize('leave:read'), leaveController.getLeaveTypes);
 router.get('/balances', authorize('leave:read'), leaveController.getMyBalances);
+router.get(
+  '/employee/:employeeId/balances',
+  requireRoles(['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin']),
+  leaveController.getEmployeeBalances
+);
+router.put(
+  '/employee/:employeeId/balances',
+  requireRoles(['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin']),
+  leaveController.updateEmployeeBalances
+);
 router.post('/calculate', authorize('leave:read'), leaveController.calculateDuration);
 
 // 2. Employee leave application & own history

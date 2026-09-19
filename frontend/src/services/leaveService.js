@@ -20,6 +20,31 @@ export const leaveService = {
   },
 
   /**
+   * Fetch a specific employee's leave balances (Admin/HR)
+   * @param {string} employeeId
+   * @param {number} year
+   */
+  async getEmployeeBalances(employeeId, year) {
+    const query = year ? `?year=${year}` : '';
+    const res = await http.get(`/v1/leaves/employee/${employeeId}/balances${query}`);
+    return res.data || [];
+  },
+
+  /**
+   * Update or set leave allocations for a specific employee (Admin/HR)
+   * @param {string} employeeId
+   * @param {Object|Array} allocations
+   * @param {number} year
+   */
+  async updateEmployeeBalances(employeeId, allocations, year) {
+    const res = await http.put(`/v1/leaves/employee/${employeeId}/balances`, {
+      allocations,
+      year: year || new Date().getFullYear(),
+    });
+    return res.data;
+  },
+
+  /**
    * Calculate leave duration with working days, weekends, and holidays
    * @param {Object} payload - { startDate, endDate, isHalfDay, halfDayPeriod }
    */
