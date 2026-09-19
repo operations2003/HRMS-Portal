@@ -65,7 +65,8 @@ export const http = {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
     if (!response.ok) {
-      throw new Error('Failed to download document.');
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.message || 'Failed to download document.');
     }
     const blob = await response.blob();
     const disposition = response.headers.get('Content-Disposition');
@@ -81,19 +82,48 @@ export const http = {
     document.body.appendChild(a);
     a.click();
     a.remove();
-    window.URL.revokeObjectURL(downloadUrl);
+    setTimeout(() => window.URL.revokeObjectURL(downloadUrl), 10000);
   },
   openInNewTab: async (endpoint) => {
+    const token = localStorage.getItem('hrms_token');
+    const separator = endpoint.includes('?') ? '&' : '?';
+    const inlineEndpoint = endpoint.includes('inline=') ? endpoint : `${endpoint}${separator}inline=true`;
+    const url = `${BASE_URL}${inlineEndpoint.startsWith('/') ? inlineEndpoint : `/${inlineEndpoint}`}`;
+    const response = await fetch(url, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.message || 'Failed to view document.');
+    }
+    const blob = await response.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+    const newTab = window.open(blobUrl, '_blank');
+    if (!newTab) {
+      // Fallback if browser popup blocker intercepts
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+    setTimeout(() => window.URL.revokeObjectURL(blobUrl), 60000);
+  },
+  getBlob: async (endpoint) => {
     const token = localStorage.getItem('hrms_token');
     const url = `${BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
     const response = await fetch(url, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
     if (!response.ok) {
-      throw new Error('Failed to view document.');
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.message || 'Failed to load document content.');
     }
     const blob = await response.blob();
-    const blobUrl = window.URL.createObjectURL(blob);
-    window.open(blobUrl, '_blank');
+    const contentType = response.headers.get('content-type') || blob.type;
+    return { blob, contentType };
   },
 };
+

@@ -14,6 +14,7 @@ import {
   X,
   ShieldAlert,
   CheckCircle2,
+  ExternalLink,
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext.jsx';
 import { onboardingService } from '../../services/onboardingService.js';
@@ -72,6 +73,37 @@ export const DocumentVaultUploader = ({
   const [rejectionReason, setRejectionReason] = useState('');
   const [verifyingDocId, setVerifyingDocId] = useState(null);
   const [acknowledgingDocId, setAcknowledgingDocId] = useState(null);
+
+  // Document View / Download State
+  const [loadingActionDocId, setLoadingActionDocId] = useState(null);
+  const [downloadingDocId, setDownloadingDocId] = useState(null);
+  const [previewDoc, setPreviewDoc] = useState(null);
+
+  const handlePreview = async (doc) => {
+    try {
+      setLoadingActionDocId(doc.id);
+      const { blob, contentType } = await documentService.getDocumentBlob(doc.id);
+      const blobUrl = window.URL.createObjectURL(blob);
+      setPreviewDoc({
+        doc,
+        blobUrl,
+        contentType: contentType || doc.mimeType || 'application/octet-stream',
+        isImage: (contentType || doc.mimeType || '').startsWith('image/'),
+        isPdf: (contentType || doc.mimeType || '').includes('pdf'),
+      });
+    } catch (err) {
+      showError(err.message || 'Failed to view document');
+    } finally {
+      setLoadingActionDocId(null);
+    }
+  };
+
+  const closePreview = () => {
+    if (previewDoc?.blobUrl) {
+      window.URL.revokeObjectURL(previewDoc.blobUrl);
+    }
+    setPreviewDoc(null);
+  };
 
   // Drag & Drop Handlers
   const handleDragOver = (e) => {
@@ -376,10 +408,6 @@ export const DocumentVaultUploader = ({
                         <h4 className="text-sm font-semibold text-slate-900 dark:text-white">
                           {doc.title}
                         </h4>
-                        <Badge variant="secondary">{doc.category}</Badge>
-                        {doc.documentType && doc.documentType !== doc.category && (
-                          <Badge variant="outline">{doc.documentType}</Badge>
-                        )}
                         {getStatusBadge(doc.verificationStatus)}
                         {isAcknowledged && (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
@@ -420,32 +448,39 @@ export const DocumentVaultUploader = ({
                     {/* View */}
                     <button
                       type="button"
-                      onClick={async () => {
-                        try {
-                          await documentService.viewDocument(doc.id);
-                        } catch (err) {
-                          showError(err.message || 'Failed to view document');
-                        }
-                      }}
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                      disabled={loadingActionDocId === doc.id}
+                      onClick={() => handlePreview(doc)}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer disabled:opacity-50"
                     >
-                      <Eye className="w-3.5 h-3.5" />
+                      {loadingActionDocId === doc.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-600" />
+                      ) : (
+                        <Eye className="w-3.5 h-3.5" />
+                      )}
                       View
                     </button>
 
                     {/* Download */}
                     <button
                       type="button"
+                      disabled={downloadingDocId === doc.id}
                       onClick={async () => {
                         try {
+                          setDownloadingDocId(doc.id);
                           await documentService.downloadDocument(doc.id, doc.title || 'document');
                         } catch (err) {
                           showError(err.message || 'Failed to download document');
+                        } finally {
+                          setDownloadingDocId(null);
                         }
                       }}
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer disabled:opacity-50"
                     >
-                      <Download className="w-3.5 h-3.5" />
+                      {downloadingDocId === doc.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-600" />
+                      ) : (
+                        <Download className="w-3.5 h-3.5" />
+                      )}
                       Download
                     </button>
 
@@ -533,6 +568,98 @@ export const DocumentVaultUploader = ({
               >
                 Confirm Rejection
               </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Document Preview Modal */}
+      {previewDoc && (
+        <Modal
+          isOpen={true}
+          onClose={closePreview}
+          title={previewDoc.doc.title || 'Document Preview'}
+          subtitle={`${previewDoc.doc.documentType || previewDoc.doc.category || 'Document'} • ${formatBytes(previewDoc.doc.fileSize)}`}
+          maxWidth="max-w-4xl"
+        >
+          <div className="space-y-4">
+            <div className="flex items-center justify-center p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 min-h-[300px] max-h-[68vh] overflow-auto">
+              {previewDoc.isImage ? (
+                <img
+                  src={previewDoc.blobUrl}
+                  alt={previewDoc.doc.title}
+                  className="max-h-[64vh] max-w-full object-contain rounded-lg shadow-xs"
+                />
+              ) : previewDoc.isPdf ? (
+                <iframe
+                  src={previewDoc.blobUrl}
+                  title={previewDoc.doc.title}
+                  className="w-full h-[64vh] rounded-lg border-0"
+                />
+              ) : (
+                <div className="py-12 flex flex-col items-center justify-center text-center space-y-3">
+                  <FileText className="w-16 h-16 text-slate-400" />
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800 dark:text-white">
+                      {previewDoc.doc.title}
+                    </p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Inline preview not supported for this file type ({previewDoc.contentType}).
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2 text-xs text-slate-500">
+                <span>Status:</span>
+                <Badge
+                  variant={
+                    previewDoc.doc.verificationStatus === 'APPROVED'
+                      ? 'success'
+                      : previewDoc.doc.verificationStatus === 'REJECTED'
+                      ? 'danger'
+                      : 'warning'
+                  }
+                  size="sm"
+                >
+                  {previewDoc.doc.verificationStatus || 'PENDING'}
+                </Badge>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={ExternalLink}
+                  onClick={() => {
+                    window.open(previewDoc.blobUrl, '_blank', 'noopener,noreferrer');
+                  }}
+                >
+                  Open in Tab
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  icon={Download}
+                  onClick={async () => {
+                    try {
+                      await documentService.downloadDocument(
+                        previewDoc.doc.id,
+                        previewDoc.doc.title || 'document'
+                      );
+                    } catch (err) {
+                      showError(err.message || 'Failed to download document');
+                    }
+                  }}
+                >
+                  Download
+                </Button>
+                <Button variant="ghost" size="sm" onClick={closePreview}>
+                  Close
+                </Button>
+              </div>
             </div>
           </div>
         </Modal>

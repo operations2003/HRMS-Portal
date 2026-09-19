@@ -90,6 +90,15 @@ export const documentService = {
    * @param {string} id - Document ID
    */
   async viewDocument(id) {
-    return await http.openInNewTab(`/v1/documents/${id}/download`);
+    return await http.openInNewTab(`/v1/documents/${id}/download?inline=true`);
+  },
+
+  /**
+   * Retrieve document as blob for in-app preview
+   * @param {string} id - Document ID
+   */
+  async getDocumentBlob(id) {
+    return await http.getBlob(`/v1/documents/${id}/download?inline=true`);
   },
 };
+
