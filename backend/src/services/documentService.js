@@ -15,6 +15,13 @@ export const documentService = {
   },
 
   /**
+   * Get all documents with optional filtering and pagination
+   */
+  async getAllDocuments(options = {}) {
+    return documentRepository.findAll(options);
+  },
+
+  /**
    * Get documents by owner
    */
   async getDocumentsByOwner(ownerType, ownerId) {

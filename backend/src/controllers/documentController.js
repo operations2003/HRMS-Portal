@@ -1,9 +1,11 @@
 import fs from 'fs';
 import path from 'path';
 import { documentService } from '../services/documentService.js';
+import { documentRepository } from '../repositories/documentRepository.js';
 import { employeeRepository } from '../repositories/employeeRepository.js';
 import { adminService } from '../services/adminService.js';
 import { sendSuccess, sendError } from '../utils/apiResponse.js';
+import { query } from '../config/db.js';
 
 // Fallback generator for missing local files (e.g. from seeded/test records)
 const ensureDocumentBinaryFile = (doc, absolutePath) => {
@@ -96,21 +98,69 @@ export const documentController = {
         // Non-blocking
       }
 
-      // If document is stored locally
+      // If document has binary in database (consistent across all devices / teammates)
+      const isInline =
+        req.query.inline === 'true' ||
+        req.query.preview === 'true' ||
+        req.query.view === 'true';
+      const dispositionType = isInline ? 'inline' : 'attachment';
+
+      const binaryRecord = await documentRepository.getFileData(id);
+      if (
+        binaryRecord?.file_data &&
+        Buffer.isBuffer(binaryRecord.file_data) &&
+        binaryRecord.file_data.length > 0
+      ) {
+        // Cache to local server disk if path is known
+        if (doc.fileUrl) {
+          try {
+            const relativePath = doc.fileUrl.startsWith('/') ? doc.fileUrl.slice(1) : doc.fileUrl;
+            const absolutePath = path.resolve(process.cwd(), relativePath);
+            const dir = path.dirname(absolutePath);
+            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+            if (!fs.existsSync(absolutePath)) {
+              fs.writeFileSync(absolutePath, binaryRecord.file_data);
+            }
+          } catch (cacheErr) {
+            // Non-blocking disk cache
+          }
+        }
+
+        res.setHeader('Content-Type', doc.mimeType || binaryRecord.mime_type || 'application/octet-stream');
+        res.setHeader(
+          'Content-Disposition',
+          `${dispositionType}; filename="${encodeURIComponent(doc.title || 'document')}"`
+        );
+        return res.send(binaryRecord.file_data);
+      }
+
+      // If document is stored on local disk
       if (doc.fileUrl) {
         const relativePath = doc.fileUrl.startsWith('/') ? doc.fileUrl.slice(1) : doc.fileUrl;
         const absolutePath = path.resolve(process.cwd(), relativePath);
 
-        // Ensure file exists on disk, generate safe fallback placeholder if missing
-        ensureDocumentBinaryFile(doc, absolutePath);
-
         if (fs.existsSync(absolutePath)) {
-          const isInline =
-            req.query.inline === 'true' ||
-            req.query.preview === 'true' ||
-            req.query.view === 'true';
-          const dispositionType = isInline ? 'inline' : 'attachment';
+          // Opportunistically sync disk file back into DB
+          try {
+            const diskBuf = fs.readFileSync(absolutePath);
+            if (diskBuf.length > 0) {
+              await query('UPDATE document_vault SET file_data = $1 WHERE id = $2', [diskBuf, id]);
+            }
+          } catch (syncErr) {
+            // Non-blocking
+          }
 
+          res.setHeader('Content-Type', doc.mimeType || 'application/octet-stream');
+          res.setHeader(
+            'Content-Disposition',
+            `${dispositionType}; filename="${encodeURIComponent(doc.title || path.basename(absolutePath))}"`
+          );
+          return res.sendFile(absolutePath);
+        }
+
+        // Safe fallback generator if not on disk or in DB
+        ensureDocumentBinaryFile(doc, absolutePath);
+        if (fs.existsSync(absolutePath)) {
           res.setHeader('Content-Type', doc.mimeType || 'application/octet-stream');
           res.setHeader(
             'Content-Disposition',
@@ -164,6 +214,50 @@ export const documentController = {
   },
 
   /**
+   * GET /api/v1/documents
+   * Company-wide Document Repository for Admins / HR / Authorized Managers
+   */
+  async getAllDocuments(req, res, next) {
+    try {
+      const orgId = req.user?.orgId || 'org-1';
+      const { category, verificationStatus, search, ownerType, ownerId, limit, offset } = req.query;
+
+      const userRole = (req.user?.roleName || '').toLowerCase();
+      const userPermissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
+      const isPrivileged =
+        ['admin', 'superadmin', 'orgadmin', 'hr', 'hrmanager'].includes(userRole) ||
+        userPermissions.includes('*') ||
+        userPermissions.includes('document:read') ||
+        userPermissions.includes('document:manage');
+
+      let managerEmployeeId = null;
+      if (!isPrivileged) {
+        if (userRole === 'manager' && req.user?.employeeId) {
+          managerEmployeeId = req.user.employeeId;
+        } else {
+          return sendError(res, 'Access Forbidden: Insufficient permissions to view organization documents.', 403);
+        }
+      }
+
+      const docs = await documentService.getAllDocuments({
+        orgId,
+        category,
+        verificationStatus,
+        search,
+        ownerType,
+        ownerId,
+        managerEmployeeId,
+        limit: limit ? parseInt(limit, 10) : 100,
+        offset: offset ? parseInt(offset, 10) : 0,
+      });
+
+      return sendSuccess(res, 'Organization documents retrieved successfully.', docs);
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  /**
    * POST /api/v1/documents/my/upload
    * Employee self-service: upload compliance/identification document to Document Vault
    */
@@ -178,6 +272,13 @@ export const documentController = {
         return sendError(res, 'No document file was uploaded.', 400);
       }
 
+      let fileData = null;
+      if (req.file.buffer) {
+        fileData = req.file.buffer;
+      } else if (req.file.path && fs.existsSync(req.file.path)) {
+        fileData = fs.readFileSync(req.file.path);
+      }
+
       const fileUrl = `/uploads/onboarding_documents/${req.file.filename}`;
       const payload = {
         orgId,
@@ -190,10 +291,56 @@ export const documentController = {
         fileSize: req.file.size,
         mimeType: req.file.mimetype,
         verificationStatus: 'PENDING',
+        fileData,
       };
 
       const doc = await documentService.addDocument(payload);
       return sendSuccess(res, 'Document uploaded to Document Vault successfully.', doc, null, 201);
+    } catch (error) {
+      if (error.statusCode === 400) {
+        return sendError(res, error.message, 400);
+      }
+      next(error);
+    }
+  },
+
+  /**
+   * POST /api/v1/documents/owner/:ownerType/:ownerId/upload
+   * HR/Admin upload a document directly for an employee or candidate
+   */
+  async uploadDocumentForOwner(req, res, next) {
+    try {
+      const { ownerType, ownerId } = req.params;
+      const orgId = req.user.orgId || 'org-1';
+
+      if (!req.file) {
+        return sendError(res, 'No document file was uploaded.', 400);
+      }
+
+      let fileData = null;
+      if (req.file.buffer) {
+        fileData = req.file.buffer;
+      } else if (req.file.path && fs.existsSync(req.file.path)) {
+        fileData = fs.readFileSync(req.file.path);
+      }
+
+      const fileUrl = `/uploads/onboarding_documents/${req.file.filename}`;
+      const payload = {
+        orgId,
+        ownerType: ownerType.toUpperCase(),
+        ownerId,
+        category: req.body.category || 'OTHER',
+        documentType: req.body.documentType || req.body.category || 'OTHER',
+        title: req.body.title || req.file.originalname,
+        fileUrl,
+        fileSize: req.file.size,
+        mimeType: req.file.mimetype,
+        verificationStatus: req.body.verificationStatus || 'APPROVED',
+        fileData,
+      };
+
+      const doc = await documentService.addDocument(payload);
+      return sendSuccess(res, 'Document uploaded to vault for owner successfully.', doc, null, 201);
     } catch (error) {
       if (error.statusCode === 400) {
         return sendError(res, error.message, 400);
@@ -208,7 +355,13 @@ export const documentController = {
   async getDocumentsByOwner(req, res, next) {
     try {
       const { ownerType, ownerId } = req.params;
-      const isHrOrAdmin = ['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin'].includes(req.user?.roleName);
+      const userRole = (req.user?.roleName || '').toLowerCase();
+      const userPermissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
+      const isHrOrAdmin =
+        ['admin', 'superadmin', 'orgadmin', 'hr', 'hrmanager'].includes(userRole) ||
+        userPermissions.includes('*') ||
+        userPermissions.includes('document:read') ||
+        userPermissions.includes('document:manage');
 
       // IDOR Protection: Employees can only access their own documents
       if (!isHrOrAdmin && ownerType.toUpperCase() === 'EMPLOYEE') {
@@ -235,7 +388,14 @@ export const documentController = {
       const doc = await documentService.getDocumentById(id);
 
       // IDOR Protection: If employee document, non-HR/Admin users can only view their own
-      const isHrOrAdmin = ['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin'].includes(req.user?.roleName);
+      const userRole = (req.user?.roleName || '').toLowerCase();
+      const userPermissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
+      const isHrOrAdmin =
+        ['admin', 'superadmin', 'orgadmin', 'hr', 'hrmanager'].includes(userRole) ||
+        userPermissions.includes('*') ||
+        userPermissions.includes('document:read') ||
+        userPermissions.includes('document:manage');
+
       if (!isHrOrAdmin && doc.ownerType === 'EMPLOYEE') {
         const orgId = req.user.orgId || 'org-1';
         const employee = await employeeRepository.findByUserId(req.user.id, orgId);

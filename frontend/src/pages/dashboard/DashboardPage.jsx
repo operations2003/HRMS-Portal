@@ -20,15 +20,15 @@ import { Button } from '../../components/common/Button.jsx';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
 import { EmptyState } from '../../components/common/EmptyState.jsx';
 import { Can } from '../../components/rbac/Can.jsx';
-import { ManagerDashboardPage } from '../manager/ManagerDashboardPage.jsx';
+import { ManagerDashboardView } from './ManagerDashboardView.jsx';
 
 export const DashboardPage = () => {
   const navigate = useNavigate();
   const { user, hasRole } = useAuth();
 
-  // Role-Aware Routing: Dedicated Manager Dashboard for Manager users
-  if (user?.roleName === 'Manager') {
-    return <ManagerDashboardPage />;
+  // Role-Aware Routing: Dedicated Executive Manager Dashboard for Manager users
+  if ((user?.roleName || '').toLowerCase() === 'manager') {
+    return <ManagerDashboardView />;
   }
 
   const [stats, setStats] = useState(null);

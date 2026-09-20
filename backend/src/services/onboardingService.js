@@ -1,3 +1,4 @@
+import fs from 'fs';
 import { newHireRepository } from '../repositories/newHireRepository.js';
 import { documentRepository } from '../repositories/documentRepository.js';
 import { documentService } from './documentService.js';
@@ -160,6 +161,13 @@ export const onboardingService = {
     const documentType = (metadata.documentType || 'OTHER').toUpperCase();
     const title = metadata.title || file.originalname;
 
+    let fileData = null;
+    if (file.buffer) {
+      fileData = file.buffer;
+    } else if (file.path && fs.existsSync(file.path)) {
+      fileData = fs.readFileSync(file.path);
+    }
+
     const docRecord = await documentRepository.create({
       orgId: newHire.orgId,
       ownerType: 'NEW_HIRE',
@@ -171,6 +179,7 @@ export const onboardingService = {
       fileSize: file.size,
       mimeType: file.mimetype,
       verificationStatus: 'PENDING',
+      fileData,
     });
 
     logger.info('DOC-UPLOAD', `Document '${title}' uploaded for candidate ${newHireId}`, {

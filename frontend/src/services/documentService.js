@@ -45,6 +45,32 @@ export const documentService = {
   },
 
   /**
+   * Get all organization documents with optional filters (Admin/HR/Manager)
+   */
+  async getAllDocuments(params = {}) {
+    const query = new URLSearchParams();
+    if (params.category && params.category !== 'ALL') query.append('category', params.category);
+    if (params.verificationStatus && params.verificationStatus !== 'ALL') {
+      query.append('verificationStatus', params.verificationStatus);
+    }
+    if (params.search) query.append('search', params.search);
+    if (params.ownerType) query.append('ownerType', params.ownerType);
+    if (params.ownerId) query.append('ownerId', params.ownerId);
+
+    const queryString = query.toString() ? `?${query.toString()}` : '';
+    const res = await http.get(`/v1/documents${queryString}`);
+    return res.data || [];
+  },
+
+  /**
+   * Upload an authorized document for a specific owner (HR / Admin action)
+   */
+  async uploadDocumentForOwner(ownerType, ownerId, formData) {
+    const res = await http.upload(`/v1/documents/owner/${ownerType}/${ownerId}/upload`, formData);
+    return res.data;
+  },
+
+  /**
    * Get documents for an owner (EMPLOYEE, NEW_HIRE, CANDIDATE)
    * @param {string} ownerType - 'EMPLOYEE' | 'NEW_HIRE' | 'CANDIDATE'
    * @param {string} ownerId - ID of employee or new hire

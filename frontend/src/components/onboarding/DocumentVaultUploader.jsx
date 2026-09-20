@@ -423,6 +423,14 @@ export const DocumentVaultUploader = ({
                         <span>{doc.mimeType || 'Document'}</span>
                         <span>•</span>
                         <span>Uploaded {new Date(doc.createdAt).toLocaleDateString()}</span>
+                        {doc.ownerName && (
+                          <>
+                            <span>•</span>
+                            <span className="font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
+                              👤 {doc.ownerName} {doc.ownerCode ? `(${doc.ownerCode})` : ''} {doc.ownerDepartment ? `• ${doc.ownerDepartment}` : ''}
+                            </span>
+                          </>
+                        )}
                         {isAcknowledged && acks[0]?.acknowledgedAt && (
                           <>
                             <span>•</span>

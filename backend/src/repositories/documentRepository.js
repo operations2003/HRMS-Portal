@@ -89,12 +89,12 @@ export const documentRepository = {
         id, org_id, owner_type, owner_id, category, document_type,
         title, version, file_url, file_size, mime_type, verification_status,
         verified_by, verified_at, rejection_reason, expiry_date,
-        acknowledgement_log, is_encrypted, encryption_metadata
+        acknowledgement_log, is_encrypted, encryption_metadata, file_data
       ) VALUES (
         $1, $2, $3, $4, $5, $6,
         $7, $8, $9, $10, $11, $12,
         $13, $14, $15, $16,
-        $17, $18, $19
+        $17, $18, $19, $20
       )
       RETURNING id;
     `;
@@ -119,6 +119,7 @@ export const documentRepository = {
       JSON.stringify(data.acknowledgementLog || []),
       Boolean(data.isEncrypted),
       JSON.stringify(data.encryptionMetadata || {}),
+      data.fileData || null,
     ];
 
     await query(text, values);
@@ -198,6 +199,129 @@ export const documentRepository = {
     const text = 'DELETE FROM document_vault WHERE id = $1 RETURNING id;';
     const res = await query(text, [id]);
     return res.rowCount > 0;
+  },
+
+  /**
+   * Fetch binary file data directly from the database for secure download / preview
+   */
+  async getFileData(id) {
+    const text = `
+      SELECT id, title, file_url, mime_type, file_size, file_data 
+      FROM document_vault 
+      WHERE id = $1;
+    `;
+    const res = await query(text, [id]);
+    return res.rows[0] || null;
+  },
+
+  /**
+   * Find all documents across the organization with owner and verification metadata
+   */
+  async findAll({
+    orgId,
+    ownerType,
+    ownerId,
+    category,
+    verificationStatus,
+    search,
+    managerEmployeeId,
+    limit = 100,
+    offset = 0,
+  } = {}) {
+    let whereClauses = [];
+    let params = [];
+    let idx = 1;
+
+    if (orgId) {
+      whereClauses.push(`d.org_id = $${idx++}`);
+      params.push(orgId);
+    }
+    if (ownerType) {
+      whereClauses.push(`d.owner_type = $${idx++}`);
+      params.push(ownerType.toUpperCase());
+    }
+    if (ownerId) {
+      whereClauses.push(`d.owner_id = $${idx++}`);
+      params.push(ownerId);
+    }
+    if (category && category !== 'ALL') {
+      whereClauses.push(`d.category = $${idx++}`);
+      params.push(category.toUpperCase());
+    }
+    if (verificationStatus && verificationStatus !== 'ALL') {
+      whereClauses.push(`d.verification_status = $${idx++}`);
+      params.push(verificationStatus.toUpperCase());
+    }
+    if (search && search.trim()) {
+      whereClauses.push(`(
+        d.title ILIKE $${idx} OR 
+        d.document_type ILIKE $${idx} OR 
+        e.first_name ILIKE $${idx} OR 
+        e.last_name ILIKE $${idx} OR 
+        e.email ILIKE $${idx} OR
+        e.employee_code ILIKE $${idx} OR
+        nh.first_name ILIKE $${idx} OR
+        nh.last_name ILIKE $${idx} OR
+        nh.email ILIKE $${idx}
+      )`);
+      params.push(`%${search.trim()}%`);
+      idx++;
+    }
+    if (managerEmployeeId) {
+      whereClauses.push(`e.manager_id = $${idx++}`);
+      params.push(managerEmployeeId);
+    }
+
+    const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+    const text = `
+      SELECT 
+        d.id,
+        d.org_id,
+        d.owner_type,
+        d.owner_id,
+        d.category,
+        d.document_type,
+        d.title,
+        d.version,
+        d.file_url,
+        d.file_size,
+        d.mime_type,
+        d.verification_status,
+        d.verified_by,
+        d.verified_at,
+        d.rejection_reason,
+        d.expiry_date,
+        d.acknowledgement_log,
+        d.is_encrypted,
+        d.encryption_metadata,
+        d.created_at,
+        d.updated_at,
+        CONCAT(u.first_name, ' ', u.last_name) AS u_name,
+        COALESCE(NULLIF(TRIM(CONCAT(e.first_name, ' ', e.last_name)), ''), NULLIF(TRIM(CONCAT(nh.first_name, ' ', nh.last_name)), ''), 'Unknown Owner') AS owner_name,
+        COALESCE(e.email, nh.email, '') AS owner_email,
+        COALESCE(e.employee_code, '') AS owner_code,
+        COALESCE(dep.name, nh.location, '') AS owner_department
+      FROM document_vault d
+      LEFT JOIN users u ON u.id = d.verified_by
+      LEFT JOIN employees e ON (d.owner_type = 'EMPLOYEE' AND e.id = d.owner_id)
+      LEFT JOIN departments dep ON dep.id = e.dept_id
+      LEFT JOIN new_hires nh ON (d.owner_type = 'NEW_HIRE' AND nh.id = d.owner_id)
+      ${whereSql}
+      ORDER BY d.created_at DESC
+      LIMIT $${idx++} OFFSET $${idx++};
+    `;
+
+    params.push(limit, offset);
+    const res = await query(text, params);
+    return res.rows.map((row) => {
+      const mapped = mapDocumentRow(row);
+      mapped.ownerName = row.owner_name;
+      mapped.ownerEmail = row.owner_email;
+      mapped.ownerCode = row.owner_code;
+      mapped.ownerDepartment = row.owner_department;
+      return mapped;
+    });
   },
 };
 
