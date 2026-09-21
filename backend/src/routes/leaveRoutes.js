@@ -49,6 +49,11 @@ router.get(
   requireRoles(['Manager', 'HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin']),
   leaveController.getTeamLeaves
 );
+router.get(
+  '/team/stats',
+  requireRoles(['Manager', 'HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin']),
+  leaveController.getTeamLeaveStats
+);
 
 // 4. Organization leaves (HR / Admin scope)
 router.get(

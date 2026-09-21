@@ -698,7 +698,7 @@ export const leaveService = {
   },
 
   /**
-   * Get team leaves for Manager (scoped to manager's department or direct reports)
+   * Get team leaves for Manager or organization leaves for HR/Admin
    */
   async getTeamLeaves(user, query = {}) {
     const normRole = normalizeRole(user.roleName);
@@ -713,11 +713,38 @@ export const leaveService = {
           pagination: { total: 0, page: 1, limit: 20, totalPages: 0 },
         };
       }
-      deptId = managerEmp.deptId || null;
+      deptId = query.deptId || null;
       managerId = managerEmp.id;
     }
 
     return leaveRepository.findTeamLeaves(deptId, user.orgId, { ...query, managerId });
+  },
+
+  /**
+   * Get team leave KPI statistics for Manager / HR / Admin
+   */
+  async getTeamLeaveStats(user, query = {}) {
+    const normRole = normalizeRole(user.roleName);
+    let deptId = query.deptId || null;
+    let managerId = null;
+
+    if (normRole === 'manager') {
+      const managerEmp = await resolveRequesterEmployee(user);
+      if (!managerEmp) {
+        return {
+          pending: 0,
+          approved: 0,
+          rejected: 0,
+          cancelled: 0,
+          total: 0,
+          onLeaveToday: 0,
+        };
+      }
+      deptId = query.deptId || null;
+      managerId = managerEmp.id;
+    }
+
+    return leaveRepository.getTeamLeaveStats(deptId, user.orgId, { managerId });
   },
 
   /**

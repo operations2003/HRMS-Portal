@@ -109,6 +109,21 @@ export const leaveService = {
   },
 
   /**
+   * Fetch team leave KPI statistics
+   */
+  async getTeamLeaveStats() {
+    const res = await http.get('/v1/leaves/team/stats');
+    return res.data || {
+      pending: 0,
+      approved: 0,
+      rejected: 0,
+      cancelled: 0,
+      total: 0,
+      onLeaveToday: 0,
+    };
+  },
+
+  /**
    * Fetch organization leave requests (HR / Admin scope)
    * @param {Object} params - { status, search, deptId, page, limit }
    */

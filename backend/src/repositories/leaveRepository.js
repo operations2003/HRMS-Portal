@@ -410,18 +410,25 @@ export const leaveRepository = {
     const values = [orgId];
     let paramIndex = 2;
 
-    if (managerId && deptId) {
-      conditions.push(`(e.manager_id = $${paramIndex++} OR e.dept_id = $${paramIndex++})`);
-      values.push(managerId, deptId);
-    } else if (managerId) {
+    if (managerId) {
       conditions.push(`e.manager_id = $${paramIndex++}`);
       values.push(managerId);
+      // Exclude manager's own personal requests from team approvals list
+      conditions.push(`lr.employee_id != $${paramIndex++}`);
+      values.push(managerId);
+      if (deptId) {
+        conditions.push(`e.dept_id = $${paramIndex++}`);
+        values.push(deptId);
+      }
     } else if (deptId) {
       conditions.push(`e.dept_id = $${paramIndex++}`);
       values.push(deptId);
     }
 
-    if (status) {
+    if (status === 'ON_LEAVE_TODAY') {
+      conditions.push(`UPPER(lr.status) = 'APPROVED'`);
+      conditions.push(`lr.start_date <= CURRENT_DATE AND lr.end_date >= CURRENT_DATE`);
+    } else if (status) {
       conditions.push(`UPPER(lr.status) = UPPER($${paramIndex++})`);
       values.push(status);
     }
@@ -481,6 +488,59 @@ export const leaveRepository = {
         limit: limitNum,
         totalPages: Math.ceil(total / limitNum) || 1,
       },
+    };
+  },
+
+  /**
+   * Get real-time KPI statistics for team or organization leaves
+   */
+  async getTeamLeaveStats(deptId, orgId, { managerId = null } = {}) {
+    const conditions = ['lr.org_id = $1'];
+    const values = [orgId];
+    let paramIndex = 2;
+
+    if (managerId) {
+      conditions.push(`e.manager_id = $${paramIndex++}`);
+      values.push(managerId);
+      conditions.push(`lr.employee_id != $${paramIndex++}`);
+      values.push(managerId);
+      if (deptId) {
+        conditions.push(`e.dept_id = $${paramIndex++}`);
+        values.push(deptId);
+      }
+    } else if (deptId) {
+      conditions.push(`e.dept_id = $${paramIndex++}`);
+      values.push(deptId);
+    }
+
+    const whereClause = `WHERE ${conditions.join(' AND ')}`;
+
+    const statsSql = `
+      SELECT 
+        COUNT(lr.id) FILTER (WHERE UPPER(lr.status) = 'PENDING')::int AS "pending",
+        COUNT(lr.id) FILTER (WHERE UPPER(lr.status) = 'APPROVED')::int AS "approved",
+        COUNT(lr.id) FILTER (WHERE UPPER(lr.status) = 'REJECTED')::int AS "rejected",
+        COUNT(lr.id) FILTER (WHERE UPPER(lr.status) = 'CANCELLED')::int AS "cancelled",
+        COUNT(lr.id)::int AS "total",
+        COUNT(DISTINCT lr.employee_id) FILTER (
+          WHERE UPPER(lr.status) = 'APPROVED' 
+            AND lr.start_date <= CURRENT_DATE 
+            AND lr.end_date >= CURRENT_DATE
+        )::int AS "onLeaveToday"
+      FROM leave_requests lr
+      JOIN employees e ON e.id = lr.employee_id
+      ${whereClause};
+    `;
+
+    const res = await pool.query(statsSql, values);
+    const row = res.rows[0] || {};
+    return {
+      pending: row.pending || 0,
+      approved: row.approved || 0,
+      rejected: row.rejected || 0,
+      cancelled: row.cancelled || 0,
+      total: row.total || 0,
+      onLeaveToday: row.onLeaveToday || 0,
     };
   },
 

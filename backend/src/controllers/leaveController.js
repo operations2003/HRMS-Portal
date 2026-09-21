@@ -204,6 +204,22 @@ export const leaveController = {
   },
 
   /**
+   * GET /api/v1/leaves/team/stats
+   * Fetch team leave KPI statistics for manager / HR / admin
+   */
+  async getTeamLeaveStats(req, res, next) {
+    try {
+      const stats = await leaveService.getTeamLeaveStats(req.user, req.query);
+      return sendSuccess(res, 'Team leave statistics fetched successfully.', stats);
+    } catch (error) {
+      if (error.statusCode) {
+        return sendError(res, error.message, error.statusCode);
+      }
+      next(error);
+    }
+  },
+
+  /**
    * GET /api/v1/leaves/organization
    * Fetch organization-wide leaves for HR & Admin
    */

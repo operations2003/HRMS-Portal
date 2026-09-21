@@ -74,7 +74,7 @@ export const LeaveManagementPage = () => {
 
   // Status Filter
   const [statusFilter, setStatusFilter] = useState(
-    (tabParam === 'team' || tabParam === 'approvals') ? 'PENDING' : ''
+    searchParams.get('status') || ''
   );
 
   // Modals state
@@ -135,12 +135,7 @@ export const LeaveManagementPage = () => {
   const handleTabChange = (newTab) => {
     setActiveTab(newTab);
     setSearchParams({ tab: newTab });
-    // Default team view to PENDING for fast approval actioning
-    if (newTab === 'team') {
-      setStatusFilter('PENDING');
-    } else {
-      setStatusFilter('');
-    }
+    setStatusFilter('');
   };
 
   // Fetch Leave Types and Balances directly from backend API
@@ -161,28 +156,21 @@ export const LeaveManagementPage = () => {
     }
   }, []);
 
-  // Fetch Team KPI stats for manager
+  // Fetch Team KPI stats directly matching leave requests scope
   const fetchTeamStats = useCallback(async () => {
     if (!canViewTeam) return;
     try {
-      const [leavesRes, summaryRes] = await Promise.allSettled([
-        managerService.getTeamLeaves(),
-        managerService.getTeamSummary(),
-      ]);
-
-      const items = leavesRes.status === 'fulfilled'
-        ? (leavesRes.value?.items || leavesRes.value?.data || (Array.isArray(leavesRes.value) ? leavesRes.value : []))
-        : [];
-      const summary = summaryRes.status === 'fulfilled'
-        ? summaryRes.value || {}
-        : {};
-
-      const pending = items.filter((l) => (l.status || '').toUpperCase() === 'PENDING').length;
-      const approved = items.filter((l) => (l.status || '').toUpperCase() === 'APPROVED').length;
-      const rejected = items.filter((l) => (l.status || '').toUpperCase() === 'REJECTED').length;
-      const onLeaveToday = summary.onLeaveToday || 0;
-
-      setTeamStats({ pending, approved, rejected, onLeaveToday });
+      const stats = await leaveService.getTeamLeaveStats();
+      if (stats) {
+        setTeamStats({
+          pending: stats.pending || 0,
+          approved: stats.approved || 0,
+          rejected: stats.rejected || 0,
+          cancelled: stats.cancelled || 0,
+          total: stats.total || 0,
+          onLeaveToday: stats.onLeaveToday || 0,
+        });
+      }
     } catch {
       // Non-blocking
     }
@@ -783,7 +771,15 @@ export const LeaveManagementPage = () => {
       {/* When on Team Tab: Show Real-time Manager KPI Counters */}
       {activeTab === 'team' && canViewTeam && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setStatusFilter(statusFilter === 'PENDING' ? '' : 'PENDING')}
+            className={`p-4 rounded-2xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
+              statusFilter === 'PENDING'
+                ? 'bg-amber-50/80 border-amber-300 ring-2 ring-amber-500/20 shadow-sm'
+                : 'bg-white border-slate-200/80 hover:border-amber-200 hover:bg-amber-50/30'
+            }`}
+          >
             <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
               <Clock className="w-5 h-5" />
             </div>
@@ -793,9 +789,17 @@ export const LeaveManagementPage = () => {
               </span>
               <span className="text-xl font-black text-slate-900">{teamStats.pending}</span>
             </div>
-          </div>
+          </button>
 
-          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setStatusFilter(statusFilter === 'APPROVED' ? '' : 'APPROVED')}
+            className={`p-4 rounded-2xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
+              statusFilter === 'APPROVED'
+                ? 'bg-emerald-50/80 border-emerald-300 ring-2 ring-emerald-500/20 shadow-sm'
+                : 'bg-white border-slate-200/80 hover:border-emerald-200 hover:bg-emerald-50/30'
+            }`}
+          >
             <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
               <CheckCircle2 className="w-5 h-5" />
             </div>
@@ -805,9 +809,17 @@ export const LeaveManagementPage = () => {
               </span>
               <span className="text-xl font-black text-slate-900">{teamStats.approved}</span>
             </div>
-          </div>
+          </button>
 
-          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setStatusFilter(statusFilter === 'REJECTED' ? '' : 'REJECTED')}
+            className={`p-4 rounded-2xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
+              statusFilter === 'REJECTED'
+                ? 'bg-rose-50/80 border-rose-300 ring-2 ring-rose-500/20 shadow-sm'
+                : 'bg-white border-slate-200/80 hover:border-rose-200 hover:bg-rose-50/30'
+            }`}
+          >
             <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
               <XCircle className="w-5 h-5" />
             </div>
@@ -817,9 +829,17 @@ export const LeaveManagementPage = () => {
               </span>
               <span className="text-xl font-black text-slate-900">{teamStats.rejected}</span>
             </div>
-          </div>
+          </button>
 
-          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setStatusFilter(statusFilter === 'ON_LEAVE_TODAY' ? '' : 'ON_LEAVE_TODAY')}
+            className={`p-4 rounded-2xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
+              statusFilter === 'ON_LEAVE_TODAY'
+                ? 'bg-sky-50/80 border-sky-300 ring-2 ring-sky-500/20 shadow-sm'
+                : 'bg-white border-slate-200/80 hover:border-sky-200 hover:bg-sky-50/30'
+            }`}
+          >
             <div className="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center shrink-0">
               <Users className="w-5 h-5" />
             </div>
@@ -829,7 +849,7 @@ export const LeaveManagementPage = () => {
               </span>
               <span className="text-xl font-black text-slate-900">{teamStats.onLeaveToday}</span>
             </div>
-          </div>
+          </button>
         </div>
       )}
 
@@ -837,13 +857,24 @@ export const LeaveManagementPage = () => {
       <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center flex-wrap gap-2.5">
           {activeTab === 'team' ? (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setStatusFilter('')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
+                  statusFilter === ''
+                    ? 'bg-slate-900 text-white shadow-xs'
+                    : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
+                }`}
+              >
+                All Team Requests ({teamStats.total})
+              </button>
               <button
                 type="button"
                 onClick={() => setStatusFilter('PENDING')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
                   statusFilter === 'PENDING'
-                    ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                    ? 'bg-amber-100 text-amber-800 border border-amber-300 shadow-xs'
                     : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
                 }`}
               >
@@ -851,36 +882,36 @@ export const LeaveManagementPage = () => {
               </button>
               <button
                 type="button"
-                onClick={() => setStatusFilter('')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
-                  statusFilter === ''
-                    ? 'bg-slate-900 text-white'
-                    : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
-                }`}
-              >
-                All Team Requests
-              </button>
-              <button
-                type="button"
                 onClick={() => setStatusFilter('APPROVED')}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
                   statusFilter === 'APPROVED'
-                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-xs'
                     : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
                 }`}
               >
-                Approved
+                Approved ({teamStats.approved})
               </button>
               <button
                 type="button"
                 onClick={() => setStatusFilter('REJECTED')}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
                   statusFilter === 'REJECTED'
-                    ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                    ? 'bg-rose-100 text-rose-800 border border-rose-300 shadow-xs'
                     : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
                 }`}
               >
-                Rejected
+                Rejected ({teamStats.rejected})
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter('ON_LEAVE_TODAY')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
+                  statusFilter === 'ON_LEAVE_TODAY'
+                    ? 'bg-sky-100 text-sky-800 border border-sky-300 shadow-xs'
+                    : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
+                }`}
+              >
+                On Leave Today ({teamStats.onLeaveToday})
               </button>
             </div>
           ) : (
@@ -908,6 +939,7 @@ export const LeaveManagementPage = () => {
         <div className="text-xs text-slate-500 font-medium">
           Showing {records.length} {records.length === 1 ? 'request' : 'requests'}
           {pagination?.total ? ` of ${pagination.total}` : ''}
+          {statusFilter ? ` (${statusFilter === 'ON_LEAVE_TODAY' ? 'On Leave Today' : statusFilter})` : ''}
         </div>
       </div>
 
@@ -919,12 +951,24 @@ export const LeaveManagementPage = () => {
         error={error}
         emptyTitle={
           activeTab === 'team'
-            ? 'No Team Requests Found'
+            ? statusFilter === 'PENDING'
+              ? 'No Pending Leave Reviews'
+              : statusFilter === 'APPROVED'
+              ? 'No Approved Leave Requests'
+              : statusFilter === 'REJECTED'
+              ? 'No Rejected Leave Requests'
+              : statusFilter === 'ON_LEAVE_TODAY'
+              ? 'No Team Members On Leave Today'
+              : 'No Team Requests Found'
             : 'No Leave Requests Found'
         }
         emptyDescription={
           activeTab === 'team'
-            ? 'There are no pending or historic leave requests matching this filter from your authorized team members.'
+            ? statusFilter === 'PENDING'
+              ? 'All leave requests from your reporting team have been reviewed and actioned.'
+              : statusFilter === 'ON_LEAVE_TODAY'
+              ? 'No team members have active approved leave scheduled for today.'
+              : 'There are no leave requests matching this filter from your authorized team members.'
             : 'You have not submitted any leave requests matching the current filter.'
         }
         pagination={pagination}

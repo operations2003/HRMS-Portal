@@ -160,7 +160,17 @@ export const managerService = {
       const totalMembers = row.totalMembers || 0;
       const presentToday = row.presentToday || 0;
       const lateToday = row.lateToday || 0;
-      const onLeaveToday = row.onLeaveToday || 0;
+
+      // On leave today based on approved leave requests spanning today
+      const leaveTodayRes = await pool.query(
+        `SELECT COUNT(DISTINCT lr.employee_id)::int AS "onLeaveToday"
+         FROM leave_requests lr
+         JOIN employees e ON lr.employee_id = e.id
+         WHERE e.manager_id = $1 AND lr.status = 'APPROVED'
+           AND lr.start_date <= CURRENT_DATE AND lr.end_date >= CURRENT_DATE;`,
+        [targetManagerId]
+      );
+      const onLeaveToday = leaveTodayRes.rows[0]?.onLeaveToday || 0;
 
       teamSummary = {
         totalMembers,
@@ -198,20 +208,28 @@ export const managerService = {
         totalPending: pendingLeaves + pendingAppraisals,
       };
     } else if (isHrAdmin) {
-      // HR/Admin fallback organization metrics
+      // HR/Admin organization metrics
       const orgRes = await pool.query(
         `SELECT 
           COUNT(*)::int AS "totalMembers",
-          COUNT(*) FILTER (WHERE LOWER(status) = 'active')::int AS "activeMembers",
-          COUNT(*) FILTER (WHERE LOWER(status) = 'on leave')::int AS "onLeaveToday"
+          COUNT(*) FILTER (WHERE LOWER(status) = 'active')::int AS "activeMembers"
          FROM employees WHERE org_id = $1;`,
         [currentUser.orgId]
       );
+      const leaveTodayRes = await pool.query(
+        `SELECT COUNT(DISTINCT lr.employee_id)::int AS "onLeaveToday"
+         FROM leave_requests lr
+         JOIN employees e ON lr.employee_id = e.id
+         WHERE e.org_id = $1 AND lr.status = 'APPROVED'
+           AND lr.start_date <= CURRENT_DATE AND lr.end_date >= CURRENT_DATE;`,
+        [currentUser.orgId]
+      );
       const row = orgRes.rows[0] || {};
+      const onLeaveToday = leaveTodayRes.rows[0]?.onLeaveToday || 0;
       teamSummary = {
         totalMembers: row.totalMembers || 0,
         activeMembers: row.activeMembers || 0,
-        onLeaveToday: row.onLeaveToday || 0,
+        onLeaveToday,
         presentToday: 0,
         lateToday: 0,
         absentToday: 0,
@@ -619,15 +637,19 @@ export const managerService = {
     const isHrAdmin = this.isHrOrAdmin(currentUser);
     let targetManagerId = managerId;
 
-    if (!targetManagerId || !isHrAdmin) {
+    const conditions = ['e.org_id = $1'];
+    const params = [currentUser.orgId];
+    let pIndex = 2;
+
+    if (targetManagerId) {
+      conditions.push(`e.manager_id = $${pIndex++}`);
+      params.push(targetManagerId);
+    } else if (!isHrAdmin) {
       const emp = await this.resolveManagerEmployee(currentUser);
       if (!emp) return [];
-      targetManagerId = emp.id;
+      conditions.push(`e.manager_id = $${pIndex++}`);
+      params.push(emp.id);
     }
-
-    const conditions = ['e.manager_id = $1', 'e.org_id = $2'];
-    const params = [targetManagerId, currentUser.orgId];
-    let pIndex = 3;
 
     if (status && status.trim()) {
       conditions.push(`lr.status = $${pIndex++}`);
