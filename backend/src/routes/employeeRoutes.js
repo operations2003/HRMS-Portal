@@ -11,6 +11,9 @@ const router = Router();
 router.use(authenticate);
 
 router.get('/metadata', authorize(['employee:read', 'employee:write']), employeeController.getMetadata);
+router.get('/me/profile', employeeController.getMyProfile);
+router.put('/me/profile', employeeController.updateMyProfile);
+router.get('/:id/profile', employeeController.getProfileById);
 router.get('/', authorize('employee:read'), employeeController.list);
 router.get('/:id', authorize('employee:read'), employeeController.getById);
 router.get('/:id/timeline', authorize('employee:read'), employeeController.getTimeline);

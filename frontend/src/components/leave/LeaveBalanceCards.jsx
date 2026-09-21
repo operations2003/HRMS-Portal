@@ -13,6 +13,25 @@ import { Badge } from '../common/Badge.jsx';
 import { Button } from '../common/Button.jsx';
 import { LoadingSpinner } from '../common/LoadingSpinner.jsx';
 
+const RESTRICTED_LEAVE_CODES = ['SBL', 'ML', 'PTL', 'AWOL', 'LOP', 'LWP'];
+
+export const isRestrictedLeave = (bal) => {
+  if (!bal) return false;
+  if (bal.isRestricted) return true;
+  const code = String(bal.leaveTypeCode || bal.code || '').trim().toUpperCase();
+  const name = String(bal.leaveTypeName || bal.name || '').trim().toLowerCase();
+  if (RESTRICTED_LEAVE_CODES.includes(code)) return true;
+  return (
+    name.includes('sabbatical') ||
+    name.includes('maternity') ||
+    name.includes('paternity') ||
+    name.includes('awol') ||
+    name.includes('without leave') ||
+    name.includes('without pay') ||
+    name.includes('loss of pay')
+  );
+};
+
 export const LeaveBalanceCards = ({
   balances = [],
   isLoading = false,
@@ -21,6 +40,9 @@ export const LeaveBalanceCards = ({
   canApply = true,
 }) => {
   const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'table'
+
+  // Filter to display only leaves that can be applied by the employee
+  const displayBalances = (balances || []).filter((bal) => !isRestrictedLeave(bal));
 
   if (isLoading) {
     return (
@@ -39,10 +61,10 @@ export const LeaveBalanceCards = ({
     );
   }
 
-  if (!balances || balances.length === 0) {
+  if (!displayBalances || displayBalances.length === 0) {
     return (
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm p-6 text-center text-slate-500 text-xs">
-        No leave allocation balances recorded for the current calendar year.
+        No applicable leave allocation balances recorded for the current calendar year.
       </div>
     );
   }
@@ -91,7 +113,7 @@ export const LeaveBalanceCards = ({
       {/* Grid View of Balances */}
       {viewMode === 'grid' ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-          {balances.map((bal, idx) => {
+          {displayBalances.map((bal, idx) => {
             const allocated = Number(bal.allocatedDays || 0);
             const used = Number(bal.usedDays || 0);
             const pending = Number(bal.pendingDays || 0);
@@ -193,7 +215,7 @@ export const LeaveBalanceCards = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
-                {balances.map((bal, idx) => {
+                {displayBalances.map((bal, idx) => {
                   const allocated = Number(bal.allocatedDays || 0);
                   const used = Number(bal.usedDays || 0);
                   const pending = Number(bal.pendingDays || 0);

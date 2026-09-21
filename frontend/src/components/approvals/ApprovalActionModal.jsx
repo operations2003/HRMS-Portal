@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CheckCircle2, RotateCcw, XCircle, AlertTriangle, MessageSquare } from 'lucide-react';
+import { CheckCircle2, XCircle, AlertTriangle, MessageSquare } from 'lucide-react';
 import { Modal } from '../common/Modal.jsx';
 import { Button } from '../common/Button.jsx';
 import { Alert } from '../common/Alert.jsx';
@@ -13,7 +13,7 @@ export const ApprovalActionModal = ({
   onClose,
   onSuccess,
   item,
-  actionType = 'APPROVE', // 'APPROVE' | 'RETURN' | 'REJECT'
+  actionType = 'APPROVE', // 'APPROVE' | 'REJECT'
   currentUser,
 }) => {
   const toast = useToast();
@@ -27,12 +27,7 @@ export const ApprovalActionModal = ({
     (currentUser?.employeeId && (item.employeeId === currentUser.employeeId || item.employee_id === currentUser.employeeId)) ||
     (currentUser?.id && (item.requesterUserId === currentUser.id || item.employee?.userId === currentUser.id));
 
-  const actionTitle =
-    actionType === 'APPROVE'
-      ? 'Approve Request'
-      : actionType === 'RETURN'
-      ? 'Return for Revision'
-      : 'Reject Request';
+  const actionTitle = actionType === 'APPROVE' ? 'Approve Request' : 'Reject Request';
 
   const actionSubtitle = `Entity: ${item.entityType || item.module || 'Workflow item'} &bull; Submitted by: ${
     item.employeeName || item.employee?.fullName || item.employee?.firstName || 'Requester'
@@ -47,8 +42,8 @@ export const ApprovalActionModal = ({
       return;
     }
 
-    if ((actionType === 'RETURN' || actionType === 'REJECT') && (!comment.trim() || comment.trim().length < 5)) {
-      setError(`A ${actionType.toLowerCase()} reason of at least 5 characters is mandatory.`);
+    if (actionType === 'REJECT' && (!comment.trim() || comment.trim().length < 5)) {
+      setError('A rejection reason of at least 5 characters is mandatory.');
       return;
     }
 
@@ -73,8 +68,6 @@ export const ApprovalActionModal = ({
         // Performance action
         if (actionType === 'APPROVE') {
           await performanceService.hrApprove(item.id, { comments: comment.trim() });
-        } else if (actionType === 'RETURN') {
-          await performanceService.returnAppraisal(item.id, { reason: comment.trim() });
         } else {
           await performanceService.rejectAppraisal(item.id, { reason: comment.trim() });
         }
@@ -136,8 +129,8 @@ export const ApprovalActionModal = ({
 
         <div>
           <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
-            <span>{actionType === 'APPROVE' ? 'Approval Comments (Optional)' : 'Reason / Feedback'}</span>
-            {(actionType === 'RETURN' || actionType === 'REJECT') && (
+            <span>{actionType === 'APPROVE' ? 'Approval Comments (Optional)' : 'Rejection Reason'}</span>
+            {actionType === 'REJECT' && (
               <span className="text-rose-500 font-normal normal-case">Required &bull; min 5 chars</span>
             )}
           </label>
@@ -148,7 +141,7 @@ export const ApprovalActionModal = ({
             placeholder={
               actionType === 'APPROVE'
                 ? 'Add any comments for the requester...'
-                : 'Explain why this is being returned or rejected...'
+                : 'Explain why this request is being rejected...'
             }
             className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-xs"
           />
@@ -160,12 +153,12 @@ export const ApprovalActionModal = ({
           </Button>
           <Button
             type="submit"
-            variant={actionType === 'APPROVE' ? 'success' : actionType === 'RETURN' ? 'warning' : 'danger'}
-            icon={actionType === 'APPROVE' ? CheckCircle2 : actionType === 'RETURN' ? RotateCcw : XCircle}
+            variant={actionType === 'APPROVE' ? 'success' : 'danger'}
+            icon={actionType === 'APPROVE' ? CheckCircle2 : XCircle}
             isLoading={isSubmitting}
             disabled={isSelf && actionType === 'APPROVE'}
           >
-            Confirm {actionType === 'APPROVE' ? 'Approval' : actionType === 'RETURN' ? 'Return' : 'Rejection'}
+            Confirm {actionType === 'APPROVE' ? 'Approval' : 'Rejection'}
           </Button>
         </div>
       </form>

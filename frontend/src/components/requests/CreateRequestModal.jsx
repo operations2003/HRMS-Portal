@@ -9,6 +9,8 @@ import { Select } from '../common/Select.jsx';
 
 export const REQUEST_TYPE_OPTIONS = [
   { value: 'DOCUMENT_REQUEST', label: 'Document Request (Salary Certificate, Bonafide, Letters)' },
+  { value: 'BANK_DETAILS_CHANGE', label: 'Bank Details Change Request (Account, IFSC, Branch)' },
+  { value: 'UAN_CHANGE', label: 'UAN / Statutory Details Update Request' },
   { value: 'HR_REQUEST', label: 'HR Policy & Employment Clarification' },
   { value: 'PAYROLL_CLARIFICATION', label: 'Payroll & Reimbursement Clarification' },
   { value: 'EMPLOYEE_SERVICE', label: 'Employee Service (ID Badge, Access Card, Workstation)' },

@@ -23,11 +23,12 @@ import {
   KeyRound,
   Wallet,
   CheckSquare,
-  Receipt,
   GraduationCap,
   Megaphone,
   Clock,
   BarChart3,
+  BookOpen,
+  User,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { TaskNeraLogo } from '../components/common/TaskNeraLogo.jsx';
@@ -97,16 +98,22 @@ export const Sidebar = ({ isOpen, onClose }) => {
       permission: 'leave:read',
     },
     {
+      name: 'Payroll',
+      path: '/payroll',
+      icon: Wallet,
+      permission: ['employee:read'],
+    },
+    {
+      name: 'Policies',
+      path: '/policies',
+      icon: BookOpen,
+      permission: ['employee:read'],
+    },
+    {
       name: 'Work Tasks',
       path: '/tasks',
       icon: CheckSquare,
       permission: ['task:read', 'employee:read'],
-    },
-    {
-      name: 'Expenses',
-      path: '/expenses',
-      icon: Receipt,
-      permission: ['expense:read', 'employee:read'],
     },
     {
       name: 'Training & Skills',
@@ -145,16 +152,16 @@ export const Sidebar = ({ isOpen, onClose }) => {
       permission: ['document:read', 'employee:read'],
     },
     {
-      name: 'Helpdesk',
+      name: 'Help Desk / Service Request',
       path: '/helpdesk',
       icon: LifeBuoy,
-      permission: ['helpdesk:read', 'employee:read'],
+      permission: ['helpdesk:read', 'request:read', 'employee:read'],
     },
     {
-      name: 'Requests',
-      path: '/requests',
-      icon: ClipboardList,
-      permission: ['request:read', 'employee:read'],
+      name: 'My Profile',
+      path: '/profile',
+      icon: User,
+      permission: ['employee:read'],
     },
     {
       name: 'Departments',

@@ -21,6 +21,10 @@ import {
   KeyRound,
   Clock,
   X,
+  Landmark,
+  ShieldCheck,
+  Home,
+  User as UserIcon,
 } from 'lucide-react';
 import { DataTable } from '../../components/common/DataTable.jsx';
 import { Button } from '../../components/common/Button.jsx';
@@ -261,6 +265,15 @@ export const EmployeeListPage = () => {
     status: 'Active',
     salary: '',
     shiftTiming: '11:00 AM - 07:00 PM',
+    fatherName: '',
+    motherName: '',
+    emergencyContact: '',
+    address: '',
+    bankName: '',
+    bankAccountNumber: '',
+    bankIfsc: '',
+    bankBranch: '',
+    uanNumber: '',
   });
   const [formErrors, setFormErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -368,6 +381,15 @@ export const EmployeeListPage = () => {
       status: 'Active',
       salary: '',
       shiftTiming: '11:00 AM - 07:00 PM',
+      fatherName: '',
+      motherName: '',
+      emergencyContact: '',
+      address: '',
+      bankName: '',
+      bankAccountNumber: '',
+      bankIfsc: '',
+      bankBranch: '',
+      uanNumber: '',
     });
     setShiftFromTime('11:00');
     setShiftFromPeriod('AM');
@@ -409,6 +431,15 @@ export const EmployeeListPage = () => {
       status: emp.status || 'Active',
       salary: emp.salary?.toString() || '',
       shiftTiming: emp.shiftTiming || '11:00 AM - 07:00 PM',
+      fatherName: emp.fatherName || '',
+      motherName: emp.motherName || '',
+      emergencyContact: emp.emergencyContact || '',
+      address: emp.address || '',
+      bankName: emp.bankName || '',
+      bankAccountNumber: emp.bankAccountNumber || '',
+      bankIfsc: emp.bankIfsc || '',
+      bankBranch: emp.bankBranch || '',
+      uanNumber: emp.uanNumber || '',
     });
     const parsedShift = parseShiftTiming(emp.shiftTiming || '11:00 AM - 07:00 PM');
     setShiftFromTime(parsedShift.fromTime);
@@ -1244,6 +1275,98 @@ export const EmployeeListPage = () => {
             )}
           </div>
 
+          {/* Personal Information Section */}
+          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-md bg-brand-100 text-brand-700 flex items-center justify-center">
+                <UserIcon className="w-3.5 h-3.5" />
+              </div>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                Personal & Family Details
+              </h4>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Input
+                label="Father's Name"
+                value={formData.fatherName}
+                onChange={(e) => setFormData({ ...formData, fatherName: e.target.value })}
+                placeholder="Father's full name"
+              />
+              <Input
+                label="Mother's Name"
+                value={formData.motherName}
+                onChange={(e) => setFormData({ ...formData, motherName: e.target.value })}
+                placeholder="Mother's full name"
+              />
+              <Input
+                label="Emergency Contact"
+                value={formData.emergencyContact}
+                onChange={(e) => setFormData({ ...formData, emergencyContact: e.target.value })}
+                placeholder="e.g. +91 98765 43210 (Spouse / Parent)"
+              />
+              <Input
+                label="Residential Address"
+                value={formData.address}
+                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                placeholder="Permanent or current address"
+              />
+            </div>
+          </div>
+
+          {/* Banking & Statutory Details Section */}
+          <div className="p-4 rounded-2xl bg-amber-50/50 border border-amber-200/80 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-md bg-amber-100 text-amber-800 flex items-center justify-center">
+                  <Landmark className="w-3.5 h-3.5" />
+                </div>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                  Banking & Statutory Details (Operations / HR)
+                </h4>
+              </div>
+              <span className="text-[11px] font-semibold text-amber-700 bg-amber-100/70 px-2 py-0.5 rounded border border-amber-200">
+                Direct Edits Restricted for Employees
+              </span>
+            </div>
+            <p className="text-xs text-slate-600">
+              Employees can view bank and UAN details in Payroll / Profile, but cannot change them directly. Raise requests go via Help Desk / Service Request for Operations manual verification.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Input
+                label="Bank Name"
+                value={formData.bankName}
+                onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}
+                placeholder="e.g. HDFC Bank"
+              />
+              <Input
+                label="Bank Account Number"
+                value={formData.bankAccountNumber}
+                onChange={(e) => setFormData({ ...formData, bankAccountNumber: e.target.value })}
+                placeholder="Account number"
+              />
+              <Input
+                label="Bank IFSC Code"
+                value={formData.bankIfsc}
+                onChange={(e) => setFormData({ ...formData, bankIfsc: e.target.value.toUpperCase() })}
+                placeholder="e.g. HDFC0001234"
+              />
+              <Input
+                label="Bank Branch"
+                value={formData.bankBranch}
+                onChange={(e) => setFormData({ ...formData, bankBranch: e.target.value })}
+                placeholder="Branch name or city"
+              />
+              <div className="sm:col-span-2">
+                <Input
+                  label="UAN Number (Universal Account Number)"
+                  value={formData.uanNumber}
+                  onChange={(e) => setFormData({ ...formData, uanNumber: e.target.value })}
+                  placeholder="12-digit EPF UAN number"
+                />
+              </div>
+            </div>
+          </div>
+
           <div className="mt-6 flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
             <Button
               type="button"
@@ -1667,6 +1790,73 @@ export const EmployeeListPage = () => {
                 <Badge variant={viewingEmployee.user ? 'success' : 'neutral'}>
                   {viewingEmployee.user ? 'Login Active' : 'No Account'}
                 </Badge>
+              </div>
+
+              {/* Personal Details Card */}
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 col-span-2 space-y-2.5">
+                <div className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                  <UserIcon className="w-3.5 h-3.5 text-brand-600" />
+                  Personal Information
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <span className="text-slate-400 block font-medium">Father's Name</span>
+                    <span className="font-semibold text-slate-800">{viewingEmployee.fatherName || '—'}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block font-medium">Mother's Name</span>
+                    <span className="font-semibold text-slate-800">{viewingEmployee.motherName || '—'}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block font-medium">Emergency Contact</span>
+                    <span className="font-semibold text-slate-800">{viewingEmployee.emergencyContact || '—'}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block font-medium">Residential Address</span>
+                    <span className="font-semibold text-slate-800">{viewingEmployee.address || '—'}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Banking & Statutory Details Card */}
+              <div className="p-4 rounded-xl bg-amber-50/50 border border-amber-200/80 col-span-2 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-bold uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
+                    <Landmark className="w-3.5 h-3.5 text-amber-600" />
+                    Banking & Statutory Details
+                  </div>
+                  <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded">
+                    Verified
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <span className="text-slate-400 block font-medium">Bank Name</span>
+                    <span className="font-semibold text-slate-800">{viewingEmployee.bankName || '—'}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block font-medium">Account Number</span>
+                    <span className="font-mono font-semibold text-slate-800">
+                      {viewingEmployee.bankAccountNumber
+                        ? (viewingEmployee.bankAccountNumber.length > 4
+                            ? `•••• •••• •••• ${viewingEmployee.bankAccountNumber.slice(-4)}`
+                            : viewingEmployee.bankAccountNumber)
+                        : '—'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block font-medium">IFSC Code</span>
+                    <span className="font-mono font-semibold text-slate-800">{viewingEmployee.bankIfsc || '—'}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block font-medium">Bank Branch</span>
+                    <span className="font-semibold text-slate-800">{viewingEmployee.bankBranch || '—'}</span>
+                  </div>
+                  <div className="col-span-2">
+                    <span className="text-slate-400 block font-medium">UAN Number</span>
+                    <span className="font-mono font-semibold text-slate-800">{viewingEmployee.uanNumber || '—'}</span>
+                  </div>
+                </div>
               </div>
             </div>
 

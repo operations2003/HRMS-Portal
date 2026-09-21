@@ -21,26 +21,26 @@ const mapWorkflowRow = (row) => {
     completedAt: row.completed_at ? new Date(row.completed_at).toISOString() : null,
     requester: row.req_id
       ? {
-          id: row.req_id,
-          employeeCode: row.req_code,
-          fullName: `${row.req_first_name || ''} ${row.req_last_name || ''}`.trim(),
-          email: row.req_email,
-        }
+        id: row.req_id,
+        employeeCode: row.req_code,
+        fullName: `${row.req_first_name || ''} ${row.req_last_name || ''}`.trim(),
+        email: row.req_email,
+      }
       : undefined,
     manager: row.mgr_id
       ? {
-          id: row.mgr_id,
-          employeeCode: row.mgr_code,
-          fullName: `${row.mgr_first_name || ''} ${row.mgr_last_name || ''}`.trim(),
-          email: row.mgr_email,
-        }
+        id: row.mgr_id,
+        employeeCode: row.mgr_code,
+        fullName: `${row.mgr_first_name || ''} ${row.mgr_last_name || ''}`.trim(),
+        email: row.mgr_email,
+      }
       : null,
     hrUser: row.hr_id
       ? {
-          id: row.hr_id,
-          fullName: `${row.hr_first_name || ''} ${row.hr_last_name || ''}`.trim(),
-          email: row.hr_email,
-        }
+        id: row.hr_id,
+        fullName: `${row.hr_first_name || ''} ${row.hr_last_name || ''}`.trim(),
+        email: row.hr_email,
+      }
       : null,
     actions: Array.isArray(row.actions) ? row.actions.map(mapActionRow) : undefined,
   };
@@ -66,10 +66,10 @@ const mapActionRow = (row) => {
     createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
     actor: row.u_id
       ? {
-          id: row.u_id,
-          fullName: `${row.u_first_name || ''} ${row.u_last_name || ''}`.trim(),
-          email: row.u_email,
-        }
+        id: row.u_id,
+        fullName: `${row.u_first_name || ''} ${row.u_last_name || ''}`.trim(),
+        email: row.u_email,
+      }
       : undefined,
   };
 };

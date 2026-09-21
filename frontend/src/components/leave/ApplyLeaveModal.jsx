@@ -11,6 +11,8 @@ import {
   Sparkles,
   Sun,
   Sunset,
+  Users,
+  ShieldCheck,
 } from 'lucide-react';
 import { Modal } from '../common/Modal.jsx';
 import { Button } from '../common/Button.jsx';
@@ -18,7 +20,9 @@ import { Input } from '../common/Input.jsx';
 import { Select } from '../common/Select.jsx';
 import { Alert } from '../common/Alert.jsx';
 import { leaveService } from '../../services/leaveService.js';
+import { managerService } from '../../services/managerService.js';
 import { useAuth } from '../../context/AuthContext.jsx';
+
 
 const DEFAULT_LEAVE_CATEGORIES = [
   { id: 'lt-pl', name: 'Planned Leave', code: 'PL', description: 'Pre-planned annual leave and scheduled vacations', genderEligibility: 'ALL' },
@@ -53,6 +57,23 @@ const getNextWorkingDay = (baseDate = new Date()) => {
   return `${year}-${month}-${date}`;
 };
 
+
+const RESTRICTED_LEAVE_CODES = ['SBL', 'ML', 'PTL', 'AWOL', 'LOP', 'LWP'];
+const isRestrictedType = (lt) => {
+  if (!lt) return false;
+  const code = String(lt.code || '').trim().toUpperCase();
+  const name = String(lt.name || '').trim().toLowerCase();
+  if (RESTRICTED_LEAVE_CODES.includes(code)) return true;
+  return (
+    name.includes('sabbatical') ||
+    name.includes('maternity') ||
+    name.includes('paternity') ||
+    name.includes('awol') ||
+    name.includes('without pay') ||
+    name.includes('loss of pay')
+  );
+};
+
 export const ApplyLeaveModal = ({
   isOpen,
   onClose,
@@ -60,18 +81,50 @@ export const ApplyLeaveModal = ({
   leaveTypes = [],
   leaveBalances = [],
 }) => {
-  const { user } = useAuth();
+  const { user, hasRole } = useAuth();
+  const canApplyForTeam = hasRole(['Manager', 'HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']);
+  
+  const [targetEmployeeId, setTargetEmployeeId] = useState('SELF');
+  const [teamMembers, setTeamMembers] = useState([]);
+  const [loadingTeam, setLoadingTeam] = useState(false);
+
+  // Fetch direct reports if the user is a manager or HR/Admin
+  useEffect(() => {
+    if (isOpen && canApplyForTeam) {
+      setLoadingTeam(true);
+      managerService
+        .getTeam()
+        .then((res) => {
+          const list = Array.isArray(res) ? res : res?.data || [];
+          setTeamMembers(list);
+        })
+        .catch((err) => {
+          console.warn('Could not load direct reports for manager leave application:', err);
+        })
+        .finally(() => setLoadingTeam(false));
+    }
+  }, [isOpen, canApplyForTeam]);
+
+  const selectedMember = teamMembers.find((m) => m.id === targetEmployeeId);
   const userGender = String(user?.gender || user?.employee?.gender || '').toUpperCase();
+  const targetGender = targetEmployeeId === 'SELF'
+    ? userGender
+    : String(selectedMember?.gender || 'Male').toUpperCase();
 
   const allAvailableTypes = leaveTypes && leaveTypes.length > 0 ? leaveTypes : DEFAULT_LEAVE_CATEGORIES;
   const effectiveLeaveTypes = allAvailableTypes.filter((lt) => {
+    // When applying for SELF: restricted leaves (Sabbatical, Maternity, Paternity, AWOL, LOP) MUST NOT appear!
+    if (targetEmployeeId === 'SELF' && isRestrictedType(lt)) {
+      return false;
+    }
+
     const ge = String(lt.genderEligibility || lt.gender_eligibility || 'ALL').toUpperCase();
     const code = String(lt.code || '').toUpperCase();
     if (ge === 'FEMALE' || code === 'ML') {
-      return userGender !== 'MALE';
+      return targetGender !== 'MALE';
     }
     if (ge === 'MALE' || code === 'PTL' || code === 'PATL') {
-      return userGender !== 'FEMALE';
+      return targetGender !== 'FEMALE';
     }
     return true;
   });
@@ -93,11 +146,30 @@ export const ApplyLeaveModal = ({
   const [durationPreview, setDurationPreview] = useState(null);
   const [isCalculating, setIsCalculating] = useState(false);
 
-  // Initialize or reset form on open (defaults to next working business day)
+  // Reset or switch category if targetEmployeeId changes or on open
+  useEffect(() => {
+    if (isOpen) {
+      const defaultWorkingDay = getNextWorkingDay();
+      const currentValid = effectiveLeaveTypes.some((t) => t.id === formData.leaveTypeId);
+      const defaultType = currentValid ? formData.leaveTypeId : (effectiveLeaveTypes[0]?.id || '');
+
+      setFormData((prev) => ({
+        ...prev,
+        leaveTypeId: defaultType,
+        startDate: prev.startDate || defaultWorkingDay,
+        endDate: prev.endDate || defaultWorkingDay,
+      }));
+      setFormErrors({});
+      setApiError(null);
+    }
+  }, [isOpen, targetEmployeeId]);
+
+  // Initialize form on initial modal open
   useEffect(() => {
     if (isOpen) {
       const defaultType = effectiveLeaveTypes[0]?.id || '';
       const defaultWorkingDay = getNextWorkingDay();
+      setTargetEmployeeId('SELF');
       setFormData({
         leaveTypeId: defaultType,
         startDate: defaultWorkingDay,
@@ -110,7 +182,7 @@ export const ApplyLeaveModal = ({
       setApiError(null);
       setDurationPreview(null);
     }
-  }, [isOpen, leaveTypes]);
+  }, [isOpen]);
 
   // Handle live duration calculation from backend when dates change
   useEffect(() => {
@@ -230,6 +302,11 @@ export const ApplyLeaveModal = ({
         reason: formData.reason.trim(),
       };
 
+      if (targetEmployeeId && targetEmployeeId !== 'SELF') {
+        payload.employeeId = targetEmployeeId;
+      }
+
+
       const newRecord = await leaveService.applyLeave(payload);
       if (onSuccess) {
         onSuccess(newRecord);
@@ -269,17 +346,63 @@ export const ApplyLeaveModal = ({
           </Alert>
         )}
 
+        {/* Apply Leave For (Manager / Team Member selector) */}
+        {canApplyForTeam && teamMembers.length > 0 && (
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1.5">
+            <label className="block text-xs font-semibold text-slate-700 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5 text-brand-600" />
+                Apply Leave For <span className="text-rose-500">*</span>
+              </span>
+              {targetEmployeeId !== 'SELF' && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                  <ShieldCheck className="w-3 h-3 text-amber-600" />
+                  Manager Action on Behalf of Employee
+                </span>
+              )}
+            </label>
+            <Select
+              value={targetEmployeeId}
+              onChange={(e) => setTargetEmployeeId(e.target.value)}
+              options={[
+                { value: 'SELF', label: `Self (${user?.firstName || 'My Account'}) - Standard Leaves` },
+                ...teamMembers.map((m) => ({
+                  value: m.id,
+                  label: `${m.firstName} ${m.lastName} (${m.employeeCode || m.designation?.title || 'Reportee'})`,
+                })),
+              ]}
+            />
+            {targetEmployeeId === 'SELF' ? (
+              <p className="text-[11px] text-slate-500">
+                Note: Sabbatical, Maternity, Paternity, AWOL, and LOP can only be initiated by your manager.
+              </p>
+            ) : (
+              <p className="text-[11px] text-emerald-700 font-medium">
+                As manager, you can grant standard and special leaves (Sabbatical, Maternity, Paternity, AWOL, LOP) for this reportee.
+              </p>
+            )}
+          </div>
+        )}
+
         {/* 1. Leave Type Selection */}
         <div>
-          <label className="block text-xs font-semibold text-slate-700 mb-1">
-            Leave Category <span className="text-rose-500">*</span>
-          </label>
+          <div className="flex items-center justify-between mb-1">
+            <label className="block text-xs font-semibold text-slate-700">
+              Leave Category <span className="text-rose-500">*</span>
+            </label>
+            {selectedTypeObj && isRestrictedType(selectedTypeObj) && (
+              <span className="text-[10px] font-semibold text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                Restricted Leave Type
+              </span>
+            )}
+          </div>
           <Select
             value={formData.leaveTypeId}
             onChange={(e) => setFormData({ ...formData, leaveTypeId: e.target.value })}
             options={typeOptions}
             error={formErrors.leaveTypeId}
           />
+
           {selectedTypeObj && (
             <div className="mt-1.5 flex items-center justify-between text-xs text-slate-500">
               <span>{selectedTypeObj.description}</span>

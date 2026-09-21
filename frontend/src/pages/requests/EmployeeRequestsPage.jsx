@@ -32,6 +32,8 @@ import {
 const REQUEST_TYPE_FILTERS = [
   { value: '', label: 'All Request Types' },
   { value: 'DOCUMENT_REQUEST', label: 'Document Requests' },
+  { value: 'BANK_DETAILS_CHANGE', label: 'Bank Details Change' },
+  { value: 'UAN_CHANGE', label: 'UAN Details Change' },
   { value: 'HR_REQUEST', label: 'HR Inquiries' },
   { value: 'PAYROLL_CLARIFICATION', label: 'Payroll Queries' },
   { value: 'EMPLOYEE_SERVICE', label: 'Employee Services' },
@@ -47,7 +49,7 @@ const STATUS_FILTERS = [
   { value: 'CANCELLED', label: 'Cancelled' },
 ];
 
-export const EmployeeRequestsPage = () => {
+export const EmployeeRequestsPage = ({ isEmbedded = false }) => {
   const { user, hasPermission, hasRole, isAuthenticated } = useAuth();
   const toast = useToast();
 
@@ -264,7 +266,7 @@ export const EmployeeRequestsPage = () => {
     stats?.resolved ?? requests.filter((r) => r.status === 'RESOLVED').length;
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className={isEmbedded ? "space-y-6 pt-2" : "p-6 max-w-7xl mx-auto space-y-6"}>
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div className="flex items-center gap-3">

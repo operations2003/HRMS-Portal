@@ -70,6 +70,10 @@ export const formatRequestType = (type) => {
   switch (type) {
     case 'DOCUMENT_REQUEST':
       return 'Document Request';
+    case 'BANK_DETAILS_CHANGE':
+      return 'Bank Details Change';
+    case 'UAN_CHANGE':
+      return 'UAN Change';
     case 'HR_REQUEST':
       return 'HR Request';
     case 'PAYROLL_CLARIFICATION':

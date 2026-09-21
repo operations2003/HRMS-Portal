@@ -705,6 +705,18 @@ export const LeaveManagementPage = () => {
             </Button>
           )}
 
+          {canViewTeam && (
+            <Button
+              variant="outline"
+              size="md"
+              icon={ShieldCheck}
+              onClick={() => setIsApplyModalOpen(true)}
+              className="border-brand-200 bg-brand-50/70 text-brand-700 hover:bg-brand-100"
+            >
+              Grant Team Leave
+            </Button>
+          )}
+
           {canApply && (
             <Button
               variant="primary"

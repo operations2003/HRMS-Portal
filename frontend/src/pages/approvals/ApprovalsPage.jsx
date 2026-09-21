@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   CheckCircle2,
   Clock,
-  RotateCcw,
   XCircle,
   Filter,
   RefreshCw,
@@ -169,14 +168,6 @@ export const ApprovalsPage = () => {
             </Button>
             <Button
               size="sm"
-              variant="warning"
-              icon={RotateCcw}
-              onClick={() => setActionModal({ isOpen: true, item: row, actionType: 'RETURN' })}
-            >
-              Return
-            </Button>
-            <Button
-              size="sm"
               variant="danger"
               icon={XCircle}
               onClick={() => setActionModal({ isOpen: true, item: row, actionType: 'REJECT' })}
@@ -218,11 +209,10 @@ export const ApprovalsPage = () => {
         <button
           type="button"
           onClick={() => setModuleFilter('ALL')}
-          className={`pb-3 transition-colors flex items-center gap-2 ${
-            moduleFilter === 'ALL'
+          className={`pb-3 transition-colors flex items-center gap-2 ${moduleFilter === 'ALL'
               ? 'text-brand-600 border-b-2 border-brand-600'
               : 'text-slate-500 hover:text-slate-700'
-          }`}
+            }`}
         >
           <Layers className="w-4 h-4" />
           All Pending ({queue.length})
@@ -230,11 +220,10 @@ export const ApprovalsPage = () => {
         <button
           type="button"
           onClick={() => setModuleFilter('LEAVE')}
-          className={`pb-3 transition-colors flex items-center gap-2 ${
-            moduleFilter === 'LEAVE'
+          className={`pb-3 transition-colors flex items-center gap-2 ${moduleFilter === 'LEAVE'
               ? 'text-brand-600 border-b-2 border-brand-600'
               : 'text-slate-500 hover:text-slate-700'
-          }`}
+            }`}
         >
           <CalendarDays className="w-4 h-4" />
           Leaves
@@ -242,11 +231,10 @@ export const ApprovalsPage = () => {
         <button
           type="button"
           onClick={() => setModuleFilter('PERFORMANCE')}
-          className={`pb-3 transition-colors flex items-center gap-2 ${
-            moduleFilter === 'PERFORMANCE'
+          className={`pb-3 transition-colors flex items-center gap-2 ${moduleFilter === 'PERFORMANCE'
               ? 'text-brand-600 border-b-2 border-brand-600'
               : 'text-slate-500 hover:text-slate-700'
-          }`}
+            }`}
         >
           <Award className="w-4 h-4" />
           Performance
@@ -254,11 +242,10 @@ export const ApprovalsPage = () => {
         <button
           type="button"
           onClick={() => setModuleFilter('REQUEST')}
-          className={`pb-3 transition-colors flex items-center gap-2 ${
-            moduleFilter === 'REQUEST'
+          className={`pb-3 transition-colors flex items-center gap-2 ${moduleFilter === 'REQUEST'
               ? 'text-brand-600 border-b-2 border-brand-600'
               : 'text-slate-500 hover:text-slate-700'
-          }`}
+            }`}
         >
           <HelpCircle className="w-4 h-4" />
           Helpdesk & Requests

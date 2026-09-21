@@ -146,9 +146,11 @@ export const hrOperationsService = {
           lr.id, 'LEAVE' AS "module", 'Leave Request' AS "type",
           lt.name AS "title",
           e.id AS "employeeId", e.first_name, e.last_name, e.employee_code,
+          d.name AS "department_name",
           lr.start_date, lr.end_date, lr.total_days AS "days_count", lr.status, lr.created_at
         FROM leave_requests lr
         JOIN employees e ON lr.employee_id = e.id
+        LEFT JOIN departments d ON e.dept_id = d.id
         JOIN leave_types lt ON lr.leave_type_id = lt.id
         WHERE e.org_id = $1 AND lr.status = 'PENDING'
         ORDER BY lr.created_at DESC
@@ -162,9 +164,11 @@ export const hrOperationsService = {
           er.id, 'REQUEST' AS "module", er.request_type AS "type",
           er.subject AS "title",
           e.id AS "employeeId", e.first_name, e.last_name, e.employee_code,
+          d.name AS "department_name",
           er.priority, er.status, er.created_at
         FROM employee_requests er
         JOIN employees e ON er.employee_id = e.id
+        LEFT JOIN departments d ON e.dept_id = d.id
         WHERE er.org_id = $1 AND er.status IN ('PENDING', 'IN_PROGRESS')
         ORDER BY er.created_at DESC
         LIMIT 25;`,
@@ -177,9 +181,11 @@ export const hrOperationsService = {
           pr.id, 'PERFORMANCE' AS "module", 'Appraisal' AS "type",
           pr.review_period AS "title",
           e.id AS "employeeId", e.first_name, e.last_name, e.employee_code,
+          d.name AS "department_name",
           pr.current_stage AS "stage", pr.status, pr.created_at
         FROM performance_records pr
         JOIN employees e ON pr.employee_id = e.id
+        LEFT JOIN departments d ON e.dept_id = d.id
         WHERE pr.org_id = $1 AND pr.current_stage = 'HR_REVIEW'
         ORDER BY pr.created_at DESC
         LIMIT 25;`,
@@ -188,39 +194,84 @@ export const hrOperationsService = {
     ]);
 
     const items = [
-      ...leavesRes.rows.map((r) => ({
-        id: r.id,
-        module: 'LEAVE',
-        moduleLabel: 'Leave Application',
-        title: `${r.title} (${r.days_count} days)`,
-        requester: `${r.first_name || ''} ${r.last_name || ''}`.trim(),
-        employeeCode: r.employee_code,
-        status: r.status,
-        date: r.created_at,
-        actionUrl: `/leaves`,
-      })),
-      ...requestsRes.rows.map((r) => ({
-        id: r.id,
-        module: 'REQUEST',
-        moduleLabel: 'Service Request',
-        title: r.title,
-        requester: `${r.first_name || ''} ${r.last_name || ''}`.trim(),
-        employeeCode: r.employee_code,
-        status: r.status,
-        date: r.created_at,
-        actionUrl: `/requests`,
-      })),
-      ...perfRes.rows.map((r) => ({
-        id: r.id,
-        module: 'PERFORMANCE',
-        moduleLabel: 'Performance Appraisal',
-        title: `Appraisal Cycle: ${r.title}`,
-        requester: `${r.first_name || ''} ${r.last_name || ''}`.trim(),
-        employeeCode: r.employee_code,
-        status: r.status,
-        date: r.created_at,
-        actionUrl: `/performance/${r.id}`,
-      })),
+      ...leavesRes.rows.map((r) => {
+        const empName = `${r.first_name || ''} ${r.last_name || ''}`.trim() || 'Employee';
+        const dept = r.department_name || 'General';
+        return {
+          id: r.id,
+          module: 'LEAVE',
+          moduleLabel: 'Leave Application',
+          title: `${r.title} (${r.days_count} days)`,
+          employeeName: empName,
+          requester: empName,
+          employeeCode: r.employee_code,
+          departmentName: dept,
+          employee: {
+            id: r.employeeId,
+            fullName: empName,
+            firstName: r.first_name,
+            lastName: r.last_name,
+            employeeCode: r.employee_code,
+            departmentName: dept,
+            department: { name: dept },
+          },
+          status: r.status,
+          date: r.created_at,
+          actionUrl: `/leaves`,
+        };
+      }),
+      ...requestsRes.rows.map((r) => {
+        const empName = `${r.first_name || ''} ${r.last_name || ''}`.trim() || 'Employee';
+        const dept = r.department_name || 'General';
+        return {
+          id: r.id,
+          module: 'REQUEST',
+          moduleLabel: 'Service Request',
+          title: r.title,
+          employeeName: empName,
+          requester: empName,
+          employeeCode: r.employee_code,
+          departmentName: dept,
+          employee: {
+            id: r.employeeId,
+            fullName: empName,
+            firstName: r.first_name,
+            lastName: r.last_name,
+            employeeCode: r.employee_code,
+            departmentName: dept,
+            department: { name: dept },
+          },
+          status: r.status,
+          date: r.created_at,
+          actionUrl: `/requests`,
+        };
+      }),
+      ...perfRes.rows.map((r) => {
+        const empName = `${r.first_name || ''} ${r.last_name || ''}`.trim() || 'Employee';
+        const dept = r.department_name || 'General';
+        return {
+          id: r.id,
+          module: 'PERFORMANCE',
+          moduleLabel: 'Performance Appraisal',
+          title: `Appraisal Cycle: ${r.title}`,
+          employeeName: empName,
+          requester: empName,
+          employeeCode: r.employee_code,
+          departmentName: dept,
+          employee: {
+            id: r.employeeId,
+            fullName: empName,
+            firstName: r.first_name,
+            lastName: r.last_name,
+            employeeCode: r.employee_code,
+            departmentName: dept,
+            department: { name: dept },
+          },
+          status: r.status,
+          date: r.created_at,
+          actionUrl: `/performance/${r.id}`,
+        };
+      }),
     ];
 
     // Sort combined feed by date descending

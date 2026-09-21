@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { LogOut, Menu, User, Shield, ChevronDown } from 'lucide-react';
 import { Badge } from '../components/common/Badge.jsx';
@@ -6,6 +7,7 @@ import { ConfirmDialog } from '../components/common/ConfirmDialog.jsx';
 import { NotificationBell } from '../components/notifications/NotificationBell.jsx';
 
 export const Navbar = ({ onToggleSidebar }) => {
+  const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -72,6 +74,20 @@ export const Navbar = ({ onToggleSidebar }) => {
                         <Shield className="w-3.5 h-3.5" />
                         <span>{user.roleName}</span>
                       </div>
+                    </div>
+
+                    <div className="py-1 border-b border-slate-100">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDropdownOpen(false);
+                          navigate('/profile');
+                        }}
+                        className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2 font-medium transition-colors"
+                      >
+                        <User className="w-4 h-4 text-slate-500" />
+                        <span>My Profile</span>
+                      </button>
                     </div>
 
                     <button

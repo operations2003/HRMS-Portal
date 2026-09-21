@@ -22,6 +22,15 @@ const mapEmployeeRow = (row) => {
     salary: parseFloat(row.salary) || 0,
     shiftTiming: row.shiftTiming || '11:00 AM - 07:00 PM',
     gender: row.gender || 'Male',
+    fatherName: row.fatherName || '',
+    motherName: row.motherName || '',
+    emergencyContact: row.emergencyContact || '',
+    address: row.address || '',
+    bankName: row.bankName || '',
+    bankAccountNumber: row.bankAccountNumber || '',
+    bankIfsc: row.bankIfsc || '',
+    bankBranch: row.bankBranch || '',
+    uanNumber: row.uanNumber || '',
     createdAt: row.createdAt ? new Date(row.createdAt).toISOString() : new Date().toISOString(),
     updatedAt: row.updatedAt ? new Date(row.updatedAt).toISOString() : new Date().toISOString(),
     organization: row.o_id ? { id: row.o_id, name: row.o_name, code: row.o_code } : null,
@@ -59,6 +68,15 @@ const BASE_EMPLOYEE_SELECT = `
     e.status,
     e.salary::float AS salary,
     e.shift_timing AS "shiftTiming",
+    e.father_name AS "fatherName",
+    e.mother_name AS "motherName",
+    e.emergency_contact AS "emergencyContact",
+    e.address,
+    e.bank_name AS "bankName",
+    e.bank_account_number AS "bankAccountNumber",
+    e.bank_ifsc AS "bankIfsc",
+    e.bank_branch AS "bankBranch",
+    e.uan_number AS "uanNumber",
     e.created_at AS "createdAt",
     e.updated_at AS "updatedAt",
     o.id AS "o_id", o.name AS "o_name", o.code AS "o_code",
@@ -245,12 +263,24 @@ export const employeeRepository = {
     const gender = data.gender ? data.gender.trim() : 'Male';
     const managerId = data.managerId || null;
 
+    const fatherName = data.fatherName ? data.fatherName.trim() : '';
+    const motherName = data.motherName ? data.motherName.trim() : '';
+    const emergencyContact = data.emergencyContact ? data.emergencyContact.trim() : '';
+    const address = data.address ? data.address.trim() : '';
+    const bankName = data.bankName ? data.bankName.trim() : '';
+    const bankAccountNumber = data.bankAccountNumber ? data.bankAccountNumber.trim() : '';
+    const bankIfsc = data.bankIfsc ? data.bankIfsc.trim() : '';
+    const bankBranch = data.bankBranch ? data.bankBranch.trim() : '';
+    const uanNumber = data.uanNumber ? data.uanNumber.trim() : '';
+
     const sql = `
       INSERT INTO employees (
         id, org_id, dept_id, desig_id, user_id, employee_code,
         first_name, last_name, email, phone, date_of_joining,
-        employment_type, status, salary, shift_timing, gender, manager_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+        employment_type, status, salary, shift_timing, gender, manager_id,
+        father_name, mother_name, emergency_contact, address,
+        bank_name, bank_account_number, bank_ifsc, bank_branch, uan_number
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)
       RETURNING id;
     `;
 
@@ -272,6 +302,15 @@ export const employeeRepository = {
       shiftTiming,
       gender,
       managerId,
+      fatherName,
+      motherName,
+      emergencyContact,
+      address,
+      bankName,
+      bankAccountNumber,
+      bankIfsc,
+      bankBranch,
+      uanNumber,
     ]);
 
     return this.findById(id);
@@ -365,6 +404,51 @@ export const employeeRepository = {
     if (data.managerId !== undefined) {
       setClauses.push(`manager_id = $${paramIndex++}`);
       values.push(data.managerId || null);
+    }
+
+    if (data.fatherName !== undefined) {
+      setClauses.push(`father_name = $${paramIndex++}`);
+      values.push(data.fatherName ? data.fatherName.trim() : '');
+    }
+
+    if (data.motherName !== undefined) {
+      setClauses.push(`mother_name = $${paramIndex++}`);
+      values.push(data.motherName ? data.motherName.trim() : '');
+    }
+
+    if (data.emergencyContact !== undefined) {
+      setClauses.push(`emergency_contact = $${paramIndex++}`);
+      values.push(data.emergencyContact ? data.emergencyContact.trim() : '');
+    }
+
+    if (data.address !== undefined) {
+      setClauses.push(`address = $${paramIndex++}`);
+      values.push(data.address ? data.address.trim() : '');
+    }
+
+    if (data.bankName !== undefined) {
+      setClauses.push(`bank_name = $${paramIndex++}`);
+      values.push(data.bankName ? data.bankName.trim() : '');
+    }
+
+    if (data.bankAccountNumber !== undefined) {
+      setClauses.push(`bank_account_number = $${paramIndex++}`);
+      values.push(data.bankAccountNumber ? data.bankAccountNumber.trim() : '');
+    }
+
+    if (data.bankIfsc !== undefined) {
+      setClauses.push(`bank_ifsc = $${paramIndex++}`);
+      values.push(data.bankIfsc ? data.bankIfsc.trim() : '');
+    }
+
+    if (data.bankBranch !== undefined) {
+      setClauses.push(`bank_branch = $${paramIndex++}`);
+      values.push(data.bankBranch ? data.bankBranch.trim() : '');
+    }
+
+    if (data.uanNumber !== undefined) {
+      setClauses.push(`uan_number = $${paramIndex++}`);
+      values.push(data.uanNumber ? data.uanNumber.trim() : '');
     }
 
     if (setClauses.length === 0) {

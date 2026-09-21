@@ -15,6 +15,9 @@ import { OnboardingDetailPage } from './pages/onboarding/OnboardingDetailPage.js
 import { EmployeeDocumentsPage } from './pages/documents/EmployeeDocumentsPage.jsx';
 import { HelpdeskPage } from './pages/helpdesk/HelpdeskPage.jsx';
 import { EmployeeRequestsPage } from './pages/requests/EmployeeRequestsPage.jsx';
+import { PayrollPage } from './pages/payroll/PayrollPage.jsx';
+import { PoliciesPage } from './pages/policies/PoliciesPage.jsx';
+import { ProfilePage } from './pages/profile/ProfilePage.jsx';
 import { NotificationsPage } from './pages/notifications/NotificationsPage.jsx';
 import { ManagerDashboardPage } from './pages/manager/ManagerDashboardPage.jsx';
 import { TeamManagementPage } from './pages/team/TeamManagementPage.jsx';
@@ -28,7 +31,6 @@ import { FnFSettlementPage } from './pages/exit/FnFSettlementPage.jsx';
 import { AdminSettingsPage } from './pages/admin/AdminSettingsPage.jsx';
 import { RolesPermissionsPage } from './pages/admin/RolesPermissionsPage.jsx';
 import { TasksPage } from './pages/tasks/TasksPage.jsx';
-import { ExpensesPage } from './pages/expenses/ExpensesPage.jsx';
 import { TrainingPage } from './pages/training/TrainingPage.jsx';
 import { EngagementPage } from './pages/engagement/EngagementPage.jsx';
 import { ProbationDashboardPage } from './pages/probation/ProbationDashboardPage.jsx';
@@ -152,9 +154,36 @@ export const App = () => {
               />
 
               <Route
+                path="payroll"
+                element={
+                  <PermissionRoute permission="employee:read">
+                    <PayrollPage />
+                  </PermissionRoute>
+                }
+              />
+
+              <Route
+                path="policies"
+                element={
+                  <PermissionRoute permission="employee:read">
+                    <PoliciesPage />
+                  </PermissionRoute>
+                }
+              />
+
+              <Route
+                path="profile"
+                element={
+                  <PermissionRoute permission="employee:read">
+                    <ProfilePage />
+                  </PermissionRoute>
+                }
+              />
+
+              <Route
                 path="helpdesk"
                 element={
-                  <PermissionRoute permission={['helpdesk:read', 'employee:read']}>
+                  <PermissionRoute permission={['helpdesk:read', 'request:read', 'employee:read']}>
                     <HelpdeskPage />
                   </PermissionRoute>
                 }
@@ -162,11 +191,7 @@ export const App = () => {
 
               <Route
                 path="requests"
-                element={
-                  <PermissionRoute permission={['request:read', 'employee:read']}>
-                    <EmployeeRequestsPage />
-                  </PermissionRoute>
-                }
+                element={<Navigate to="/helpdesk?tab=requests" replace />}
               />
 
               <Route
@@ -335,15 +360,6 @@ export const App = () => {
                 }
               />
 
-              {/* Expenses & Reimbursement */}
-              <Route
-                path="expenses"
-                element={
-                  <PermissionRoute permission={['expense:read', 'employee:read']}>
-                    <ExpensesPage />
-                  </PermissionRoute>
-                }
-              />
 
               {/* Learning & Skill Development */}
               <Route

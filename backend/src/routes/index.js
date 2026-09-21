@@ -27,6 +27,8 @@ import engagementRoutes from './engagementRoutes.js';
 import taskRoutes from './taskRoutes.js';
 import expenseRoutes from './expenseRoutes.js';
 import analyticsRoutes from './analyticsRoutes.js';
+import payrollRoutes from './payrollRoutes.js';
+import policyRoutes from './policyRoutes.js';
 import { sendSuccess } from '../utils/apiResponse.js';
 
 const router = Router();
@@ -71,5 +73,7 @@ router.use('/v1/engagement', engagementRoutes);
 router.use('/v1/tasks', taskRoutes);
 router.use('/v1/expenses', expenseRoutes);
 router.use('/v1/analytics', analyticsRoutes);
+router.use('/v1/payroll', payrollRoutes);
+router.use('/v1/policies', policyRoutes);
 
 export default router;

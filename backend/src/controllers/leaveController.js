@@ -11,7 +11,8 @@ export const leaveController = {
   async getLeaveTypes(req, res, next) {
     try {
       const isAll = req.query.all === 'true';
-      const types = await leaveService.getLeaveTypes(req.user, { all: isAll, gender: req.query.gender });
+      const isForSelf = req.query.forSelf === 'true';
+      const types = await leaveService.getLeaveTypes(req.user, { all: isAll, gender: req.query.gender, forSelf: isForSelf });
       return sendSuccess(res, 'Leave types fetched successfully.', types);
     } catch (error) {
       if (error.statusCode) {
@@ -44,7 +45,8 @@ export const leaveController = {
   async getMyBalances(req, res, next) {
     try {
       const year = req.query.year ? parseInt(req.query.year, 10) : new Date().getFullYear();
-      const balances = await leaveService.getMyBalances(req.user, year);
+      const isAll = req.query.all === 'true';
+      const balances = await leaveService.getMyBalances(req.user, year, { all: isAll });
       return sendSuccess(res, 'Leave balances fetched successfully.', balances);
     } catch (error) {
       if (error.statusCode) {

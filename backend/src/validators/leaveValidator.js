@@ -47,6 +47,12 @@ export const validateApplyLeave = (body) => {
     errors.push('Reason must not exceed 1000 characters.');
   }
 
+  if (body.employeeId !== undefined && body.employeeId !== null) {
+    if (typeof body.employeeId !== 'string' || !body.employeeId.trim()) {
+      errors.push('Target employee ID must be a valid non-empty string.');
+    }
+  }
+
   return errors;
 };
 

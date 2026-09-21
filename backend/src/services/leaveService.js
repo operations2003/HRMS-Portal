@@ -229,6 +229,27 @@ const calculateLeaveDuration = async (orgId, startDateStr, endDateStr, isHalfDay
   };
 };
 
+export const RESTRICTED_LEAVE_CODES = ['SBL', 'ML', 'PTL', 'AWOL', 'LOP', 'LWP'];
+export const RESTRICTED_LEAVE_NAMES = [
+  'sabbatical leave',
+  'maternity leave',
+  'paternity leave',
+  'absent without leave(awol)',
+  'absent without leave',
+  'awol',
+  'leave without pay (lop)',
+  'leave without pay',
+  'loss of pay',
+];
+
+export const isRestrictedLeaveType = (lt) => {
+  if (!lt) return false;
+  const code = String(lt.code || '').trim().toUpperCase();
+  const name = String(lt.name || '').trim().toLowerCase();
+  if (RESTRICTED_LEAVE_CODES.includes(code)) return true;
+  return RESTRICTED_LEAVE_NAMES.some((rn) => name === rn || name.includes(rn));
+};
+
 export const leaveService = {
   /**
    * Preview calculated leave duration (working days, weekends, holidays)
@@ -269,7 +290,17 @@ export const leaveService = {
     if (!types || types.length === 0) {
       types = await leaveRepository.findLeaveTypes('org-1', options.all ? null : gender);
     }
-    return types;
+
+    const enriched = types.map((lt) => ({
+      ...lt,
+      isRestricted: isRestrictedLeaveType(lt),
+    }));
+
+    if (options.forSelf) {
+      return enriched.filter((lt) => !lt.isRestricted);
+    }
+
+    return enriched;
   },
 
   /**
@@ -292,7 +323,7 @@ export const leaveService = {
   /**
    * Get leave balances for the authenticated employee
    */
-  async getMyBalances(user, year = new Date().getFullYear()) {
+  async getMyBalances(user, year = new Date().getFullYear(), options = {}) {
     const emp = await resolveRequesterEmployee(user);
     if (!emp) {
       const error = new Error('No employee profile found for your user account.');
@@ -305,37 +336,101 @@ export const leaveService = {
     if (balances.length < types.length) {
       balances = await leaveRepository.initializeBalancesForEmployee(emp.id, emp.orgId, year, emp.gender);
     }
-    return balances;
+
+    const enriched = balances.map((b) => ({
+      ...b,
+      isRestricted: isRestrictedLeaveType({ code: b.leaveTypeCode, name: b.leaveTypeName }),
+    }));
+
+    if (options.all === true) {
+      return enriched;
+    }
+
+    // By default, only return applicable leaves that the employee can apply for
+    return enriched.filter((b) => !b.isRestricted);
   },
 
   /**
-   * Apply for Leave (Employee)
+   * Apply for Leave (Employee or Manager on behalf of Direct Report)
+   * Strictly enforces:
+   * 1. Employees cannot self-apply restricted leaves (Sabbatical, Maternity, Paternity, AWOL, LOP).
+   * 2. Managers can apply restricted leaves on behalf of direct reports.
+   * 3. Managers CANNOT apply restricted leaves for themselves.
+   * 4. Managers cannot apply leaves for employees outside their reporting hierarchy.
    */
   async applyLeave(user, data) {
-    const emp = await resolveRequesterEmployee(user);
-    if (!emp) {
+    const callerEmp = await resolveRequesterEmployee(user);
+    if (!callerEmp) {
       const error = new Error('No employee profile found for your user account.');
       error.statusCode = 404;
       throw error;
     }
 
+    const roles = Array.isArray(user.roles) ? user.roles : [user.roleName || user.role];
+    const isHrAdmin = roles.some((r) =>
+      ['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin'].includes(r)
+    );
+
+    // Determine target employee: if employeeId is provided and different, check reporting hierarchy
+    const targetEmployeeId = data.employeeId && data.employeeId.trim() ? data.employeeId.trim() : callerEmp.id;
+    const isSelf = targetEmployeeId === callerEmp.id;
+
+    let targetEmp = callerEmp;
+    if (!isSelf) {
+      targetEmp = await employeeRepository.findById(targetEmployeeId);
+      if (!targetEmp) {
+        const error = new Error(`Target employee with ID '${targetEmployeeId}' not found.`);
+        error.statusCode = 404;
+        throw error;
+      }
+      if (targetEmp.orgId !== callerEmp.orgId && !isHrAdmin) {
+        const error = new Error('Access denied: Employee not found in your organization.');
+        error.statusCode = 403;
+        throw error;
+      }
+
+      // Hierarchy verification:
+      // If caller is HR/Admin -> allowed across organization.
+      // If caller is Manager -> target employee MUST report directly to caller!
+      // If caller is regular Employee -> forbidden from applying for others.
+      if (!isHrAdmin) {
+        if (targetEmp.managerId !== callerEmp.id) {
+          const error = new Error('Access denied: You can only apply leave on behalf of employees who directly report to you in your reporting hierarchy.');
+          error.statusCode = 403;
+          throw error;
+        }
+      }
+    }
+
     // Inactive employee check
-    if (emp.status && emp.status.toLowerCase() !== 'active') {
-      const error = new Error(`Cannot apply for leave: Employee account status is "${emp.status}". Only active employees can apply for leave.`);
+    if (targetEmp.status && targetEmp.status.toLowerCase() !== 'active') {
+      const error = new Error(`Cannot apply for leave: Employee account status is "${targetEmp.status}". Only active employees can take leave.`);
       error.statusCode = 403;
       throw error;
     }
 
     // Verify leave type exists and belongs to employee's organization
-    const leaveType = await leaveRepository.findLeaveTypeById(data.leaveTypeId, emp.orgId);
+    const leaveType = await leaveRepository.findLeaveTypeById(data.leaveTypeId, targetEmp.orgId);
     if (!leaveType) {
-      const error = new Error('Selected leave type does not exist or is not available for your organization.');
+      const error = new Error('Selected leave type does not exist or is not available for this organization.');
       error.statusCode = 400;
       throw error;
     }
 
-    // Gender eligibility verification
-    const empGender = String(emp.gender || 'Male').trim().toUpperCase();
+    // CRITICAL SECURITY ENFORCEMENT: RESTRICTED LEAVE TYPES
+    // (Sabbatical Leave, Maternity Leave, Paternity Leave, AWOL, Leave Without Pay)
+    if (isRestrictedLeaveType(leaveType)) {
+      if (isSelf) {
+        const error = new Error(
+          `Restricted leave policy violation: Employees and managers cannot apply for '${leaveType.name}' for themselves. This leave must be applied by your reporting manager on your behalf.`
+        );
+        error.statusCode = 403;
+        throw error;
+      }
+    }
+
+    // Gender eligibility verification on targetEmp
+    const empGender = String(targetEmp.gender || 'Male').trim().toUpperCase();
     const ltGender = String(leaveType.genderEligibility || 'ALL').trim().toUpperCase();
     if (ltGender === 'FEMALE' && empGender === 'MALE') {
       const error = new Error('Maternity leave is only applicable to female employees.');
@@ -355,7 +450,7 @@ export const leaveService = {
 
     // Calculate duration with holiday, weekend and date validation
     const calculation = await calculateLeaveDuration(
-      emp.orgId,
+      targetEmp.orgId,
       startDate,
       endDate,
       isHalfDay,
@@ -363,26 +458,26 @@ export const leaveService = {
     );
     const totalDays = calculation.totalDays;
 
-    // Overlap validation
-    const overlap = await leaveRepository.checkOverlappingLeave(emp.id, startDate, endDate, isHalfDay, halfDayPeriod);
+    // Overlap validation for targetEmp
+    const overlap = await leaveRepository.checkOverlappingLeave(targetEmp.id, startDate, endDate, isHalfDay, halfDayPeriod);
     if (overlap) {
-      const error = new Error(`Overlapping leave conflict: You already have an active ${overlap.status} leave request from ${overlap.start_date} to ${overlap.end_date}.`);
+      const error = new Error(`Overlapping leave conflict: Employee already has an active ${overlap.status} leave request from ${overlap.start_date} to ${overlap.end_date}.`);
       error.statusCode = 409;
       throw error;
     }
 
-    // Balance check
+    // Balance check for targetEmp
     const startYear = new Date(startDate).getFullYear();
-    let balances = await leaveRepository.getLeaveBalances(emp.id, startYear);
+    let balances = await leaveRepository.getLeaveBalances(targetEmp.id, startYear);
     if (balances.length === 0) {
-      balances = await leaveRepository.initializeBalancesForEmployee(emp.id, emp.orgId, startYear);
+      balances = await leaveRepository.initializeBalancesForEmployee(targetEmp.id, targetEmp.orgId, startYear);
     }
     const balance = balances.find((b) => b.leaveTypeId === leaveType.id);
 
     // If leave type is paid and quota-tracked, verify available days
     if (balance && leaveType.isPaid && leaveType.daysPerYear > 0) {
       if (balance.remainingDays < totalDays) {
-        const error = new Error(`Insufficient leave balance. You have ${balance.remainingDays} days remaining for ${leaveType.name}, but requested ${totalDays} days.`);
+        const error = new Error(`Insufficient leave balance. Employee has ${balance.remainingDays} days remaining for ${leaveType.name}, but requested ${totalDays} days.`);
         error.statusCode = 400;
         throw error;
       }
@@ -390,66 +485,79 @@ export const leaveService = {
 
     // Create the leave request
     const request = await leaveRepository.createLeaveRequest({
-      orgId: emp.orgId,
-      employeeId: emp.id,
+      orgId: targetEmp.orgId,
+      employeeId: targetEmp.id,
       leaveTypeId: leaveType.id,
       startDate,
       endDate,
       isHalfDay,
       halfDayPeriod,
       totalDays,
-      reason: data.reason,
+      reason: isSelf
+        ? data.reason
+        : `[Applied by Manager: ${callerEmp.firstName} ${callerEmp.lastName}] ${data.reason}`,
     });
 
     // Update pending balance
     if (balance) {
-      await leaveRepository.adjustBalance(emp.id, leaveType.id, startYear, { pendingDelta: totalDays });
+      await leaveRepository.adjustBalance(targetEmp.id, leaveType.id, startYear, { pendingDelta: totalDays });
     }
 
     // Initialize Phase 6 approval workflow tracking instance
     try {
       await workflowRepository.createWorkflowInstance(
         {
-          orgId: emp.orgId,
+          orgId: targetEmp.orgId,
           entityType: 'LEAVE_REQUEST',
           entityId: request.id,
           workflowType: 'EMPLOYEE_MANAGER_HR',
           currentStage: 'MANAGER_REVIEW',
           currentStatus: 'PENDING',
-          requesterId: emp.id,
-          managerId: emp.managerId || null,
+          requesterId: targetEmp.id,
+          managerId: targetEmp.managerId || null,
         },
         {
-          stage: 'EMPLOYEE_SUBMISSION',
+          stage: isSelf ? 'EMPLOYEE_SUBMISSION' : 'MANAGER_SUBMISSION',
           actorUserId: user.id,
-          actorRole: user.roleName || 'Employee',
+          actorRole: user.roleName || (isSelf ? 'Employee' : 'Manager'),
           action: 'SUBMIT',
           fromStatus: 'PENDING',
           toStatus: 'PENDING',
-          comments: data.reason || 'Leave request submitted.',
+          comments: data.reason || (isSelf ? 'Leave request submitted.' : `Leave applied by reporting manager on employee's behalf.`),
         }
       );
     } catch (wfErr) {
       logger.warn('LeaveService', `Failed to initialize workflow instance for leave ${request.id}: ${wfErr.message}`);
     }
 
-    // Dispatch in-app notification to Manager
+    // Dispatch in-app notifications
     try {
-      if (emp.managerId) {
-        const mgrEmp = await employeeRepository.findById(emp.managerId);
+      if (isSelf && targetEmp.managerId) {
+        const mgrEmp = await employeeRepository.findById(targetEmp.managerId);
         if (mgrEmp && mgrEmp.userId) {
           await notificationService.notifyLeaveApprovalPending({
-            orgId: emp.orgId,
+            orgId: targetEmp.orgId,
             leaveId: request.id,
-            employeeName: `${emp.firstName || ''} ${emp.lastName || ''}`.trim(),
+            employeeName: `${targetEmp.firstName || ''} ${targetEmp.lastName || ''}`.trim(),
             startDate,
             endDate,
             managerUserId: mgrEmp.userId,
           });
         }
+      } else if (!isSelf && targetEmp.userId) {
+        await notificationService.createNotification({
+          orgId: targetEmp.orgId,
+          userId: targetEmp.userId,
+          eventType: 'LEAVE_APPLIED_BY_MANAGER',
+          title: `${leaveType.name} Applied by Manager`,
+          message: `${callerEmp.firstName} ${callerEmp.lastName} has applied ${leaveType.name} on your behalf from ${startDate} to ${endDate}.`,
+          entityType: 'LEAVE_REQUEST',
+          entityId: request.id,
+          actionUrl: '/leaves',
+        });
       }
     } catch (notifErr) {
-      logger.warn('LeaveService', `Failed to dispatch pending leave notification: ${notifErr.message}`);
+      logger.warn('LeaveService', `Failed to dispatch leave notification: ${notifErr.message}`);
     }
 
     return request;
