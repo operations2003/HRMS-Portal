@@ -7,7 +7,6 @@ node_modules/
 coverage/
 backend/test_*.js
 test_*.js
-!backend/src/tests/
 
 # Production & Build outputs
 dist/
