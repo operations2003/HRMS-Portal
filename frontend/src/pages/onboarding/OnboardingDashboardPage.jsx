@@ -15,7 +15,6 @@ import {
   Building2,
   Briefcase,
   ChevronRight,
-  Sparkles,
   RefreshCw,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
@@ -26,7 +25,6 @@ import { Badge } from '../../components/common/Badge.jsx';
 import { Button } from '../../components/common/Button.jsx';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
 import { EmptyState } from '../../components/common/EmptyState.jsx';
-import { AtsHandoffModal } from '../../components/onboarding/AtsHandoffModal.jsx';
 
 export const OnboardingDashboardPage = () => {
   const navigate = useNavigate();
@@ -36,7 +34,6 @@ export const OnboardingDashboardPage = () => {
   const [loading, setLoading] = useState(true);
   const [candidates, setCandidates] = useState([]);
   const [viewMode, setViewMode] = useState('table'); // 'table' | 'kanban'
-  const [isAtsModalOpen, setIsAtsModalOpen] = useState(false);
 
   // Filters State
   const [searchTerm, setSearchTerm] = useState('');
@@ -286,16 +283,6 @@ export const OnboardingDashboardPage = () => {
               Kanban
             </button>
           </div>
-
-          {canWrite && (
-            <Button
-              variant="primary"
-              icon={Sparkles}
-              onClick={() => setIsAtsModalOpen(true)}
-            >
-              Simulate ATS Handoff
-            </Button>
-          )}
         </div>
       </div>
 
@@ -447,9 +434,7 @@ export const OnboardingDashboardPage = () => {
       ) : candidates.length === 0 ? (
         <EmptyState
           title="No onboarding candidates found"
-          message="No candidates match your current filter criteria or none have been handed off from ATS yet."
-          actionText={canWrite ? 'Simulate ATS Handoff' : undefined}
-          onAction={canWrite ? () => setIsAtsModalOpen(true) : undefined}
+          message="No candidates match your current filter criteria."
         />
       ) : viewMode === 'table' ? (
         /* TABLE VIEW */
@@ -548,17 +533,6 @@ export const OnboardingDashboardPage = () => {
             );
           })}
         </div>
-      )}
-
-      {/* ATS Simulator Modal */}
-      {isAtsModalOpen && (
-        <AtsHandoffModal
-          isOpen={true}
-          onClose={() => setIsAtsModalOpen(false)}
-          onHandoffSuccess={() => {
-            fetchCandidates();
-          }}
-        />
       )}
     </div>
   );
