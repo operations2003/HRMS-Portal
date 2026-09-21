@@ -11,6 +11,7 @@ import {
   XCircle,
   RotateCcw,
   UserCheck,
+  ShieldCheck,
   Filter,
   ShieldAlert,
   Calendar,
@@ -316,6 +317,15 @@ export const TeamManagementPage = () => {
           </span>
         );
       },
+    },
+    {
+      header: 'Assigned HR Partner',
+      render: (row) => (
+        <span className="text-xs text-slate-700 font-medium flex items-center gap-1.5">
+          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+          {row.hr?.fullName || row.hrName || 'General HR Pool'}
+        </span>
+      ),
     },
     {
       header: 'Actions',

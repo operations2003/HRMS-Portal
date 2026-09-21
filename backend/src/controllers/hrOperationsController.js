@@ -7,7 +7,7 @@ export const hrOperationsController = {
    */
   async getOverview(req, res, next) {
     try {
-      const overview = await hrOperationsService.getOperationsOverview(req.user);
+      const overview = await hrOperationsService.getOperationsOverview(req.user, req.query);
       return sendSuccess(res, 'HR operations summary fetched successfully.', overview);
     } catch (error) {
       if (error.statusCode) {
@@ -22,7 +22,7 @@ export const hrOperationsController = {
    */
   async getApprovalQueue(req, res, next) {
     try {
-      const queue = await hrOperationsService.getUnifiedApprovalQueue(req.user);
+      const queue = await hrOperationsService.getUnifiedApprovalQueue(req.user, req.query);
       return sendSuccess(res, 'Unified approval queue fetched successfully.', queue);
     } catch (error) {
       if (error.statusCode) {

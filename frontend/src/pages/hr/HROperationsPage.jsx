@@ -3,7 +3,9 @@ import {
   ShieldAlert,
   Users,
   Megaphone,
+  CalendarOff,
   UserCheck,
+  ShieldCheck,
   Clock,
   CalendarDays,
   Award,
@@ -47,6 +49,15 @@ export const HROperationsPage = () => {
   // Active Tab: 'overview' | 'employees' | 'teams' | 'managers' | 'attendance' | 'leaves' | 'performance' | 'approvals'
   const [activeTab, setActiveTab] = useState('overview');
 
+  // HR Scope & Partner Filter States
+  const isHrUser = (user?.roleName || '').toLowerCase().includes('hr');
+  const [hrScope, setHrScope] = useState(isHrUser ? 'mine' : 'all'); // 'mine' | 'all' | 'filtered'
+  const [selectedHrFilter, setSelectedHrFilter] = useState(isHrUser && user?.employeeId ? user.employeeId : '');
+  const [hrList, setHrList] = useState([]);
+
+  // Active HR filter ID
+  const activeHrId = hrScope === 'mine' ? (user?.employeeId || selectedHrFilter) : selectedHrFilter;
+
   // Overview & Operational Data States
   const [overview, setOverview] = useState({});
   const [teams, setTeams] = useState([]);
@@ -88,39 +99,24 @@ export const HROperationsPage = () => {
   useEffect(() => {
     loadInitialData();
     loadDepartments();
-  }, []);
+    loadMetadata();
+    loadEmployees();
+  }, [activeHrId]);
 
-  useEffect(() => {
-    switch (activeTab) {
-      case 'employees':
-        if (allEmployees.length === 0) loadEmployees();
-        break;
-      case 'teams':
-      case 'managers':
-        if (teams.length === 0) loadTeams();
-        break;
-      case 'attendance':
-        loadAttendanceData(selectedAttendanceDate);
-        break;
-      case 'leaves':
-        loadLeaveData();
-        break;
-      case 'performance':
-        loadPerformanceData();
-        break;
-      case 'approvals':
-        loadApprovalsQueue();
-        break;
-      default:
-        break;
+  const loadMetadata = async () => {
+    try {
+      const meta = await employeeService.getMetadata();
+      setHrList(meta.hrs || []);
+    } catch {
+      // Non-blocking
     }
-  }, [activeTab]);
+  };
 
   const loadInitialData = async () => {
     try {
       setIsRefreshing(true);
       const [ovRes, tRes, attRes] = await Promise.allSettled([
-        hrOperationsService.getOverview(),
+        hrOperationsService.getOverview(activeHrId ? { assignedHrId: activeHrId } : {}),
         hrOperationsService.getTeams(),
         hrOperationsService.getAttendanceSummary(),
       ]);
@@ -259,15 +255,20 @@ export const HROperationsPage = () => {
   };
 
   // -------------------------------------------------------------
-  // Filtered Lists
+  // Filtered Lists Centered Around Assigned HR Scope
   // -------------------------------------------------------------
   const safeAllEmployees = Array.isArray(allEmployees) ? allEmployees : [];
   const filteredEmployees = safeAllEmployees.filter((e) => {
+    if (activeHrId) {
+      const empHrId = e.hrId || e.hr?.id || e.hr_id;
+      if (empHrId !== activeHrId) return false;
+    }
+
     const q = searchEmployeeQuery.toLowerCase();
     const name = (e.fullName || `${e.firstName || ''} ${e.lastName || ''}`).toLowerCase();
     const email = (e.email || '').toLowerCase();
     const code = (e.employeeCode || e.employee_code || '').toLowerCase();
-    const matchesQuery = name.includes(q) || email.includes(q) || code.includes(q);
+    const matchesQuery = !searchEmployeeQuery || name.includes(q) || email.includes(q) || code.includes(q);
 
     const matchesDept = deptFilter ? (e.deptId === deptFilter || e.department?.id === deptFilter) : true;
     const matchesStatus = statusFilter ? (e.status || '').toUpperCase() === statusFilter.toUpperCase() : true;
@@ -277,18 +278,36 @@ export const HROperationsPage = () => {
 
   const safeAttendanceRecords = Array.isArray(attendanceRecords) ? attendanceRecords : [];
   const filteredAttendanceRecords = safeAttendanceRecords.filter((rec) => {
+    if (activeHrId) {
+      const empId = rec.employeeId || rec.employee_id || rec.employee?.id;
+      const matchedEmp = safeAllEmployees.find((e) => e.id === empId);
+      const empHrId = matchedEmp?.hrId || matchedEmp?.hr?.id || matchedEmp?.hr_id || rec.hrId || rec.employee?.hrId;
+      if (empHrId && empHrId !== activeHrId) return false;
+    }
     if (!attendanceStatusFilter) return true;
     return (rec.status || '').toUpperCase() === attendanceStatusFilter.toUpperCase();
   });
 
   const safeOrgLeaves = Array.isArray(orgLeaves) ? orgLeaves : [];
   const filteredOrgLeaves = safeOrgLeaves.filter((l) => {
+    if (activeHrId) {
+      const empId = l.employeeId || l.employee_id || l.employee?.id;
+      const matchedEmp = safeAllEmployees.find((e) => e.id === empId);
+      const empHrId = matchedEmp?.hrId || matchedEmp?.hr?.id || matchedEmp?.hr_id || l.hrId || l.employee?.hrId;
+      if (empHrId && empHrId !== activeHrId) return false;
+    }
     if (leaveStatusFilter === 'ALL') return true;
     return (l.status || '').toUpperCase() === leaveStatusFilter.toUpperCase();
   });
 
   const safePendingApprovalsQueue = Array.isArray(pendingApprovalsQueue) ? pendingApprovalsQueue : [];
   const filteredApprovals = safePendingApprovalsQueue.filter((item) => {
+    if (activeHrId) {
+      const empId = item.employeeId || item.employee_id || item.employee?.id || item.requesterId;
+      const matchedEmp = safeAllEmployees.find((e) => e.id === empId);
+      const empHrId = matchedEmp?.hrId || matchedEmp?.hr?.id || matchedEmp?.hr_id || item.hrId;
+      if (empHrId && empHrId !== activeHrId) return false;
+    }
     if (approvalModuleFilter === 'ALL') return true;
     const type = (item.module || item.entityType || '').toUpperCase();
     if (approvalModuleFilter === 'LEAVE') return type.includes('LEAVE');
@@ -332,8 +351,22 @@ export const HROperationsPage = () => {
     {
       header: 'Reporting Manager',
       render: (row) => (
-        <span className="text-xs text-slate-600">
-          {row.reportingManager?.name || row.manager?.name || row.managerName || 'Direct to Org'}
+        <span className="text-xs text-slate-700 font-medium flex items-center gap-1.5">
+          <UserCheck className="w-3.5 h-3.5 text-brand-600 shrink-0" />
+          {row.manager?.fullName || row.reportingManager?.name || row.managerName || (
+            <span className="text-slate-400 italic">Direct to Org</span>
+          )}
+        </span>
+      ),
+    },
+    {
+      header: 'Assigned HR Partner',
+      render: (row) => (
+        <span className="text-xs text-slate-700 font-medium flex items-center gap-1.5">
+          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+          {row.hr?.fullName || row.hrName || (
+            <span className="text-slate-400 italic">General HR Pool</span>
+          )}
         </span>
       ),
     },
@@ -363,9 +396,9 @@ export const HROperationsPage = () => {
             variant="ghost"
             icon={UserCheck}
             onClick={() => setReassigningEmployee(row)}
-            title="Reassign Reporting Manager"
+            title="Reassign Reporting Manager & HR Partner"
           >
-            Manager
+            Hierarchy
           </Button>
         </div>
       ),
@@ -761,17 +794,111 @@ export const HROperationsPage = () => {
             variant="secondary"
             icon={RefreshCw}
             isLoading={isRefreshing}
-            onClick={loadInitialData}
+            onClick={() => {
+              loadInitialData();
+              loadEmployees();
+              if (activeTab === 'attendance') loadAttendanceData(selectedAttendanceDate);
+              if (activeTab === 'leaves') loadLeaveData();
+              if (activeTab === 'performance') loadPerformanceData();
+              if (activeTab === 'approvals') loadApprovalsQueue();
+            }}
           >
-            Refresh
+            Refresh Cockpit
           </Button>
           <Button
             variant="primary"
             icon={Megaphone}
             onClick={() => setIsBroadcastOpen(true)}
           >
-            Broadcast Announcement
+            Broadcast Alert
           </Button>
+        </div>
+      </div>
+
+      {/* Workforce Scope & HR Assignment Filter Toolbar */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
+            <ShieldCheck className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                Operational Scope
+              </span>
+              <Badge variant={hrScope === 'mine' ? 'brand' : 'neutral'} size="sm">
+                {hrScope === 'mine' ? 'My Assigned Subordinates' : activeHrId ? 'Filtered HR Portfolio' : 'All Organization Workforce'}
+              </Badge>
+            </div>
+            <p className="text-xs text-slate-600 mt-0.5">
+              {hrScope === 'mine'
+                ? `Center operations & view activities for employees assigned under your HR management.`
+                : activeHrId
+                ? `Filtering workforce & activities for selected HR partner.`
+                : `Viewing all company workforce records with complete cross-team visibility.`}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1 border border-slate-200 text-xs font-semibold">
+            <button
+              type="button"
+              onClick={() => {
+                setHrScope('mine');
+                setSelectedHrFilter(user?.employeeId || '');
+              }}
+              className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
+                hrScope === 'mine'
+                  ? 'bg-white text-brand-600 shadow-sm font-bold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <UserCheck className="w-3.5 h-3.5" />
+              My Assigned Employees
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setHrScope('all');
+                setSelectedHrFilter('');
+              }}
+              className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
+                hrScope === 'all'
+                  ? 'bg-white text-brand-600 shadow-sm font-bold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Building2 className="w-3.5 h-3.5" />
+              All Org Employees
+            </button>
+          </div>
+
+          {/* HR Partner Filter Dropdown */}
+          <div className="flex items-center gap-1.5">
+            <select
+              value={selectedHrFilter}
+              onChange={(e) => {
+                const val = e.target.value;
+                setSelectedHrFilter(val);
+                if (val && val === user?.employeeId) {
+                  setHrScope('mine');
+                } else if (val) {
+                  setHrScope('filtered');
+                } else {
+                  setHrScope('all');
+                }
+              }}
+              className="text-xs py-2 px-3 rounded-xl border border-slate-200 bg-white font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+            >
+              <option value="">All HR Partners</option>
+              {hrList.map((h) => (
+                <option key={h.id} value={h.id}>
+                  HR: {h.fullName || `${h.firstName || ''} ${h.lastName || ''}`.trim()} ({h.employeeCode || h.id?.slice(0, 6)})
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 

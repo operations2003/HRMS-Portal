@@ -18,6 +18,15 @@ export const validateAssignManager = (body = {}) => {
     errors.push('An employee cannot be assigned as their own manager.');
   }
 
+  // hrId can be null/empty if removing HR, but if provided must be string
+  if (body.hrId !== null && body.hrId !== undefined && typeof body.hrId !== 'string') {
+    errors.push('HR ID must be a string or null.');
+  }
+
+  if (body.employeeId && body.hrId && body.employeeId === body.hrId) {
+    errors.push('An employee cannot be assigned as their own HR partner.');
+  }
+
   return errors;
 };
 

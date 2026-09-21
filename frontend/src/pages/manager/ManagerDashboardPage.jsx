@@ -13,6 +13,7 @@ import {
   RefreshCw,
   Eye,
   ShieldAlert,
+  ShieldCheck,
   Calendar,
   Layers,
   ChevronRight,
@@ -216,6 +217,15 @@ export const ManagerDashboardPage = () => {
         <Badge variant={row.status === 'Active' || row.status === 'ACTIVE' ? 'success' : 'neutral'} size="sm">
           {row.status || 'Active'}
         </Badge>
+      ),
+    },
+    {
+      header: 'Assigned HR Partner',
+      render: (row) => (
+        <div className="flex items-center gap-1.5 text-xs text-slate-700 font-medium">
+          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+          <span>{row.hr?.fullName || row.hrName || 'General HR Pool'}</span>
+        </div>
       ),
     },
     {

@@ -10,6 +10,7 @@ import {
   Award,
   CalendarOff,
   UserCheck,
+  ShieldCheck,
   AlertCircle,
   FileText,
 } from 'lucide-react';
@@ -155,7 +156,15 @@ export const EmployeeDossierModal = ({ isOpen, onClose, employeeId }) => {
                   <span className="text-slate-400 block text-[10px]">Reporting Manager</span>
                   <div className="flex items-center gap-2 font-medium text-slate-800">
                     <UserCheck className="w-4 h-4 text-brand-600" />
-                    <span>{emp.manager?.fullName || emp.managerName || 'No direct manager assigned'}</span>
+                    <span>{emp.reportingManager?.name || emp.manager?.fullName || emp.managerName || 'Direct to Org'}</span>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-1">
+                  <span className="text-slate-400 block text-[10px]">Assigned HR Partner</span>
+                  <div className="flex items-center gap-2 font-medium text-slate-800">
+                    <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                    <span>{emp.assignedHr?.name || emp.hr?.fullName || emp.hrName || 'General HR Pool'}</span>
                   </div>
                 </div>
 

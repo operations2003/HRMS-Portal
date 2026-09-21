@@ -1018,10 +1018,10 @@ export const teamService = {
   // 7. Team Assignment & Hierarchy Management (HR & Admin Scope)
   // =========================================================================
 
-  async assignTeamManager(currentUser, { employeeId, managerId }) {
+  async assignTeamManager(currentUser, { employeeId, managerId, hrId }) {
     const isHrAdmin = this.isHrOrAdmin(currentUser);
     if (!isHrAdmin) {
-      const err = new Error('Forbidden: Only HR or Administrators can assign team managers.');
+      const err = new Error('Forbidden: Only HR or Administrators can assign team managers or HR partners.');
       err.statusCode = 403;
       throw err;
     }
@@ -1040,7 +1040,7 @@ export const teamService = {
       throw err;
     }
 
-    if (managerId) {
+    if (managerId !== undefined && managerId !== null && managerId !== '') {
       const mgrIdErr = validateEmployeeId(managerId);
       if (mgrIdErr) {
         const err = new Error(`Manager ID error: ${mgrIdErr}`);
@@ -1070,21 +1070,53 @@ export const teamService = {
       }
     }
 
-    const updated = await employeeRepository.assignManager(employee.id, managerId ? managerId.trim() : null);
-    logger.info('TeamService', `Admin ${currentUser.id} assigned manager ${managerId || 'None'} to employee ${employeeId}`);
+    if (hrId !== undefined && hrId !== null && hrId !== '') {
+      const hrIdErr = validateEmployeeId(hrId);
+      if (hrIdErr) {
+        const err = new Error(`HR ID error: ${hrIdErr}`);
+        err.statusCode = 400;
+        throw err;
+      }
 
-    // Notify employee and manager
-    try {
-      const manager = managerId ? await employeeRepository.findById(managerId.trim()) : null;
-      await notificationService.notifyManagerAssigned({
-        orgId: currentUser.orgId,
-        employeeName: `${employee.firstName || ''} ${employee.lastName || ''}`.trim(),
-        managerName: manager ? `${manager.firstName || ''} ${manager.lastName || ''}`.trim() : 'None',
-        employeeUserId: employee.userId,
-        managerUserId: manager?.userId || null,
-      });
-    } catch (notifErr) {
-      logger.warn('TeamService', `Failed to dispatch manager assignment notification: ${notifErr.message}`);
+      if (employee.id === hrId.trim()) {
+        const err = new Error('An employee cannot be assigned as their own HR partner.');
+        err.statusCode = 400;
+        throw err;
+      }
+
+      const hrEmp = await employeeRepository.findById(hrId.trim());
+      if (!hrEmp || hrEmp.orgId !== currentUser.orgId) {
+        const err = new Error('Target HR partner employee not found in your organization.');
+        err.statusCode = 404;
+        throw err;
+      }
+    }
+
+    const updatePayload = {};
+    if (managerId !== undefined) {
+      updatePayload.managerId = managerId ? managerId.trim() : null;
+    }
+    if (hrId !== undefined) {
+      updatePayload.hrId = hrId ? hrId.trim() : null;
+    }
+
+    const updated = await employeeRepository.assignHierarchy(employee.id, updatePayload);
+    logger.info('TeamService', `Admin ${currentUser.id} assigned hierarchy manager:${updatePayload.managerId || 'Unchanged'} hr:${updatePayload.hrId || 'Unchanged'} to employee ${employeeId}`);
+
+    // Notify employee and manager if manager changed
+    if (managerId !== undefined) {
+      try {
+        const manager = updatePayload.managerId ? await employeeRepository.findById(updatePayload.managerId) : null;
+        await notificationService.notifyManagerAssigned({
+          orgId: currentUser.orgId,
+          employeeName: `${employee.firstName || ''} ${employee.lastName || ''}`.trim(),
+          managerName: manager ? `${manager.firstName || ''} ${manager.lastName || ''}`.trim() : 'None',
+          employeeUserId: employee.userId,
+          managerUserId: manager?.userId || null,
+        });
+      } catch (notifErr) {
+        logger.warn('TeamService', `Failed to dispatch manager assignment notification: ${notifErr.message}`);
+      }
     }
 
     return updated;

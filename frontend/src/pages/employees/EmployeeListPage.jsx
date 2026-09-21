@@ -23,6 +23,7 @@ import {
   X,
   Landmark,
   ShieldCheck,
+  UserCheck,
   Home,
   User as UserIcon,
 } from 'lucide-react';
@@ -40,6 +41,7 @@ import { Can } from '../../components/rbac/Can.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { EmployeeTimelineModal } from '../../components/employees/EmployeeTimelineModal.jsx';
+import { AssignManagerModal } from '../../components/team/AssignManagerModal.jsx';
 
 export const EmployeeListPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -53,7 +55,7 @@ export const EmployeeListPage = () => {
   const [orgFilter, setOrgFilter] = useState('');
   const [deptFilter, setDeptFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [metadata, setMetadata] = useState({ organizations: [], departments: [], designations: [], roles: [] });
+  const [metadata, setMetadata] = useState({ organizations: [], departments: [], designations: [], roles: [], managers: [], hrs: [] });
   const [error, setError] = useState(null);
 
   // Modals
@@ -62,6 +64,7 @@ export const EmployeeListPage = () => {
   const [viewingEmployee, setViewingEmployee] = useState(null);
   const [loadingViewProfile, setLoadingViewProfile] = useState(false);
   const [timelineEmployee, setTimelineEmployee] = useState(null);
+  const [reassigningEmployee, setReassigningEmployee] = useState(null);
 
   // Leave Quotas & Entitlements State (Decided by Admin) - 11 Standard Company Categories
   const [leaveTypes, setLeaveTypes] = useState([
@@ -265,6 +268,8 @@ export const EmployeeListPage = () => {
     status: 'Active',
     salary: '',
     shiftTiming: '11:00 AM - 07:00 PM',
+    managerId: '',
+    hrId: '',
     fatherName: '',
     motherName: '',
     emergencyContact: '',
@@ -381,6 +386,8 @@ export const EmployeeListPage = () => {
       status: 'Active',
       salary: '',
       shiftTiming: '11:00 AM - 07:00 PM',
+      managerId: '',
+      hrId: '',
       fatherName: '',
       motherName: '',
       emergencyContact: '',
@@ -431,6 +438,8 @@ export const EmployeeListPage = () => {
       status: emp.status || 'Active',
       salary: emp.salary?.toString() || '',
       shiftTiming: emp.shiftTiming || '11:00 AM - 07:00 PM',
+      managerId: emp.managerId || emp.manager?.id || '',
+      hrId: emp.hrId || emp.hr?.id || '',
       fatherName: emp.fatherName || '',
       motherName: emp.motherName || '',
       emergencyContact: emp.emergencyContact || '',
@@ -513,6 +522,8 @@ export const EmployeeListPage = () => {
       const computedShift = `${shiftFromTime.trim() || '11:00'} ${shiftFromPeriod} - ${shiftToTime.trim() || '07:00'} ${shiftToPeriod}`;
       const payload = {
         ...formData,
+        managerId: formData.managerId || null,
+        hrId: formData.hrId || null,
         shiftTiming: computedShift,
         leaveAllocations,
       };
@@ -649,6 +660,26 @@ export const EmployeeListPage = () => {
       render: (row) => <Badge>{row.status}</Badge>,
     },
     {
+      header: 'Reporting & HR',
+      key: 'hierarchy',
+      render: (row) => (
+        <div className="space-y-1 text-xs">
+          <div className="flex items-center gap-1.5 text-slate-700">
+            <UserCheck className="w-3.5 h-3.5 text-brand-600 shrink-0" />
+            <span className="font-medium truncate max-w-[130px]" title={row.manager?.fullName || 'No Manager'}>
+              {row.manager?.fullName ? row.manager.fullName : <span className="text-slate-400 italic">No Manager</span>}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 text-slate-700">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+            <span className="font-medium truncate max-w-[130px]" title={row.hr?.fullName || 'No HR'}>
+              {row.hr?.fullName ? row.hr.fullName : <span className="text-slate-400 italic">No HR</span>}
+            </span>
+          </div>
+        </div>
+      ),
+    },
+    {
       header: 'Actions',
       key: 'actions',
       className: 'text-right',
@@ -666,6 +697,16 @@ export const EmployeeListPage = () => {
             View
           </Button>
           <Can permission="employee:write">
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={UserCheck}
+              onClick={() => setReassigningEmployee(row)}
+              className="text-slate-600 hover:text-brand-600"
+              title="Assign / Reassign Reporting Manager & HR Partner"
+            >
+              Hierarchy
+            </Button>
             <Button
               variant="ghost"
               size="sm"
@@ -1170,6 +1211,76 @@ export const EmployeeListPage = () => {
             <p className="text-[11px] text-slate-500">
               Type the exact working hours manually. Active shift displays on employee's clock in/out timer.
             </p>
+          </div>
+
+          {/* Reporting Manager & Assigned HR Partner Section */}
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-50 to-indigo-50/40 border border-slate-200/90 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <UserCheck className="w-4 h-4 text-indigo-600" />
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                  Reporting Manager & Assigned HR Partner
+                </span>
+              </div>
+              <span className="text-[11px] text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded font-semibold">
+                Hierarchy & Governance
+              </span>
+            </div>
+            <p className="text-xs text-slate-500">
+              Assign this employee's reporting manager for direct operational oversight and an HR partner for personnel governance.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+              {/* Reporting Manager Selector */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                  <UserCheck className="w-3.5 h-3.5 text-indigo-600" />
+                  Reporting Manager
+                </label>
+                <select
+                  value={formData.managerId || ''}
+                  onChange={(e) => setFormData({ ...formData, managerId: e.target.value })}
+                  className="block w-full rounded-lg border text-sm py-2.5 px-3 bg-white border-slate-300 text-slate-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
+                >
+                  <option value="">No Direct Manager (Direct to Org)</option>
+                  {(metadata.managers || [])
+                    .filter((m) => !editingEmployee || m.id !== editingEmployee.id)
+                    .map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.fullName || `${m.firstName || ''} ${m.lastName || ''}`.trim()} ({m.employeeCode || m.id?.slice(0, 7)}) {m.designationTitle ? `— ${m.designationTitle}` : ''}
+                      </option>
+                    ))}
+                </select>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Direct manager oversees day-to-day work, reviews leaves, and tracks attendance.
+                </p>
+              </div>
+
+              {/* Assigned HR Partner Selector */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                  Assigned HR Partner (HRBP)
+                </label>
+                <select
+                  value={formData.hrId || ''}
+                  onChange={(e) => setFormData({ ...formData, hrId: e.target.value })}
+                  className="block w-full rounded-lg border text-sm py-2.5 px-3 bg-white border-slate-300 text-slate-900 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors"
+                >
+                  <option value="">No Assigned HR (General HR Pool)</option>
+                  {(metadata.hrs || metadata.managers || [])
+                    .filter((h) => !editingEmployee || h.id !== editingEmployee.id)
+                    .map((h) => (
+                      <option key={h.id} value={h.id}>
+                        {h.fullName || `${h.firstName || ''} ${h.lastName || ''}`.trim()} ({h.employeeCode || h.id?.slice(0, 7)}) {h.roleName ? `[${h.roleName}]` : ''}
+                      </option>
+                    ))}
+                </select>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Oversees personnel files, compliance, grievances, and employee lifecycle management.
+                </p>
+              </div>
+            </div>
           </div>
 
           {/* Annual Leave Quotas & Entitlements Segment (Decided by Admin) */}
@@ -1741,6 +1852,33 @@ export const EmployeeListPage = () => {
                 </div>
               </div>
 
+              {/* Reporting Manager & Assigned HR Display */}
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                <div className="text-xs text-slate-400 flex items-center gap-1.5 mb-1">
+                  <UserCheck className="w-3.5 h-3.5 text-brand-600" />
+                  Reporting Manager
+                </div>
+                <div className="font-semibold text-slate-800">
+                  {viewingEmployee.manager?.fullName || 'Direct to Organization'}
+                </div>
+                {viewingEmployee.manager?.employeeCode && (
+                  <div className="text-[11px] text-slate-400 font-mono">Code: {viewingEmployee.manager.employeeCode}</div>
+                )}
+              </div>
+
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                <div className="text-xs text-slate-400 flex items-center gap-1.5 mb-1">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                  Assigned HR Partner
+                </div>
+                <div className="font-semibold text-slate-800">
+                  {viewingEmployee.hr?.fullName || 'General HR Pool'}
+                </div>
+                {viewingEmployee.hr?.employeeCode && (
+                  <div className="text-[11px] text-slate-400 font-mono">Code: {viewingEmployee.hr.employeeCode}</div>
+                )}
+              </div>
+
               {/* Annual Leave Allocations Display */}
               <div className="p-3.5 rounded-xl bg-emerald-50/50 border border-emerald-100/90 col-span-2 space-y-2">
                 <div className="flex items-center justify-between">
@@ -1913,6 +2051,14 @@ export const EmployeeListPage = () => {
         confirmText="Delete"
         variant="danger"
         isLoading={isDeleting}
+      />
+
+      {/* Assign Manager & HR Hierarchy Modal */}
+      <AssignManagerModal
+        isOpen={Boolean(reassigningEmployee)}
+        employee={reassigningEmployee}
+        onClose={() => setReassigningEmployee(null)}
+        onSuccess={() => fetchEmployees(pagination?.page || 1)}
       />
     </div>
   );

@@ -46,6 +46,15 @@ const mapEmployeeRow = (row) => {
           email: row.m_email,
         }
       : null,
+    hrId: row.hrId || null,
+    hr: row.h_id
+      ? {
+          id: row.h_id,
+          employeeCode: row.h_code,
+          fullName: `${row.h_first_name || ''} ${row.h_last_name || ''}`.trim(),
+          email: row.h_email,
+        }
+      : null,
   };
 };
 
@@ -57,6 +66,7 @@ const BASE_EMPLOYEE_SELECT = `
     e.desig_id AS "desigId",
     e.user_id AS "userId",
     e.manager_id AS "managerId",
+    e.hr_id AS "hrId",
     e.employee_code AS "employeeCode",
     e.first_name AS "firstName",
     e.last_name AS "lastName",
@@ -84,7 +94,8 @@ const BASE_EMPLOYEE_SELECT = `
     ds.id AS "ds_id", ds.title AS "ds_title", ds.code AS "ds_code",
     u.id AS "u_id", u.status AS "u_status",
     r.id AS "r_id", r.name AS "r_name",
-    m.id AS "m_id", m.employee_code AS "m_code", m.first_name AS "m_first_name", m.last_name AS "m_last_name", m.email AS "m_email"
+    m.id AS "m_id", m.employee_code AS "m_code", m.first_name AS "m_first_name", m.last_name AS "m_last_name", m.email AS "m_email",
+    h.id AS "h_id", h.employee_code AS "h_code", h.first_name AS "h_first_name", h.last_name AS "h_last_name", h.email AS "h_email"
   FROM employees e
   LEFT JOIN organizations o ON o.id = e.org_id
   LEFT JOIN departments d ON d.id = e.dept_id
@@ -92,13 +103,14 @@ const BASE_EMPLOYEE_SELECT = `
   LEFT JOIN users u ON u.id = e.user_id
   LEFT JOIN roles r ON r.id = u.role_id
   LEFT JOIN employees m ON m.id = e.manager_id
+  LEFT JOIN employees h ON h.id = e.hr_id
 `;
 
 export const employeeRepository = {
   /**
    * Find all employees with filtering and pagination
    */
-  async findAll({ search = '', orgId = '', deptId = '', status = '', managerId = '', page = 1, limit = 20 } = {}) {
+  async findAll({ search = '', orgId = '', deptId = '', status = '', managerId = '', hrId = '', page = 1, limit = 20 } = {}) {
     const conditions = [];
     const values = [];
     let paramIndex = 1;
@@ -121,6 +133,11 @@ export const employeeRepository = {
     if (managerId) {
       conditions.push(`e.manager_id = $${paramIndex++}`);
       values.push(managerId);
+    }
+
+    if (hrId) {
+      conditions.push(`e.hr_id = $${paramIndex++}`);
+      values.push(hrId);
     }
 
     if (search) {
@@ -262,7 +279,7 @@ export const employeeRepository = {
     const shiftTiming = data.shiftTiming ? data.shiftTiming.trim() : '11:00 AM - 07:00 PM';
     const gender = data.gender ? data.gender.trim() : 'Male';
     const managerId = data.managerId || null;
-
+    const hrId = data.hrId || null;
     const fatherName = data.fatherName ? data.fatherName.trim() : '';
     const motherName = data.motherName ? data.motherName.trim() : '';
     const emergencyContact = data.emergencyContact ? data.emergencyContact.trim() : '';
@@ -277,10 +294,10 @@ export const employeeRepository = {
       INSERT INTO employees (
         id, org_id, dept_id, desig_id, user_id, employee_code,
         first_name, last_name, email, phone, date_of_joining,
-        employment_type, status, salary, shift_timing, gender, manager_id,
+        employment_type, status, salary, shift_timing, gender, manager_id, hr_id,
         father_name, mother_name, emergency_contact, address,
         bank_name, bank_account_number, bank_ifsc, bank_branch, uan_number
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
       RETURNING id;
     `;
 
@@ -302,6 +319,7 @@ export const employeeRepository = {
       shiftTiming,
       gender,
       managerId,
+      hrId,
       fatherName,
       motherName,
       emergencyContact,
@@ -406,6 +424,11 @@ export const employeeRepository = {
       values.push(data.managerId || null);
     }
 
+    if (data.hrId !== undefined) {
+      setClauses.push(`hr_id = $${paramIndex++}`);
+      values.push(data.hrId || null);
+    }
+
     if (data.fatherName !== undefined) {
       setClauses.push(`father_name = $${paramIndex++}`);
       values.push(data.fatherName ? data.fatherName.trim() : '');
@@ -508,6 +531,43 @@ export const employeeRepository = {
   },
 
   /**
+   * Assign or reassign an employee's assigned HR partner
+   */
+  async assignHr(employeeId, hrId) {
+    const res = await pool.query(
+      'UPDATE employees SET hr_id = $1, updated_at = NOW() WHERE id = $2 RETURNING id;',
+      [hrId || null, employeeId]
+    );
+    if (res.rows.length === 0) return null;
+    return this.findById(employeeId);
+  },
+
+  /**
+   * Assign or update both manager and HR hierarchy
+   */
+  async assignHierarchy(employeeId, { managerId, hrId }) {
+    const setClauses = ['updated_at = NOW()'];
+    const values = [];
+    let idx = 1;
+
+    if (managerId !== undefined) {
+      setClauses.push(`manager_id = $${idx++}`);
+      values.push(managerId || null);
+    }
+
+    if (hrId !== undefined) {
+      setClauses.push(`hr_id = $${idx++}`);
+      values.push(hrId || null);
+    }
+
+    values.push(employeeId);
+    const sql = `UPDATE employees SET ${setClauses.join(', ')} WHERE id = $${idx} RETURNING id;`;
+    const res = await pool.query(sql, values);
+    if (res.rows.length === 0) return null;
+    return this.findById(employeeId);
+  },
+
+  /**
    * Get team headcount summary for a manager
    */
   async getTeamSummary(managerId, orgId = null) {
@@ -530,21 +590,52 @@ export const employeeRepository = {
   },
 
   /**
-   * Load metadata (organizations, departments, designations) directly from PostgreSQL
+   * Load metadata (organizations, departments, designations, roles, and eligible managers/HRs)
    */
   async getMetadata() {
-    const [orgsRes, deptsRes, desigsRes, rolesRes] = await Promise.all([
+    const [orgsRes, deptsRes, desigsRes, rolesRes, empsRes] = await Promise.all([
       pool.query("SELECT id, name, code FROM organizations WHERE status = 'Active' ORDER BY name ASC;"),
       pool.query('SELECT id, org_id AS "orgId", name, code, description FROM departments WHERE status = \'Active\' ORDER BY name ASC;'),
       pool.query("SELECT id, org_id AS \"orgId\", title, code FROM designations WHERE status = 'Active' ORDER BY title ASC;"),
       pool.query("SELECT id, name, description FROM roles WHERE status = 'Active' ORDER BY name ASC;"),
+      pool.query(`
+        SELECT 
+          e.id, 
+          e.org_id AS "orgId",
+          e.employee_code AS "employeeCode", 
+          e.first_name AS "firstName", 
+          e.last_name AS "lastName",
+          TRIM(CONCAT(e.first_name, ' ', e.last_name)) AS "fullName",
+          e.email,
+          d.name AS "departmentName",
+          ds.title AS "designationTitle",
+          r.name AS "roleName"
+        FROM employees e
+        LEFT JOIN departments d ON d.id = e.dept_id
+        LEFT JOIN designations ds ON ds.id = e.desig_id
+        LEFT JOIN users u ON u.id = e.user_id
+        LEFT JOIN roles r ON r.id = u.role_id
+        WHERE e.status = 'Active'
+        ORDER BY e.first_name ASC, e.last_name ASC;
+      `),
     ]);
+
+    const allEmps = empsRes.rows;
+    // HR candidates: employees with role HR/HRManager, or HR designation/dept, or all staff fallback
+    const hrCandidates = allEmps.filter((e) => {
+      const role = (e.roleName || '').toLowerCase();
+      const desig = (e.designationTitle || '').toLowerCase();
+      const dept = (e.departmentName || '').toLowerCase();
+      return role.includes('hr') || desig.includes('hr') || dept.includes('human resource') || dept.includes('hr');
+    });
 
     return {
       organizations: orgsRes.rows,
       departments: deptsRes.rows,
       designations: desigsRes.rows,
       roles: rolesRes.rows,
+      managers: allEmps, // Any active employee can be chosen as manager
+      hrs: hrCandidates.length > 0 ? hrCandidates : allEmps, // HR candidates or fallback to all active staff
     };
   },
 };

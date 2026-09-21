@@ -19,9 +19,10 @@ export const hrOperationsService = {
   /**
    * Consolidated HR Operations Cockpit Overview
    */
-  async getOperationsOverview(currentUser) {
+  async getOperationsOverview(currentUser, query = {}) {
     this.assertHrAdmin(currentUser);
     const orgId = currentUser.orgId;
+    const assignedHrId = query.assignedHrId || (query.scope === 'mine' ? currentUser.employeeId : null);
     const todayStr = new Date().toISOString().split('T')[0];
 
     const [
@@ -31,6 +32,7 @@ export const hrOperationsService = {
       openTicketsRes,
       pendingAppraisalsRes,
       onboardingRes,
+      exitStatsRes,
     ] = await Promise.all([
       // 1. Employee headcount & attendance overview
       pool.query(
@@ -39,8 +41,8 @@ export const hrOperationsService = {
           COUNT(*) FILTER (WHERE LOWER(status) = 'active')::int AS "activeEmployees",
           COUNT(*) FILTER (WHERE LOWER(status) = 'on leave')::int AS "onLeaveCount"
         FROM employees
-        WHERE org_id = $1;`,
-        [orgId]
+        WHERE org_id = $1 ${assignedHrId ? 'AND hr_id = $2' : ''};`,
+        assignedHrId ? [orgId, assignedHrId] : [orgId]
       ),
 
       // 2. Pending leaves
@@ -48,32 +50,35 @@ export const hrOperationsService = {
         `SELECT COUNT(*)::int AS "pendingLeaves"
         FROM leave_requests lr
         JOIN employees e ON lr.employee_id = e.id
-        WHERE e.org_id = $1 AND lr.status = 'PENDING';`,
-        [orgId]
+        WHERE e.org_id = $1 AND lr.status = 'PENDING' ${assignedHrId ? 'AND e.hr_id = $2' : ''};`,
+        assignedHrId ? [orgId, assignedHrId] : [orgId]
       ),
 
       // 3. Pending employee service requests
       pool.query(
         `SELECT COUNT(*)::int AS "pendingRequests"
-        FROM employee_requests
-        WHERE org_id = $1 AND status IN ('PENDING', 'IN_PROGRESS');`,
-        [orgId]
+        FROM employee_requests er
+        ${assignedHrId ? 'JOIN employees e ON er.employee_id = e.id' : ''}
+        WHERE er.org_id = $1 AND er.status IN ('PENDING', 'IN_PROGRESS') ${assignedHrId ? 'AND e.hr_id = $2' : ''};`,
+        assignedHrId ? [orgId, assignedHrId] : [orgId]
       ),
 
       // 4. Open helpdesk tickets
       pool.query(
         `SELECT COUNT(*)::int AS "openTickets"
-        FROM helpdesk_tickets
-        WHERE org_id = $1 AND status IN ('OPEN', 'IN_PROGRESS');`,
-        [orgId]
+        FROM helpdesk_tickets ht
+        ${assignedHrId ? 'JOIN employees e ON ht.employee_id = e.id' : ''}
+        WHERE ht.org_id = $1 AND ht.status IN ('OPEN', 'IN_PROGRESS') ${assignedHrId ? 'AND e.hr_id = $2' : ''};`,
+        assignedHrId ? [orgId, assignedHrId] : [orgId]
       ),
 
       // 5. Pending performance appraisals
       pool.query(
         `SELECT COUNT(*)::int AS "pendingAppraisals"
-        FROM performance_records
-        WHERE org_id = $1 AND status IN ('SUBMITTED', 'UNDER_REVIEW');`,
-        [orgId]
+        FROM performance_records pr
+        ${assignedHrId ? 'JOIN employees e ON pr.employee_id = e.id' : ''}
+        WHERE pr.org_id = $1 AND pr.status IN ('SUBMITTED', 'UNDER_REVIEW') ${assignedHrId ? 'AND e.hr_id = $2' : ''};`,
+        assignedHrId ? [orgId, assignedHrId] : [orgId]
       ),
 
       // 6. Onboarding candidates in pipeline
@@ -87,11 +92,12 @@ export const hrOperationsService = {
       // 7. Active exits & offboarding
       pool.query(
         `SELECT 
-          COUNT(*) FILTER (WHERE status IN ('SUBMITTED', 'UNDER_REVIEW'))::int AS "pendingExits",
-          COUNT(*) FILTER (WHERE status = 'APPROVED')::int AS "noticePeriodExits"
-        FROM exit_requests
-        WHERE org_id = $1;`,
-        [orgId]
+          COUNT(*) FILTER (WHERE er.status IN ('SUBMITTED', 'UNDER_REVIEW'))::int AS "pendingExits",
+          COUNT(*) FILTER (WHERE er.status = 'APPROVED')::int AS "noticePeriodExits"
+        FROM exit_requests er
+        ${assignedHrId ? 'JOIN employees e ON er.employee_id = e.id' : ''}
+        WHERE er.org_id = $1 ${assignedHrId ? 'AND e.hr_id = $2' : ''};`,
+        assignedHrId ? [orgId, assignedHrId] : [orgId]
       ),
     ]);
 
@@ -382,14 +388,16 @@ export const hrOperationsService = {
     const empRes = await pool.query(
       `SELECT 
         e.id, e.employee_code, e.first_name, e.last_name, e.email, e.phone,
-        e.date_of_joining, e.employment_type, e.status, e.manager_id, e.org_id,
+        e.date_of_joining, e.employment_type, e.status, e.manager_id, e.hr_id, e.org_id,
         d.id AS dept_id, d.name AS dept_name,
         ds.id AS desig_id, ds.title AS desig_title,
-        m.first_name AS mgr_first_name, m.last_name AS mgr_last_name, m.employee_code AS mgr_code
+        m.first_name AS mgr_first_name, m.last_name AS mgr_last_name, m.employee_code AS mgr_code,
+        h.first_name AS hr_first_name, h.last_name AS hr_last_name, h.employee_code AS hr_code, h.email AS hr_email
       FROM employees e
       LEFT JOIN departments d ON e.dept_id = d.id
       LEFT JOIN designations ds ON e.desig_id = ds.id
       LEFT JOIN employees m ON e.manager_id = m.id
+      LEFT JOIN employees h ON e.hr_id = h.id
       WHERE e.id = $1;`,
       [employeeId]
     );
@@ -484,6 +492,14 @@ export const hrOperationsService = {
               id: emp.manager_id,
               name: `${emp.mgr_first_name || ''} ${emp.mgr_last_name || ''}`.trim(),
               code: emp.mgr_code,
+            }
+          : null,
+        assignedHr: emp.hr_id
+          ? {
+              id: emp.hr_id,
+              name: `${emp.hr_first_name || ''} ${emp.hr_last_name || ''}`.trim(),
+              code: emp.hr_code,
+              email: emp.hr_email,
             }
           : null,
       },
