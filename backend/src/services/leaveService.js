@@ -745,11 +745,12 @@ export const leaveService = {
       throw error;
     }
 
-    const normRole = normalizeRole(user.roleName);
+    const normRole = normalizeRole(user.roleName || user.role);
 
-    // Standard employee CANNOT approve leave
-    if (normRole === 'employee') {
-      const error = new Error('Access denied: Standard employees are not permitted to approve leave requests.');
+    // Approval is restricted to Admin, HR, and Manager roles only
+    const isApproverRole = ['admin', 'superadmin', 'hr', 'hrmanager', 'orgadmin', 'manager', 'lead', 'teamlead', 'supervisor'].includes(normRole);
+    if (!isApproverRole) {
+      const error = new Error('Access denied: Only Admin, HR, and Manager roles are permitted to approve leave requests.');
       error.statusCode = 403;
       throw error;
     }
@@ -856,11 +857,12 @@ export const leaveService = {
       throw error;
     }
 
-    const normRole = normalizeRole(user.roleName);
+    const normRole = normalizeRole(user.roleName || user.role);
 
-    // Standard employee CANNOT reject leave
-    if (normRole === 'employee') {
-      const error = new Error('Access denied: Standard employees are not permitted to reject leave requests.');
+    // Rejection is restricted to Admin, HR, and Manager roles only
+    const isApproverRole = ['admin', 'superadmin', 'hr', 'hrmanager', 'orgadmin', 'manager', 'lead', 'teamlead', 'supervisor'].includes(normRole);
+    if (!isApproverRole) {
+      const error = new Error('Access denied: Only Admin, HR, and Manager roles are permitted to reject leave requests.');
       error.statusCode = 403;
       throw error;
     }

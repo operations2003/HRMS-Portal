@@ -155,8 +155,19 @@ export const workflowService = {
     // =========================================================================
     // Security Enforcement 3: Role & Team Scope Verification
     // =========================================================================
-    const userRole = (currentUser.roleName || '').toLowerCase();
-    const isManagerRole = ['manager', 'lead', 'teamlead', 'supervisor'].includes(userRole);
+    const userRole = (currentUser.roleName || currentUser.role || '').toLowerCase();
+    const isManagerRole = ['manager', 'lead', 'teamlead', 'supervisor'].some((r) => userRole.includes(r));
+
+    // Approval, rejection, and return are strictly restricted to Admin, HR, and Manager
+    if (['APPROVE', 'REJECT', 'RETURN'].includes(action)) {
+      if (!isHrAdmin && !isManagerRole) {
+        const err = new Error(
+          'Access denied: Only Admin, HR, and Manager roles have the authority to approve, reject, or return requests.'
+        );
+        err.statusCode = 403;
+        throw err;
+      }
+    }
 
     let nextStage = wf.currentStage;
     let toStatus = wf.currentStatus;

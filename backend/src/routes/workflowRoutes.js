@@ -25,9 +25,10 @@ router.get(
   workflowController.getById
 );
 
-// Perform workflow action (APPROVE, REJECT, RETURN)
+// Perform workflow action (APPROVE, REJECT, RETURN) - restricted to Admin, HR, and Manager
 router.post(
   '/:id/action',
+  requireRoles(['Admin', 'SuperAdmin', 'OrgAdmin', 'HR', 'HRManager', 'Manager', 'Lead', 'TeamLead', 'Supervisor']),
   authorize(['workflow:action']),
   validate(validateWorkflowAction),
   workflowController.executeAction

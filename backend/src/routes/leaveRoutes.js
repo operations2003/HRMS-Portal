@@ -71,6 +71,7 @@ router.post(
 // 7. Approve leave (Manager / HR / Admin)
 router.post(
   '/:id/approve',
+  requireRoles(['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin', 'Manager', 'Lead', 'TeamLead', 'Supervisor']),
   authorize('leave:approve'),
   leaveController.approveLeave
 );
@@ -78,6 +79,7 @@ router.post(
 // 8. Reject leave (Manager / HR / Admin)
 router.post(
   '/:id/reject',
+  requireRoles(['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin', 'Manager', 'Lead', 'TeamLead', 'Supervisor']),
   authorize('leave:approve'),
   validate(validateRejectLeave),
   leaveController.rejectLeave

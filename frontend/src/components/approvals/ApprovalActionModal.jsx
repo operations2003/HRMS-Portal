@@ -30,13 +30,29 @@ export const ApprovalActionModal = ({
 
   const actionTitle = actionType === 'APPROVE' ? 'Approve Request' : 'Reject Request';
 
+  const userRoleDisplay = currentUser?.roleName || currentUser?.role || 'Approver';
   const actionSubtitle = `Entity: ${item.entityType || item.module || 'Workflow item'} • Submitted by: ${
     item.employeeName || item.employee?.fullName || item.employee?.firstName || 'Requester'
-  }`;
+  } • Approver Authority: ${userRoleDisplay}`;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
+
+    // Authority Check: Only Admin, HR, and Manager roles are permitted
+    const userRole = (currentUser?.roleName || currentUser?.role || '').toLowerCase();
+    const rolesList = Array.isArray(currentUser?.roles)
+      ? currentUser.roles.map((r) => (typeof r === 'string' ? r.toLowerCase() : ''))
+      : [userRole];
+    const isAuthorizedApprover =
+      ['admin', 'superadmin', 'orgadmin', 'hr', 'hrmanager', 'manager', 'lead', 'teamlead', 'supervisor'].some(
+        (role) => rolesList.some((r) => r.includes(role)) || userRole.includes(role)
+      );
+
+    if (!isAuthorizedApprover) {
+      setError('Access denied: Approval authority is restricted to Admin, HR, and Manager roles only.');
+      return;
+    }
 
     if (isSelf && actionType === 'APPROVE') {
       setError('Self-approval violation: You cannot approve your own submission.');

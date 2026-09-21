@@ -36,6 +36,8 @@ export const ApprovalsPage = () => {
   });
 
   const isHrOrAdmin = hasRole('HR') || hasRole('HRManager') || hasRole('Admin') || hasRole('SuperAdmin') || hasRole('OrgAdmin');
+  const isManager = hasRole('Manager') || hasRole('TeamLead') || hasRole('Lead') || hasRole('Supervisor');
+  const canApprove = isHrOrAdmin || isManager;
 
   useEffect(() => {
     loadApprovalQueue();
@@ -44,7 +46,7 @@ export const ApprovalsPage = () => {
   const loadApprovalQueue = async () => {
     try {
       setIsRefreshing(true);
-      // Try HR unified queue first if HR/Admin, otherwise workflow pending queue
+      // Try HR unified queue first if HR/Admin, otherwise workflow pending queue for Managers
       let items = [];
       if (isHrOrAdmin) {
         try {
@@ -54,9 +56,11 @@ export const ApprovalsPage = () => {
           const wfRes = await workflowService.getPendingQueue();
           items = wfRes.items || wfRes.data || (Array.isArray(wfRes) ? wfRes : []);
         }
-      } else {
+      } else if (isManager) {
         const wfRes = await workflowService.getPendingQueue();
         items = wfRes.items || wfRes.data || (Array.isArray(wfRes) ? wfRes : []);
+      } else {
+        items = [];
       }
       setQueue(items);
     } catch (err) {
@@ -154,6 +158,17 @@ export const ApprovalsPage = () => {
           (user?.employeeId && (row.employeeId === user.employeeId || row.employee_id === user.employeeId)) ||
           (user?.id && (row.requesterUserId === user.id || row.employee?.userId === user.id));
 
+        // Approval is strictly restricted to Admin, HR, and Manager roles only
+        if (!canApprove) {
+          return (
+            <div className="flex items-center justify-end">
+              <span className="text-[11px] text-slate-400 italic bg-slate-50 border border-slate-200 px-2 py-1 rounded font-medium">
+                Admin, HR & Manager only
+              </span>
+            </div>
+          );
+        }
+
         return (
           <div className="flex items-center justify-end gap-1.5">
             <Button
@@ -170,6 +185,8 @@ export const ApprovalsPage = () => {
               size="sm"
               variant="danger"
               icon={XCircle}
+              disabled={isSelf}
+              title={isSelf ? 'Self-action is forbidden' : 'Reject'}
               onClick={() => setActionModal({ isOpen: true, item: row, actionType: 'REJECT' })}
             >
               Reject
@@ -185,9 +202,14 @@ export const ApprovalsPage = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-            Approvals & Governance Queue
-          </h1>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+              Approvals & Governance Queue
+            </h1>
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              Admin • HR • Manager Authority
+            </span>
+          </div>
           <p className="text-sm text-slate-500 mt-1">
             Review and execute pending approval workflows across leaves, appraisals, and employee requests.
           </p>

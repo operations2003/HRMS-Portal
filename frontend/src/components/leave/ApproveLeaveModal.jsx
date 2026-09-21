@@ -25,6 +25,20 @@ export const ApproveLeaveModal = ({
     (currentUser?.id && leaveRecord.employee?.userId === currentUser.id);
 
   const handleApprove = async () => {
+    const userRole = (currentUser?.roleName || currentUser?.role || '').toLowerCase();
+    const rolesList = Array.isArray(currentUser?.roles)
+      ? currentUser.roles.map((r) => (typeof r === 'string' ? r.toLowerCase() : ''))
+      : [userRole];
+    const isAuthorizedApprover =
+      ['admin', 'superadmin', 'orgadmin', 'hr', 'hrmanager', 'manager', 'lead', 'teamlead', 'supervisor'].some(
+        (role) => rolesList.some((r) => r.includes(role)) || userRole.includes(role)
+      );
+
+    if (!isAuthorizedApprover) {
+      toast.error('Access denied: Only Admin, HR, and Manager roles have authority to approve leaves.');
+      return;
+    }
+
     if (isSelf) {
       toast.error('Self-approval violation: You cannot approve your own leave request.');
       return;

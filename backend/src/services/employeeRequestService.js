@@ -297,6 +297,16 @@ export const employeeRequestService = {
   },
 
   async resolveRequest(user, id, data) {
+    const userRole = (user.roleName || user.role || '').toLowerCase();
+    const isApprover =
+      HR_ADMIN_ROLES.some((r) => userRole.includes(r.toLowerCase())) ||
+      ['manager', 'lead', 'teamlead', 'supervisor'].some((r) => userRole.includes(r)) ||
+      (user.permissions && user.permissions.includes('request:manage'));
+
+    if (!isApprover) {
+      throw createError('Access denied: Only Admin, HR, and Manager roles have authority to resolve or approve requests.', 403);
+    }
+
     const orgId = user.orgId || 'org-1';
     const request = await employeeRequestRepository.findRequestById(id, orgId);
     if (!request) {
@@ -353,6 +363,16 @@ export const employeeRequestService = {
   },
 
   async rejectRequest(user, id, data) {
+    const userRole = (user.roleName || user.role || '').toLowerCase();
+    const isApprover =
+      HR_ADMIN_ROLES.some((r) => userRole.includes(r.toLowerCase())) ||
+      ['manager', 'lead', 'teamlead', 'supervisor'].some((r) => userRole.includes(r)) ||
+      (user.permissions && user.permissions.includes('request:manage'));
+
+    if (!isApprover) {
+      throw createError('Access denied: Only Admin, HR, and Manager roles have authority to reject requests.', 403);
+    }
+
     const orgId = user.orgId || 'org-1';
     const request = await employeeRequestRepository.findRequestById(id, orgId);
     if (!request) {

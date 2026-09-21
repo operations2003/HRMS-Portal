@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { employeeRequestController } from '../controllers/employeeRequestController.js';
 import { authenticate } from '../middleware/authMiddleware.js';
-import { authorize } from '../middleware/rbacMiddleware.js';
+import { authorize, requireRoles } from '../middleware/rbacMiddleware.js';
 import { validate } from '../middleware/validateMiddleware.js';
 import {
   validateCreateRequest,
@@ -57,18 +57,21 @@ router.post(
 );
 router.patch(
   '/:id/status',
+  requireRoles(['Admin', 'SuperAdmin', 'OrgAdmin', 'HR', 'HRManager', 'Manager', 'Lead', 'TeamLead', 'Supervisor']),
   authorize(['request:manage', 'Manager', 'HR', 'Admin']),
   validate(validateUpdateRequestStatus),
   employeeRequestController.updateStatus
 );
 router.post(
   '/:id/resolve',
+  requireRoles(['Admin', 'SuperAdmin', 'OrgAdmin', 'HR', 'HRManager', 'Manager', 'Lead', 'TeamLead', 'Supervisor']),
   authorize(['request:manage', 'Manager', 'HR', 'Admin']),
   validate(validateResolveRequest),
   employeeRequestController.resolveRequest
 );
 router.post(
   '/:id/reject',
+  requireRoles(['Admin', 'SuperAdmin', 'OrgAdmin', 'HR', 'HRManager', 'Manager', 'Lead', 'TeamLead', 'Supervisor']),
   authorize(['request:manage', 'Manager', 'HR', 'Admin']),
   validate(validateRejectRequest),
   employeeRequestController.rejectRequest
