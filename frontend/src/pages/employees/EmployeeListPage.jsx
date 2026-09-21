@@ -42,6 +42,13 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { EmployeeTimelineModal } from '../../components/employees/EmployeeTimelineModal.jsx';
 import { AssignManagerModal } from '../../components/team/AssignManagerModal.jsx';
+const getProbationEndDate = (startDate) => {
+  if (!startDate) return null;
+  const d = new Date(startDate);
+  if (isNaN(d.getTime())) return null;
+  d.setMonth(d.getMonth() + 6);
+  return d.toISOString().split('T')[0];
+};
 
 export const EmployeeListPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -279,6 +286,8 @@ export const EmployeeListPage = () => {
     bankIfsc: '',
     bankBranch: '',
     uanNumber: '',
+    probationStatus: 'IN_PROBATION',
+    probationNotes: 'Standard 6-month probation period.',
   });
   const [formErrors, setFormErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -397,6 +406,8 @@ export const EmployeeListPage = () => {
       bankIfsc: '',
       bankBranch: '',
       uanNumber: '',
+      probationStatus: 'IN_PROBATION',
+      probationNotes: 'Standard 6-month probation period.',
     });
     setShiftFromTime('11:00');
     setShiftFromPeriod('AM');
@@ -449,6 +460,10 @@ export const EmployeeListPage = () => {
       bankIfsc: emp.bankIfsc || '',
       bankBranch: emp.bankBranch || '',
       uanNumber: emp.uanNumber || '',
+      probationStatus: emp.probationStatus || 'IN_PROBATION',
+      probationStartDate: emp.probationStartDate || emp.dateOfJoining || '',
+      probationEndDate: emp.probationEndDate || getProbationEndDate(emp.dateOfJoining) || '',
+      probationNotes: emp.probationNotes || '',
     });
     const parsedShift = parseShiftTiming(emp.shiftTiming || '11:00 AM - 07:00 PM');
     setShiftFromTime(parsedShift.fromTime);
@@ -526,6 +541,10 @@ export const EmployeeListPage = () => {
         hrId: formData.hrId || null,
         shiftTiming: computedShift,
         leaveAllocations,
+        probationStatus: formData.probationStatus || 'IN_PROBATION',
+        probationStartDate: formData.probationStartDate || formData.dateOfJoining,
+        probationEndDate: formData.probationStatus === 'CONFIRMED' ? null : (formData.probationEndDate || getProbationEndDate(formData.dateOfJoining)),
+        probationNotes: formData.probationNotes || 'Standard 6-month probation period.',
       };
 
       if (editingEmployee) {
@@ -655,9 +674,28 @@ export const EmployeeListPage = () => {
       ),
     },
     {
-      header: 'Status',
+      header: 'Status & Probation',
       accessor: 'status',
-      render: (row) => <Badge>{row.status}</Badge>,
+      render: (row) => (
+        <div className="space-y-1">
+          <Badge>{row.status}</Badge>
+          {row.probationStatus && (
+            <div>
+              <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                row.probationStatus === 'CONFIRMED'
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  : row.probationStatus === 'EXTENDED'
+                  ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                  : row.probationStatus === 'REJECTED'
+                  ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                  : 'bg-amber-50 text-amber-700 border border-amber-200'
+              }`}>
+                {row.probationStatus === 'IN_PROBATION' ? '6M Probation' : row.probationStatus}
+              </span>
+            </div>
+          )}
+        </div>
+      ),
     },
     {
       header: 'Reporting & HR',
@@ -1100,7 +1138,15 @@ export const EmployeeListPage = () => {
               label="Date of Joining"
               type="date"
               value={formData.dateOfJoining}
-              onChange={(e) => setFormData({ ...formData, dateOfJoining: e.target.value })}
+              onChange={(e) => {
+                const newDoj = e.target.value;
+                setFormData((prev) => ({
+                  ...prev,
+                  dateOfJoining: newDoj,
+                  probationStartDate: newDoj,
+                  probationEndDate: prev.probationStatus === 'IN_PROBATION' ? getProbationEndDate(newDoj) : prev.probationEndDate,
+                }));
+              }}
             />
             <Input
               label="Annual Salary (₹)"
@@ -1109,6 +1155,57 @@ export const EmployeeListPage = () => {
               onChange={(e) => setFormData({ ...formData, salary: e.target.value })}
               placeholder="e.g. 1200000"
             />
+          </div>
+
+          {/* Interactive Probation Period Assignment Section */}
+          <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-amber-600" />
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                  Probation Period Assignment
+                </span>
+              </div>
+              <span className="text-[11px] text-amber-800 bg-amber-100 border border-amber-300 px-2.5 py-0.5 rounded-full font-bold">
+                6 Months Policy
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Select
+                label="Assign Probation Status"
+                value={formData.probationStatus || 'IN_PROBATION'}
+                onChange={(e) => {
+                  const newStatus = e.target.value;
+                  setFormData((prev) => ({
+                    ...prev,
+                    probationStatus: newStatus,
+                    probationEndDate: newStatus === 'IN_PROBATION'
+                      ? (prev.probationEndDate || getProbationEndDate(prev.dateOfJoining || prev.probationStartDate))
+                      : prev.probationEndDate,
+                  }));
+                }}
+                options={[
+                  { value: 'IN_PROBATION', label: 'Yes — In Probation (6 Months Standard)' },
+                  { value: 'CONFIRMED', label: 'No — Confirmed (Exempt from / Passed Probation)' },
+                  { value: 'EXTENDED', label: 'Extended Probation' },
+                  { value: 'REJECTED', label: 'Discontinued / Rejected' },
+                ]}
+              />
+
+              <Input
+                label="Probation End Date"
+                type="date"
+                value={formData.probationStatus === 'CONFIRMED' ? '' : (formData.probationEndDate || getProbationEndDate(formData.dateOfJoining) || '')}
+                onChange={(e) => setFormData({ ...formData, probationEndDate: e.target.value })}
+                disabled={formData.probationStatus === 'CONFIRMED'}
+                placeholder="YYYY-MM-DD"
+              />
+            </div>
+
+            <p className="text-[11px] text-amber-800/90 leading-relaxed">
+              <strong>Company Rule:</strong> Every employee, manager, or HR member has a mandatory 6-month probation period by default upon joining. Select <em>'Yes — In Probation'</em> to apply the 6-month timeline, or <em>'No — Confirmed'</em> if exempt.
+            </p>
           </div>
 
           {/* Work Shift & Time Slot Segment */}
@@ -1876,6 +1973,50 @@ export const EmployeeListPage = () => {
                 </div>
                 {viewingEmployee.hr?.employeeCode && (
                   <div className="text-[11px] text-slate-400 font-mono">Code: {viewingEmployee.hr.employeeCode}</div>
+                )}
+              </div>
+
+              {/* 6-Month Probation Status Card */}
+              <div className="p-3.5 rounded-xl bg-amber-50/60 border border-amber-200/80 col-span-2 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs text-amber-900 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
+                    Probation Lifecycle (6 Months Policy)
+                  </div>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                    viewingEmployee.probationStatus === 'CONFIRMED'
+                      ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                      : viewingEmployee.probationStatus === 'EXTENDED'
+                      ? 'bg-purple-100 text-purple-800 border-purple-300'
+                      : viewingEmployee.probationStatus === 'REJECTED'
+                      ? 'bg-rose-100 text-rose-800 border-rose-300'
+                      : 'bg-amber-100 text-amber-800 border-amber-300'
+                  }`}>
+                    {viewingEmployee.probationStatus || 'IN_PROBATION'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
+                  <div className="bg-white p-2.5 rounded-lg border border-amber-100 shadow-2xs">
+                    <div className="text-[10px] font-bold text-slate-500 uppercase">Policy Duration</div>
+                    <div className="text-sm font-bold text-amber-900 mt-0.5">6 Months</div>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-lg border border-amber-100 shadow-2xs">
+                    <div className="text-[10px] font-bold text-slate-500 uppercase">Probation Starts</div>
+                    <div className="text-sm font-semibold text-slate-800 mt-0.5">
+                      {viewingEmployee.probationStartDate || viewingEmployee.dateOfJoining || '—'}
+                    </div>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-lg border border-amber-100 shadow-2xs col-span-2 sm:col-span-1">
+                    <div className="text-[10px] font-bold text-slate-500 uppercase">Probation Ends</div>
+                    <div className="text-sm font-semibold text-amber-900 mt-0.5">
+                      {viewingEmployee.probationEndDate || getProbationEndDate(viewingEmployee.dateOfJoining) || '—'}
+                    </div>
+                  </div>
+                </div>
+                {viewingEmployee.probationNotes && (
+                  <div className="text-[11px] text-slate-600 bg-white/80 p-2 rounded border border-amber-100/70">
+                    <span className="font-semibold text-slate-700">Notes:</span> {viewingEmployee.probationNotes}
+                  </div>
                 )}
               </div>
 

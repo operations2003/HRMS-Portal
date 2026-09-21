@@ -7,7 +7,7 @@
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'employees' AND column_name = 'probation_status') THEN
-        ALTER TABLE employees ADD COLUMN probation_status VARCHAR(30) DEFAULT 'CONFIRMED' CHECK (probation_status IN ('IN_PROBATION', 'CONFIRMED', 'EXTENDED', 'REJECTED'));
+        ALTER TABLE employees ADD COLUMN probation_status VARCHAR(30) DEFAULT 'IN_PROBATION' CHECK (probation_status IN ('IN_PROBATION', 'CONFIRMED', 'EXTENDED', 'REJECTED'));
     END IF;
 
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'employees' AND column_name = 'probation_start_date') THEN

@@ -11,6 +11,7 @@ import {
   AlertCircle,
   User,
   X,
+  RefreshCw,
 } from 'lucide-react';
 import { probationService } from '../../services/probationService.js';
 import { useAuth } from '../../context/AuthContext.jsx';
@@ -112,6 +113,12 @@ export const ProbationDashboardPage = () => {
             Monitor probation lifecycles, manager reviews, duration extensions, and confirmation decisions
           </p>
         </div>
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold">
+            <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+            Standard Policy: 6 Months Probation
+          </span>
+        </div>
       </div>
 
       {/* KPI Cards */}
@@ -164,7 +171,7 @@ export const ProbationDashboardPage = () => {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="text-xs border border-slate-300 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            className="text-xs rounded-lg border border-slate-300 px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
           >
             <option value="">All Statuses</option>
             <option value="IN_PROBATION">In Probation</option>
@@ -172,23 +179,17 @@ export const ProbationDashboardPage = () => {
             <option value="EXTENDED">Extended</option>
             <option value="REJECTED">Rejected</option>
           </select>
-
-          <select
-            value={isOverdueFilter}
-            onChange={(e) => setIsOverdueFilter(e.target.value)}
-            className="text-xs border border-slate-300 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-          >
-            <option value="">All Timelines</option>
-            <option value="true">Overdue Reviews Only</option>
-          </select>
         </div>
 
-        <span className="text-xs font-semibold text-slate-500">
-          Showing {records.length} record(s)
-        </span>
+        <button
+          onClick={fetchProbations}
+          className="flex items-center gap-1.5 text-xs text-indigo-600 font-semibold hover:text-indigo-700"
+        >
+          <RefreshCw className="w-3.5 h-3.5" /> Refresh
+        </button>
       </div>
 
-      {/* Table */}
+      {/* Probation List Table */}
       {loading ? (
         <LoadingSpinner message="Loading probation records..." />
       ) : records.length === 0 ? (
@@ -202,7 +203,7 @@ export const ProbationDashboardPage = () => {
               <tr>
                 <th className="p-3.5">Employee</th>
                 <th className="p-3.5">Department</th>
-                <th className="p-3.5">Probation End Date</th>
+                <th className="p-3.5">Probation Timeline (6M)</th>
                 <th className="p-3.5">Status</th>
                 <th className="p-3.5">Manager Evaluation</th>
                 <th className="p-3.5 text-right">Actions</th>
@@ -219,15 +220,24 @@ export const ProbationDashboardPage = () => {
                   </td>
                   <td className="p-3.5 text-slate-600">{r.department_name || 'N/A'}</td>
                   <td className="p-3.5">
-                    <span className={`block font-semibold ${r.is_overdue ? 'text-rose-600' : 'text-slate-700'}`}>
-                      {r.probation_end_date || 'N/A'}
-                    </span>
-                    {r.is_overdue && (
-                      <span className="text-[10px] font-bold text-rose-500 uppercase">Overdue</span>
-                    )}
-                    {r.is_approaching_expiry && (
-                      <span className="text-[10px] font-bold text-amber-500 uppercase">Expiring Soon</span>
-                    )}
+                    <div className="space-y-0.5">
+                      <span className={`block font-semibold ${r.is_overdue ? 'text-rose-600' : 'text-slate-800'}`}>
+                        Ends: {r.probation_end_date || 'N/A'}
+                      </span>
+                      <span className="text-[11px] text-slate-400 block">
+                        Joined: {r.date_of_joining || '—'}
+                      </span>
+                      {r.is_overdue && (
+                        <span className="inline-block text-[10px] font-bold text-rose-600 uppercase bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200">
+                          Overdue Review
+                        </span>
+                      )}
+                      {r.is_approaching_expiry && (
+                        <span className="inline-block text-[10px] font-bold text-amber-600 uppercase bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
+                          Expiring Soon
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="p-3.5">
                     <Badge

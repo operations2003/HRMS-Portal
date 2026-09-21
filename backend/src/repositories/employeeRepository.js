@@ -55,6 +55,10 @@ const mapEmployeeRow = (row) => {
           email: row.h_email,
         }
       : null,
+    probationStatus: row.probationStatus || 'IN_PROBATION',
+    probationStartDate: row.probationStartDate || row.dateOfJoining || null,
+    probationEndDate: row.probationEndDate || null,
+    probationNotes: row.probationNotes || '',
   };
 };
 
@@ -87,6 +91,10 @@ const BASE_EMPLOYEE_SELECT = `
     e.bank_ifsc AS "bankIfsc",
     e.bank_branch AS "bankBranch",
     e.uan_number AS "uanNumber",
+    e.probation_status AS "probationStatus",
+    TO_CHAR(e.probation_start_date, 'YYYY-MM-DD') AS "probationStartDate",
+    TO_CHAR(e.probation_end_date, 'YYYY-MM-DD') AS "probationEndDate",
+    e.probation_notes AS "probationNotes",
     e.created_at AS "createdAt",
     e.updated_at AS "updatedAt",
     o.id AS "o_id", o.name AS "o_name", o.code AS "o_code",
@@ -290,14 +298,25 @@ export const employeeRepository = {
     const bankBranch = data.bankBranch ? data.bankBranch.trim() : '';
     const uanNumber = data.uanNumber ? data.uanNumber.trim() : '';
 
+    const probationStatus = data.probationStatus || 'IN_PROBATION';
+    const probationStartDate = data.probationStartDate || dateOfJoining;
+    let probationEndDate = data.probationEndDate;
+    if (!probationEndDate && probationStartDate) {
+      const pDate = new Date(probationStartDate);
+      pDate.setMonth(pDate.getMonth() + 6);
+      probationEndDate = pDate.toISOString().split('T')[0];
+    }
+    const probationNotes = data.probationNotes ? data.probationNotes.trim() : 'Standard 6-month probation period.';
+
     const sql = `
       INSERT INTO employees (
         id, org_id, dept_id, desig_id, user_id, employee_code,
         first_name, last_name, email, phone, date_of_joining,
         employment_type, status, salary, shift_timing, gender, manager_id, hr_id,
         father_name, mother_name, emergency_contact, address,
-        bank_name, bank_account_number, bank_ifsc, bank_branch, uan_number
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
+        bank_name, bank_account_number, bank_ifsc, bank_branch, uan_number,
+        probation_status, probation_start_date, probation_end_date, probation_notes
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31)
       RETURNING id;
     `;
 
@@ -329,6 +348,10 @@ export const employeeRepository = {
       bankIfsc,
       bankBranch,
       uanNumber,
+      probationStatus,
+      probationStartDate,
+      probationEndDate,
+      probationNotes,
     ]);
 
     return this.findById(id);
@@ -472,6 +495,26 @@ export const employeeRepository = {
     if (data.uanNumber !== undefined) {
       setClauses.push(`uan_number = $${paramIndex++}`);
       values.push(data.uanNumber ? data.uanNumber.trim() : '');
+    }
+
+    if (data.probationStatus !== undefined) {
+      setClauses.push(`probation_status = $${paramIndex++}`);
+      values.push(data.probationStatus);
+    }
+
+    if (data.probationStartDate !== undefined) {
+      setClauses.push(`probation_start_date = $${paramIndex++}`);
+      values.push(data.probationStartDate || null);
+    }
+
+    if (data.probationEndDate !== undefined) {
+      setClauses.push(`probation_end_date = $${paramIndex++}`);
+      values.push(data.probationEndDate || null);
+    }
+
+    if (data.probationNotes !== undefined) {
+      setClauses.push(`probation_notes = $${paramIndex++}`);
+      values.push(data.probationNotes ? data.probationNotes.trim() : null);
     }
 
     if (setClauses.length === 0) {
