@@ -25,7 +25,7 @@ export const AttendanceStatsBar = ({ statistics = {}, summary = {}, isOrgView = 
       {
         title: 'Late Arrivals',
         value: summary.lateCount || 0,
-        subtext: 'Punched in after 09:30 AM',
+        subtext: 'Punched in >10 mins after shift',
         icon: Clock,
         color: 'text-amber-600',
         bgLight: 'bg-amber-50',

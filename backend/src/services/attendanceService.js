@@ -28,6 +28,78 @@ const resolveRequesterEmployee = async (user) => {
   return null;
 };
 
+/**
+ * Parse start hour and minute from shift timing string
+ * Supports: "03:00 PM - 08:00 PM", "11:00 AM - 07:00 PM", "09:30 AM - 06:30 PM", "15:00 - 23:00", etc.
+ */
+export const parseShiftStartTime = (shiftTiming) => {
+  if (!shiftTiming || typeof shiftTiming !== 'string') {
+    return { hour: 11, minute: 0 };
+  }
+  const match12 = shiftTiming.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+  if (match12) {
+    let h = parseInt(match12[1], 10);
+    const m = parseInt(match12[2], 10);
+    const period = (match12[3] || '').toUpperCase();
+    if (period === 'PM' && h < 12) h += 12;
+    if (period === 'AM' && h === 12) h = 0;
+    return { hour: h, minute: m };
+  }
+  const match24 = shiftTiming.match(/^(\d{1,2}):(\d{2})/);
+  if (match24) {
+    return { hour: parseInt(match24[1], 10), minute: parseInt(match24[2], 10) };
+  }
+  return { hour: 11, minute: 0 };
+};
+
+/**
+ * Determine if check-in is on time ('PRESENT') or late ('LATE') based on assigned shift and grace window
+ * If employee logs in on time or early (e.g. at 02:59 PM for a 03:00 PM shift), status is 'PRESENT'
+ * Grace period defaults to 10 minutes after shift start.
+ */
+export const determineAttendanceStatus = (checkInDate, shiftTiming, timezone = 'Asia/Kolkata', graceMinutes = 10) => {
+  const { hour: shiftHour, minute: shiftMin } = parseShiftStartTime(shiftTiming);
+
+  let checkInHour = checkInDate.getHours();
+  let checkInMinute = checkInDate.getMinutes();
+
+  try {
+    const tz = timezone || 'Asia/Kolkata';
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: false,
+    });
+    const parts = formatter.formatToParts(checkInDate);
+    const hPart = parts.find((p) => p.type === 'hour');
+    const mPart = parts.find((p) => p.type === 'minute');
+    if (hPart && mPart) {
+      let parsedH = parseInt(hPart.value, 10);
+      if (parsedH === 24) parsedH = 0;
+      checkInHour = parsedH;
+      checkInMinute = parseInt(mPart.value, 10);
+    }
+  } catch {
+    // Fall back to serverNow local hours/minutes
+  }
+
+  const shiftStartMinutes = shiftHour * 60 + shiftMin;
+  let checkInMinutes = checkInHour * 60 + checkInMinute;
+
+  // Handle overnight shift edge case (e.g. Shift starts 11:00 PM, check-in past midnight)
+  if (shiftHour >= 18 && checkInHour < 6) {
+    checkInMinutes += 24 * 60;
+  }
+
+  // If check-in is on or before shift start, or within the 10-min grace period after start
+  if (checkInMinutes <= shiftStartMinutes + graceMinutes) {
+    return 'PRESENT';
+  }
+
+  return 'LATE';
+};
+
 export const attendanceService = {
   /**
    * Record Check-In
@@ -78,13 +150,10 @@ export const attendanceService = {
       throw error;
     }
 
-    // Determine initial status (check if marked late based on standard shift or default 09:30 AM)
-    let status = 'PRESENT';
-    const hours = serverNow.getHours();
-    const minutes = serverNow.getMinutes();
-    if (hours > 9 || (hours === 9 && minutes > 30)) {
-      status = 'LATE';
-    }
+    // Determine status accurately based on employee's assigned shift timing and 10-minute grace period
+    const shiftTiming = targetEmployee.shiftTiming || data.shiftTiming || '11:00 AM - 07:00 PM';
+    const tz = data.timezone || targetEmployee.timezone || 'Asia/Kolkata';
+    const status = determineAttendanceStatus(serverNow, shiftTiming, tz, 10);
 
     if (existing) {
       // If a shell record already exists (e.g. ABSENT or initialized), update it with check-in
@@ -220,13 +289,16 @@ export const attendanceService = {
     const overtimeHours = totalHours > 8.0 ? parseFloat((totalHours - 8.0).toFixed(2)) : 0.0;
 
     // Determine final status
-    let finalStatus = existing.status;
+    let finalStatus = 'PRESENT';
     if (totalHours < 4.0) {
       finalStatus = 'HALF_DAY';
-    } else if (existing.status === 'LATE') {
-      finalStatus = 'LATE';
     } else {
-      finalStatus = 'PRESENT';
+      // Re-validate against shift timing to ensure accurate status
+      const shiftTiming = targetEmployee.shiftTiming || data.shiftTiming || '11:00 AM - 07:00 PM';
+      const tz = data.timezone || existing.timezone || targetEmployee.timezone || 'Asia/Kolkata';
+      finalStatus = existing.checkIn
+        ? determineAttendanceStatus(new Date(existing.checkIn), shiftTiming, tz, 10)
+        : existing.status;
     }
 
     // Notes accumulation

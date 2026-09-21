@@ -312,7 +312,7 @@ export const AttendanceDashboardPage = () => {
                   : 'Standard Shift (11:00 AM – 07:00 PM)'}
               </h2>
               <p className="text-xs text-slate-300 mt-1 max-w-md">
-                Standard schedule with break tracking. Overtime accrued automatically for work exceeding 8.0 net hours.
+                Standard schedule with break tracking. 10-minute arrival grace applies. Overtime accrued automatically for work exceeding 8.0 net hours.
               </p>
             </div>
             <div className="shrink-0">

@@ -1,5 +1,6 @@
 import { employeeRequestRepository } from '../repositories/employeeRequestRepository.js';
 import { employeeRepository } from '../repositories/employeeRepository.js';
+import { workflowRepository } from '../repositories/workflowRepository.js';
 import { notificationService } from './notificationService.js';
 
 const createError = (message, statusCode = 400) => {
@@ -103,7 +104,34 @@ export const employeeRequestService = {
         requesterUserId: user.id,
         assigneeUserId: request.assignedTo,
       });
-    } catch (e) {
+    } catch {
+      // Non-blocking
+    }
+
+    // Auto-create approval workflow instance
+    try {
+      await workflowRepository.createWorkflowInstance(
+        {
+          orgId,
+          entityType: 'EMPLOYEE_REQUEST',
+          entityId: request.id,
+          workflowType: 'EMPLOYEE_MANAGER_HR',
+          currentStage: 'MANAGER_REVIEW',
+          currentStatus: 'SUBMITTED',
+          requesterId: emp.id,
+          managerId: emp.managerId || null,
+          hrUserId: null,
+        },
+        {
+          actorUserId: user.id,
+          actorRole: 'EMPLOYEE',
+          action: 'SUBMIT',
+          fromStatus: 'PENDING',
+          toStatus: 'SUBMITTED',
+          comments: request.subject || 'Employee request submission',
+        }
+      );
+    } catch {
       // Non-blocking
     }
 
@@ -298,8 +326,27 @@ export const employeeRequestService = {
           recipientUserId: request.requester.userId,
         });
       }
-    } catch (e) {
+    } catch {
       // Non-blocking
+    }
+
+    // Sync approval_workflows if instance exists
+    try {
+      const wf = await workflowRepository.findByEntity('EMPLOYEE_REQUEST', request.id);
+      if (wf && wf.currentStatus !== 'APPROVED') {
+        await workflowRepository.recordAction(wf.id, {
+          stage: wf.currentStage,
+          actorUserId: user.id,
+          actorRole: user.roleName || 'ADMIN',
+          action: 'APPROVE',
+          fromStatus: wf.currentStatus,
+          toStatus: 'APPROVED',
+          nextStage: 'COMPLETED',
+          comments: data.responseNotes || 'Resolved by administrator',
+        });
+      }
+    } catch {
+      // Non-blocking sync
     }
 
     return resolved;
@@ -335,6 +382,25 @@ export const employeeRequestService = {
       }
     } catch (e) {
       // Non-blocking
+    }
+
+    // Sync approval_workflows if instance exists
+    try {
+      const wf = await workflowRepository.findByEntity('EMPLOYEE_REQUEST', request.id);
+      if (wf && wf.currentStatus !== 'REJECTED') {
+        await workflowRepository.recordAction(wf.id, {
+          stage: wf.currentStage,
+          actorUserId: user.id,
+          actorRole: user.roleName || 'ADMIN',
+          action: 'REJECT',
+          fromStatus: wf.currentStatus,
+          toStatus: 'REJECTED',
+          nextStage: 'REJECTED',
+          comments: data.rejectionReason || 'Rejected by administrator',
+        });
+      }
+    } catch {
+      // Non-blocking sync
     }
 
     return rejected;

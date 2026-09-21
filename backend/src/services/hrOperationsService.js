@@ -231,6 +231,8 @@ export const hrOperationsService = {
         const dept = r.department_name || 'General';
         return {
           id: r.id,
+          entityId: r.id,
+          entityType: 'REQUEST',
           module: 'REQUEST',
           moduleLabel: 'Service Request',
           title: r.title,

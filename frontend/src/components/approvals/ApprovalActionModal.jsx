@@ -6,6 +6,7 @@ import { Alert } from '../common/Alert.jsx';
 import { workflowService } from '../../services/workflowService.js';
 import { leaveService } from '../../services/leaveService.js';
 import { performanceService } from '../../services/performanceService.js';
+import { requestService } from '../../services/requestService.js';
 import { useToast } from '../../context/ToastContext.jsx';
 
 export const ApprovalActionModal = ({
@@ -29,7 +30,7 @@ export const ApprovalActionModal = ({
 
   const actionTitle = actionType === 'APPROVE' ? 'Approve Request' : 'Reject Request';
 
-  const actionSubtitle = `Entity: ${item.entityType || item.module || 'Workflow item'} &bull; Submitted by: ${
+  const actionSubtitle = `Entity: ${item.entityType || item.module || 'Workflow item'} • Submitted by: ${
     item.employeeName || item.employee?.fullName || item.employee?.firstName || 'Requester'
   }`;
 
@@ -70,6 +71,31 @@ export const ApprovalActionModal = ({
           await performanceService.hrApprove(item.id, { comments: comment.trim() });
         } else {
           await performanceService.rejectAppraisal(item.id, { reason: comment.trim() });
+        }
+      } else if (
+        item.module === 'REQUEST' ||
+        item.entityType === 'REQUEST' ||
+        item.entityType === 'EMPLOYEE_REQUEST' ||
+        item.requestType ||
+        item.request_type ||
+        (typeof item.id === 'string' && item.id.startsWith('req-'))
+      ) {
+        // Employee service request: Try workflow action first, fall back to direct requestService
+        try {
+          await workflowService.executeAction(item.id, {
+            action: actionType,
+            comment: comment.trim() || undefined,
+          });
+        } catch (wfErr) {
+          if (actionType === 'APPROVE') {
+            await requestService.resolveRequest(item.id, {
+              responseNotes: comment.trim() || 'Approved by administrator',
+            });
+          } else {
+            await requestService.rejectRequest(item.id, {
+              rejectionReason: comment.trim() || 'Rejected by administrator',
+            });
+          }
         }
       } else {
         // Default workflow action
@@ -131,7 +157,7 @@ export const ApprovalActionModal = ({
           <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
             <span>{actionType === 'APPROVE' ? 'Approval Comments (Optional)' : 'Rejection Reason'}</span>
             {actionType === 'REJECT' && (
-              <span className="text-rose-500 font-normal normal-case">Required &bull; min 5 chars</span>
+              <span className="text-rose-500 font-normal normal-case">Required • min 5 chars</span>
             )}
           </label>
           <textarea

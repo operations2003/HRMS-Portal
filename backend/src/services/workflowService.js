@@ -15,7 +15,7 @@ export const workflowService = {
    */
   isHrOrAdmin(currentUser) {
     const role = (currentUser.roleName || '').toLowerCase();
-    return ['admin', 'superadmin', 'hr', 'hrmanager'].includes(role);
+    return ['admin', 'superadmin', 'hr', 'hrmanager', 'orgadmin'].includes(role);
   },
 
   /**
@@ -49,7 +49,47 @@ export const workflowService = {
       throw err;
     }
 
-    const wf = await workflowRepository.findById(workflowId);
+    let wf = await workflowRepository.findById(workflowId);
+    if (!wf) {
+      // 1. Check if workflowId was passed as an entity ID
+      wf =
+        (await workflowRepository.findByEntity('EMPLOYEE_REQUEST', workflowId)) ||
+        (await workflowRepository.findByEntity('REQUEST', workflowId)) ||
+        (await workflowRepository.findByEntity('LEAVE_REQUEST', workflowId)) ||
+        (await workflowRepository.findByEntity('PERFORMANCE', workflowId)) ||
+        (await workflowRepository.findByEntity('PERFORMANCE_REVIEW', workflowId)) ||
+        (await workflowRepository.findByEntity('EXIT_REQUEST', workflowId));
+    }
+
+    // 2. If still not found and workflowId corresponds to an employee request, auto-provision workflow
+    if (!wf) {
+      const empReq = await employeeRequestRepository.findRequestById(workflowId, currentUser.orgId);
+      if (empReq) {
+        const reqEmp = await employeeRepository.findById(empReq.employeeId);
+        wf = await workflowRepository.createWorkflowInstance(
+          {
+            orgId: currentUser.orgId,
+            entityType: 'EMPLOYEE_REQUEST',
+            entityId: empReq.id,
+            workflowType: 'EMPLOYEE_MANAGER_HR',
+            currentStage: 'MANAGER_REVIEW',
+            currentStatus: empReq.status === 'PENDING' ? 'SUBMITTED' : empReq.status,
+            requesterId: empReq.employeeId,
+            managerId: reqEmp?.managerId || null,
+            hrUserId: null,
+          },
+          {
+            actorUserId: reqEmp?.userId || currentUser.id,
+            actorRole: 'EMPLOYEE',
+            action: 'SUBMIT',
+            fromStatus: 'PENDING',
+            toStatus: 'SUBMITTED',
+            comments: empReq.subject || 'Employee request submission',
+          }
+        );
+      }
+    }
+
     if (!wf) {
       const err = new Error('Workflow instance not found.');
       err.statusCode = 404;
@@ -301,17 +341,20 @@ export const workflowService = {
       } else if (action === 'REJECT') {
         await leaveService.rejectLeave(currentUser, wf.entityId, { rejectionReason: reason, skipWorkflowSync: true });
       }
-    } else if (wf.entityType === 'EMPLOYEE_REQUEST') {
+    } else if (wf.entityType === 'EMPLOYEE_REQUEST' || wf.entityType === 'REQUEST') {
       if (action === 'APPROVE') {
-        await employeeRequestRepository.updateStatus(wf.entityId, currentUser.orgId, 'APPROVED', {
-          approverUserId: currentUser.id,
-          adminNotes: reason,
-        });
+        await employeeRequestRepository.resolveRequest(
+          wf.entityId,
+          currentUser.orgId,
+          reason || 'Approved by administrator',
+          currentUser.id
+        );
       } else if (action === 'REJECT') {
-        await employeeRequestRepository.updateStatus(wf.entityId, currentUser.orgId, 'REJECTED', {
-          approverUserId: currentUser.id,
-          rejectionReason: reason,
-        });
+        await employeeRequestRepository.rejectRequest(
+          wf.entityId,
+          currentUser.orgId,
+          reason || 'Rejected by administrator'
+        );
       }
     } else if (wf.entityType === 'EXIT_REQUEST') {
       if (action === 'APPROVE' || action === 'REVIEW' || action === 'SUBMIT_REVIEW') {

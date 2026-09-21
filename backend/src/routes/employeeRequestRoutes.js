@@ -57,19 +57,19 @@ router.post(
 );
 router.patch(
   '/:id/status',
-  authorize('request:manage'),
+  authorize(['request:manage', 'Manager', 'HR', 'Admin']),
   validate(validateUpdateRequestStatus),
   employeeRequestController.updateStatus
 );
 router.post(
   '/:id/resolve',
-  authorize('request:manage'),
+  authorize(['request:manage', 'Manager', 'HR', 'Admin']),
   validate(validateResolveRequest),
   employeeRequestController.resolveRequest
 );
 router.post(
   '/:id/reject',
-  authorize('request:manage'),
+  authorize(['request:manage', 'Manager', 'HR', 'Admin']),
   validate(validateRejectRequest),
   employeeRequestController.rejectRequest
 );

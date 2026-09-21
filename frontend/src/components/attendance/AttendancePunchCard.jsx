@@ -188,6 +188,7 @@ export const AttendancePunchCard = ({
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
     onCheckIn({
       timezone,
+      shiftTiming: assignedShift,
       source: 'WEB',
     });
   };
@@ -195,7 +196,9 @@ export const AttendancePunchCard = ({
   const handleDirectLogout = () => {
     if (isPunchingIn || isPunchingOut || isBreakLoading) return;
     if (onClearError) onClearError();
-    onCheckOut();
+    onCheckOut({
+      shiftTiming: assignedShift,
+    });
   };
 
   return (
