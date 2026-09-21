@@ -77,6 +77,7 @@ router.get(
 
 router.post(
   '/records',
+  requireRoles(['Manager', 'HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']),
   authorize(['performance:write']),
   validate(validateCreateRecord),
   performanceController.createRecord

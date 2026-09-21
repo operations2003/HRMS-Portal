@@ -1,24 +1,32 @@
 import React, { useState, useEffect } from 'react';
-import { Target, Award, AlertCircle, Plus, Trash2, Send, Save, Star } from 'lucide-react';
+import { Target, Award, AlertCircle, Plus, Trash2, Send, Save, Star, UserCheck, Users } from 'lucide-react';
 import { Modal } from '../common/Modal.jsx';
 import { Button } from '../common/Button.jsx';
 import { Alert } from '../common/Alert.jsx';
 import { ConfirmDialog } from '../common/ConfirmDialog.jsx';
 import { performanceService } from '../../services/performanceService.js';
+import { employeeService } from '../../services/employeeService.js';
+import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 
 export const CreateAppraisalModal = ({ isOpen, onClose, onSuccess }) => {
   const toast = useToast();
+  const { user, hasRole } = useAuth();
+  const isManagerOnly = hasRole('Manager') && !hasRole('Admin') && !hasRole('SuperAdmin') && !hasRole('OrgAdmin') && !hasRole('HR') && !hasRole('HRManager');
+
   const [periods, setPeriods] = useState([]);
+  const [employees, setEmployees] = useState([]);
   const [isLoadingPeriods, setIsLoadingPeriods] = useState(false);
+  const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
   const [error, setError] = useState(null);
 
   const [formData, setFormData] = useState({
+    employeeId: '',
     period_id: '',
-    self_rating: 4.0,
-    self_summary: '',
+    rating: 4.0,
+    summary: '',
     achievements: '',
     challenges: '',
   });
@@ -30,12 +38,14 @@ export const CreateAppraisalModal = ({ isOpen, onClose, onSuccess }) => {
   useEffect(() => {
     if (isOpen) {
       loadPeriods();
+      loadEmployees();
       setError(null);
       setShowConfirmSubmit(false);
       setFormData({
+        employeeId: '',
         period_id: '',
-        self_rating: 4.0,
-        self_summary: '',
+        rating: 4.0,
+        summary: '',
         achievements: '',
         challenges: '',
       });
@@ -61,6 +71,29 @@ export const CreateAppraisalModal = ({ isOpen, onClose, onSuccess }) => {
     }
   };
 
+  const loadEmployees = async () => {
+    try {
+      setIsLoadingEmployees(true);
+      const res = await employeeService.listEmployees({ limit: 200 });
+      const all = res.employees || res.data || (Array.isArray(res) ? res : []);
+      // Exclude self (employees cannot evaluate themselves)
+      const nonSelf = all.filter((e) => e.id !== user?.employeeId);
+
+      if (isManagerOnly && user?.employeeId) {
+        // Manager can only evaluate reportees
+        const reportees = nonSelf.filter((e) => e.managerId === user.employeeId || e.manager?.id === user.employeeId);
+        setEmployees(reportees.length > 0 ? reportees : nonSelf);
+      } else {
+        // HR and Admin can evaluate any employee
+        setEmployees(nonSelf);
+      }
+    } catch (err) {
+      console.warn('Failed to load employees for appraisal:', err);
+    } finally {
+      setIsLoadingEmployees(false);
+    }
+  };
+
   const handleGoalChange = (index, field, val) => {
     const updated = [...goals];
     updated[index][field] = val;
@@ -77,12 +110,16 @@ export const CreateAppraisalModal = ({ isOpen, onClose, onSuccess }) => {
   };
 
   const validate = () => {
+    if (!formData.employeeId) {
+      setError('Please select the employee to be appraised.');
+      return false;
+    }
     if (!formData.period_id) {
       setError('Please select an appraisal review period.');
       return false;
     }
-    if (!formData.self_summary.trim()) {
-      setError('Self-review summary is required.');
+    if (!formData.summary.trim()) {
+      setError('Evaluator performance summary is required.');
       return false;
     }
     return true;
@@ -98,15 +135,19 @@ export const CreateAppraisalModal = ({ isOpen, onClose, onSuccess }) => {
       const reviewPeriod = selectedPeriod?.name || selectedPeriod?.code || 'Quarterly Review';
 
       const payload = {
+        employeeId: formData.employeeId,
         periodId: formData.period_id,
         reviewPeriod: reviewPeriod,
-        selfComments: formData.self_summary.trim(),
-        selfRating: Number(formData.self_rating),
+        rating: Number(formData.rating),
+        score: Number(formData.rating),
+        feedback: formData.summary.trim(),
+        reviewerComments: formData.summary.trim(),
+        selfComments: '',
         self_review: {
-          summary: formData.self_summary.trim(),
+          summary: formData.summary.trim(),
           achievements: formData.achievements.trim(),
           challenges: formData.challenges.trim(),
-          rating: Number(formData.self_rating),
+          rating: Number(formData.rating),
         },
         goals: goals
           .filter((g) => g.title.trim())
@@ -124,9 +165,9 @@ export const CreateAppraisalModal = ({ isOpen, onClose, onSuccess }) => {
 
       if (shouldSubmitDirectly && recordId) {
         await performanceService.submitRecord(recordId, {
-          comments: 'Self-appraisal submitted for manager review.',
-        });
-        toast.success('Appraisal self-evaluation submitted for manager review!');
+          comments: 'Performance appraisal finalized and submitted.',
+        }).catch(() => {});
+        toast.success('Performance appraisal submitted successfully for employee!');
       } else {
         toast.success('Performance appraisal saved as draft.');
       }
@@ -150,8 +191,8 @@ export const CreateAppraisalModal = ({ isOpen, onClose, onSuccess }) => {
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Create Performance Appraisal"
-      subtitle="Complete your self-evaluation and key goals for the review cycle"
+      title="Conduct Employee Performance Appraisal"
+      subtitle="Evaluate employee performance, assign rating, and provide developmental feedback"
       maxWidth="max-w-2xl"
     >
       <form
@@ -163,37 +204,58 @@ export const CreateAppraisalModal = ({ isOpen, onClose, onSuccess }) => {
       >
         {error && <Alert variant="error" message={error} />}
 
-        {/* Period Selection */}
-        <div>
-          <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
-            Review Period <span className="text-rose-500">*</span>
-          </label>
-          <select
-            value={formData.period_id}
-            onChange={(e) => setFormData({ ...formData, period_id: e.target.value })}
-            disabled={isLoadingPeriods}
-            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 font-medium"
-          >
-            <option value="">Select appraisal period...</option>
-            {periods.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name} ({p.code || 'CYCLE'}) &bull; {p.status}
-              </option>
-            ))}
-          </select>
+        {/* Employee & Period Selection */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
+              Select Employee <span className="text-rose-500">*</span>
+            </label>
+            <select
+              value={formData.employeeId}
+              onChange={(e) => setFormData({ ...formData, employeeId: e.target.value })}
+              disabled={isLoadingEmployees}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 font-medium text-xs"
+            >
+              <option value="">Choose employee to evaluate...</option>
+              {employees.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.firstName} {e.lastName} ({e.employeeCode}) — {e.department?.name || 'General'}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
+              Review Period <span className="text-rose-500">*</span>
+            </label>
+            <select
+              value={formData.period_id}
+              onChange={(e) => setFormData({ ...formData, period_id: e.target.value })}
+              disabled={isLoadingPeriods}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 font-medium text-xs"
+            >
+              <option value="">Select appraisal period...</option>
+              {periods.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} ({p.code || 'CYCLE'}) &bull; {p.status}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
-        {/* Self Rating & Summary */}
+        {/* Performance Evaluation & Rating */}
         <div className="bg-slate-50/80 p-4 rounded-2xl border border-slate-200/60 space-y-4">
           <div className="flex items-center justify-between">
             <h4 className="font-semibold text-slate-900 flex items-center gap-2">
               <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
-              Self Evaluation
+              Performance Rating & Feedback
             </h4>
             <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-500 font-medium">Self Rating:</span>
+              <span className="text-xs text-slate-500 font-medium">Assigned Rating:</span>
               <span className="text-sm font-bold text-brand-600 bg-brand-50 px-2 py-0.5 rounded-md border border-brand-200">
-                {Number(formData.self_rating).toFixed(1)} / 5.0
+                {Number(formData.rating).toFixed(1)} / 5.0
               </span>
             </div>
           </div>
@@ -204,8 +266,8 @@ export const CreateAppraisalModal = ({ isOpen, onClose, onSuccess }) => {
               min="1.0"
               max="5.0"
               step="0.5"
-              value={formData.self_rating}
-              onChange={(e) => setFormData({ ...formData, self_rating: parseFloat(e.target.value) })}
+              value={formData.rating}
+              onChange={(e) => setFormData({ ...formData, rating: parseFloat(e.target.value) })}
               className="w-full accent-brand-600 cursor-pointer"
             />
             <div className="flex justify-between text-[11px] text-slate-400 mt-1">
@@ -217,39 +279,39 @@ export const CreateAppraisalModal = ({ isOpen, onClose, onSuccess }) => {
 
           <div>
             <label className="block text-xs font-medium text-slate-700 mb-1.5">
-              Performance Summary & Highlights <span className="text-rose-500">*</span>
+              Evaluator Performance Summary & Key Highlights <span className="text-rose-500">*</span>
             </label>
             <textarea
               rows={3}
-              value={formData.self_summary}
-              onChange={(e) => setFormData({ ...formData, self_summary: e.target.value })}
-              placeholder="Summarize your overall performance, main contributions, and role execution during this period..."
-              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+              value={formData.summary}
+              onChange={(e) => setFormData({ ...formData, summary: e.target.value })}
+              placeholder="Provide a comprehensive evaluation of the employee's performance, quality of work, core competencies, and reliability during this cycle..."
+              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-xs"
             />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-slate-700 mb-1.5">
-                Key Accomplishments
+                Key Accomplishments & Strengths
               </label>
               <textarea
                 rows={2}
                 value={formData.achievements}
                 onChange={(e) => setFormData({ ...formData, achievements: e.target.value })}
-                placeholder="Specific projects delivered or metrics improved..."
+                placeholder="Specific achievements, project milestones, or positive behaviors demonstrated..."
                 className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-xs"
               />
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-700 mb-1.5">
-                Challenges & Roadblocks
+                Areas of Improvement & Development Feedback
               </label>
               <textarea
                 rows={2}
                 value={formData.challenges}
                 onChange={(e) => setFormData({ ...formData, challenges: e.target.value })}
-                placeholder="Obstacles encountered and how you handled them..."
+                placeholder="Constructive feedback, skill gaps to bridge, and development targets..."
                 className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-xs"
               />
             </div>
@@ -261,7 +323,7 @@ export const CreateAppraisalModal = ({ isOpen, onClose, onSuccess }) => {
           <div className="flex items-center justify-between mb-2">
             <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
               <Target className="w-3.5 h-3.5 text-brand-600" />
-              Key Deliverables & Goals
+              Key Deliverables & Objectives for Next Period
             </label>
             <button
               type="button"
@@ -269,7 +331,7 @@ export const CreateAppraisalModal = ({ isOpen, onClose, onSuccess }) => {
               className="text-xs font-semibold text-brand-600 hover:text-brand-700 flex items-center gap-1"
             >
               <Plus className="w-3.5 h-3.5" />
-              Add Goal
+              Add Objective
             </button>
           </div>
 
@@ -282,7 +344,7 @@ export const CreateAppraisalModal = ({ isOpen, onClose, onSuccess }) => {
                 <div className="flex items-center justify-between gap-2">
                   <input
                     type="text"
-                    placeholder={`Goal #${idx + 1} Title`}
+                    placeholder={`Objective #${idx + 1} Title`}
                     value={g.title}
                     onChange={(e) => handleGoalChange(idx, 'title', e.target.value)}
                     className="flex-1 text-xs font-medium px-2.5 py-1.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500"
@@ -299,7 +361,7 @@ export const CreateAppraisalModal = ({ isOpen, onClose, onSuccess }) => {
                 </div>
                 <textarea
                   rows={2}
-                  placeholder="Target outcome and measurement metrics..."
+                  placeholder="Target outcome, KPI, or measurement criteria..."
                   value={g.description}
                   onChange={(e) => handleGoalChange(idx, 'description', e.target.value)}
                   className="w-full text-xs px-2.5 py-1.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500"
@@ -331,7 +393,7 @@ export const CreateAppraisalModal = ({ isOpen, onClose, onSuccess }) => {
               isLoading={isSubmitting}
               onClick={handleOpenSubmitConfirm}
             >
-              Submit for Review
+              Submit Appraisal
             </Button>
           </div>
         </div>
@@ -344,9 +406,9 @@ export const CreateAppraisalModal = ({ isOpen, onClose, onSuccess }) => {
           setShowConfirmSubmit(false);
           handleSubmit(true);
         }}
-        title="Submit Self-Appraisal for Review"
-        message="Are you sure you want to submit your self-appraisal for manager evaluation? Once submitted, it will enter the SUBMITTED stage and cannot be modified until reviewed or returned by your manager."
-        confirmText="Submit for Review"
+        title="Submit Employee Performance Appraisal"
+        message="Are you sure you want to finalize and submit this performance appraisal? It will be recorded under the employee's official performance profile."
+        confirmText="Submit Appraisal"
         cancelText="Keep Editing"
         variant="primary"
         isLoading={isSubmitting}

@@ -35,6 +35,7 @@ export const PerformancePage = () => {
 
   const isManager = hasRole('Manager') || hasRole('Admin') || hasRole('SuperAdmin') || hasRole('OrgAdmin');
   const isHrOrAdmin = hasRole('HR') || hasRole('HRManager') || hasRole('Admin') || hasRole('SuperAdmin') || hasRole('OrgAdmin');
+  const canGiveAppraisal = isManager || isHrOrAdmin;
 
   // Active Tab: 'my' | 'team' | 'cycles'
   const [activeTab, setActiveTab] = useState('my');
@@ -457,13 +458,15 @@ export const PerformancePage = () => {
           >
             Refresh
           </Button>
-          <Button
-            variant="primary"
-            icon={Plus}
-            onClick={() => setIsCreateAppraisalOpen(true)}
-          >
-            Submit Self-Appraisal
-          </Button>
+          {canGiveAppraisal && (
+            <Button
+              variant="primary"
+              icon={Plus}
+              onClick={() => setIsCreateAppraisalOpen(true)}
+            >
+              Give Appraisal
+            </Button>
+          )}
           {isHrOrAdmin && (
             <Button
               variant="secondary"
@@ -571,7 +574,7 @@ export const PerformancePage = () => {
             data={myRecords}
             isLoading={isLoading}
             emptyTitle="No appraisal records found"
-            emptyDescription="You have not submitted any self-appraisals yet. Click 'Submit Self-Appraisal' to get started."
+            emptyDescription="You have not received any performance appraisals yet. Your manager or HR will conduct your review during the active appraisal cycle."
           />
         </div>
       )}

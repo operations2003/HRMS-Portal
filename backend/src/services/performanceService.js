@@ -74,16 +74,30 @@ export const performanceService = {
 
   async createRecord(currentUser, data, goals = []) {
     const isHrAdmin = this.isHrOrAdmin(currentUser);
+    const role = (currentUser.roleName || '').toLowerCase();
+    const isManager = role === 'manager';
     const emp = await this.resolveEmployee(currentUser);
 
-    // If employeeId is not provided, default to the caller's employee profile
-    if (!data.employeeId && emp) {
-      data.employeeId = emp.id;
+    // Policy: Employees cannot submit self-appraisals.
+    // Appraisals can ONLY be given by:
+    // 1. Manager (for their reportees)
+    // 2. HR (for any employee)
+    // 3. Admin (for any employee in the system)
+    if (!isHrAdmin && !isManager) {
+      const err = new Error('Forbidden: Employees cannot submit self-appraisals. Performance appraisals can only be given by a Manager, HR, or Administrator.');
+      err.statusCode = 403;
+      throw err;
     }
 
-    // If regular employee, they can only create self-review for their own employee record
-    if (!isHrAdmin && (!emp || emp.id !== data.employeeId)) {
-      const err = new Error('Forbidden: Employees can only create their own performance self-evaluations.');
+    if (!data.employeeId) {
+      const err = new Error('Please specify the employee to be appraised.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    // Disallow self appraisal
+    if (emp && emp.id === data.employeeId && !isHrAdmin) {
+      const err = new Error('Forbidden: Self-appraisals are disabled. You cannot evaluate yourself.');
       err.statusCode = 403;
       throw err;
     }
@@ -93,6 +107,23 @@ export const performanceService = {
       const err = new Error(idErr);
       err.statusCode = 400;
       throw err;
+    }
+
+    // Verify employee exists
+    const targetEmp = await employeeRepository.findById(data.employeeId);
+    if (!targetEmp || targetEmp.orgId !== currentUser.orgId) {
+      const err = new Error('Target employee not found in your organization.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    // Manager can only evaluate their direct reportees
+    if (isManager && !isHrAdmin) {
+      if (!emp || targetEmp.managerId !== emp.id) {
+        const err = new Error('Forbidden: Managers can only conduct appraisals for their direct reportees.');
+        err.statusCode = 403;
+        throw err;
+      }
     }
 
     if (data.reviewerId) {
@@ -112,18 +143,16 @@ export const performanceService = {
       throw err;
     }
 
-    // Verify employee exists
-    const targetEmp = await employeeRepository.findById(data.employeeId);
-    if (!targetEmp || targetEmp.orgId !== currentUser.orgId) {
-      const err = new Error('Target employee not found in your organization.');
-      err.statusCode = 404;
-      throw err;
-    }
-
     const id = `perf-rec-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const recordNumber = `REV-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`;
 
-    const reviewerId = data.reviewerId || targetEmp.managerId || null;
+    const reviewerId = emp ? emp.id : (data.reviewerId || targetEmp.managerId || null);
+    const reviewerUserId = currentUser.id;
+    const rating = data.rating !== undefined && data.rating !== null
+      ? Number(data.rating)
+      : (data.selfRating !== undefined ? Number(data.selfRating) : 4.0);
+
+    const reviewerComments = data.reviewerComments || data.feedback || data.selfComments || '';
 
     const record = await performanceRepository.createRecord(
       {
@@ -132,16 +161,16 @@ export const performanceService = {
         orgId: currentUser.orgId,
         employeeId: data.employeeId,
         reviewerId,
-        reviewerUserId: data.reviewerUserId || null,
+        reviewerUserId,
         periodId: data.periodId || null,
         reviewPeriod: data.reviewPeriod,
-        status: data.status || 'DRAFT',
-        approvalState: 'PENDING',
-        rating: data.rating || null,
-        score: data.score || null,
-        feedback: data.feedback || '',
+        status: data.status || (isHrAdmin ? 'APPROVED' : 'SUBMITTED'),
+        approvalState: isHrAdmin ? 'APPROVED' : 'PENDING',
+        rating,
+        score: rating,
+        feedback: reviewerComments,
         selfComments: data.selfComments || '',
-        reviewerComments: data.reviewerComments || '',
+        reviewerComments,
         reviewDate: data.reviewDate || new Date().toISOString().split('T')[0],
         actorUserId: currentUser.id,
       },
