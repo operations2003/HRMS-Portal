@@ -15,6 +15,12 @@ import {
   ShieldAlert,
   CheckCircle2,
   ExternalLink,
+  Sparkles,
+  FileSpreadsheet,
+  Image as ImageIcon,
+  User,
+  ShieldCheck,
+  ChevronDown,
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext.jsx';
 import { onboardingService } from '../../services/onboardingService.js';
@@ -35,6 +41,14 @@ const CATEGORY_OPTIONS = [
   { value: 'OTHER', label: 'Other Onboarding Documents' },
 ];
 
+const QUICK_REJECTION_REASONS = [
+  'Blurry or illegible scan quality',
+  'Document expired / past validity date',
+  'Name mismatch with HR records',
+  'Missing mandatory signature or official seal',
+  'Incomplete pages / cut-off document borders',
+];
+
 const formatBytes = (bytes, decimals = 1) => {
   if (!bytes) return '0 B';
   const k = 1024;
@@ -42,6 +56,67 @@ const formatBytes = (bytes, decimals = 1) => {
   const sizes = ['B', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+};
+
+const getFileTypeMeta = (filename = '', mimeType = '') => {
+  const lowerName = filename.toLowerCase();
+  const lowerMime = (mimeType || '').toLowerCase();
+
+  if (lowerName.endsWith('.pdf') || lowerMime.includes('pdf')) {
+    return {
+      label: 'PDF',
+      bgClass: 'bg-rose-50 text-rose-600 ring-1 ring-rose-100',
+      badgeClass: 'bg-rose-100 text-rose-700',
+      icon: FileText,
+    };
+  }
+  if (
+    lowerName.endsWith('.doc') ||
+    lowerName.endsWith('.docx') ||
+    lowerMime.includes('word') ||
+    lowerMime.includes('officedocument')
+  ) {
+    return {
+      label: 'DOC',
+      bgClass: 'bg-blue-50 text-blue-600 ring-1 ring-blue-100',
+      badgeClass: 'bg-blue-100 text-blue-700',
+      icon: FileText,
+    };
+  }
+  if (
+    lowerName.endsWith('.png') ||
+    lowerName.endsWith('.jpg') ||
+    lowerName.endsWith('.jpeg') ||
+    lowerName.endsWith('.webp') ||
+    lowerMime.startsWith('image/')
+  ) {
+    return {
+      label: 'IMG',
+      bgClass: 'bg-purple-50 text-purple-600 ring-1 ring-purple-100',
+      badgeClass: 'bg-purple-100 text-purple-700',
+      icon: ImageIcon,
+    };
+  }
+  if (
+    lowerName.endsWith('.xls') ||
+    lowerName.endsWith('.xlsx') ||
+    lowerName.endsWith('.csv') ||
+    lowerMime.includes('spreadsheet') ||
+    lowerMime.includes('excel')
+  ) {
+    return {
+      label: 'SHEET',
+      bgClass: 'bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100',
+      badgeClass: 'bg-emerald-100 text-emerald-700',
+      icon: FileSpreadsheet,
+    };
+  }
+  return {
+    label: 'FILE',
+    bgClass: 'bg-slate-100 text-slate-600 ring-1 ring-slate-200',
+    badgeClass: 'bg-slate-200 text-slate-700',
+    icon: File,
+  };
 };
 
 export const DocumentVaultUploader = ({
@@ -127,7 +202,6 @@ export const DocumentVaultUploader = ({
   const handleFileSelected = (file) => {
     setSelectedFile(file);
     if (!title) {
-      // Auto-populate title without extension
       const nameWithoutExt = file.name.replace(/\.[^/.]+$/, '');
       setTitle(nameWithoutExt);
     }
@@ -219,27 +293,27 @@ export const DocumentVaultUploader = ({
     }
   };
 
-  const getStatusBadge = (status) => {
+  const renderStatusBadge = (status) => {
     switch (status) {
       case 'APPROVED':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
-            <CheckCircle className="w-3.5 h-3.5" />
-            Approved
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            Verified
           </span>
         );
       case 'REJECTED':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-800">
-            <XCircle className="w-3.5 h-3.5" />
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs">
+            <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
             Rejected
           </span>
         );
       default:
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
-            <Clock className="w-3.5 h-3.5" />
-            Verification Pending
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+            Pending Review
           </span>
         );
     }
@@ -247,20 +321,24 @@ export const DocumentVaultUploader = ({
 
   return (
     <div className="space-y-6">
-      {/* Upload Box (Only for HR / Admin / Candidate upload) */}
+      {/* Upload Box (Only when upload is allowed) */}
       {canUpload && (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs">
           <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <Upload className="w-5 h-5 text-brand-600" />
-                Upload Onboarding Document to Vault
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Drag and drop government IDs, signed contracts, or educational records.
-              </p>
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center ring-1 ring-brand-100">
+                <Upload className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 font-display">
+                  Upload Document to Vault
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Select identity documents, contracts, or educational records for secure cloud storage.
+                </p>
+              </div>
             </div>
-            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider bg-slate-100 px-2.5 py-1 rounded-lg">
               Max: 10MB
             </span>
           </div>
@@ -272,12 +350,12 @@ export const DocumentVaultUploader = ({
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
               onClick={() => fileInputRef.current?.click()}
-              className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all ${
+              className={`border-2 border-dashed rounded-2xl p-7 text-center cursor-pointer transition-all ${
                 isDragging
-                  ? 'border-brand-600 bg-brand-50/50 dark:bg-brand-950/20'
+                  ? 'border-brand-500 bg-brand-50/60 ring-4 ring-brand-50'
                   : selectedFile
-                  ? 'border-emerald-500 bg-emerald-50/20 dark:bg-emerald-950/10'
-                  : 'border-slate-300 dark:border-slate-700 hover:border-brand-400 bg-slate-50/50 dark:bg-slate-800/30'
+                  ? 'border-emerald-500 bg-emerald-50/30'
+                  : 'border-slate-200 hover:border-brand-400 bg-slate-50/60 hover:bg-slate-50'
               }`}
             >
               <input
@@ -291,21 +369,24 @@ export const DocumentVaultUploader = ({
               />
 
               {selectedFile ? (
-                <div className="flex items-center justify-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 flex items-center justify-center">
-                    <FileText className="w-5 h-5" />
+                <div className="flex items-center justify-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center ring-1 ring-emerald-200">
+                    <FileText className="w-6 h-6" />
                   </div>
                   <div className="text-left">
-                    <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                    <p className="text-sm font-bold text-slate-900 font-display">
                       {selectedFile.name}
                     </p>
-                    <p className="text-xs text-slate-500">{formatBytes(selectedFile.size)}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {formatBytes(selectedFile.size)} • Ready for upload
+                    </p>
                   </div>
                   <Button
                     type="button"
                     variant="ghost"
                     size="xs"
                     icon={X}
+                    className="text-slate-400 hover:text-slate-700"
                     onClick={(e) => {
                       e.stopPropagation();
                       setSelectedFile(null);
@@ -316,21 +397,23 @@ export const DocumentVaultUploader = ({
                   </Button>
                 </div>
               ) : (
-                <div>
-                  <Upload className="w-8 h-8 mx-auto text-slate-400 mb-2" />
-                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                <div className="flex flex-col items-center">
+                  <div className="w-12 h-12 rounded-2xl bg-brand-50 text-brand-600 flex items-center justify-center mb-3 ring-4 ring-brand-50/50">
+                    <Upload className="w-5 h-5" />
+                  </div>
+                  <p className="text-sm font-bold text-slate-800 font-display">
                     Click to browse or drag & drop file here
                   </p>
                   <p className="text-xs text-slate-400 mt-1">
-                    Supports PDF, PNG, JPG, WEBP, DOC, DOCX up to 10MB
+                    Accepts PDF, PNG, JPG, WEBP, DOC, DOCX up to 10MB
                   </p>
                 </div>
               )}
             </div>
 
-            {/* Metadata Fields (Visible once file selected) */}
+            {/* Metadata Fields (Shown when file is selected) */}
             {selectedFile && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 bg-slate-50/80 p-4 rounded-2xl border border-slate-200/80 animate-fade-in">
                 <Input
                   label="Document Title"
                   value={title}
@@ -348,7 +431,7 @@ export const DocumentVaultUploader = ({
                   <Button
                     type="submit"
                     variant="primary"
-                    className="w-full"
+                    className="w-full h-10 shadow-sm"
                     loading={uploading}
                     icon={Upload}
                   >
@@ -361,114 +444,136 @@ export const DocumentVaultUploader = ({
         </div>
       )}
 
-      {/* Document Vault Table / Grid */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+      {/* Document Vault Card Container */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+        <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/30">
           <div>
-            <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <FileText className="w-5 h-5 text-brand-600" />
+            <h3 className="text-sm font-bold text-slate-900 font-display flex items-center gap-2">
+              <FileText className="w-4 h-4 text-brand-600" />
               {titlePrefix} ({documents.length})
             </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            <p className="text-xs text-slate-500 mt-0.5">
               {subtitle}
             </p>
           </div>
+          <span className="text-xs font-semibold text-slate-500 bg-white border border-slate-200 px-2.5 py-1 rounded-lg">
+            {documents.length} {documents.length === 1 ? 'file' : 'files'}
+          </span>
         </div>
 
         {documents.length === 0 ? (
-          <div className="p-12 text-center">
-            <File className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
-            <p className="text-sm font-medium text-slate-600 dark:text-slate-400">
-              No documents found in vault.
+          <div className="p-14 text-center">
+            <div className="w-14 h-14 mx-auto rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mb-3">
+              <File className="w-6 h-6" />
+            </div>
+            <p className="text-sm font-bold text-slate-700 font-display">
+              No documents found
             </p>
-            <p className="text-xs text-slate-400 mt-1">
-              Upload documents using the form above to securely store and verify them.
+            <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+              No documents have been uploaded matching your current filter criteria.
             </p>
           </div>
         ) : (
-          <div className="divide-y divide-slate-100 dark:divide-slate-800">
+          <div className="divide-y divide-slate-100">
             {documents.map((doc) => {
               const isVerifying = verifyingDocId === doc.id;
               const isAcknowledging = acknowledgingDocId === doc.id;
               const acks = doc.acknowledgementLog || doc.acknowledgement_log || [];
               const isAcknowledged = Array.isArray(acks) && acks.length > 0;
+              const fileMeta = getFileTypeMeta(doc.title, doc.mimeType);
+              const FileIcon = fileMeta.icon;
 
               return (
                 <div
                   key={doc.id}
-                  className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors"
+                  className="p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 hover:bg-slate-50/70 transition-colors group"
                 >
-                  <div className="flex items-start gap-3.5">
-                    <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center shrink-0">
-                      <FileText className="w-5 h-5" />
+                  <div className="flex items-start gap-4">
+                    {/* File type icon badge */}
+                    <div
+                      className={`w-11 h-11 rounded-xl ${fileMeta.bgClass} flex flex-col items-center justify-center shrink-0 group-hover:scale-105 transition-transform`}
+                    >
+                      <FileIcon className="w-5 h-5" />
+                      <span className="text-[9px] font-black tracking-wider leading-none mt-0.5">
+                        {fileMeta.label}
+                      </span>
                     </div>
 
                     <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h4 className="text-sm font-semibold text-slate-900 dark:text-white">
+                      {/* Title & Status Badges */}
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <h4 className="text-sm font-bold text-slate-900 group-hover:text-brand-600 transition-colors font-display">
                           {doc.title}
                         </h4>
-                        {getStatusBadge(doc.verificationStatus)}
+                        {renderStatusBadge(doc.verificationStatus)}
                         {isAcknowledged && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-200">
                             <CheckCircle2 className="w-3.5 h-3.5" />
                             Acknowledged
                           </span>
                         )}
                       </div>
 
-                      <div className="flex items-center gap-3 text-xs text-slate-400 mt-1 flex-wrap">
-                        <span>{formatBytes(doc.fileSize)}</span>
+                      {/* File Metadata Line */}
+                      <div className="flex items-center gap-2.5 text-xs text-slate-500 mt-1.5 flex-wrap">
+                        <span className="font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded text-[11px]">
+                          {doc.category || 'GENERAL'}
+                        </span>
                         <span>•</span>
-                        <span>{doc.mimeType || 'Document'}</span>
+                        <span>{formatBytes(doc.fileSize)}</span>
                         <span>•</span>
                         <span>Uploaded {new Date(doc.createdAt).toLocaleDateString()}</span>
                         {doc.ownerName && (
                           <>
                             <span>•</span>
-                            <span className="font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
-                              👤 {doc.ownerName} {doc.ownerCode ? `(${doc.ownerCode})` : ''} {doc.ownerDepartment ? `• ${doc.ownerDepartment}` : ''}
+                            <span className="inline-flex items-center gap-1.5 font-semibold text-indigo-800 bg-indigo-50/80 border border-indigo-100 px-2.5 py-0.5 rounded-md text-[11px]">
+                              <span className="w-4 h-4 rounded-full bg-indigo-200 text-indigo-800 text-[9px] flex items-center justify-center font-bold">
+                                {doc.ownerName.charAt(0)}
+                              </span>
+                              {doc.ownerName} {doc.ownerCode ? `(${doc.ownerCode})` : ''} {doc.ownerDepartment ? `• ${doc.ownerDepartment}` : ''}
                             </span>
                           </>
                         )}
                         {isAcknowledged && acks[0]?.acknowledgedAt && (
                           <>
                             <span>•</span>
-                            <span className="text-blue-600 dark:text-blue-400">
-                              Acknowledged {new Date(acks[0].acknowledgedAt).toLocaleDateString()}
+                            <span className="text-sky-700 font-medium">
+                              Signed {new Date(acks[0].acknowledgedAt).toLocaleDateString()}
                             </span>
                           </>
                         )}
                       </div>
 
-                      {/* Rejection alert if rejected */}
+                      {/* Rejection Alert Box */}
                       {doc.verificationStatus === 'REJECTED' && doc.rejectionReason && (
-                        <div className="mt-2 p-2 rounded-lg bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-400 text-xs flex items-center gap-2">
-                          <AlertCircle className="w-4 h-4 shrink-0" />
-                          <span>Rejection Reason: {doc.rejectionReason}</span>
+                        <div className="mt-2.5 p-2.5 rounded-xl bg-rose-50 border border-rose-100 text-rose-700 text-xs flex items-center gap-2">
+                          <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                          <span>
+                            <strong className="font-semibold">Rejection Note:</strong> {doc.rejectionReason}
+                          </span>
                         </div>
                       )}
                     </div>
                   </div>
 
-                  {/* Actions */}
-                  <div className="flex items-center gap-2 shrink-0 self-end sm:self-center flex-wrap">
-                    {/* View */}
+                  {/* Clean Modern Actions */}
+                  <div className="flex items-center gap-2 shrink-0 self-end lg:self-center flex-wrap pt-2 lg:pt-0">
+                    {/* View Button */}
                     <button
                       type="button"
                       disabled={loadingActionDocId === doc.id}
                       onClick={() => handlePreview(doc)}
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100/80 hover:bg-slate-200/80 transition-all cursor-pointer disabled:opacity-50"
                     >
                       {loadingActionDocId === doc.id ? (
                         <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-600" />
                       ) : (
-                        <Eye className="w-3.5 h-3.5" />
+                        <Eye className="w-3.5 h-3.5 text-slate-500" />
                       )}
                       View
                     </button>
 
-                    {/* Download */}
+                    {/* Download Button */}
                     <button
                       type="button"
                       disabled={downloadingDocId === doc.id}
@@ -482,55 +587,64 @@ export const DocumentVaultUploader = ({
                           setDownloadingDocId(null);
                         }
                       }}
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100/80 hover:bg-slate-200/80 transition-all cursor-pointer disabled:opacity-50"
                     >
                       {downloadingDocId === doc.id ? (
                         <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-600" />
                       ) : (
-                        <Download className="w-3.5 h-3.5" />
+                        <Download className="w-3.5 h-3.5 text-slate-500" />
                       )}
                       Download
                     </button>
 
-                    {/* Acknowledgement Action */}
+                    {/* Employee Acknowledgement Button */}
                     {canAcknowledge && !isAcknowledged && (
-                      <Button
-                        variant="secondary"
-                        size="xs"
-                        icon={CheckCircle2}
-                        loading={isAcknowledging}
+                      <button
+                        type="button"
+                        disabled={isAcknowledging}
                         onClick={() => handleAcknowledge(doc.id)}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold text-white bg-brand-600 hover:bg-brand-700 shadow-2xs transition-all cursor-pointer disabled:opacity-50"
                       >
+                        {isAcknowledging ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                        )}
                         Acknowledge
-                      </Button>
+                      </button>
                     )}
 
-                    {/* HR Verification Controls */}
+                    {/* HR Approve Button */}
                     {canVerify && doc.verificationStatus !== 'APPROVED' && (
-                      <Button
-                        variant="success"
-                        size="xs"
-                        icon={Check}
-                        loading={isVerifying}
+                      <button
+                        type="button"
+                        disabled={isVerifying}
                         onClick={() => handleVerify(doc.id, 'APPROVED')}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 shadow-2xs hover:shadow-xs transition-all cursor-pointer disabled:opacity-50"
                       >
+                        {isVerifying ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Check className="w-3.5 h-3.5" />
+                        )}
                         Approve
-                      </Button>
+                      </button>
                     )}
 
+                    {/* HR Reject Button */}
                     {canVerify && doc.verificationStatus !== 'REJECTED' && (
-                      <Button
-                        variant="danger"
-                        size="xs"
-                        icon={X}
-                        loading={isVerifying}
+                      <button
+                        type="button"
+                        disabled={isVerifying}
                         onClick={() => {
                           setRejectingDoc(doc);
                           setRejectionReason('');
                         }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 shadow-2xs transition-all cursor-pointer disabled:opacity-50"
                       >
+                        <X className="w-3.5 h-3.5" />
                         Reject
-                      </Button>
+                      </button>
                     )}
                   </div>
                 </div>
@@ -540,37 +654,62 @@ export const DocumentVaultUploader = ({
         )}
       </div>
 
-      {/* Document Rejection Modal */}
+      {/* Modern Rejection Modal with Quick Reasons */}
       {rejectingDoc && (
         <Modal
           isOpen={true}
           onClose={() => setRejectingDoc(null)}
           title="Reject Document"
-          subtitle={`Provide reason for rejecting '${rejectingDoc.title}'`}
+          subtitle={`Provide verification feedback for '${rejectingDoc.title}'`}
         >
           <div className="space-y-4">
-            <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-400 text-xs flex items-center gap-2">
-              <ShieldAlert className="w-4 h-4 shrink-0" />
+            <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-100 text-rose-800 text-xs flex items-center gap-2.5">
+              <ShieldAlert className="w-4 h-4 shrink-0 text-rose-600" />
               <span>
-                The candidate will be notified of this rejection and prompted to upload a corrected
-                copy.
+                The candidate/employee will be notified of this rejection and asked to resubmit a compliant copy.
               </span>
             </div>
 
-            <Input
-              label="Rejection Reason"
-              value={rejectionReason}
-              onChange={(e) => setRejectionReason(e.target.value)}
-              placeholder="e.g. Blurry scan, expired document, or missing signature"
-              required
-            />
+            {/* Quick Reason Chips */}
+            <div>
+              <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">
+                Quick Preset Reasons
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {QUICK_REJECTION_REASONS.map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setRejectionReason(preset)}
+                    className="text-xs px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium transition-colors cursor-pointer"
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-            <div className="flex justify-end gap-3 pt-3">
-              <Button variant="secondary" onClick={() => setRejectingDoc(null)}>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Specific Rejection Reason <span className="text-rose-500">*</span>
+              </label>
+              <textarea
+                rows={3}
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                placeholder="Explain why this document cannot be approved..."
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-rose-500 transition-all"
+                required
+              />
+            </div>
+
+            <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-100">
+              <Button variant="secondary" size="sm" onClick={() => setRejectingDoc(null)}>
                 Cancel
               </Button>
               <Button
                 variant="danger"
+                size="sm"
                 disabled={!rejectionReason.trim()}
                 onClick={() => handleVerify(rejectingDoc.id, 'REJECTED', rejectionReason)}
               >
@@ -591,49 +730,40 @@ export const DocumentVaultUploader = ({
           maxWidth="max-w-4xl"
         >
           <div className="space-y-4">
-            <div className="flex items-center justify-center p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 min-h-[300px] max-h-[68vh] overflow-auto">
+            <div className="flex items-center justify-center p-3 bg-slate-100/60 rounded-2xl border border-slate-200 min-h-[340px] max-h-[70vh] overflow-auto">
               {previewDoc.isImage ? (
                 <img
                   src={previewDoc.blobUrl}
                   alt={previewDoc.doc.title}
-                  className="max-h-[64vh] max-w-full object-contain rounded-lg shadow-xs"
+                  className="max-h-[66vh] max-w-full object-contain rounded-xl shadow-xs"
                 />
               ) : previewDoc.isPdf ? (
                 <iframe
                   src={previewDoc.blobUrl}
                   title={previewDoc.doc.title}
-                  className="w-full h-[64vh] rounded-lg border-0"
+                  className="w-full h-[66vh] rounded-xl border-0 bg-white"
                 />
               ) : (
                 <div className="py-12 flex flex-col items-center justify-center text-center space-y-3">
-                  <FileText className="w-16 h-16 text-slate-400" />
+                  <div className="w-16 h-16 rounded-2xl bg-white border border-slate-200 text-slate-400 flex items-center justify-center shadow-xs">
+                    <FileText className="w-8 h-8" />
+                  </div>
                   <div>
-                    <p className="text-sm font-semibold text-slate-800 dark:text-white">
+                    <p className="text-sm font-bold text-slate-800 font-display">
                       {previewDoc.doc.title}
                     </p>
-                    <p className="text-xs text-slate-500 mt-1">
-                      Inline preview not supported for this file type ({previewDoc.contentType}).
+                    <p className="text-xs text-slate-500 mt-1 max-w-sm">
+                      Inline browser rendering is not supported for this file format ({previewDoc.contentType}). Please download the file to inspect.
                     </p>
                   </div>
                 </div>
               )}
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
               <div className="flex items-center gap-2 text-xs text-slate-500">
-                <span>Status:</span>
-                <Badge
-                  variant={
-                    previewDoc.doc.verificationStatus === 'APPROVED'
-                      ? 'success'
-                      : previewDoc.doc.verificationStatus === 'REJECTED'
-                      ? 'danger'
-                      : 'warning'
-                  }
-                  size="sm"
-                >
-                  {previewDoc.doc.verificationStatus || 'PENDING'}
-                </Badge>
+                <span className="font-semibold">Status:</span>
+                {renderStatusBadge(previewDoc.doc.verificationStatus)}
               </div>
 
               <div className="flex items-center gap-2">
@@ -645,7 +775,7 @@ export const DocumentVaultUploader = ({
                     window.open(previewDoc.blobUrl, '_blank', 'noopener,noreferrer');
                   }}
                 >
-                  Open in Tab
+                  Open in New Tab
                 </Button>
                 <Button
                   variant="primary"
@@ -662,7 +792,7 @@ export const DocumentVaultUploader = ({
                     }
                   }}
                 >
-                  Download
+                  Download File
                 </Button>
                 <Button variant="ghost" size="sm" onClick={closePreview}>
                   Close
