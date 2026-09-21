@@ -6,6 +6,7 @@ import { employeeRepository } from '../repositories/employeeRepository.js';
 import { adminService } from '../services/adminService.js';
 import { sendSuccess, sendError } from '../utils/apiResponse.js';
 import { query } from '../config/db.js';
+import { cloudinaryService } from '../services/cloudinaryService.js';
 
 // Fallback generator for missing local files (e.g. from seeded/test records)
 const ensureDocumentBinaryFile = (doc, absolutePath) => {
@@ -132,6 +133,23 @@ export const documentController = {
           `${dispositionType}; filename="${encodeURIComponent(doc.title || 'document')}"`
         );
         return res.send(binaryRecord.file_data);
+      }
+
+      // If document is stored on Cloudinary / external secure storage
+      if (doc.fileUrl && (doc.fileUrl.startsWith('http://') || doc.fileUrl.startsWith('https://'))) {
+        try {
+          const cloudBuffer = await cloudinaryService.fetchBuffer(doc.fileUrl);
+          if (cloudBuffer && cloudBuffer.length > 0) {
+            res.setHeader('Content-Type', doc.mimeType || 'application/pdf');
+            res.setHeader(
+              'Content-Disposition',
+              `${dispositionType}; filename="${encodeURIComponent(doc.title || 'document')}"`
+            );
+            return res.send(cloudBuffer);
+          }
+        } catch (cloudErr) {
+          console.warn(`Cloudinary fetch warning for document ${id}:`, cloudErr.message);
+        }
       }
 
       // If document is stored on local disk
@@ -279,7 +297,30 @@ export const documentController = {
         fileData = fs.readFileSync(req.file.path);
       }
 
-      const fileUrl = `/uploads/onboarding_documents/${req.file.filename}`;
+      let fileUrl = `/uploads/onboarding_documents/${req.file.filename}`;
+      let encryptionMetadata = {};
+
+      try {
+        const uploadSource = fileData || req.file.path;
+        if (uploadSource) {
+          const cRes = await cloudinaryService.upload(uploadSource, {
+            filename: req.file.originalname,
+            mimeType: req.file.mimetype,
+          });
+          if (cRes?.secureUrl) {
+            fileUrl = cRes.secureUrl;
+            encryptionMetadata = {
+              storageProvider: 'CLOUDINARY',
+              cloudinaryPublicId: cRes.publicId,
+              cloudinaryResourceType: cRes.resourceType,
+              cloudinaryBytes: cRes.bytes,
+            };
+          }
+        }
+      } catch (cloudErr) {
+        console.warn('Cloudinary upload warning:', cloudErr.message);
+      }
+
       const payload = {
         orgId,
         ownerType: 'EMPLOYEE',
@@ -292,6 +333,7 @@ export const documentController = {
         mimeType: req.file.mimetype,
         verificationStatus: 'PENDING',
         fileData,
+        encryptionMetadata,
       };
 
       const doc = await documentService.addDocument(payload);
@@ -324,7 +366,30 @@ export const documentController = {
         fileData = fs.readFileSync(req.file.path);
       }
 
-      const fileUrl = `/uploads/onboarding_documents/${req.file.filename}`;
+      let fileUrl = `/uploads/onboarding_documents/${req.file.filename}`;
+      let encryptionMetadata = {};
+
+      try {
+        const uploadSource = fileData || req.file.path;
+        if (uploadSource) {
+          const cRes = await cloudinaryService.upload(uploadSource, {
+            filename: req.file.originalname,
+            mimeType: req.file.mimetype,
+          });
+          if (cRes?.secureUrl) {
+            fileUrl = cRes.secureUrl;
+            encryptionMetadata = {
+              storageProvider: 'CLOUDINARY',
+              cloudinaryPublicId: cRes.publicId,
+              cloudinaryResourceType: cRes.resourceType,
+              cloudinaryBytes: cRes.bytes,
+            };
+          }
+        }
+      } catch (cloudErr) {
+        console.warn('Cloudinary upload warning:', cloudErr.message);
+      }
+
       const payload = {
         orgId,
         ownerType: ownerType.toUpperCase(),
@@ -337,6 +402,7 @@ export const documentController = {
         mimeType: req.file.mimetype,
         verificationStatus: req.body.verificationStatus || 'APPROVED',
         fileData,
+        encryptionMetadata,
       };
 
       const doc = await documentService.addDocument(payload);

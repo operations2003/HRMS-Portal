@@ -2,6 +2,7 @@ import fs from 'fs';
 import { newHireRepository } from '../repositories/newHireRepository.js';
 import { documentRepository } from '../repositories/documentRepository.js';
 import { documentService } from './documentService.js';
+import { cloudinaryService } from './cloudinaryService.js';
 import { logger } from '../utils/logger.js';
 
 export const onboardingService = {
@@ -156,7 +157,7 @@ export const onboardingService = {
       throw err;
     }
 
-    const fileUrl = `/uploads/onboarding_documents/${file.filename}`;
+    let fileUrl = `/uploads/onboarding_documents/${file.filename}`;
     const category = (metadata.category || 'IDENTITY').toUpperCase();
     const documentType = (metadata.documentType || 'OTHER').toUpperCase();
     const title = metadata.title || file.originalname;
@@ -166,6 +167,28 @@ export const onboardingService = {
       fileData = file.buffer;
     } else if (file.path && fs.existsSync(file.path)) {
       fileData = fs.readFileSync(file.path);
+    }
+
+    let encryptionMetadata = {};
+    try {
+      const uploadSource = fileData || file.path;
+      if (uploadSource) {
+        const cRes = await cloudinaryService.upload(uploadSource, {
+          filename: file.originalname,
+          mimeType: file.mimetype,
+        });
+        if (cRes?.secureUrl) {
+          fileUrl = cRes.secureUrl;
+          encryptionMetadata = {
+            storageProvider: 'CLOUDINARY',
+            cloudinaryPublicId: cRes.publicId,
+            cloudinaryResourceType: cRes.resourceType,
+            cloudinaryBytes: cRes.bytes,
+          };
+        }
+      }
+    } catch (cloudErr) {
+      logger.warn('OnboardingService', `Cloudinary upload warning: ${cloudErr.message}`);
     }
 
     const docRecord = await documentRepository.create({
@@ -180,6 +203,7 @@ export const onboardingService = {
       mimeType: file.mimetype,
       verificationStatus: 'PENDING',
       fileData,
+      encryptionMetadata,
     });
 
     logger.info('DOC-UPLOAD', `Document '${title}' uploaded for candidate ${newHireId}`, {

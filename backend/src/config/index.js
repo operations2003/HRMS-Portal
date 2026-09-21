@@ -28,4 +28,9 @@ export const config = {
     databaseUrl: process.env.DATABASE_URL || '',
     directUrl: process.env.DIRECT_URL || '',
   },
+  cloudinary: {
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME || 'oroewjgz',
+    apiKey: process.env.CLOUDINARY_API_KEY || '851245953754347',
+    apiSecret: process.env.CLOUDINARY_API_SECRET || 'WQ8Hd7P0Uk-3NLDxUJ-Ut2r5Ysw',
+  },
 };

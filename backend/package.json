@@ -10,10 +10,12 @@
     "db:migrate": "node src/migrations/migrate.js",
     "db:seed": "node src/seeds/seed.js",
     "db:clean": "node src/scripts/clean_dummy_data.js",
-    "db:clean:dry": "node src/scripts/clean_dummy_data.js --dry-run"
+    "db:clean:dry": "node src/scripts/clean_dummy_data.js --dry-run",
+    "sync:cloudinary": "node src/scripts/sync_pdfs_to_cloudinary.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
+    "cloudinary": "^2.11.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
