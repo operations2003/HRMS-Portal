@@ -1,3 +1,4 @@
+import React, { useState } from 'react';
 import { ShieldCheck, CheckCircle2, XCircle, Calendar, AlertTriangle, AlertCircle } from 'lucide-react';
 import { Modal } from '../common/Modal.jsx';
 import { Button } from '../common/Button.jsx';
