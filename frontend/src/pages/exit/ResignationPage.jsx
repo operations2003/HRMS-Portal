@@ -323,30 +323,57 @@ export const ResignationPage = () => {
     },
     {
       header: 'Actions',
-      render: (row) => (
-        <div className="flex items-center gap-1.5 justify-end">
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={Eye}
-            onClick={() => setInspectingDossierId(row.id)}
-            title="Inspect Dossier"
-          >
-            Dossier
-          </Button>
+      render: (row) => {
+        const isSelf =
+          (user?.employeeId && row.employeeId === user.employeeId) ||
+          (user?.id && row.employee?.userId === user.id);
 
-          {['SUBMITTED', 'UNDER_REVIEW'].includes(row.status) && (
+        return (
+          <div className="flex items-center gap-1.5 justify-end">
             <Button
-              variant="primary"
+              variant="ghost"
               size="sm"
-              icon={ShieldCheck}
-              onClick={() => setHrActingRecord(row)}
+              icon={Eye}
+              onClick={() => setInspectingDossierId(row.id)}
+              title="Inspect Dossier"
             >
-              HR Action
+              Dossier
             </Button>
-          )}
-        </div>
-      ),
+
+            {isSelf ? (
+              <span className="text-[11px] text-slate-400 italic" title="Self-approval prohibited">
+                Your Resignation
+              </span>
+            ) : (
+              <>
+                {row.status === 'SUBMITTED' && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon={UserCheck}
+                    onClick={() => setReviewingRecord(row)}
+                    title="Review as supervisor"
+                  >
+                    Manager Review
+                  </Button>
+                )}
+
+                {['SUBMITTED', 'UNDER_REVIEW'].includes(row.status) && (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    icon={ShieldCheck}
+                    onClick={() => setHrActingRecord(row)}
+                    title="HR Action & Clearances"
+                  >
+                    HR Action
+                  </Button>
+                )}
+              </>
+            )}
+          </div>
+        );
+      },
     },
   ];
 
@@ -719,6 +746,7 @@ export const ResignationPage = () => {
           onClose={() => setHrActingRecord(null)}
           onSuccess={() => {
             fetchOrgExits();
+            if (isManager) fetchTeamExits();
             fetchMyExit();
           }}
           record={hrActingRecord}

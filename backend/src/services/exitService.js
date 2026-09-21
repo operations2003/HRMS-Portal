@@ -56,6 +56,10 @@ export const exitService = {
     }
 
     const noticePeriodDays = data.noticePeriodDays !== undefined ? parseInt(data.noticePeriodDays, 10) : 30;
+    const hasManager = !!emp.managerId && emp.managerId !== emp.id;
+    const initialStage = hasManager ? 'MANAGER_REVIEW' : 'HR_REVIEW';
+    const initialStatus = hasManager ? 'SUBMITTED' : 'UNDER_REVIEW';
+    const workflowType = hasManager ? 'EMPLOYEE_MANAGER_HR' : 'EMPLOYEE_HR';
 
     // Create exit request
     const exitRequest = await exitRepository.create({
@@ -67,8 +71,8 @@ export const exitService = {
       exitType: data.exitType || 'VOLUNTARY',
       reason: data.reason.trim(),
       comments: data.comments || '',
-      status: 'SUBMITTED',
-      currentStage: 'MANAGER_REVIEW',
+      status: initialStatus,
+      currentStage: initialStage,
       submittedBy: currentUser.id,
       documentId: data.documentId || null,
     });
@@ -81,11 +85,11 @@ export const exitService = {
         orgId: currentUser.orgId,
         entityType: 'EXIT_REQUEST',
         entityId: exitRequest.id,
-        workflowType: 'EMPLOYEE_MANAGER_HR',
-        currentStage: 'MANAGER_REVIEW',
-        currentStatus: 'SUBMITTED',
+        workflowType,
+        currentStage: initialStage,
+        currentStatus: initialStatus,
         requesterId: emp.id,
-        managerId: emp.managerId || null,
+        managerId: hasManager ? emp.managerId : null,
       },
       {
         stage: 'EMPLOYEE_SUBMISSION',
@@ -93,13 +97,13 @@ export const exitService = {
         actorRole: currentUser.roleName || 'Employee',
         action: 'SUBMIT',
         fromStatus: 'ACTIVE',
-        toStatus: 'SUBMITTED',
+        toStatus: initialStatus,
         comments: data.reason.trim(),
       }
     );
 
     // Notify assigned manager if exists
-    if (emp.managerId) {
+    if (hasManager) {
       const mgr = await employeeRepository.findById(emp.managerId);
       if (mgr && mgr.userId) {
         await notificationService.notifyResignationSubmitted({
@@ -107,6 +111,23 @@ export const exitService = {
           exitId: exitRequest.id,
           employeeName: `${emp.firstName} ${emp.lastName}`.trim(),
           managerUserId: mgr.userId,
+        });
+      }
+    } else {
+      // Direct notification to HR team
+      const hrUsersRes = await pool.query(
+        `SELECT u.id FROM users u
+         JOIN roles r ON u.role_id = r.id
+         WHERE u.org_id = $1 AND r.name IN ('HR', 'HRManager', 'Admin') AND u.status = 'Active';`,
+        [currentUser.orgId]
+      );
+      const hrUserIds = hrUsersRes.rows.map((r) => r.id);
+      if (hrUserIds.length > 0) {
+        await notificationService.notifyExitReviewPending({
+          orgId: currentUser.orgId,
+          exitId: exitRequest.id,
+          employeeName: `${emp.firstName} ${emp.lastName}`.trim(),
+          hrUserIds,
         });
       }
     }
@@ -208,9 +229,13 @@ export const exitService = {
       return { items: [], total: 0, limit: 20, offset: 0 };
     }
 
+    const managerId = (this.isHrOrAdmin(currentUser) && query.managerId)
+      ? query.managerId
+      : (emp ? emp.id : null);
+
     return exitRepository.findAll({
       orgId: currentUser.orgId,
-      managerId: emp ? emp.id : null,
+      managerId,
       status: query.status || null,
       currentStage: query.currentStage || null,
       limit: query.limit ? parseInt(query.limit, 10) : 50,
@@ -440,8 +465,10 @@ export const exitService = {
       throw err;
     }
 
-    // Stage validation
-    if (exit.currentStage !== 'HR_REVIEW' && exit.status !== 'UNDER_REVIEW') {
+    // Stage validation: allow both HR_REVIEW and MANAGER_REVIEW (executive override)
+    const validStages = ['HR_REVIEW', 'MANAGER_REVIEW'];
+    const validStatuses = ['UNDER_REVIEW', 'SUBMITTED'];
+    if (!validStages.includes(exit.currentStage) && !validStatuses.includes(exit.status)) {
       const err = new Error(`Invalid transition: Exit request is currently in '${exit.currentStage}' stage.`);
       err.statusCode = 400;
       throw err;
@@ -449,10 +476,14 @@ export const exitService = {
 
     const approvedLwd = approvalData.approvedLastWorkingDay;
     const noticeDays = approvalData.noticePeriodDays !== undefined ? parseInt(approvalData.noticePeriodDays, 10) : exit.noticePeriodDays;
+    const isDirectHrApproval = exit.currentStage === 'MANAGER_REVIEW' || exit.status === 'SUBMITTED';
 
     const updated = await exitRepository.update(id, {
       status: 'APPROVED',
       currentStage: 'CLEARANCE_IN_PROGRESS',
+      reviewedBy: exit.reviewedBy || currentUser.id,
+      managerFeedback: exit.managerFeedback || (isDirectHrApproval ? 'Approved with executive oversight by HR/Admin.' : ''),
+      managerReviewedAt: exit.managerReviewedAt || (isDirectHrApproval ? new Date().toISOString() : null),
       approvedBy: currentUser.id,
       approvedLastWorkingDay: approvedLwd,
       noticePeriodDays: noticeDays,
@@ -541,6 +572,19 @@ export const exitService = {
     // Advance approval workflow
     const wf = await workflowRepository.findByEntity('EXIT_REQUEST', id);
     if (wf) {
+      if (isDirectHrApproval && wf.currentStage === 'MANAGER_REVIEW') {
+        await workflowRepository.recordAction(wf.id, {
+          stage: 'MANAGER_REVIEW',
+          actorUserId: currentUser.id,
+          actorRole: currentUser.roleName || 'HR',
+          action: 'REVIEW',
+          fromStatus: 'SUBMITTED',
+          toStatus: 'UNDER_REVIEW',
+          nextStage: 'HR_REVIEW',
+          comments: approvalData.hrComments || 'Manager review stage approved via HR/Admin executive oversight.',
+        });
+      }
+
       await workflowRepository.recordAction(wf.id, {
         stage: 'HR_REVIEW',
         actorUserId: currentUser.id,
@@ -604,7 +648,7 @@ export const exitService = {
     const wf = await workflowRepository.findByEntity('EXIT_REQUEST', id);
     if (wf) {
       await workflowRepository.recordAction(wf.id, {
-        stage: 'HR_REVIEW',
+        stage: wf.currentStage || 'HR_REVIEW',
         actorUserId: currentUser.id,
         actorRole: currentUser.roleName || 'HR',
         action: 'REJECT',

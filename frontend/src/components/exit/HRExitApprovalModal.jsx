@@ -1,5 +1,4 @@
-import React, { useState } from 'react';
-import { ShieldCheck, CheckCircle2, XCircle, Calendar, AlertTriangle } from 'lucide-react';
+import { ShieldCheck, CheckCircle2, XCircle, Calendar, AlertTriangle, AlertCircle } from 'lucide-react';
 import { Modal } from '../common/Modal.jsx';
 import { Button } from '../common/Button.jsx';
 import { Input } from '../common/Input.jsx';
@@ -107,6 +106,15 @@ export const HRExitApprovalModal = ({ isOpen, onClose, onSuccess, record }) => {
 
         {mode === 'APPROVE' ? (
           <>
+            {!record.managerFeedback && (record.status === 'SUBMITTED' || record.currentStage === 'MANAGER_REVIEW') && (
+              <div className="bg-sky-50 border border-sky-200/80 rounded-xl p-3 text-xs text-sky-800 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-sky-600 shrink-0 mt-0.5" />
+                <p>
+                  <span className="font-semibold text-sky-900">Executive Fast-Track:</span> Direct HR/Admin approval will complete manager review routing and activate notice period clearances immediately.
+                </p>
+              </div>
+            )}
+
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-600 space-y-1">
               <div className="flex justify-between">
                 <span>Employee Requested LWD:</span>
