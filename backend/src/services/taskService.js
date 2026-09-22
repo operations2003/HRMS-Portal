@@ -195,5 +195,183 @@ export const taskService = {
     }
     return res.rows[0];
   },
+
+  /**
+   * Get employee's personal work performance metrics
+   */
+  async getMyPerformance(orgId, currentUser, timeframe = 'this_month') {
+    let empId = currentUser.employeeId;
+    if (!empId) {
+      const eRes = await query('SELECT id FROM employees WHERE user_id = $1 AND org_id = $2;', [currentUser.id, orgId]);
+      if (eRes.rows[0]) {
+        empId = eRes.rows[0].id;
+      }
+    }
+
+    if (!empId) {
+      return {
+        performanceScore: 0,
+        performanceStatus: 'Needs Improvement',
+        totalTasks: 0,
+        completedTasks: 0,
+        createdTasks: 0,
+        completionRate: 0,
+        onTimeDelivery: 0,
+        averageRating: 0,
+        ratingCount: 0,
+        firstTimeCompletion: 0,
+        tasksReopened: 0,
+        reopenRate: 0,
+        overdueTasks: 0,
+        priority: { high: 0, medium: 0, low: 0 },
+        last30DaysTrend: [],
+      };
+    }
+
+    // Determine timeframe boundaries
+    const now = new Date();
+    let startDate = null;
+    const tf = (timeframe || '').toLowerCase().replace(/[\s-]/g, '_');
+
+    if (tf === 'this_week') {
+      const day = now.getDay();
+      const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+      startDate = new Date(now.setDate(diff));
+      startDate.setHours(0, 0, 0, 0);
+    } else if (tf === 'last_month') {
+      startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    } else if (tf === 'this_quarter') {
+      const qMonth = Math.floor(now.getMonth() / 3) * 3;
+      startDate = new Date(now.getFullYear(), qMonth, 1);
+    } else if (tf === 'this_year') {
+      startDate = new Date(now.getFullYear(), 0, 1);
+    } else if (tf === 'all_time') {
+      startDate = null;
+    } else {
+      // Default: this_month
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    }
+
+    let sql = `
+      SELECT t.*,
+             CASE 
+               WHEN t.status != 'COMPLETED' AND t.status != 'CANCELLED' AND t.due_date < CURRENT_DATE THEN true
+               ELSE false
+             END AS is_overdue
+      FROM work_tasks t
+      WHERE t.org_id = $1 AND (t.assignee_id = $2 OR t.creator_id = $2)
+    `;
+    const params = [orgId, empId];
+
+    if (startDate) {
+      params.push(startDate.toISOString());
+      sql += ` AND t.created_at >= $${params.length}`;
+    }
+
+    const res = await query(sql, params);
+    const tasks = res.rows;
+
+    const assignedTasks = tasks.filter((t) => t.assignee_id === empId);
+    const totalTasks = assignedTasks.length;
+    const createdTasks = tasks.filter((t) => t.creator_id === empId).length;
+    const completedTasks = assignedTasks.filter((t) => t.status === 'COMPLETED').length;
+    const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+    const onTimeTasks = assignedTasks.filter((t) => {
+      if (t.status !== 'COMPLETED') return false;
+      if (!t.due_date) return true;
+      const compDate = new Date(t.updated_at);
+      const dueDate = new Date(t.due_date);
+      dueDate.setHours(23, 59, 59, 999);
+      return compDate <= dueDate;
+    }).length;
+    const onTimeDelivery = completedTasks > 0 ? Math.round((onTimeTasks / completedTasks) * 100) : 0;
+
+    const firstTimeTasks = assignedTasks.filter((t) => {
+      if (t.status !== 'COMPLETED') return false;
+      const commentsStr = JSON.stringify(t.comments || []);
+      return !commentsStr.toLowerCase().includes('reopen') && !commentsStr.toLowerCase().includes('rejected');
+    }).length;
+    const firstTimeCompletion = completedTasks > 0 ? Math.round((firstTimeTasks / completedTasks) * 100) : 0;
+
+    const tasksReopened = assignedTasks.filter((t) => {
+      const commentsStr = JSON.stringify(t.comments || []);
+      return commentsStr.toLowerCase().includes('reopen') || t.status === 'BLOCKED';
+    }).length;
+    const reopenRate = totalTasks > 0 ? Math.round((tasksReopened / totalTasks) * 100) : 0;
+
+    const overdueTasks = assignedTasks.filter((t) => t.is_overdue).length;
+
+    // Priority breakdown for assigned tasks
+    const priority = {
+      high: assignedTasks.filter((t) => t.priority === 'HIGH' || t.priority === 'URGENT').length,
+      medium: assignedTasks.filter((t) => t.priority === 'MEDIUM').length,
+      low: assignedTasks.filter((t) => t.priority === 'LOW').length,
+    };
+
+    // Calculate dynamic performance score
+    let performanceScore = 0;
+    let performanceStatus = 'Needs Improvement';
+
+    if (totalTasks > 0) {
+      performanceScore = Math.min(
+        100,
+        Math.max(
+          0,
+          Math.round(
+            completionRate * 0.4 +
+            onTimeDelivery * 0.35 +
+            firstTimeCompletion * 0.25 -
+            (overdueTasks / totalTasks) * 20
+          )
+        )
+      );
+
+      if (performanceScore >= 85) performanceStatus = 'Outstanding';
+      else if (performanceScore >= 70) performanceStatus = 'Good';
+      else if (performanceScore >= 50) performanceStatus = 'Satisfactory';
+      else performanceStatus = 'Needs Improvement';
+    }
+
+    // Generate last 30 days completed tasks distribution
+    const last30DaysTrend = [];
+    const today = new Date();
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      const ymd = d.toISOString().split('T')[0];
+      const label = d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+
+      const dayCompleted = assignedTasks.filter((t) => {
+        if (t.status !== 'COMPLETED') return false;
+        const compYmd = new Date(t.updated_at).toISOString().split('T')[0];
+        return compYmd === ymd;
+      }).length;
+
+      last30DaysTrend.push({
+        date: ymd,
+        label,
+        completed: dayCompleted,
+      });
+    }
+
+    return {
+      performanceScore,
+      performanceStatus,
+      totalTasks,
+      completedTasks,
+      createdTasks,
+      completionRate,
+      onTimeDelivery,
+      averageRating: 0,
+      ratingCount: 0,
+      firstTimeCompletion,
+      tasksReopened,
+      reopenRate,
+      overdueTasks,
+      priority,
+      last30DaysTrend,
+    };
+  },
 };
 

@@ -17,8 +17,13 @@ import {
   RefreshCw,
   ExternalLink,
   Save,
+  Camera,
+  Upload,
+  Trash2,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { profileService } from '../../services/profileService.js';
+import { useAuth } from '../../context/AuthContext.jsx';
 import { Button } from '../../components/common/Button.jsx';
 import { Input } from '../../components/common/Input.jsx';
 import { Alert } from '../../components/common/Alert.jsx';
@@ -30,6 +35,7 @@ import { useToast } from '../../context/ToastContext.jsx';
 export const ProfilePage = () => {
   const navigate = useNavigate();
   const toast = useToast();
+  const { updateUser } = useAuth();
 
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -47,6 +53,15 @@ export const ProfilePage = () => {
   });
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
+
+  // Photo Upload State
+  const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
+  const [photoFile, setPhotoFile] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [removingPhoto, setRemovingPhoto] = useState(false);
+  const [photoError, setPhotoError] = useState(null);
+  const fileInputRef = React.useRef(null);
 
   const fetchProfile = async (isBackground = false) => {
     try {
@@ -100,6 +115,78 @@ export const ProfilePage = () => {
       setSaveError(err.message || 'Failed to update personal details.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleOpenPhotoModal = () => {
+    setPhotoFile(null);
+    setPhotoPreview(null);
+    setPhotoError(null);
+    setIsPhotoModalOpen(true);
+  };
+
+  const handleClosePhotoModal = () => {
+    if (uploadingPhoto || removingPhoto) return;
+    setIsPhotoModalOpen(false);
+    setPhotoFile(null);
+    setPhotoPreview(null);
+    setPhotoError(null);
+  };
+
+  const handleSelectPhoto = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg', 'image/gif'];
+    if (!validTypes.includes(file.type)) {
+      setPhotoError('Please select a valid image file (JPG, PNG, WEBP, GIF).');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setPhotoError('Image size exceeds maximum limit of 5MB.');
+      return;
+    }
+
+    setPhotoError(null);
+    setPhotoFile(file);
+    const previewUrl = URL.createObjectURL(file);
+    setPhotoPreview(previewUrl);
+  };
+
+  const handleUploadPhoto = async () => {
+    if (!photoFile) return;
+    try {
+      setUploadingPhoto(true);
+      setPhotoError(null);
+      const res = await profileService.uploadAvatar(photoFile);
+      const newUrl = res.avatarUrl;
+      setProfile((prev) => ({ ...prev, avatarUrl: newUrl }));
+      updateUser?.({ avatarUrl: newUrl });
+      toast.success('Profile photo updated successfully.');
+      handleClosePhotoModal();
+    } catch (err) {
+      console.error('Failed to upload photo:', err);
+      setPhotoError(err.message || 'Failed to upload photo. Please try again.');
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  const handleRemovePhoto = async () => {
+    try {
+      setRemovingPhoto(true);
+      setPhotoError(null);
+      await profileService.removeAvatar();
+      setProfile((prev) => ({ ...prev, avatarUrl: null }));
+      updateUser?.({ avatarUrl: null });
+      toast.success('Profile photo removed.');
+      handleClosePhotoModal();
+    } catch (err) {
+      console.error('Failed to remove photo:', err);
+      setPhotoError(err.message || 'Failed to remove photo.');
+    } finally {
+      setRemovingPhoto(false);
     }
   };
 
@@ -169,9 +256,41 @@ export const ProfilePage = () => {
       {/* Identity Card */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-6 shadow-xs">
         <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5">
-          {/* Avatar */}
-          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 font-bold text-2xl flex items-center justify-center border border-brand-200/60 dark:border-brand-800/60 shrink-0">
-            {initials}
+          {/* Avatar with Photo Upload Trigger */}
+          <div className="relative group shrink-0">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 font-bold text-2xl flex items-center justify-center border border-brand-200/60 dark:border-brand-800/60 overflow-hidden shadow-xs relative">
+              {profile?.avatarUrl ? (
+                <img
+                  src={profile.avatarUrl}
+                  alt={profile?.fullName || 'Profile photo'}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                initials
+              )}
+
+              {/* Hover overlay for quick change */}
+              <button
+                type="button"
+                onClick={handleOpenPhotoModal}
+                className="absolute inset-0 bg-slate-900/60 text-white flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-pointer rounded-2xl text-[10px] font-semibold"
+                aria-label="Change photo"
+              >
+                <Camera className="w-4 h-4 mb-0.5" />
+                <span>Change</span>
+              </button>
+            </div>
+
+            {/* Camera badge action button */}
+            <button
+              type="button"
+              onClick={handleOpenPhotoModal}
+              className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-brand-600 hover:bg-brand-700 text-white flex items-center justify-center shadow-md border-2 border-white dark:border-slate-900 transition-transform hover:scale-110 focus:outline-none"
+              title="Add or update photo"
+              aria-label="Add or update photo"
+            >
+              <Camera className="w-3.5 h-3.5" />
+            </button>
           </div>
 
           {/* Details */}
@@ -186,6 +305,14 @@ export const ProfilePage = () => {
               <Badge variant="success" size="sm">
                 {profile?.status || 'Active'}
               </Badge>
+              <button
+                type="button"
+                onClick={handleOpenPhotoModal}
+                className="text-xs text-brand-600 dark:text-brand-400 hover:text-brand-700 font-medium inline-flex items-center gap-1 transition-colors ml-1"
+              >
+                <Camera className="w-3.5 h-3.5" />
+                <span>{profile?.avatarUrl ? 'Change photo' : 'Add photo'}</span>
+              </button>
             </div>
 
             <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-5 gap-y-1.5 text-xs text-slate-500 dark:text-slate-400">
@@ -474,13 +601,137 @@ export const ProfilePage = () => {
               type="submit"
               variant="primary"
               size="sm"
-              loading={saving}
+              isLoading={saving}
               icon={Save}
             >
               Save Changes
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Photo Upload Modal */}
+      <Modal
+        isOpen={isPhotoModalOpen}
+        onClose={handleClosePhotoModal}
+        title={profile?.avatarUrl ? 'Update Profile Photo' : 'Add Profile Photo'}
+        maxWidth="max-w-md"
+      >
+        <div className="space-y-5">
+          {photoError && (
+            <Alert variant="danger" message={photoError} />
+          )}
+
+          {/* Current & Preview display */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-6 py-2">
+            <div className="text-center space-y-2">
+              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 font-bold text-3xl flex items-center justify-center border-2 border-dashed border-brand-300 dark:border-brand-700 overflow-hidden shadow-inner mx-auto">
+                {photoPreview ? (
+                  <img src={photoPreview} alt="Preview" className="w-full h-full object-cover" />
+                ) : profile?.avatarUrl ? (
+                  <img src={profile.avatarUrl} alt="Current profile" className="w-full h-full object-cover" />
+                ) : (
+                  initials
+                )}
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                {photoPreview ? 'New Preview' : 'Current Photo'}
+              </p>
+            </div>
+
+            {/* Circular mini preview when previewing */}
+            {photoPreview && (
+              <div className="text-center space-y-2">
+                <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-slate-100 dark:bg-slate-800 border-2 border-brand-500 overflow-hidden shadow-md mx-auto">
+                  <img src={photoPreview} alt="Round Preview" className="w-full h-full object-cover" />
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                  Avatar View
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* File Picker / Dropzone */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/jpg,image/webp,image/gif"
+            onChange={handleSelectPhoto}
+            className="hidden"
+          />
+
+          <div
+            onClick={() => fileInputRef.current?.click()}
+            className="border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-brand-500 dark:hover:border-brand-500 rounded-xl p-5 text-center cursor-pointer transition-colors bg-slate-50/60 dark:bg-slate-800/40 hover:bg-brand-50/30 group"
+          >
+            <div className="w-10 h-10 rounded-full bg-brand-50 dark:bg-brand-900/40 text-brand-600 dark:text-brand-400 flex items-center justify-center mx-auto mb-2 group-hover:scale-110 transition-transform">
+              <Upload className="w-5 h-5" />
+            </div>
+            <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+              {photoFile ? photoFile.name : 'Click to select a photo from your device'}
+            </p>
+            <p className="text-[11px] text-slate-400 mt-1">
+              Supports JPEG, PNG, WEBP up to 5MB
+            </p>
+            {photoFile && (
+              <p className="text-[11px] text-brand-600 font-semibold mt-1">
+                {(photoFile.size / 1024).toFixed(1)} KB — Selected
+              </p>
+            )}
+          </div>
+
+          {/* Actions */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+            {profile?.avatarUrl && !photoPreview ? (
+              <Button
+                type="button"
+                variant="danger"
+                size="sm"
+                icon={Trash2}
+                isLoading={removingPhoto}
+                disabled={uploadingPhoto}
+                onClick={handleRemovePhoto}
+              >
+                Remove Photo
+              </Button>
+            ) : <div />}
+
+            <div className="flex items-center gap-2 self-end">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={handleClosePhotoModal}
+                disabled={uploadingPhoto || removingPhoto}
+              >
+                Cancel
+              </Button>
+              {photoPreview ? (
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  icon={Save}
+                  isLoading={uploadingPhoto}
+                  onClick={handleUploadPhoto}
+                >
+                  Save Photo
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  icon={Camera}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  Choose File
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
       </Modal>
     </div>
   );

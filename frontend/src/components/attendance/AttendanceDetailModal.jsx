@@ -14,6 +14,8 @@ import {
   Coffee,
   Flame,
   Zap,
+  RotateCcw,
+  Tag,
   AlertTriangle,
 } from 'lucide-react';
 import { Modal } from '../common/Modal.jsx';
@@ -208,9 +210,10 @@ export const AttendanceDetailModal = ({
           const hasNeedsTag = notes.includes('[NEEDS_POST_SHIFT_REMARK]');
           const isEmergency = regReason.includes('[EMERGENCY]') || notes.includes('[POST_SHIFT_REMARK: EMERGENCY]');
           const isOT = regReason.includes('[OT]') || notes.includes('[POST_SHIFT_REMARK: OT]');
+          const isMistake = regReason.includes('[MISTAKE]') || notes.includes('[POST_SHIFT_REMARK: MISTAKE]');
           const isPostShiftExceeded = isAutoLoggedOut || hasNeedsTag;
 
-          if (!isPostShiftExceeded && !isEmergency && !isOT) return null;
+          if (!isPostShiftExceeded && !isEmergency && !isOT && !isMistake) return null;
 
           return (
             <div
@@ -219,6 +222,8 @@ export const AttendanceDetailModal = ({
                   ? 'bg-rose-50/70 border-rose-200'
                   : isOT
                   ? 'bg-purple-50/70 border-purple-200'
+                  : isMistake
+                  ? 'bg-slate-50 border-slate-200'
                   : 'bg-amber-50/70 border-amber-200'
               }`}
             >
@@ -227,73 +232,88 @@ export const AttendanceDetailModal = ({
                   {isEmergency ? (
                     <>
                       <Flame className="w-4 h-4 text-rose-600" />
-                      <span className="text-rose-900">Post-Shift Review: Emergency Work</span>
+                      <span className="text-rose-900">Classification: Emergency Work</span>
                     </>
                   ) : isOT ? (
                     <>
                       <Zap className="w-4 h-4 text-purple-600" />
-                      <span className="text-purple-900">Post-Shift Review: Approved Overtime</span>
+                      <span className="text-purple-900">Classification: Approved Overtime</span>
+                    </>
+                  ) : isMistake ? (
+                    <>
+                      <RotateCcw className="w-4 h-4 text-slate-600" />
+                      <span className="text-slate-800">Classification: Mistake (Forgot Logout)</span>
                     </>
                   ) : (
                     <>
                       <AlertTriangle className="w-4 h-4 text-amber-600" />
-                      <span className="text-amber-900">10h Post-Shift Review Pending</span>
+                      <span className="text-amber-900">Classification Pending</span>
                     </>
                   )}
                 </div>
 
-                {canRemark && (
-                  <Button
-                    variant={isEmergency || isOT ? 'secondary' : 'primary'}
-                    size="sm"
-                    icon={ShieldCheck}
-                    className={
-                      !isEmergency && !isOT
-                        ? '!bg-amber-600 hover:!bg-amber-700 text-white !py-1 !px-2.5 !text-xs shadow-xs'
-                        : '!py-1 !px-2.5 !text-xs'
-                    }
-                    onClick={() => onAddRemark && onAddRemark(record)}
-                  >
-                    {isEmergency || isOT ? 'Update Remark' : 'Submit Remark'}
-                  </Button>
-                )}
+                <Button
+                  variant={isEmergency || isOT || isMistake ? 'secondary' : 'primary'}
+                  size="sm"
+                  icon={Tag}
+                  className={
+                    !isEmergency && !isOT && !isMistake
+                      ? '!bg-amber-600 hover:!bg-amber-700 text-white !py-1 !px-2.5 !text-xs shadow-xs'
+                      : '!py-1 !px-2.5 !text-xs'
+                  }
+                  onClick={() => onAddRemark && onAddRemark(record)}
+                >
+                  {isEmergency || isOT || isMistake ? 'Change Tag' : 'Tag as OT / Mistake'}
+                </Button>
               </div>
 
               <div className="text-xs space-y-1.5">
-                {isEmergency || isOT ? (
+                {isEmergency || isOT || isMistake ? (
                   <>
                     <div className="text-slate-800">
                       <span className="font-semibold text-slate-700">Classification:</span>{' '}
-                      <strong className={isEmergency ? 'text-rose-700' : 'text-purple-700'}>
-                        {isEmergency ? 'Emergency Work' : 'Approved Overtime (OT)'}
+                      <strong
+                        className={
+                          isEmergency
+                            ? 'text-rose-700'
+                            : isOT
+                            ? 'text-purple-700'
+                            : 'text-slate-700'
+                        }
+                      >
+                        {isEmergency
+                          ? 'Emergency Work'
+                          : isOT
+                          ? 'Approved Overtime (OT)'
+                          : 'Mistake (Forgot to Logout) — Overtime voided (0.00 hrs)'}
                       </strong>
                     </div>
                     {record.regularizer && (
                       <div className="text-slate-700">
-                        <span className="font-semibold text-slate-700">Reviewed By:</span>{' '}
+                        <span className="font-semibold text-slate-700">Tagged By:</span>{' '}
                         {record.regularizer.name} ({record.regularizer.email})
                       </div>
                     )}
                     {record.regularizedAt && (
                       <div className="text-slate-600">
-                        <span className="font-semibold text-slate-700">Reviewed At:</span>{' '}
+                        <span className="font-semibold text-slate-700">Tagged At:</span>{' '}
                         {formatTimestamp(record.regularizedAt)}
                       </div>
                     )}
                     {record.regularizationReason && (
                       <div className="text-slate-800 bg-white/70 p-2.5 rounded-xl border border-slate-200/50 mt-1">
                         <span className="font-semibold text-slate-700 block mb-0.5">
-                          Reviewer Remarks:
+                          Remarks / Justification:
                         </span>
                         <p className="whitespace-pre-wrap">
-                          {record.regularizationReason.replace(/^\[(EMERGENCY|OT)\]\s*/i, '')}
+                          {record.regularizationReason.replace(/^\[(EMERGENCY|OT|MISTAKE)\]\s*/i, '')}
                         </p>
                       </div>
                     )}
                   </>
                 ) : (
                   <p className="text-amber-800 leading-relaxed">
-                    This work session extended 10 hours beyond scheduled shift completion and requires an official review by an Admin, Manager, or HR to classify as <strong>Emergency Work</strong> or <strong>Approved OT</strong>.
+                    This work session extended beyond scheduled shift duration and can be classified as <strong>Approved OT</strong>, <strong>Mistake (Forgot Logout)</strong>, or <strong>Emergency Work</strong>.
                   </p>
                 )}
               </div>
@@ -302,7 +322,7 @@ export const AttendanceDetailModal = ({
         })()}
 
         {/* Regularization Details if applicable */}
-        {record.isRegularized && !record.regularizationReason?.match(/^\[(EMERGENCY|OT)\]/i) && (
+        {record.isRegularized && !record.regularizationReason?.match(/^\[(EMERGENCY|OT|MISTAKE)\]/i) && (
           <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200/80 space-y-2">
             <div className="flex items-center gap-2 text-xs font-bold text-amber-800 uppercase tracking-wider">
               <UserCheck className="w-4 h-4 text-amber-600" />

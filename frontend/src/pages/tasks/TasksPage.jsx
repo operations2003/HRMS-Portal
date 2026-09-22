@@ -14,7 +14,9 @@ import {
   User,
   Tag,
   X,
+  TrendingUp,
 } from 'lucide-react';
+import { MyPerformanceSection } from '../../components/tasks/MyPerformanceSection.jsx';
 import { taskService } from '../../services/taskService.js';
 import { employeeService } from '../../services/employeeService.js';
 import { useAuth } from '../../context/AuthContext.jsx';
@@ -36,6 +38,7 @@ export const TasksPage = () => {
 
   const [tasks, setTasks] = useState([]);
   const [employees, setEmployees] = useState([]);
+  const [activeTab, setActiveTab] = useState('performance'); // 'performance' | 'board'
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState('kanban'); // 'kanban' | 'list'
   const [search, setSearch] = useState('');
@@ -175,17 +178,50 @@ export const TasksPage = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2.5">
-            <CheckSquare className="w-6 h-6 text-indigo-600" />
-            Internal Task & Work Management
-          </h1>
-          <p className="text-sm text-slate-500">
-            Collaborative task assignment, workload tracking, and Kanban delivery pipeline
-          </p>
-        </div>
+      {/* Top Tab Navigation Bar (Matching User Screenshot) */}
+      <div className="flex items-center gap-8 border-b border-slate-200/90 pb-px">
+        <button
+          type="button"
+          onClick={() => setActiveTab('performance')}
+          className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
+            activeTab === 'performance'
+              ? 'border-indigo-600 text-indigo-600'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <TrendingUp className="w-4 h-4" />
+          My Performance
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('board')}
+          className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
+            activeTab === 'board'
+              ? 'border-indigo-600 text-indigo-600'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Kanban className="w-4 h-4" />
+          Task Board & Pipeline
+        </button>
+      </div>
+
+      {activeTab === 'performance' ? (
+        <MyPerformanceSection />
+      ) : (
+        <>
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2.5">
+                <CheckSquare className="w-6 h-6 text-indigo-600" />
+                Internal Task & Work Management
+              </h1>
+              <p className="text-sm text-slate-500">
+                Collaborative task assignment, workload tracking, and Kanban delivery pipeline
+              </p>
+            </div>
 
         <div className="flex items-center gap-3">
           {/* View toggle */}
@@ -396,6 +432,8 @@ export const TasksPage = () => {
           </table>
         </div>
       )}
+      </>
+    )}
 
       {/* CREATE TASK MODAL */}
       {showCreateModal && (

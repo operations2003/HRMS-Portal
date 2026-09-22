@@ -103,6 +103,22 @@ export const attendanceService = {
   },
 
   /**
+   * Get organization attendance analytics (trend, distribution, KPI metrics) for HR / Admin
+   * @param {Object} params - { view, shift, deptId, date }
+   */
+  async getOrgAnalytics(params = {}) {
+    const query = new URLSearchParams();
+    if (params.view) query.append('view', params.view);
+    if (params.shift) query.append('shift', params.shift);
+    if (params.deptId) query.append('deptId', params.deptId);
+    if (params.date) query.append('date', params.date);
+    const queryString = query.toString() ? `?${query.toString()}` : '';
+
+    const res = await http.get(`/v1/attendance/organization/analytics${queryString}`);
+    return res.data;
+  },
+
+  /**
    * Get attendance record by ID
    * @param {string} id
    */

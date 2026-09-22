@@ -19,6 +19,7 @@ import {
   Flame,
   Zap,
   ShieldCheck,
+  Tag,
 } from 'lucide-react';
 import { Badge } from '../common/Badge.jsx';
 import { Button } from '../common/Button.jsx';
@@ -53,15 +54,23 @@ export const AttendanceHistoryTable = ({
 
     const isEmergency = regReason.includes('[EMERGENCY]') || notes.includes('[POST_SHIFT_REMARK: EMERGENCY]');
     const isOT = regReason.includes('[OT]') || notes.includes('[POST_SHIFT_REMARK: OT]');
+    const isMistake = regReason.includes('[MISTAKE]') || notes.includes('[POST_SHIFT_REMARK: MISTAKE]');
 
     const isPostShiftExceeded = isAutoLoggedOut || hasNeedsTag;
+    const isPending =
+      (isPostShiftExceeded || Number(row?.overtimeHours || 0) > 0) &&
+      !isEmergency &&
+      !isOT &&
+      !isMistake &&
+      hasNeedsTag;
 
     return {
       isPostShiftExceeded,
-      isPending: isPostShiftExceeded && !isEmergency && !isOT,
+      isPending,
       isEmergency,
       isOT,
-      hasRemark: isEmergency || isOT,
+      isMistake,
+      hasRemark: isEmergency || isOT || isMistake,
     };
   };
 
@@ -361,9 +370,26 @@ export const AttendanceHistoryTable = ({
                   <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 flex-wrap">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       {remarkInfo.isPending && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                        <button
+                          type="button"
+                          onClick={() => onAddRemark && onAddRemark(row)}
+                          title="Click to Tag as OT or Mistake"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 hover:bg-amber-200 text-amber-800 border border-amber-300 transition-all cursor-pointer shadow-2xs"
+                        >
                           <AlertTriangle className="w-2.5 h-2.5 text-amber-600" />
                           Review Needed
+                        </button>
+                      )}
+                      {remarkInfo.isOT && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                          <Zap className="w-2.5 h-2.5 text-purple-600" />
+                          Approved OT
+                        </span>
+                      )}
+                      {remarkInfo.isMistake && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                          <RotateCcw className="w-2.5 h-2.5 text-slate-500" />
+                          Mistake (Logged Out)
                         </span>
                       )}
                       {remarkInfo.isEmergency && (
@@ -372,23 +398,32 @@ export const AttendanceHistoryTable = ({
                           Emergency
                         </span>
                       )}
-                      {remarkInfo.isOT && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
-                          <Zap className="w-2.5 h-2.5 text-purple-600" />
-                          Approved OT
-                        </span>
-                      )}
                     </div>
                     <div className="flex items-center gap-1.5">
-                      {canRemark && (remarkInfo.isPending || remarkInfo.hasRemark) && (
+                      {(remarkInfo.isPending || remarkInfo.hasRemark || ot > 0) && (
                         <Button
                           variant={remarkInfo.isPending ? 'primary' : 'secondary'}
                           size="sm"
-                          icon={ShieldCheck}
-                          className={remarkInfo.isPending ? '!bg-amber-600 hover:!bg-amber-700 text-white !py-1 !px-2.5 !text-xs shadow-xs' : '!py-1 !px-2.5 !text-xs text-slate-600'}
+                          icon={Tag}
+                          className={
+                            remarkInfo.isPending
+                              ? '!bg-amber-600 hover:!bg-amber-700 text-white !py-1 !px-2.5 !text-xs font-semibold shadow-xs'
+                              : '!py-1 !px-2.5 !text-xs text-slate-600'
+                          }
                           onClick={() => onAddRemark && onAddRemark(row)}
+                          title={
+                            remarkInfo.isPending
+                              ? 'Tag as OT or Mistake'
+                              : remarkInfo.hasRemark
+                              ? 'Edit Tag'
+                              : 'Tag OT / Mistake'
+                          }
                         >
-                          {remarkInfo.isPending ? 'Remark' : 'Edit'}
+                          {remarkInfo.isPending
+                            ? 'Tag OT / Mistake'
+                            : remarkInfo.hasRemark
+                            ? 'Edit Tag'
+                            : 'Tag OT/Mistake'}
                         </Button>
                       )}
                       <Button
@@ -506,12 +541,32 @@ export const AttendanceHistoryTable = ({
                             </span>
                           )}
                           {remarkInfo.isPending && (
-                            <span
-                              title="Exceeded 10h post-shift. Manager/HR/Admin review required."
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200"
+                            <button
+                              type="button"
+                              onClick={() => onAddRemark && onAddRemark(row)}
+                              title="Session exceeded shift hours. Click to Tag as OT or Mistake"
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 hover:bg-amber-200 text-amber-800 border border-amber-300 transition-all cursor-pointer shadow-2xs"
                             >
-                              <AlertTriangle className="w-2.5 h-2.5 text-amber-600" />
+                              <AlertTriangle className="w-3 h-3 text-amber-600" />
                               Review Needed
+                            </button>
+                          )}
+                          {remarkInfo.isOT && (
+                            <span
+                              title="Classified as Approved Overtime"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200"
+                            >
+                              <Zap className="w-2.5 h-2.5 text-purple-600" />
+                              Approved OT
+                            </span>
+                          )}
+                          {remarkInfo.isMistake && (
+                            <span
+                              title="Classified as Mistake (Forgot to Logout)"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200"
+                            >
+                              <RotateCcw className="w-2.5 h-2.5 text-slate-500" />
+                              Mistake (Logged Out)
                             </span>
                           )}
                           {remarkInfo.isEmergency && (
@@ -521,15 +576,6 @@ export const AttendanceHistoryTable = ({
                             >
                               <Flame className="w-2.5 h-2.5 text-rose-600" />
                               Emergency
-                            </span>
-                          )}
-                          {remarkInfo.isOT && (
-                            <span
-                              title="Classified as Approved Overtime"
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200"
-                            >
-                              <Zap className="w-2.5 h-2.5 text-purple-600" />
-                              Approved OT
                             </span>
                           )}
                         </div>
@@ -591,16 +637,30 @@ export const AttendanceHistoryTable = ({
                       {/* Actions */}
                       <td className="px-6 py-4 whitespace-nowrap text-right">
                         <div className="flex items-center justify-end gap-1.5">
-                          {canRemark && (remarkInfo.isPending || remarkInfo.hasRemark) && (
+                          {(remarkInfo.isPending || remarkInfo.hasRemark || ot > 0) && (
                             <Button
                               variant={remarkInfo.isPending ? 'primary' : 'secondary'}
                               size="sm"
-                              icon={ShieldCheck}
-                              className={remarkInfo.isPending ? '!bg-amber-600 hover:!bg-amber-700 text-white !py-1 !px-2.5 !text-xs shadow-xs' : '!py-1 !px-2.5 !text-xs text-slate-600'}
+                              icon={Tag}
+                              className={
+                                remarkInfo.isPending
+                                  ? '!bg-amber-600 hover:!bg-amber-700 text-white !py-1 !px-2.5 !text-xs font-semibold shadow-xs'
+                                  : '!py-1 !px-2.5 !text-xs text-slate-600 hover:text-slate-900 border-slate-200'
+                              }
                               onClick={() => onAddRemark && onAddRemark(row)}
-                              title={remarkInfo.isPending ? 'Add Emergency or OT Remark' : 'Update Shift Remark'}
+                              title={
+                                remarkInfo.isPending
+                                  ? 'Tag as OT or Mistake'
+                                  : remarkInfo.hasRemark
+                                  ? 'Change Tag (OT, Mistake, Emergency)'
+                                  : 'Tag Record as OT or Mistake'
+                              }
                             >
-                              {remarkInfo.isPending ? 'Remark' : 'Edit'}
+                              {remarkInfo.isPending
+                                ? 'Tag: OT / Mistake'
+                                : remarkInfo.hasRemark
+                                ? 'Edit Tag'
+                                : 'Tag OT/Mistake'}
                             </Button>
                           )}
                           <Button

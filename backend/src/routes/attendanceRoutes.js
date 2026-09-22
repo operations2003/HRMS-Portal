@@ -52,14 +52,21 @@ router.get(
   attendanceController.getMyAttendance
 );
 
-// 4. Manager / team attendance API
+// 4. Team attendance API (HR and Admin only)
 router.get(
   '/team',
-  requireRoles(['Manager', 'HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin']),
+  requireRoles(['HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin']),
   attendanceController.getTeamAttendance
 );
 
-// 5. HR authorized organization attendance API
+// 5a. Organization Attendance Analytics (Trend & Status Distribution for Admin & HR)
+router.get(
+  '/organization/analytics',
+  requireRoles(['HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin']),
+  attendanceController.getOrgAnalytics
+);
+
+// 5b. HR & Admin authorized organization attendance records API
 router.get(
   '/organization',
   requireRoles(['HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin']),
@@ -81,10 +88,10 @@ router.put(
   attendanceController.regularize
 );
 
-// 8. Add Shift Remark (Emergency or OT for 10h+ post-shift work) (Admin, HR, Manager)
+// 8. Add Shift Remark (Tag as OT, Mistake, or Emergency) (Employee, Manager, HR, Admin)
 router.put(
   '/:id/remark',
-  requireRoles(['Manager', 'HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin']),
+  requireRoles(['Employee', 'Manager', 'HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin']),
   validate(validateShiftRemark),
   attendanceController.addShiftRemark
 );

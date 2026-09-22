@@ -776,11 +776,28 @@ export const attendanceService = {
   },
 
   /**
+   * Get organization attendance analytics (trend & distribution) for HR & Admin
+   */
+  async getOrgAnalytics(user, query = {}) {
+    const normRole = normalizeRole(user.roleName);
+    if (!['admin', 'superadmin', 'hr', 'hrmanager', 'orgadmin'].includes(normRole)) {
+      const error = new Error('Access denied: Requires HR or Admin authorization.');
+      error.statusCode = 403;
+      throw error;
+    }
+
+    // Automatically resolve stale sessions across organization
+    await autoCheckoutStaleRecords(user.orgId);
+
+    return attendanceRepository.getAttendanceAnalytics(user.orgId, query);
+  },
+
+  /**
    * Get organization-wide attendance for HR & Admin
    */
   async getOrgAttendance(user, query = {}) {
     const normRole = normalizeRole(user.roleName);
-    if (normRole !== 'admin' && normRole !== 'superadmin' && normRole !== 'hr' && normRole !== 'hrmanager') {
+    if (!['admin', 'superadmin', 'hr', 'hrmanager', 'orgadmin'].includes(normRole)) {
       const error = new Error('Access denied: Requires HR or Admin authorization.');
       error.statusCode = 403;
       throw error;
@@ -868,8 +885,8 @@ export const attendanceService = {
   },
 
   /**
-   * Add an Emergency or OT remark on an attendance session (Admin, HR, Manager)
-   * Specifically for sessions that logged out after 10 hours post-shift.
+   * Add a Shift Remark (OT, Mistake, or Emergency) on an attendance session
+   * Classifies sessions (including those logged out after 10h post-shift or with excess hours)
    */
   async addShiftRemark(user, id, { remarkType, comments }) {
     const record = await attendanceRepository.findById(id);
@@ -880,9 +897,9 @@ export const attendanceService = {
     }
 
     const normRole = normalizeRole(user.roleName);
-    const allowedRoles = ['admin', 'hr', 'manager', 'superadmin', 'hrmanager', 'orgadmin'];
+    const allowedRoles = ['admin', 'hr', 'manager', 'superadmin', 'hrmanager', 'orgadmin', 'employee'];
     if (!allowedRoles.includes(normRole)) {
-      const error = new Error('Access denied: Only Admin, HR, and Manager can add shift remarks.');
+      const error = new Error('Access denied: Unauthorized role to submit shift remarks.');
       error.statusCode = 403;
       throw error;
     }
@@ -894,19 +911,31 @@ export const attendanceService = {
       throw error;
     }
 
-    // Manager boundary check: can remark only department members
+    // Employee boundary check: can tag their own record
+    if (normRole === 'employee') {
+      const emp = await resolveRequesterEmployee(user);
+      if (!emp || emp.id !== record.employeeId) {
+        const error = new Error('Access denied: Employees can only tag their own attendance records.');
+        error.statusCode = 403;
+        throw error;
+      }
+    }
+
+    // Manager boundary check: can remark only department members or own record
     if (normRole === 'manager') {
       const managerEmp = await resolveRequesterEmployee(user);
-      if (!managerEmp || !managerEmp.deptId || !record.employee || record.employee.deptId !== managerEmp.deptId) {
-        const error = new Error('Access denied: Managers can only add remarks for members in their department.');
+      const isOwnRecord = managerEmp && managerEmp.id === record.employeeId;
+      const isDeptMember = managerEmp && managerEmp.deptId && record.employee && record.employee.deptId === managerEmp.deptId;
+      if (!isOwnRecord && !isDeptMember) {
+        const error = new Error('Access denied: Managers can only add remarks for members in their department or their own records.');
         error.statusCode = 403;
         throw error;
       }
     }
 
     const typeNormalized = (remarkType || '').trim().toUpperCase();
-    if (!['EMERGENCY', 'OT'].includes(typeNormalized)) {
-      const error = new Error("Invalid remark type. Must be either 'EMERGENCY' or 'OT'.");
+    if (!['EMERGENCY', 'OT', 'MISTAKE'].includes(typeNormalized)) {
+      const error = new Error("Invalid remark type. Must be 'OT', 'MISTAKE', or 'EMERGENCY'.");
       error.statusCode = 400;
       throw error;
     }
@@ -931,7 +960,33 @@ export const attendanceService = {
 
     const regularizationReason = `[${typeNormalized}] ${cleanComment}`;
 
+    // Adjust hours and checkout if marked as MISTAKE (forgot to logout / spurious duration)
+    let updatedTotalHours = record.totalHours;
+    let updatedOvertimeHours = record.overtimeHours;
+    let updatedCheckOut = record.checkOut;
+
+    if (typeNormalized === 'MISTAKE') {
+      // Overtime is voided
+      updatedOvertimeHours = 0.00;
+      // Cap working duration to standard shift duration
+      const shiftTiming = record.employee?.shiftTiming || '11:00 AM - 07:00 PM';
+      const shiftInfo = parseShiftTiming(shiftTiming);
+      const scheduledHours = shiftInfo.scheduledDurationHours || 8.0;
+      updatedTotalHours = scheduledHours;
+
+      // Adjust checkOut timestamp to match scheduled shift completion if checkIn exists
+      if (record.checkIn) {
+        const inTime = new Date(record.checkIn).getTime();
+        const breakMs = (record.breakDurationMinutes || 0) * 60 * 1000;
+        const netShiftMs = scheduledHours * 3600 * 1000;
+        updatedCheckOut = new Date(inTime + netShiftMs + breakMs);
+      }
+    }
+
     const updatedRecord = await attendanceRepository.update(id, {
+      checkOut: updatedCheckOut,
+      totalHours: updatedTotalHours,
+      overtimeHours: updatedOvertimeHours,
       isRegularized: true,
       regularizationReason,
       regularizedBy: user.id,

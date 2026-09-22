@@ -61,5 +61,17 @@ export const taskController = {
       next(error);
     }
   },
+
+  async getMyPerformance(req, res, next) {
+    try {
+      const orgId = req.user.orgId || 'org-1';
+      const timeframe = req.query.timeframe || 'this_month';
+      const metrics = await taskService.getMyPerformance(orgId, req.user, timeframe);
+      return sendSuccess(res, 'Task performance metrics retrieved successfully.', metrics);
+    } catch (error) {
+      if (error.statusCode) return sendError(res, error.message, error.statusCode);
+      next(error);
+    }
+  },
 };
 

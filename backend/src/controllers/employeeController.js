@@ -1,5 +1,7 @@
+import fs from 'fs';
 import { employeeService } from '../services/employeeService.js';
 import { employeeLifecycleService } from '../services/employeeLifecycleService.js';
+import { cloudinaryService } from '../services/cloudinaryService.js';
 import { sendSuccess, sendError } from '../utils/apiResponse.js';
 import { pool } from '../config/db.js';
 
@@ -169,6 +171,7 @@ export const employeeController = {
         fullName: `${emp.first_name || ''} ${emp.last_name || ''}`.trim(),
         email: emp.email,
         phone: emp.phone || '',
+        avatarUrl: emp.avatar_url || '',
         dateOfJoining: emp.date_of_joining,
         employmentType: emp.employment_type,
         status: emp.status,
@@ -200,7 +203,7 @@ export const employeeController = {
   async updateMyProfile(req, res, next) {
     try {
       const user = req.user;
-      const { phone, emergencyContact, address, fatherName, motherName } = req.body;
+      const { phone, emergencyContact, address, fatherName, motherName, avatarUrl } = req.body;
 
       const updateRes = await pool.query(
         `UPDATE employees
@@ -210,10 +213,11 @@ export const employeeController = {
            address = COALESCE($3, address),
            father_name = COALESCE($4, father_name),
            mother_name = COALESCE($5, mother_name),
+           avatar_url = COALESCE($6, avatar_url),
            updated_at = NOW()
-         WHERE user_id = $6 OR email = $7
+         WHERE user_id = $7 OR email = $8
          RETURNING *;`,
-        [phone, emergencyContact, address, fatherName, motherName, user.id, user.email]
+        [phone, emergencyContact, address, fatherName, motherName, avatarUrl, user.id, user.email]
       );
 
       if (updateRes.rows.length === 0) {
@@ -280,6 +284,7 @@ export const employeeController = {
         fullName: `${emp.first_name || ''} ${emp.last_name || ''}`.trim(),
         email: emp.email,
         phone: emp.phone || '',
+        avatarUrl: emp.avatar_url || '',
         dateOfJoining: emp.date_of_joining,
         employmentType: emp.employment_type,
         status: emp.status,
@@ -299,6 +304,93 @@ export const employeeController = {
       };
 
       return sendSuccess(res, 'Profile retrieved successfully.', profile);
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  /**
+   * POST /api/v1/employees/me/avatar
+   * Upload profile picture
+   */
+  async uploadAvatar(req, res, next) {
+    try {
+      const user = req.user;
+      if (!req.file) {
+        return sendError(res, 'No image file uploaded. Please select an image.', 400);
+      }
+
+      let avatarUrl = '';
+      try {
+        const cloudRes = await cloudinaryService.upload(req.file.path, {
+          folder: 'hrms-portal/avatars',
+          filename: `avatar_${user.id}_${Date.now()}`,
+          resourceType: 'image',
+        });
+        avatarUrl = cloudRes.secureUrl;
+      } catch (cloudErr) {
+        // Fallback to base64 Data URI if Cloudinary upload encounters an issue
+        const fileBuffer = fs.readFileSync(req.file.path);
+        const mimeType = req.file.mimetype || 'image/jpeg';
+        avatarUrl = `data:${mimeType};base64,${fileBuffer.toString('base64')}`;
+      } finally {
+        // Clean up temporary local file if created
+        try {
+          if (req.file.path && fs.existsSync(req.file.path)) {
+            fs.unlinkSync(req.file.path);
+          }
+        } catch {
+          // Ignore cleanup errors
+        }
+      }
+
+      // Persist to employees and users tables
+      const empRes = await pool.query(
+        `UPDATE employees
+         SET avatar_url = $1, updated_at = NOW()
+         WHERE user_id = $2 OR email = $3
+         RETURNING id, employee_code, first_name, last_name, email, avatar_url;`,
+        [avatarUrl, user.id, user.email]
+      );
+
+      await pool.query(
+        `UPDATE users
+         SET avatar_url = $1, updated_at = NOW()
+         WHERE id = $2;`,
+        [avatarUrl, user.id]
+      );
+
+      return sendSuccess(res, 'Profile photo updated successfully.', {
+        avatarUrl,
+        employee: empRes.rows[0] || null,
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  /**
+   * DELETE /api/v1/employees/me/avatar
+   * Remove profile picture
+   */
+  async removeAvatar(req, res, next) {
+    try {
+      const user = req.user;
+      await pool.query(
+        `UPDATE employees
+         SET avatar_url = NULL, updated_at = NOW()
+         WHERE user_id = $1 OR email = $2;`,
+        [user.id, user.email]
+      );
+
+      await pool.query(
+        `UPDATE users
+         SET avatar_url = NULL, updated_at = NOW()
+         WHERE id = $1;`,
+        [user.id]
+      );
+
+      return sendSuccess(res, 'Profile photo removed successfully.', { avatarUrl: null });
     } catch (error) {
       next(error);
     }

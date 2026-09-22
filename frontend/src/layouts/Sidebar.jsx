@@ -44,6 +44,18 @@ export const Sidebar = ({ isOpen, onClose }) => {
       permission: 'dashboard:read',
     },
     {
+      name: 'My Profile',
+      path: '/profile',
+      icon: User,
+      permission: ['employee:read'],
+    },
+    {
+      name: 'Attendance',
+      path: '/attendance',
+      icon: CalendarCheck,
+      permission: 'attendance:read',
+    },
+    {
       name: 'Manager Cockpit',
       path: '/manager',
       icon: Briefcase,
@@ -84,12 +96,6 @@ export const Sidebar = ({ isOpen, onClose }) => {
       path: '/analytics',
       icon: BarChart3,
       roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
-    },
-    {
-      name: 'Attendance',
-      path: '/attendance',
-      icon: CalendarCheck,
-      permission: 'attendance:read',
     },
     {
       name: 'Leaves',
@@ -156,12 +162,6 @@ export const Sidebar = ({ isOpen, onClose }) => {
       path: '/helpdesk',
       icon: LifeBuoy,
       permission: ['helpdesk:read', 'request:read', 'employee:read'],
-    },
-    {
-      name: 'My Profile',
-      path: '/profile',
-      icon: User,
-      permission: ['employee:read'],
     },
     {
       name: 'Departments',

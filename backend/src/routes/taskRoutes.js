@@ -8,6 +8,7 @@ const router = Router();
 router.use(authenticate);
 
 router.get('/', authorize(['task:read', 'employee:read']), taskController.list);
+router.get('/performance', authorize(['task:read', 'employee:read']), taskController.getMyPerformance);
 router.post('/', authorize(['task:write', 'employee:read']), taskController.create);
 router.patch('/:id/status', authorize(['task:write', 'employee:read']), taskController.updateStatus);
 router.post('/:id/comments', authorize(['task:write', 'employee:read']), taskController.addComment);

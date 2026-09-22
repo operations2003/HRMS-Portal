@@ -90,6 +90,15 @@ export const AuthProvider = ({ children }) => {
     return targetRoles.includes(userRoleStr);
   };
 
+  const updateUser = (updatedFields) => {
+    setUser((prev) => {
+      if (!prev) return prev;
+      const updated = { ...prev, ...updatedFields };
+      localStorage.setItem('hrms_user', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -101,6 +110,7 @@ export const AuthProvider = ({ children }) => {
         logout,
         hasPermission,
         hasRole,
+        updateUser,
       }}
     >
       {children}

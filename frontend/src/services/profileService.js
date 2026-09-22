@@ -15,4 +15,16 @@ export const profileService = {
     const res = await http.get(`/v1/employees/${employeeId}/profile`);
     return res.data;
   },
+
+  async uploadAvatar(file) {
+    const formData = new FormData();
+    formData.append('avatar', file);
+    const res = await http.upload('/v1/employees/me/avatar', formData);
+    return res.data;
+  },
+
+  async removeAvatar() {
+    const res = await http.delete('/v1/employees/me/avatar');
+    return res.data;
+  },
 };

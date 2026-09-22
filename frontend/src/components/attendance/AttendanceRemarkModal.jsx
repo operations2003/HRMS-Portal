@@ -3,12 +3,14 @@ import {
   AlertTriangle,
   Flame,
   Zap,
+  RotateCcw,
   Clock,
   User,
   Calendar,
   FileText,
   CheckCircle2,
   ShieldCheck,
+  Tag,
 } from 'lucide-react';
 import { Modal } from '../common/Modal.jsx';
 import { Button } from '../common/Button.jsx';
@@ -23,7 +25,7 @@ export const AttendanceRemarkModal = ({
   onSuccess,
 }) => {
   const toast = useToast();
-  const [remarkType, setRemarkType] = useState('EMERGENCY');
+  const [remarkType, setRemarkType] = useState('OT');
   const [comments, setComments] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
@@ -32,25 +34,31 @@ export const AttendanceRemarkModal = ({
   useEffect(() => {
     if (record) {
       // Check if existing remark already exists in regularizationReason or notes
-      const isEmergency =
-        record.regularizationReason?.includes('[EMERGENCY]') ||
-        record.notes?.includes('[POST_SHIFT_REMARK: EMERGENCY]');
+      const isMistake =
+        record.regularizationReason?.includes('[MISTAKE]') ||
+        record.notes?.includes('[POST_SHIFT_REMARK: MISTAKE]');
       const isOT =
         record.regularizationReason?.includes('[OT]') ||
         record.notes?.includes('[POST_SHIFT_REMARK: OT]');
+      const isEmergency =
+        record.regularizationReason?.includes('[EMERGENCY]') ||
+        record.notes?.includes('[POST_SHIFT_REMARK: EMERGENCY]');
 
-      if (isEmergency) {
-        setRemarkType('EMERGENCY');
+      if (isMistake) {
+        setRemarkType('MISTAKE');
       } else if (isOT) {
         setRemarkType('OT');
-      } else {
+      } else if (isEmergency) {
         setRemarkType('EMERGENCY');
+      } else {
+        // Default to OT (or Mistake if large duration)
+        setRemarkType('OT');
       }
 
       // Extract previous comment if available
       if (record.regularizationReason) {
         const cleaned = record.regularizationReason
-          .replace(/^\[(EMERGENCY|OT)\]\s*/i, '')
+          .replace(/^\[(EMERGENCY|OT|MISTAKE)\]\s*/i, '')
           .trim();
         setComments(cleaned);
       } else {
@@ -66,11 +74,11 @@ export const AttendanceRemarkModal = ({
   const handleSubmit = async (e) => {
     e?.preventDefault();
     if (!comments.trim()) {
-      setError('Please provide justification remarks or explanation for this work.');
+      setError('Please provide a brief reason or explanation for this classification.');
       return;
     }
     if (comments.trim().length < 3) {
-      setError('Remarks must be at least 3 characters long.');
+      setError('Comments must be at least 3 characters long.');
       return;
     }
 
@@ -83,15 +91,20 @@ export const AttendanceRemarkModal = ({
         comments: comments.trim(),
       });
 
-      toast.success(
-        `Recorded remark as ${remarkType === 'EMERGENCY' ? 'Emergency Work' : 'Approved OT'} successfully!`
-      );
+      if (remarkType === 'MISTAKE') {
+        toast.success('Tagged as Mistake: Overtime has been reset to 0 and shift duration normalized.');
+      } else if (remarkType === 'OT') {
+        toast.success('Tagged as Approved Overtime (OT) successfully!');
+      } else {
+        toast.success('Tagged as Emergency Work successfully!');
+      }
+
       if (onSuccess) {
         onSuccess(updated);
       }
       onClose();
     } catch (err) {
-      const msg = err.message || 'Failed to submit remark. Please try again.';
+      const msg = err.message || 'Failed to submit tag. Please try again.';
       setError(msg);
       toast.error(msg);
     } finally {
@@ -119,20 +132,20 @@ export const AttendanceRemarkModal = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Post-Shift Review & Remark"
-      subtitle="Admin, Manager & HR classification for sessions exceeding 10 hours post-shift"
+      title="Tag Attendance Record"
+      subtitle="Classify this session as Approved Overtime (OT), Mistake (Forgot Logout), or Emergency"
       maxWidth="max-w-xl"
     >
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Info Banner */}
-        <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200/80 flex items-start gap-3 text-xs text-amber-900">
+        <div className="p-3.5 rounded-2xl bg-amber-50/90 border border-amber-200/80 flex items-start gap-3 text-xs text-amber-900">
           <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
           <div className="space-y-1">
             <span className="font-bold text-amber-950 block">
-              10-Hour Post-Shift Policy Review Required
+              Classification & Overtime Tagging
             </span>
             <p className="text-amber-800 leading-relaxed">
-              This employee session extended 10 hours past scheduled shift completion. Authorized management must classify this duration as <strong>Emergency Work</strong> or <strong>Approved OT</strong>.
+              Select <strong>OT</strong> if extra hours were genuine overtime, or <strong>Mistake</strong> if the employee forgot to log out (which automatically voids overtime and resets duration).
             </p>
           </div>
         </div>
@@ -166,15 +179,15 @@ export const AttendanceRemarkModal = ({
 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2 border-t border-slate-200/60 text-xs">
             <div>
-              <span className="text-slate-400 block text-[10px]">Total Hours</span>
+              <span className="text-slate-400 block text-[10px]">Total Recorded Hours</span>
               <span className="font-bold text-slate-800 font-mono">
                 {record.totalHours !== undefined ? `${Number(record.totalHours).toFixed(2)} hrs` : '—'}
               </span>
             </div>
             <div>
-              <span className="text-slate-400 block text-[10px]">Overtime Accrued</span>
-              <span className="font-bold text-purple-700 font-mono">
-                +{otHours.toFixed(2)} hrs
+              <span className="text-slate-400 block text-[10px]">Overtime</span>
+              <span className="font-bold text-amber-600 font-mono">
+                {otHours > 0 ? `+${otHours.toFixed(2)} hrs` : '0.00 hrs'}
               </span>
             </div>
             <div>
@@ -189,48 +202,16 @@ export const AttendanceRemarkModal = ({
         {/* Classification Selector */}
         <div className="space-y-2">
           <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-            Work Classification Remark <span className="text-rose-500">*</span>
+            Select Classification Tag <span className="text-rose-500">*</span>
           </label>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {/* 1. Emergency Option */}
-            <button
-              type="button"
-              onClick={() => setRemarkType('EMERGENCY')}
-              className={`p-3.5 rounded-2xl border text-left transition-all flex flex-col justify-between gap-2 ${
-                remarkType === 'EMERGENCY'
-                  ? 'bg-rose-50/80 border-rose-400 ring-2 ring-rose-400/20 shadow-xs'
-                  : 'bg-white border-slate-200 hover:border-slate-300'
-              }`}
-            >
-              <div className="flex items-center justify-between w-full">
-                <div className="flex items-center gap-2">
-                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${
-                    remarkType === 'EMERGENCY'
-                      ? 'bg-rose-600 text-white'
-                      : 'bg-rose-100 text-rose-700'
-                  }`}>
-                    <Flame className="w-4 h-4" />
-                  </div>
-                  <span className="text-sm font-bold text-slate-900">
-                    Emergency Work
-                  </span>
-                </div>
-                {remarkType === 'EMERGENCY' && (
-                  <CheckCircle2 className="w-4 h-4 text-rose-600" />
-                )}
-              </div>
-              <p className="text-[11px] text-slate-500 leading-relaxed">
-                Critical production outage, server emergency, or urgent unscheduled incident response.
-              </p>
-            </button>
-
-            {/* 2. Overtime (OT) Option */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            {/* 1. Overtime (OT) Option */}
             <button
               type="button"
               onClick={() => setRemarkType('OT')}
-              className={`p-3.5 rounded-2xl border text-left transition-all flex flex-col justify-between gap-2 ${
+              className={`p-3 rounded-2xl border text-left transition-all flex flex-col justify-between gap-2 ${
                 remarkType === 'OT'
-                  ? 'bg-purple-50/80 border-purple-400 ring-2 ring-purple-400/20 shadow-xs'
+                  ? 'bg-purple-50/90 border-purple-500 ring-2 ring-purple-400/20 shadow-xs'
                   : 'bg-white border-slate-200 hover:border-slate-300'
               }`}
             >
@@ -243,8 +224,8 @@ export const AttendanceRemarkModal = ({
                   }`}>
                     <Zap className="w-4 h-4" />
                   </div>
-                  <span className="text-sm font-bold text-slate-900">
-                    Approved Overtime (OT)
+                  <span className="text-xs font-bold text-slate-900">
+                    OT (Overtime)
                   </span>
                 </div>
                 {remarkType === 'OT' && (
@@ -252,7 +233,71 @@ export const AttendanceRemarkModal = ({
                 )}
               </div>
               <p className="text-[11px] text-slate-500 leading-relaxed">
-                Authorized extra hours for project deadlines, deployments, or scheduled deliverables.
+                Legitimate extra hours worked. Keeps overtime duration intact.
+              </p>
+            </button>
+
+            {/* 2. Mistake Option */}
+            <button
+              type="button"
+              onClick={() => setRemarkType('MISTAKE')}
+              className={`p-3 rounded-2xl border text-left transition-all flex flex-col justify-between gap-2 ${
+                remarkType === 'MISTAKE'
+                  ? 'bg-amber-50/90 border-amber-500 ring-2 ring-amber-400/20 shadow-xs'
+                  : 'bg-white border-slate-200 hover:border-slate-300'
+              }`}
+            >
+              <div className="flex items-center justify-between w-full">
+                <div className="flex items-center gap-2">
+                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${
+                    remarkType === 'MISTAKE'
+                      ? 'bg-amber-600 text-white'
+                      : 'bg-amber-100 text-amber-700'
+                  }`}>
+                    <RotateCcw className="w-4 h-4" />
+                  </div>
+                  <span className="text-xs font-bold text-slate-900">
+                    Mistake
+                  </span>
+                </div>
+                {remarkType === 'MISTAKE' && (
+                  <CheckCircle2 className="w-4 h-4 text-amber-600" />
+                )}
+              </div>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                Forgot to log out. Resets overtime to 0 hrs and normalizes total duration.
+              </p>
+            </button>
+
+            {/* 3. Emergency Option */}
+            <button
+              type="button"
+              onClick={() => setRemarkType('EMERGENCY')}
+              className={`p-3 rounded-2xl border text-left transition-all flex flex-col justify-between gap-2 ${
+                remarkType === 'EMERGENCY'
+                  ? 'bg-rose-50/90 border-rose-500 ring-2 ring-rose-400/20 shadow-xs'
+                  : 'bg-white border-slate-200 hover:border-slate-300'
+              }`}
+            >
+              <div className="flex items-center justify-between w-full">
+                <div className="flex items-center gap-2">
+                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${
+                    remarkType === 'EMERGENCY'
+                      ? 'bg-rose-600 text-white'
+                      : 'bg-rose-100 text-rose-700'
+                  }`}>
+                    <Flame className="w-4 h-4" />
+                  </div>
+                  <span className="text-xs font-bold text-slate-900">
+                    Emergency
+                  </span>
+                </div>
+                {remarkType === 'EMERGENCY' && (
+                  <CheckCircle2 className="w-4 h-4 text-rose-600" />
+                )}
+              </div>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                Critical production outage or urgent incident triage response.
               </p>
             </button>
           </div>
@@ -264,7 +309,7 @@ export const AttendanceRemarkModal = ({
             htmlFor="remark-comments"
             className="text-xs font-bold text-slate-700 uppercase tracking-wider block"
           >
-            Reviewer Remarks / Justification <span className="text-rose-500">*</span>
+            Remarks / Explanation <span className="text-rose-500">*</span>
           </label>
           <textarea
             id="remark-comments"
@@ -272,9 +317,11 @@ export const AttendanceRemarkModal = ({
             value={comments}
             onChange={(e) => setComments(e.target.value)}
             placeholder={
-              remarkType === 'EMERGENCY'
-                ? 'e.g. Approved critical server migration and emergency incident triage...'
-                : 'e.g. Authorized sprint release testing and overtime for client go-live...'
+              remarkType === 'MISTAKE'
+                ? 'e.g. Forgot to log out upon leaving the office at regular shift end...'
+                : remarkType === 'OT'
+                ? 'e.g. Authorized project overtime for release deployment and sprint deliverables...'
+                : 'e.g. Approved critical server incident triage and emergency fix...'
             }
             className="w-full text-xs rounded-xl border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 p-3 outline-none transition-all placeholder:text-slate-400 resize-none"
           />
@@ -309,8 +356,21 @@ export const AttendanceRemarkModal = ({
             isLoading={isSubmitting}
             disabled={isSubmitting || !comments.trim()}
             icon={ShieldCheck}
+            className={
+              remarkType === 'MISTAKE'
+                ? '!bg-amber-600 hover:!bg-amber-700 text-white'
+                : remarkType === 'OT'
+                ? '!bg-purple-600 hover:!bg-purple-700 text-white'
+                : '!bg-rose-600 hover:!bg-rose-700 text-white'
+            }
           >
-            {isSubmitting ? 'Recording...' : 'Submit Remark'}
+            {isSubmitting
+              ? 'Saving...'
+              : remarkType === 'MISTAKE'
+              ? 'Tag as Mistake'
+              : remarkType === 'OT'
+              ? 'Tag as OT'
+              : 'Tag as Emergency'}
           </Button>
         </div>
       </form>

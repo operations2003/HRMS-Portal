@@ -70,6 +70,7 @@ export const authService = {
         organization: user.organization,
         employeeId: emp ? emp.id : null,
         employeeCode: emp ? emp.employeeCode : null,
+        avatarUrl: user.avatarUrl || emp?.avatarUrl || null,
       },
     };
   },
@@ -114,6 +115,7 @@ export const authService = {
       organization: user.organization,
       employeeId: emp ? emp.id : null,
       employeeCode: emp ? emp.employeeCode : null,
+      avatarUrl: user.avatarUrl || emp?.avatarUrl || null,
     };
   },
 };

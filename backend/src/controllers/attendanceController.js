@@ -109,6 +109,22 @@ export const attendanceController = {
   },
 
   /**
+   * GET /api/v1/attendance/organization/analytics
+   * Aggregated Attendance Trend, Status Distribution, and KPI Metrics for Admin/HR
+   */
+  async getOrgAnalytics(req, res, next) {
+    try {
+      const result = await attendanceService.getOrgAnalytics(req.user, req.query);
+      return sendSuccess(res, 'Organization attendance analytics fetched successfully.', result);
+    } catch (error) {
+      if (error.statusCode) {
+        return sendError(res, error.message, error.statusCode);
+      }
+      next(error);
+    }
+  },
+
+  /**
    * GET /api/v1/attendance/organization
    * Fetch organization-wide attendance & stats for HR / Admin
    */

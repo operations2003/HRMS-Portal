@@ -161,11 +161,11 @@ export const validateRegularize = (body) => {
 export const validateShiftRemark = (body) => {
   const errors = [];
 
-  const validRemarkTypes = ['EMERGENCY', 'OT'];
+  const validRemarkTypes = ['EMERGENCY', 'OT', 'MISTAKE'];
   if (!body.remarkType || typeof body.remarkType !== 'string') {
-    errors.push("Remark type is required and must be either 'EMERGENCY' or 'OT'.");
+    errors.push("Remark type is required and must be 'OT', 'MISTAKE', or 'EMERGENCY'.");
   } else if (!validRemarkTypes.includes(body.remarkType.trim().toUpperCase())) {
-    errors.push("Invalid remark type. Allowed values are 'EMERGENCY' or 'OT'.");
+    errors.push("Invalid remark type. Allowed values are 'OT', 'MISTAKE', or 'EMERGENCY'.");
   }
 
   if (!body.comments || typeof body.comments !== 'string' || !body.comments.trim()) {

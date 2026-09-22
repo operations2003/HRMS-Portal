@@ -18,6 +18,7 @@ import { AttendanceStatsBar } from '../../components/attendance/AttendanceStatsB
 import { AttendanceHistoryTable } from '../../components/attendance/AttendanceHistoryTable.jsx';
 import { AttendanceDetailModal } from '../../components/attendance/AttendanceDetailModal.jsx';
 import { AttendanceRemarkModal } from '../../components/attendance/AttendanceRemarkModal.jsx';
+import { AttendanceAnalyticsSection } from '../../components/attendance/AttendanceAnalyticsSection.jsx';
 import { Button } from '../../components/common/Button.jsx';
 import { Alert } from '../../components/common/Alert.jsx';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
@@ -26,13 +27,12 @@ export const AttendanceDashboardPage = () => {
   const { user, hasRole, hasPermission } = useAuth();
   const toast = useToast();
 
-  // Role permissions
-  const canViewTeam = hasRole(['Manager', 'HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin']);
+  // Role permissions: Only HR and Admin can see the whole organization's attendance
   const canViewOrg = hasRole(['HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin']);
-  const canRemark = hasRole(['Manager', 'HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin']);
+  const canRemark = true; // All authenticated roles can tag/review (employees for their own sessions, managers/HR/admin for team/org)
 
-  // Active view tab: 'my' | 'team' | 'org'
-  const [activeTab, setActiveTab] = useState('my');
+  // Active view tab: Admin and HR default to 'org', Managers and Employees only have 'my'
+  const [activeTab, setActiveTab] = useState(() => (canViewOrg ? 'org' : 'my'));
 
   // Today's attendance state for punch card
   const [todayRecord, setTodayRecord] = useState(null);
@@ -57,6 +57,7 @@ export const AttendanceDashboardPage = () => {
     endDate: '',
     status: '',
     search: '',
+    deptId: '',
   });
 
   // Modals state
@@ -109,22 +110,13 @@ export const AttendanceDashboardPage = () => {
           setRecords(res.records);
           setStatistics(res.statistics || {});
           setPagination(res.pagination || null);
-        } else if (activeTab === 'team') {
-          const res = await attendanceService.getTeamAttendance({
-            startDate: filters.startDate,
-            endDate: filters.endDate,
-            status: filters.status,
-            page,
-            limit: 15,
-          });
-          setRecords(res.records);
-          setPagination(res.pagination || null);
-        } else if (activeTab === 'org') {
+        } else if (activeTab === 'org' && canViewOrg) {
           const res = await attendanceService.getOrgAttendance({
             date: filters.startDate && filters.startDate === filters.endDate ? filters.startDate : undefined,
             startDate: filters.startDate,
             endDate: filters.endDate,
             status: filters.status,
+            deptId: filters.deptId,
             search: filters.search,
             page,
             limit: 15,
@@ -248,6 +240,7 @@ export const AttendanceDashboardPage = () => {
       endDate: '',
       status: '',
       search: '',
+      deptId: '',
     });
   };
 
@@ -283,106 +276,98 @@ export const AttendanceDashboardPage = () => {
         </div>
       </div>
 
-      {/* Top Section: Punch Card + Metrics Bar */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-        {/* Punch In/Out Card */}
-        <div className="lg:col-span-5 flex flex-col">
-          <AttendancePunchCard
-            todayRecord={todayRecord}
-            assignedShift={employeeProfile?.shiftTiming || todayRecord?.employee?.shiftTiming || '11:00 AM - 07:00 PM'}
-            onCheckIn={handleCheckIn}
-            onCheckOut={handleCheckOut}
-            onPauseBreak={handlePauseBreak}
-            onResumeBreak={handleResumeBreak}
-            isPunchingIn={isPunchingIn}
-            isPunchingOut={isPunchingOut}
-            isBreakLoading={isBreakLoading}
-            error={punchError}
-            onClearError={() => setPunchError(null)}
-          />
-        </div>
-
-        {/* Dynamic Metric Cards */}
-        <div className="lg:col-span-7 flex flex-col justify-between space-y-4">
-          <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-3xl p-6 text-white shadow-md border border-slate-700 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div>
-              <div className="text-xs font-semibold text-brand-400 uppercase tracking-wider">
-                Assigned Shift & Policy Overview
-              </div>
-              <h2 className="text-lg font-bold text-white mt-1">
-                {employeeProfile?.shiftTiming
-                  ? `Assigned Shift: ${employeeProfile.shiftTiming}`
-                  : 'Standard Shift (11:00 AM – 07:00 PM)'}
-              </h2>
-              <p className="text-xs text-slate-300 mt-1 max-w-md">
-                Standard schedule with live break tracking. Work beyond scheduled hours is counted as Overtime (OT). Unclosed sessions automatically log out 10 hours after shift end.
-              </p>
-            </div>
-            <div className="shrink-0 flex flex-col items-start sm:items-end gap-1.5">
-              <span className="px-3.5 py-1.5 rounded-xl bg-white/10 text-xs font-bold text-slate-200 border border-white/10 backdrop-blur-sm">
-                Universal Shift Policy
-              </span>
-              <span className="px-2.5 py-0.5 rounded-lg bg-brand-500/20 text-[11px] font-semibold text-brand-300 border border-brand-500/30">
-                +10h Auto-Logout Cap
-              </span>
-            </div>
-          </div>
-
-          <AttendanceStatsBar
-            statistics={statistics}
-            summary={summary}
-            isOrgView={activeTab === 'org'}
-          />
-        </div>
-      </div>
-
-      {/* Tabs Navigation */}
-      <div className="border-b border-slate-200">
-        <nav className="-mb-px flex space-x-6">
-          <button
-            type="button"
-            onClick={() => setActiveTab('my')}
-            className={`pb-4 px-1 border-b-2 font-semibold text-sm transition-colors flex items-center gap-2 ${
-              activeTab === 'my'
-                ? 'border-brand-500 text-brand-600 font-bold'
-                : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-            }`}
-          >
-            <UserCheck className="w-4 h-4" />
-            <span>My Attendance</span>
-          </button>
-
-          {canViewTeam && (
-            <button
-              type="button"
-              onClick={() => setActiveTab('team')}
-              className={`pb-4 px-1 border-b-2 font-semibold text-sm transition-colors flex items-center gap-2 ${
-                activeTab === 'team'
-                  ? 'border-brand-500 text-brand-600 font-bold'
-                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-              }`}
-            >
-              <Users className="w-4 h-4" />
-              <span>Team Attendance</span>
-            </button>
-          )}
-
-          {canViewOrg && (
+      {/* Tabs Navigation for HR / Admin */}
+      {canViewOrg && (
+        <div className="border-b border-slate-200 dark:border-slate-800">
+          <nav className="-mb-px flex space-x-6">
             <button
               type="button"
               onClick={() => setActiveTab('org')}
               className={`pb-4 px-1 border-b-2 font-semibold text-sm transition-colors flex items-center gap-2 ${
                 activeTab === 'org'
-                  ? 'border-brand-500 text-brand-600 font-bold'
+                  ? 'border-brand-500 text-brand-600 dark:text-brand-400 font-bold'
                   : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
               }`}
             >
               <Building2 className="w-4 h-4" />
-              <span>Organization Logs</span>
+              <span>Organization Attendance & Analytics</span>
             </button>
-          )}
-        </nav>
-      </div>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('my')}
+              className={`pb-4 px-1 border-b-2 font-semibold text-sm transition-colors flex items-center gap-2 ${
+                activeTab === 'my'
+                  ? 'border-brand-500 text-brand-600 dark:text-brand-400 font-bold'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              <UserCheck className="w-4 h-4" />
+              <span>My Punch & Attendance</span>
+            </button>
+          </nav>
+        </div>
+      )}
+
+      {/* Main Section: Analytics Graphs (Org view) vs Personal Punch Card (My view) */}
+      {activeTab === 'org' && canViewOrg ? (
+        <AttendanceAnalyticsSection
+          selectedDeptId={filters.deptId}
+          onDeptChange={(dId) => handleFilterChange('deptId', dId)}
+        />
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+          {/* Punch In/Out Card */}
+          <div className="lg:col-span-5 flex flex-col">
+            <AttendancePunchCard
+              todayRecord={todayRecord}
+              assignedShift={employeeProfile?.shiftTiming || todayRecord?.employee?.shiftTiming || '11:00 AM - 07:00 PM'}
+              onCheckIn={handleCheckIn}
+              onCheckOut={handleCheckOut}
+              onPauseBreak={handlePauseBreak}
+              onResumeBreak={handleResumeBreak}
+              isPunchingIn={isPunchingIn}
+              isPunchingOut={isPunchingOut}
+              isBreakLoading={isBreakLoading}
+              error={punchError}
+              onClearError={() => setPunchError(null)}
+            />
+          </div>
+
+          {/* Dynamic Metric Cards */}
+          <div className="lg:col-span-7 flex flex-col justify-between space-y-4">
+            <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-3xl p-6 text-white shadow-md border border-slate-700 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <div className="text-xs font-semibold text-brand-400 uppercase tracking-wider">
+                  Assigned Shift & Policy Overview
+                </div>
+                <h2 className="text-lg font-bold text-white mt-1">
+                  {employeeProfile?.shiftTiming
+                    ? `Assigned Shift: ${employeeProfile.shiftTiming}`
+                    : 'Standard Shift (11:00 AM – 07:00 PM)'}
+                </h2>
+                <p className="text-xs text-slate-300 mt-1 max-w-md">
+                  Standard schedule with live break tracking. Work beyond scheduled hours is counted as Overtime (OT). Unclosed sessions automatically log out 10 hours after shift end.
+                </p>
+              </div>
+              <div className="shrink-0 flex flex-col items-start sm:items-end gap-1.5">
+                <span className="px-3.5 py-1.5 rounded-xl bg-white/10 text-xs font-bold text-slate-200 border border-white/10 backdrop-blur-sm">
+                  Universal Shift Policy
+                </span>
+                <span className="px-2.5 py-0.5 rounded-lg bg-brand-500/20 text-[11px] font-semibold text-brand-300 border border-brand-500/30">
+                  +10h Auto-Logout Cap
+                </span>
+              </div>
+            </div>
+
+            <AttendanceStatsBar
+              statistics={statistics}
+              summary={summary}
+              isOrgView={false}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Attendance History Table */}
       <AttendanceHistoryTable

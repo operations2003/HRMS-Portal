@@ -15,11 +15,12 @@ const ALLOWED_MIME_TYPES = new Set([
   'image/jpeg',
   'image/png',
   'image/webp',
+  'image/gif',
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ]);
 
-const ALLOWED_EXTENSIONS = new Set(['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.doc', '.docx']);
+const ALLOWED_EXTENSIONS = new Set(['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.gif', '.doc', '.docx']);
 
 // Storage engine configuration
 const storage = multer.diskStorage({
