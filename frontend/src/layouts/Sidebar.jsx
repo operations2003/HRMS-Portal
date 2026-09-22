@@ -98,6 +98,12 @@ export const Sidebar = ({ isOpen, onClose }) => {
       roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
     },
     {
+      name: 'Reports',
+      path: '/reports',
+      icon: FileText,
+      permission: ['employee:read'],
+    },
+    {
       name: 'Leaves',
       path: '/leaves',
       icon: CalendarDays,

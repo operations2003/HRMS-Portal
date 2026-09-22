@@ -11,6 +11,7 @@ export const taskService = {
       SELECT t.*,
              c.first_name AS creator_first, c.last_name AS creator_last, c.employee_code AS creator_code,
              a.first_name AS assignee_first, a.last_name AS assignee_last, a.employee_code AS assignee_code,
+             r.first_name AS rater_first, r.last_name AS rater_last,
              d.name AS department_name,
              CASE 
                WHEN t.status != 'COMPLETED' AND t.status != 'CANCELLED' AND t.due_date < CURRENT_DATE THEN true
@@ -19,6 +20,7 @@ export const taskService = {
       FROM work_tasks t
       JOIN employees c ON t.creator_id = c.id
       JOIN employees a ON t.assignee_id = a.id
+      LEFT JOIN employees r ON t.rated_by = r.id
       LEFT JOIN departments d ON t.dept_id = d.id
       WHERE t.org_id = $1
     `;
@@ -65,6 +67,14 @@ export const taskService = {
    * Create task
    */
   async createTask(orgId, currentUser, payload) {
+    const normRole = (currentUser.roleName || '').toLowerCase();
+    const allowedAssignerRoles = ['admin', 'superadmin', 'orgadmin', 'hr', 'hrmanager', 'manager'];
+    if (!allowedAssignerRoles.includes(normRole)) {
+      const err = new Error('Access denied: Only Admin, HR, and Manager can create and assign tasks.');
+      err.statusCode = 403;
+      throw err;
+    }
+
     const creatorId = currentUser.employeeId;
     if (!creatorId) {
       const err = new Error('You must be linked to an employee profile to create tasks.');
@@ -197,6 +207,161 @@ export const taskService = {
   },
 
   /**
+   * Rate a completed task (Admin, HR, Manager only)
+   */
+  async rateTask(taskId, orgId, currentUser, { rating, feedback }) {
+    const normRole = (currentUser.roleName || '').toLowerCase();
+    const allowedAssignerRoles = ['admin', 'superadmin', 'orgadmin', 'hr', 'hrmanager', 'manager'];
+    if (!allowedAssignerRoles.includes(normRole)) {
+      const err = new Error('Access denied: Only Admin, HR, and Manager can rate completed tasks.');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    const taskRes = await query('SELECT * FROM work_tasks WHERE id = $1 AND org_id = $2;', [taskId, orgId]);
+    if (taskRes.rows.length === 0) {
+      const err = new Error('Task not found.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const task = taskRes.rows[0];
+
+    // Only completed tasks can be rated
+    if (task.status !== 'COMPLETED') {
+      const err = new Error('Only completed tasks can be reviewed and rated.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const numRating = parseFloat(rating);
+    if (isNaN(numRating) || numRating < 1 || numRating > 5) {
+      const err = new Error('Rating must be a number between 1.0 and 5.0.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    // Resolve rater employee ID
+    let raterEmpId = currentUser.employeeId;
+    if (!raterEmpId) {
+      const eRes = await query('SELECT id FROM employees WHERE user_id = $1 AND org_id = $2;', [currentUser.id, orgId]);
+      if (eRes.rows[0]) raterEmpId = eRes.rows[0].id;
+    }
+
+    const raterName = `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim() || currentUser.name || 'Manager';
+    const cleanFeedback = feedback ? feedback.trim() : null;
+
+    // Append rating event to comments
+    const comments = task.comments || [];
+    comments.push({
+      id: `comment-rating-${Date.now()}`,
+      authorName: raterName,
+      authorId: currentUser.id,
+      text: `[TASK_RATED] Rated ${numRating} / 5 stars ⭐${cleanFeedback ? ` — Feedback: "${cleanFeedback}"` : ''}`,
+      createdAt: new Date().toISOString(),
+    });
+
+    const res = await query(
+      `UPDATE work_tasks
+       SET rating = $1,
+           rating_feedback = $2,
+           rated_by = $3,
+           rated_at = NOW(),
+           comments = $4,
+           updated_at = NOW()
+       WHERE id = $5 AND org_id = $6
+       RETURNING *;`,
+      [numRating, cleanFeedback, raterEmpId, JSON.stringify(comments), taskId, orgId]
+    );
+
+    const updatedTask = res.rows[0];
+
+    // Send notification to assignee
+    if (task.assignee_id) {
+      const aRes = await query('SELECT user_id FROM employees WHERE id = $1;', [task.assignee_id]);
+      if (aRes.rows[0]?.user_id) {
+        await notificationService.createNotification({
+          orgId,
+          userId: aRes.rows[0].user_id,
+          eventType: 'TASK_RATED',
+          title: `Task Rated: ${numRating}/5 for "${task.title}"`,
+          message: `${raterName} rated your completed task ${numRating}/5.${cleanFeedback ? ` Feedback: "${cleanFeedback}"` : ''}`,
+          entityType: 'TASK',
+          entityId: taskId,
+        }).catch(() => {});
+      }
+    }
+
+    return updatedTask;
+  },
+
+  /**
+   * Reopen a task for revisions (Admin, HR, Manager only)
+   */
+  async reopenTask(taskId, orgId, currentUser, { reason }) {
+    const normRole = (currentUser.roleName || '').toLowerCase();
+    const allowedAssignerRoles = ['admin', 'superadmin', 'orgadmin', 'hr', 'hrmanager', 'manager'];
+    if (!allowedAssignerRoles.includes(normRole)) {
+      const err = new Error('Access denied: Only Admin, HR, and Manager can reopen tasks.');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    const taskRes = await query('SELECT * FROM work_tasks WHERE id = $1 AND org_id = $2;', [taskId, orgId]);
+    if (taskRes.rows.length === 0) {
+      const err = new Error('Task not found.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const task = taskRes.rows[0];
+    const comments = task.comments || [];
+    const reviewerName = `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim() || currentUser.name || 'Manager';
+    const reopenNote = reason && reason.trim() ? reason.trim() : 'Task reopened for revisions and completion.';
+
+    comments.push({
+      id: `comment-reopen-${Date.now()}`,
+      authorName: reviewerName,
+      authorId: currentUser.id,
+      text: `[TASK_REOPENED] ${reopenNote}`,
+      createdAt: new Date().toISOString(),
+    });
+
+    const res = await query(
+      `UPDATE work_tasks
+       SET status = 'IN_PROGRESS',
+           reopen_count = COALESCE(reopen_count, 0) + 1,
+           rating = NULL,
+           rating_feedback = NULL,
+           comments = $1,
+           updated_at = NOW()
+       WHERE id = $2 AND org_id = $3
+       RETURNING *;`,
+      [JSON.stringify(comments), taskId, orgId]
+    );
+
+    const updatedTask = res.rows[0];
+
+    // Send notification to assignee
+    if (task.assignee_id) {
+      const aRes = await query('SELECT user_id FROM employees WHERE id = $1;', [task.assignee_id]);
+      if (aRes.rows[0]?.user_id) {
+        await notificationService.createNotification({
+          orgId,
+          userId: aRes.rows[0].user_id,
+          eventType: 'TASK_REOPENED',
+          title: `Task Reopened: "${task.title}"`,
+          message: `${reviewerName} reopened your task for revisions: "${reopenNote}"`,
+          entityType: 'TASK',
+          entityId: taskId,
+        }).catch(() => {});
+      }
+    }
+
+    return updatedTask;
+  },
+
+  /**
    * Get employee's personal work performance metrics
    */
   async getMyPerformance(orgId, currentUser, timeframe = 'this_month') {
@@ -287,17 +452,21 @@ export const taskService = {
     }).length;
     const onTimeDelivery = completedTasks > 0 ? Math.round((onTimeTasks / completedTasks) * 100) : 0;
 
+    // Rated tasks & average rating calculation
+    const ratedTasks = assignedTasks.filter((t) => t.rating != null && Number(t.rating) > 0);
+    const totalRating = ratedTasks.reduce((sum, t) => sum + Number(t.rating), 0);
+    const averageRating = ratedTasks.length > 0 ? parseFloat((totalRating / ratedTasks.length).toFixed(1)) : 0;
+    const ratingCount = ratedTasks.length;
+
+    // First time completion (completed with 0 reopens)
     const firstTimeTasks = assignedTasks.filter((t) => {
       if (t.status !== 'COMPLETED') return false;
-      const commentsStr = JSON.stringify(t.comments || []);
-      return !commentsStr.toLowerCase().includes('reopen') && !commentsStr.toLowerCase().includes('rejected');
+      return !t.reopen_count || Number(t.reopen_count) === 0;
     }).length;
     const firstTimeCompletion = completedTasks > 0 ? Math.round((firstTimeTasks / completedTasks) * 100) : 0;
 
-    const tasksReopened = assignedTasks.filter((t) => {
-      const commentsStr = JSON.stringify(t.comments || []);
-      return commentsStr.toLowerCase().includes('reopen') || t.status === 'BLOCKED';
-    }).length;
+    // Tasks reopened
+    const tasksReopened = assignedTasks.filter((t) => Number(t.reopen_count || 0) > 0).length;
     const reopenRate = totalTasks > 0 ? Math.round((tasksReopened / totalTasks) * 100) : 0;
 
     const overdueTasks = assignedTasks.filter((t) => t.is_overdue).length;
@@ -314,15 +483,17 @@ export const taskService = {
     let performanceStatus = 'Needs Improvement';
 
     if (totalTasks > 0) {
+      const ratingNormalized = ratedTasks.length > 0 ? (averageRating / 5) * 100 : completionRate;
       performanceScore = Math.min(
         100,
         Math.max(
           0,
           Math.round(
-            completionRate * 0.4 +
-            onTimeDelivery * 0.35 +
-            firstTimeCompletion * 0.25 -
-            (overdueTasks / totalTasks) * 20
+            completionRate * 0.3 +
+            onTimeDelivery * 0.25 +
+            firstTimeCompletion * 0.25 +
+            ratingNormalized * 0.2 -
+            (overdueTasks / totalTasks) * 15
           )
         )
       );
@@ -363,8 +534,8 @@ export const taskService = {
       createdTasks,
       completionRate,
       onTimeDelivery,
-      averageRating: 0,
-      ratingCount: 0,
+      averageRating,
+      ratingCount,
       firstTimeCompletion,
       tasksReopened,
       reopenRate,

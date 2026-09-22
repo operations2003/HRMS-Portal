@@ -15,6 +15,8 @@ import {
   Tag,
   X,
   TrendingUp,
+  Star,
+  RotateCcw,
 } from 'lucide-react';
 import { MyPerformanceSection } from '../../components/tasks/MyPerformanceSection.jsx';
 import { taskService } from '../../services/taskService.js';
@@ -33,8 +35,11 @@ const STATUS_COLUMNS = [
 ];
 
 export const TasksPage = () => {
-  const { user } = useAuth();
+  const { user, hasRole } = useAuth();
   const toast = useToast();
+
+  // Task assigners and reviewers: Admin, HR, and Manager only
+  const canAssign = hasRole(['Admin', 'SuperAdmin', 'OrgAdmin', 'HR', 'HRManager', 'Manager']);
 
   const [tasks, setTasks] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -49,6 +54,13 @@ export const TasksPage = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
   const [newComment, setNewComment] = useState('');
+
+  // Task Review & Rating state
+  const [taskRating, setTaskRating] = useState(5);
+  const [ratingFeedback, setRatingFeedback] = useState('');
+  const [isRatingSubmitting, setIsRatingSubmitting] = useState(false);
+  const [reopenReason, setReopenReason] = useState('');
+  const [showReopenInput, setShowReopenInput] = useState(false);
 
   // Create form state
   const [formData, setFormData] = useState({
@@ -162,6 +174,50 @@ export const TasksPage = () => {
     }
   };
 
+  useEffect(() => {
+    if (selectedTask) {
+      setTaskRating(selectedTask.rating ? Math.round(Number(selectedTask.rating)) : 5);
+      setRatingFeedback(selectedTask.rating_feedback || '');
+      setShowReopenInput(false);
+      setReopenReason('');
+    }
+  }, [selectedTask]);
+
+  const handleRateTask = async (taskId) => {
+    try {
+      setIsRatingSubmitting(true);
+      const res = await taskService.rateTask(taskId, {
+        rating: taskRating,
+        feedback: ratingFeedback,
+      });
+      toast.success(`Task rated ${taskRating}/5 stars successfully!`);
+      setSelectedTask(res.data);
+      fetchTasks();
+    } catch (err) {
+      toast.error(err.message || 'Failed to submit rating.');
+    } finally {
+      setIsRatingSubmitting(false);
+    }
+  };
+
+  const handleReopenTask = async (taskId) => {
+    try {
+      setIsRatingSubmitting(true);
+      const res = await taskService.reopenTask(taskId, {
+        reason: reopenReason,
+      });
+      toast.success('Task has been reopened for revisions.');
+      setSelectedTask(res.data);
+      setShowReopenInput(false);
+      setReopenReason('');
+      fetchTasks();
+    } catch (err) {
+      toast.error(err.message || 'Failed to reopen task.');
+    } finally {
+      setIsRatingSubmitting(false);
+    }
+  };
+
   const getPriorityBadge = (p) => {
     switch (p) {
       case 'URGENT':
@@ -246,9 +302,11 @@ export const TasksPage = () => {
             </button>
           </div>
 
-          <Button onClick={() => setShowCreateModal(true)} icon={Plus}>
-            Create Task
-          </Button>
+          {canAssign && (
+            <Button onClick={() => setShowCreateModal(true)} icon={Plus}>
+              Create Task
+            </Button>
+          )}
         </div>
       </div>
 
@@ -328,7 +386,25 @@ export const TasksPage = () => {
                     >
                       <div className="flex items-start justify-between gap-2">
                         <h4 className="text-xs font-bold text-slate-800 line-clamp-2">{t.title}</h4>
-                        {getPriorityBadge(t.priority)}
+                        <div className="flex items-center gap-1 shrink-0">
+                          {t.rating && (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-black bg-amber-100 text-amber-900 border border-amber-200">
+                              <Star className="w-2.5 h-2.5 text-amber-600 fill-amber-400" />
+                              {Number(t.rating).toFixed(1)}
+                            </span>
+                          )}
+                          {t.status === 'COMPLETED' && !t.rating && canAssign && (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200 animate-pulse">
+                              Rate ⭐
+                            </span>
+                          )}
+                          {t.reopen_count > 0 && (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                              Reopened
+                            </span>
+                          )}
+                          {getPriorityBadge(t.priority)}
+                        </div>
                       </div>
 
                       {t.description && (
@@ -382,6 +458,7 @@ export const TasksPage = () => {
               <tr>
                 <th className="p-3.5">Task</th>
                 <th className="p-3.5">Status</th>
+                <th className="p-3.5">Rating</th>
                 <th className="p-3.5">Priority</th>
                 <th className="p-3.5">Assignee</th>
                 <th className="p-3.5">Due Date</th>
@@ -402,9 +479,30 @@ export const TasksPage = () => {
                     </span>
                   </td>
                   <td className="p-3.5">
-                    <Badge variant={t.status === 'COMPLETED' ? 'success' : t.status === 'IN_PROGRESS' ? 'info' : t.status === 'BLOCKED' ? 'warning' : 'neutral'}>
-                      {t.status}
-                    </Badge>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <Badge variant={t.status === 'COMPLETED' ? 'success' : t.status === 'IN_PROGRESS' ? 'info' : t.status === 'BLOCKED' ? 'warning' : 'neutral'}>
+                        {t.status}
+                      </Badge>
+                      {t.reopen_count > 0 && (
+                        <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">
+                          Reopened ({t.reopen_count})
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="p-3.5 whitespace-nowrap">
+                    {t.rating ? (
+                      <span className="inline-flex items-center gap-1 font-bold text-amber-900 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-200 text-xs">
+                        <Star className="w-3 h-3 fill-amber-400 text-amber-500" />
+                        {Number(t.rating).toFixed(1)}/5
+                      </span>
+                    ) : t.status === 'COMPLETED' ? (
+                      <span className="text-[10px] font-semibold text-amber-600 italic">
+                        {canAssign ? 'Rate task ▾' : 'Pending rating'}
+                      </span>
+                    ) : (
+                      <span className="text-slate-300">—</span>
+                    )}
                   </td>
                   <td className="p-3.5">{getPriorityBadge(t.priority)}</td>
                   <td className="p-3.5 text-slate-600">
@@ -577,6 +675,169 @@ export const TasksPage = () => {
                   ))}
                 </div>
               </div>
+
+              {/* Task Review & Rating Section (For COMPLETED tasks or tasks with existing rating) */}
+              {(selectedTask.status === 'COMPLETED' || selectedTask.rating) && (
+                <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200/80 space-y-3">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-amber-900">
+                      <Star className="w-4 h-4 text-amber-500 fill-amber-400" />
+                      Task Quality & Manager Rating
+                    </div>
+                    {selectedTask.rating && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-black bg-amber-200 text-amber-950">
+                        ★ {Number(selectedTask.rating).toFixed(1)} / 5
+                      </span>
+                    )}
+                  </div>
+
+                  {canAssign && selectedTask.status === 'COMPLETED' ? (
+                    <div className="space-y-3 pt-1">
+                      <div>
+                        <span className="text-[11px] font-bold text-slate-700 block mb-1">
+                          {selectedTask.rating ? 'Update Assignee Rating (1 - 5 Stars):' : 'Rate Assignee Completion (1 - 5 Stars):'}
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <button
+                              key={star}
+                              type="button"
+                              onClick={() => setTaskRating(star)}
+                              className={`p-1 rounded-lg transition transform hover:scale-110 cursor-pointer ${
+                                star <= taskRating
+                                  ? 'text-amber-500 hover:text-amber-600'
+                                  : 'text-slate-300 hover:text-amber-300'
+                              }`}
+                            >
+                              <Star className={`w-6 h-6 ${star <= taskRating ? 'fill-amber-400 text-amber-500' : ''}`} />
+                            </button>
+                          ))}
+                          <span className="text-xs font-bold text-amber-800 ml-2">
+                            {taskRating === 5
+                              ? '5/5 (Outstanding)'
+                              : taskRating === 4
+                              ? '4/5 (Great Delivery)'
+                              : taskRating === 3
+                              ? '3/5 (Met Expectations)'
+                              : taskRating === 2
+                              ? '2/5 (Needs Work)'
+                              : '1/5 (Unsatisfactory)'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                          Reviewer Feedback & Remarks
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={ratingFeedback}
+                          onChange={(e) => setRatingFeedback(e.target.value)}
+                          placeholder="e.g. Delivered on time with great code quality and thorough test cases..."
+                          className="w-full text-xs border border-amber-200 rounded-xl p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 resize-none"
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between gap-2 pt-1 flex-wrap">
+                        <Button
+                          type="button"
+                          variant="primary"
+                          size="sm"
+                          isLoading={isRatingSubmitting}
+                          disabled={isRatingSubmitting}
+                          onClick={() => handleRateTask(selectedTask.id)}
+                          className="!bg-amber-600 hover:!bg-amber-700 text-white font-bold shadow-2xs"
+                        >
+                          {selectedTask.rating ? 'Update Rating' : `Submit Rating (${taskRating}/5)`}
+                        </Button>
+
+                        {!showReopenInput ? (
+                          <button
+                            type="button"
+                            onClick={() => setShowReopenInput(true)}
+                            className="text-xs font-semibold text-rose-700 hover:text-rose-800 underline flex items-center gap-1 cursor-pointer"
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                            Work Not Satisfactory? Reopen Task
+                          </button>
+                        ) : null}
+                      </div>
+
+                      {showReopenInput && (
+                        <div className="p-3 bg-rose-50 rounded-xl border border-rose-200 space-y-2 mt-2">
+                          <label className="text-[11px] font-bold text-rose-900 block">
+                            Specify Reopen Reason for Assignee
+                          </label>
+                          <input
+                            type="text"
+                            value={reopenReason}
+                            onChange={(e) => setReopenReason(e.target.value)}
+                            placeholder="e.g., Deliverables missing test report, please revise..."
+                            className="w-full text-xs border border-rose-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20"
+                          />
+                          <div className="flex items-center gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="danger"
+                              isLoading={isRatingSubmitting}
+                              onClick={() => handleReopenTask(selectedTask.id)}
+                            >
+                              Confirm Reopen
+                            </Button>
+                            <button
+                              type="button"
+                              onClick={() => setShowReopenInput(false)}
+                              className="text-xs text-slate-500 hover:text-slate-700"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-xs space-y-1.5 text-slate-700 pt-1">
+                      {selectedTask.rating ? (
+                        <>
+                          <div className="flex items-center gap-1">
+                            <span className="font-semibold text-slate-900">Rated:</span>
+                            <span className="font-bold text-amber-800">{Number(selectedTask.rating).toFixed(1)} / 5</span>
+                            <div className="flex items-center ml-1">
+                              {[1, 2, 3, 4, 5].map((s) => (
+                                <Star
+                                  key={s}
+                                  className={`w-3.5 h-3.5 ${
+                                    s <= Math.round(Number(selectedTask.rating))
+                                      ? 'text-amber-500 fill-amber-400'
+                                      : 'text-slate-300'
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                          {selectedTask.rater_first && (
+                            <div className="text-[11px] text-slate-500">
+                              Reviewed by {selectedTask.rater_first} {selectedTask.rater_last || ''}
+                              {selectedTask.rated_at && ` on ${new Date(selectedTask.rated_at).toLocaleDateString()}`}
+                            </div>
+                          )}
+                          {selectedTask.rating_feedback && (
+                            <p className="p-2.5 rounded-xl bg-white border border-amber-200 text-xs italic text-slate-800 mt-1">
+                              "{selectedTask.rating_feedback}"
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <p className="text-amber-800 text-xs italic">
+                          Task completed. Awaiting review and quality rating from manager / assigner.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Subtasks */}
               {selectedTask.subtasks?.length > 0 && (

@@ -13,6 +13,8 @@ router.post('/', authorize(['task:write', 'employee:read']), taskController.crea
 router.patch('/:id/status', authorize(['task:write', 'employee:read']), taskController.updateStatus);
 router.post('/:id/comments', authorize(['task:write', 'employee:read']), taskController.addComment);
 router.patch('/:id/subtasks', authorize(['task:write', 'employee:read']), taskController.updateSubtasks);
+router.patch('/:id/rate', authorize(['task:write', 'employee:read']), taskController.rate);
+router.patch('/:id/reopen', authorize(['task:write', 'employee:read']), taskController.reopen);
 
 export default router;
 

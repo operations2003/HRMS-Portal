@@ -35,6 +35,7 @@ import { TrainingPage } from './pages/training/TrainingPage.jsx';
 import { EngagementPage } from './pages/engagement/EngagementPage.jsx';
 import { ProbationDashboardPage } from './pages/probation/ProbationDashboardPage.jsx';
 import { AnalyticsPage } from './pages/analytics/AnalyticsPage.jsx';
+import { ReportsPage } from './pages/reports/ReportsPage.jsx';
 import { ForbiddenPage } from './pages/common/ForbiddenPage.jsx';
 import { NotFoundPage } from './pages/common/NotFoundPage.jsx';
 import { AppLayout } from './layouts/AppLayout.jsx';
@@ -397,6 +398,16 @@ export const App = () => {
                 element={
                   <PermissionRoute roles={['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']}>
                     <AnalyticsPage />
+                  </PermissionRoute>
+                }
+              />
+
+              {/* Department Performance Review Reports */}
+              <Route
+                path="reports"
+                element={
+                  <PermissionRoute permission={['employee:read']}>
+                    <ReportsPage />
                   </PermissionRoute>
                 }
               />

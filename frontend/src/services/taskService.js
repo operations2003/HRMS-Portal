@@ -6,6 +6,8 @@ export const taskService = {
   updateStatus: (id, status) => http.patch(`/v1/tasks/${id}/status`, { status }),
   addComment: (id, text) => http.post(`/v1/tasks/${id}/comments`, { text }),
   updateSubtasks: (id, subtasks) => http.patch(`/v1/tasks/${id}/subtasks`, { subtasks }),
+  rateTask: (id, data) => http.patch(`/v1/tasks/${id}/rate`, data),
+  reopenTask: (id, data) => http.patch(`/v1/tasks/${id}/reopen`, data),
   getMyPerformance: (params) => http.get('/v1/tasks/performance', { params }),
 };
 

@@ -73,5 +73,31 @@ export const taskController = {
       next(error);
     }
   },
+
+  async rate(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { rating, feedback } = req.body;
+      const orgId = req.user.orgId || 'org-1';
+      const rated = await taskService.rateTask(id, orgId, req.user, { rating, feedback });
+      return sendSuccess(res, 'Task rated successfully.', rated);
+    } catch (error) {
+      if (error.statusCode) return sendError(res, error.message, error.statusCode);
+      next(error);
+    }
+  },
+
+  async reopen(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { reason } = req.body;
+      const orgId = req.user.orgId || 'org-1';
+      const reopened = await taskService.reopenTask(id, orgId, req.user, { reason });
+      return sendSuccess(res, 'Task reopened successfully.', reopened);
+    } catch (error) {
+      if (error.statusCode) return sendError(res, error.message, error.statusCode);
+      next(error);
+    }
+  },
 };
 
