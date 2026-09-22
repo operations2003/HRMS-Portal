@@ -158,4 +158,21 @@ export const attendanceController = {
       next(error);
     }
   },
+
+  /**
+   * PUT /api/v1/attendance/:id/remark
+   * Add Emergency or OT remark on attendance record (Admin, HR, Manager)
+   */
+  async addShiftRemark(req, res, next) {
+    try {
+      const record = await attendanceService.addShiftRemark(req.user, req.params.id, req.body);
+      return sendSuccess(res, 'Shift remark recorded successfully.', record, 200);
+    } catch (error) {
+      if (error.statusCode) {
+        return sendError(res, error.message, error.statusCode);
+      }
+      next(error);
+    }
+  },
 };
+

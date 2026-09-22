@@ -12,12 +12,21 @@ import {
   UserCheck,
   ShieldCheck,
   Coffee,
+  Flame,
+  Zap,
+  AlertTriangle,
 } from 'lucide-react';
 import { Modal } from '../common/Modal.jsx';
 import { Badge } from '../common/Badge.jsx';
 import { Button } from '../common/Button.jsx';
 
-export const AttendanceDetailModal = ({ isOpen, onClose, record = null }) => {
+export const AttendanceDetailModal = ({
+  isOpen,
+  onClose,
+  record = null,
+  onAddRemark,
+  canRemark = false,
+}) => {
   if (!record) return null;
 
   const formatTimestamp = (ts) => {
@@ -191,8 +200,109 @@ export const AttendanceDetailModal = ({ isOpen, onClose, record = null }) => {
           </div>
         </div>
 
+        {/* Post-Shift 10h+ Work Review & Classification Section */}
+        {(() => {
+          const notes = record.notes || '';
+          const regReason = record.regularizationReason || '';
+          const isAutoLoggedOut = notes.includes('[SYSTEM_AUTO_LOGOUT]');
+          const hasNeedsTag = notes.includes('[NEEDS_POST_SHIFT_REMARK]');
+          const isEmergency = regReason.includes('[EMERGENCY]') || notes.includes('[POST_SHIFT_REMARK: EMERGENCY]');
+          const isOT = regReason.includes('[OT]') || notes.includes('[POST_SHIFT_REMARK: OT]');
+          const isPostShiftExceeded = isAutoLoggedOut || hasNeedsTag;
+
+          if (!isPostShiftExceeded && !isEmergency && !isOT) return null;
+
+          return (
+            <div
+              className={`p-4 rounded-2xl border space-y-3 ${
+                isEmergency
+                  ? 'bg-rose-50/70 border-rose-200'
+                  : isOT
+                  ? 'bg-purple-50/70 border-purple-200'
+                  : 'bg-amber-50/70 border-amber-200'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider">
+                  {isEmergency ? (
+                    <>
+                      <Flame className="w-4 h-4 text-rose-600" />
+                      <span className="text-rose-900">Post-Shift Review: Emergency Work</span>
+                    </>
+                  ) : isOT ? (
+                    <>
+                      <Zap className="w-4 h-4 text-purple-600" />
+                      <span className="text-purple-900">Post-Shift Review: Approved Overtime</span>
+                    </>
+                  ) : (
+                    <>
+                      <AlertTriangle className="w-4 h-4 text-amber-600" />
+                      <span className="text-amber-900">10h Post-Shift Review Pending</span>
+                    </>
+                  )}
+                </div>
+
+                {canRemark && (
+                  <Button
+                    variant={isEmergency || isOT ? 'secondary' : 'primary'}
+                    size="sm"
+                    icon={ShieldCheck}
+                    className={
+                      !isEmergency && !isOT
+                        ? '!bg-amber-600 hover:!bg-amber-700 text-white !py-1 !px-2.5 !text-xs shadow-xs'
+                        : '!py-1 !px-2.5 !text-xs'
+                    }
+                    onClick={() => onAddRemark && onAddRemark(record)}
+                  >
+                    {isEmergency || isOT ? 'Update Remark' : 'Submit Remark'}
+                  </Button>
+                )}
+              </div>
+
+              <div className="text-xs space-y-1.5">
+                {isEmergency || isOT ? (
+                  <>
+                    <div className="text-slate-800">
+                      <span className="font-semibold text-slate-700">Classification:</span>{' '}
+                      <strong className={isEmergency ? 'text-rose-700' : 'text-purple-700'}>
+                        {isEmergency ? 'Emergency Work' : 'Approved Overtime (OT)'}
+                      </strong>
+                    </div>
+                    {record.regularizer && (
+                      <div className="text-slate-700">
+                        <span className="font-semibold text-slate-700">Reviewed By:</span>{' '}
+                        {record.regularizer.name} ({record.regularizer.email})
+                      </div>
+                    )}
+                    {record.regularizedAt && (
+                      <div className="text-slate-600">
+                        <span className="font-semibold text-slate-700">Reviewed At:</span>{' '}
+                        {formatTimestamp(record.regularizedAt)}
+                      </div>
+                    )}
+                    {record.regularizationReason && (
+                      <div className="text-slate-800 bg-white/70 p-2.5 rounded-xl border border-slate-200/50 mt-1">
+                        <span className="font-semibold text-slate-700 block mb-0.5">
+                          Reviewer Remarks:
+                        </span>
+                        <p className="whitespace-pre-wrap">
+                          {record.regularizationReason.replace(/^\[(EMERGENCY|OT)\]\s*/i, '')}
+                        </p>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-amber-800 leading-relaxed">
+                    This work session extended 10 hours beyond scheduled shift completion and requires an official review by an Admin, Manager, or HR to classify as <strong>Emergency Work</strong> or <strong>Approved OT</strong>.
+                  </p>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Regularization Details if applicable */}
-        {record.isRegularized && (
+        {record.isRegularized && !record.regularizationReason?.match(/^\[(EMERGENCY|OT)\]/i) && (
           <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200/80 space-y-2">
             <div className="flex items-center gap-2 text-xs font-bold text-amber-800 uppercase tracking-wider">
               <UserCheck className="w-4 h-4 text-amber-600" />

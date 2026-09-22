@@ -7,6 +7,7 @@ import {
   validateCheckIn,
   validateCheckOut,
   validateRegularize,
+  validateShiftRemark,
 } from '../validators/attendanceValidator.js';
 
 const router = Router();
@@ -80,4 +81,13 @@ router.put(
   attendanceController.regularize
 );
 
+// 8. Add Shift Remark (Emergency or OT for 10h+ post-shift work) (Admin, HR, Manager)
+router.put(
+  '/:id/remark',
+  requireRoles(['Manager', 'HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin']),
+  validate(validateShiftRemark),
+  attendanceController.addShiftRemark
+);
+
 export default router;
+

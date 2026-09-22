@@ -17,6 +17,7 @@ import { AttendancePunchCard } from '../../components/attendance/AttendancePunch
 import { AttendanceStatsBar } from '../../components/attendance/AttendanceStatsBar.jsx';
 import { AttendanceHistoryTable } from '../../components/attendance/AttendanceHistoryTable.jsx';
 import { AttendanceDetailModal } from '../../components/attendance/AttendanceDetailModal.jsx';
+import { AttendanceRemarkModal } from '../../components/attendance/AttendanceRemarkModal.jsx';
 import { Button } from '../../components/common/Button.jsx';
 import { Alert } from '../../components/common/Alert.jsx';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
@@ -28,6 +29,7 @@ export const AttendanceDashboardPage = () => {
   // Role permissions
   const canViewTeam = hasRole(['Manager', 'HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin']);
   const canViewOrg = hasRole(['HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin']);
+  const canRemark = hasRole(['Manager', 'HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin']);
 
   // Active view tab: 'my' | 'team' | 'org'
   const [activeTab, setActiveTab] = useState('my');
@@ -39,6 +41,7 @@ export const AttendanceDashboardPage = () => {
   const [isPunchingOut, setIsPunchingOut] = useState(false);
   const [isBreakLoading, setIsBreakLoading] = useState(false);
   const [punchError, setPunchError] = useState(null);
+  const [selectedRemarkRecord, setSelectedRemarkRecord] = useState(null);
 
   // History & Metrics state
   const [records, setRecords] = useState([]);
@@ -389,6 +392,8 @@ export const AttendanceDashboardPage = () => {
         error={error}
         onPageChange={(p) => fetchTableData(p)}
         onViewDetails={(rec) => setSelectedDetailRecord(rec)}
+        onAddRemark={(rec) => setSelectedRemarkRecord(rec)}
+        canRemark={canRemark}
         showEmployeeCol={activeTab !== 'my'}
         showSearch={activeTab === 'org'}
         filters={filters}
@@ -402,6 +407,24 @@ export const AttendanceDashboardPage = () => {
         isOpen={Boolean(selectedDetailRecord)}
         onClose={() => setSelectedDetailRecord(null)}
         record={selectedDetailRecord}
+        onAddRemark={(rec) => {
+          setSelectedDetailRecord(null);
+          setSelectedRemarkRecord(rec);
+        }}
+        canRemark={canRemark}
+      />
+
+      {/* Attendance Remark Modal (Emergency vs OT for 10h+ Post-Shift) */}
+      <AttendanceRemarkModal
+        isOpen={Boolean(selectedRemarkRecord)}
+        onClose={() => setSelectedRemarkRecord(null)}
+        record={selectedRemarkRecord}
+        onSuccess={(updated) => {
+          fetchTableData(pagination?.page || 1);
+          if (todayRecord && todayRecord.id === updated.id) {
+            setTodayRecord(updated);
+          }
+        }}
       />
     </div>
   );

@@ -212,7 +212,7 @@ export const checkAndAutoLogoutRecord = async (record, shiftTimingOverride = nul
   const scheduledHours = shift.scheduledDurationHours || 8.0;
   const overtimeHours = totalHours > scheduledHours ? parseFloat((totalHours - scheduledHours).toFixed(2)) : 0.0;
 
-  const autoLogoutNote = '[SYSTEM_AUTO_LOGOUT] Automatically logged out 10 hours after shift completed.';
+  const autoLogoutNote = '[SYSTEM_AUTO_LOGOUT] Automatically logged out 10 hours after shift completed. [NEEDS_POST_SHIFT_REMARK]';
   const updatedNotes = record.notes
     ? `${record.notes} | ${autoLogoutNote}`
     : autoLogoutNote;
@@ -866,4 +866,80 @@ export const attendanceService = {
       notes: data.notes ? (record.notes ? `${record.notes} | ${data.notes}` : data.notes) : record.notes,
     });
   },
+
+  /**
+   * Add an Emergency or OT remark on an attendance session (Admin, HR, Manager)
+   * Specifically for sessions that logged out after 10 hours post-shift.
+   */
+  async addShiftRemark(user, id, { remarkType, comments }) {
+    const record = await attendanceRepository.findById(id);
+    if (!record) {
+      const error = new Error('Attendance record not found.');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const normRole = normalizeRole(user.roleName);
+    const allowedRoles = ['admin', 'hr', 'manager', 'superadmin', 'hrmanager', 'orgadmin'];
+    if (!allowedRoles.includes(normRole)) {
+      const error = new Error('Access denied: Only Admin, HR, and Manager can add shift remarks.');
+      error.statusCode = 403;
+      throw error;
+    }
+
+    // Organization boundary check
+    if (normRole !== 'superadmin' && record.orgId !== user.orgId) {
+      const error = new Error('Access denied: Attendance record belongs to a different organization.');
+      error.statusCode = 403;
+      throw error;
+    }
+
+    // Manager boundary check: can remark only department members
+    if (normRole === 'manager') {
+      const managerEmp = await resolveRequesterEmployee(user);
+      if (!managerEmp || !managerEmp.deptId || !record.employee || record.employee.deptId !== managerEmp.deptId) {
+        const error = new Error('Access denied: Managers can only add remarks for members in their department.');
+        error.statusCode = 403;
+        throw error;
+      }
+    }
+
+    const typeNormalized = (remarkType || '').trim().toUpperCase();
+    if (!['EMERGENCY', 'OT'].includes(typeNormalized)) {
+      const error = new Error("Invalid remark type. Must be either 'EMERGENCY' or 'OT'.");
+      error.statusCode = 400;
+      throw error;
+    }
+
+    if (!comments || typeof comments !== 'string' || comments.trim().length < 3) {
+      const error = new Error('Remark comments must be at least 3 characters long.');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const reviewerName = user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || 'Authorized Reviewer';
+    const cleanComment = comments.trim();
+    const timestampIso = new Date().toISOString();
+
+    const remarkAuditTag = `[POST_SHIFT_REMARK: ${typeNormalized}] Review by ${reviewerName} (${user.roleName || 'Reviewer'}) at ${timestampIso}: "${cleanComment}"`;
+
+    // Strip [NEEDS_POST_SHIFT_REMARK] if present from existing notes, then append new remark
+    let currentNotes = (record.notes || '').replace(/\[NEEDS_POST_SHIFT_REMARK\]/g, '').trim();
+    // Also remove trailing or double pipes if any
+    currentNotes = currentNotes.replace(/\s*\|\s*$/, '').trim();
+    const updatedNotes = currentNotes ? `${currentNotes} | ${remarkAuditTag}` : remarkAuditTag;
+
+    const regularizationReason = `[${typeNormalized}] ${cleanComment}`;
+
+    const updatedRecord = await attendanceRepository.update(id, {
+      isRegularized: true,
+      regularizationReason,
+      regularizedBy: user.id,
+      regularizedAt: new Date(),
+      notes: updatedNotes,
+    });
+
+    return updatedRecord;
+  },
 };
+

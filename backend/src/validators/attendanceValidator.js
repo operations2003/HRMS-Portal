@@ -153,3 +153,29 @@ export const validateRegularize = (body) => {
 
   return errors;
 };
+
+/**
+ * Validate Shift Remark Payload (for sessions logged out 10h post shift)
+ * Remark must be 'EMERGENCY' or 'OT', with reviewer comments.
+ */
+export const validateShiftRemark = (body) => {
+  const errors = [];
+
+  const validRemarkTypes = ['EMERGENCY', 'OT'];
+  if (!body.remarkType || typeof body.remarkType !== 'string') {
+    errors.push("Remark type is required and must be either 'EMERGENCY' or 'OT'.");
+  } else if (!validRemarkTypes.includes(body.remarkType.trim().toUpperCase())) {
+    errors.push("Invalid remark type. Allowed values are 'EMERGENCY' or 'OT'.");
+  }
+
+  if (!body.comments || typeof body.comments !== 'string' || !body.comments.trim()) {
+    errors.push('Remark comments / justification are required.');
+  } else if (body.comments.trim().length < 3) {
+    errors.push('Comments must be at least 3 characters long.');
+  } else if (body.comments.trim().length > 1000) {
+    errors.push('Comments must not exceed 1000 characters.');
+  }
+
+  return errors;
+};
+

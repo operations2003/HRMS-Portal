@@ -120,4 +120,15 @@ export const attendanceService = {
     const res = await http.put(`/v1/attendance/${id}/regularize`, data);
     return res.data;
   },
+
+  /**
+   * Add Emergency or OT remark on attendance record (Manager, HR, Admin)
+   * @param {string} id
+   * @param {Object} data - { remarkType: 'EMERGENCY' | 'OT', comments: string }
+   */
+  async addShiftRemark(id, data) {
+    const res = await http.put(`/v1/attendance/${id}/remark`, data);
+    return res.data;
+  },
 };
+

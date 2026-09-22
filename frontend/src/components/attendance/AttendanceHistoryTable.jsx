@@ -16,6 +16,9 @@ import {
   Timer,
   Coffee,
   Laptop,
+  Flame,
+  Zap,
+  ShieldCheck,
 } from 'lucide-react';
 import { Badge } from '../common/Badge.jsx';
 import { Button } from '../common/Button.jsx';
@@ -33,6 +36,8 @@ export const AttendanceHistoryTable = ({
   onViewDetails,
   onRegularize,
   canRegularize = false,
+  onAddRemark,
+  canRemark = false,
   showEmployeeCol = false,
   filters = {},
   onFilterChange,
@@ -40,6 +45,26 @@ export const AttendanceHistoryTable = ({
   showSearch = false,
   onRetry,
 }) => {
+  const getRemarkInfo = (row) => {
+    const notes = row?.notes || '';
+    const regReason = row?.regularizationReason || '';
+    const isAutoLoggedOut = notes.includes('[SYSTEM_AUTO_LOGOUT]');
+    const hasNeedsTag = notes.includes('[NEEDS_POST_SHIFT_REMARK]');
+
+    const isEmergency = regReason.includes('[EMERGENCY]') || notes.includes('[POST_SHIFT_REMARK: EMERGENCY]');
+    const isOT = regReason.includes('[OT]') || notes.includes('[POST_SHIFT_REMARK: OT]');
+
+    const isPostShiftExceeded = isAutoLoggedOut || hasNeedsTag;
+
+    return {
+      isPostShiftExceeded,
+      isPending: isPostShiftExceeded && !isEmergency && !isOT,
+      isEmergency,
+      isOT,
+      hasRemark: isEmergency || isOT,
+    };
+  };
+
   const getStatusBadge = (status) => {
     switch ((status || '').toUpperCase()) {
       case 'PRESENT':
@@ -238,6 +263,7 @@ export const AttendanceHistoryTable = ({
             {records.map((row, idx) => {
               const d = row.attendanceDate ? new Date(row.attendanceDate) : null;
               const ot = Number(row.overtimeHours || 0);
+              const remarkInfo = getRemarkInfo(row);
 
               return (
                 <div key={row.id || idx} className="p-4 space-y-3 hover:bg-slate-50/50 transition-colors">
@@ -331,16 +357,49 @@ export const AttendanceHistoryTable = ({
                     </div>
                   </div>
 
-                  {/* Card Actions */}
-                  <div className="flex items-center justify-end gap-2 pt-1">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      icon={Eye}
-                      onClick={() => onViewDetails && onViewDetails(row)}
-                    >
-                      Details
-                    </Button>
+                  {/* Card Actions & Remark Badges */}
+                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 flex-wrap">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {remarkInfo.isPending && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                          <AlertTriangle className="w-2.5 h-2.5 text-amber-600" />
+                          Review Needed
+                        </span>
+                      )}
+                      {remarkInfo.isEmergency && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                          <Flame className="w-2.5 h-2.5 text-rose-600" />
+                          Emergency
+                        </span>
+                      )}
+                      {remarkInfo.isOT && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                          <Zap className="w-2.5 h-2.5 text-purple-600" />
+                          Approved OT
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {canRemark && (remarkInfo.isPending || remarkInfo.hasRemark) && (
+                        <Button
+                          variant={remarkInfo.isPending ? 'primary' : 'secondary'}
+                          size="sm"
+                          icon={ShieldCheck}
+                          className={remarkInfo.isPending ? '!bg-amber-600 hover:!bg-amber-700 text-white !py-1 !px-2.5 !text-xs shadow-xs' : '!py-1 !px-2.5 !text-xs text-slate-600'}
+                          onClick={() => onAddRemark && onAddRemark(row)}
+                        >
+                          {remarkInfo.isPending ? 'Remark' : 'Edit'}
+                        </Button>
+                      )}
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        icon={Eye}
+                        onClick={() => onViewDetails && onViewDetails(row)}
+                      >
+                        Details
+                      </Button>
+                    </div>
                   </div>
                 </div>
               );
@@ -384,6 +443,7 @@ export const AttendanceHistoryTable = ({
                 {records.map((row, index) => {
                   const d = row.attendanceDate ? new Date(row.attendanceDate) : null;
                   const ot = Number(row.overtimeHours || 0);
+                  const remarkInfo = getRemarkInfo(row);
 
                   return (
                     <tr
@@ -435,7 +495,7 @@ export const AttendanceHistoryTable = ({
 
                       {/* Status */}
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-2 flex-wrap">
                           {getStatusBadge(row.status)}
                           {row.isRegularized && (
                             <span
@@ -443,6 +503,33 @@ export const AttendanceHistoryTable = ({
                               className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold"
                             >
                               R
+                            </span>
+                          )}
+                          {remarkInfo.isPending && (
+                            <span
+                              title="Exceeded 10h post-shift. Manager/HR/Admin review required."
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200"
+                            >
+                              <AlertTriangle className="w-2.5 h-2.5 text-amber-600" />
+                              Review Needed
+                            </span>
+                          )}
+                          {remarkInfo.isEmergency && (
+                            <span
+                              title="Classified as Emergency Work"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200"
+                            >
+                              <Flame className="w-2.5 h-2.5 text-rose-600" />
+                              Emergency
+                            </span>
+                          )}
+                          {remarkInfo.isOT && (
+                            <span
+                              title="Classified as Approved Overtime"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200"
+                            >
+                              <Zap className="w-2.5 h-2.5 text-purple-600" />
+                              Approved OT
                             </span>
                           )}
                         </div>
@@ -504,6 +591,18 @@ export const AttendanceHistoryTable = ({
                       {/* Actions */}
                       <td className="px-6 py-4 whitespace-nowrap text-right">
                         <div className="flex items-center justify-end gap-1.5">
+                          {canRemark && (remarkInfo.isPending || remarkInfo.hasRemark) && (
+                            <Button
+                              variant={remarkInfo.isPending ? 'primary' : 'secondary'}
+                              size="sm"
+                              icon={ShieldCheck}
+                              className={remarkInfo.isPending ? '!bg-amber-600 hover:!bg-amber-700 text-white !py-1 !px-2.5 !text-xs shadow-xs' : '!py-1 !px-2.5 !text-xs text-slate-600'}
+                              onClick={() => onAddRemark && onAddRemark(row)}
+                              title={remarkInfo.isPending ? 'Add Emergency or OT Remark' : 'Update Shift Remark'}
+                            >
+                              {remarkInfo.isPending ? 'Remark' : 'Edit'}
+                            </Button>
+                          )}
                           <Button
                             variant="secondary"
                             size="sm"
