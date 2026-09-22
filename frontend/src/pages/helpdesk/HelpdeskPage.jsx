@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useParams, useNavigate } from 'react-router-dom';
 import {
   LifeBuoy,
   Plus,
@@ -56,6 +56,8 @@ const STATUS_FILTER_OPTIONS = [
 ];
 
 export const HelpdeskPage = () => {
+  const navigate = useNavigate();
+  const { id: routeTicketId } = useParams();
   const { user, hasPermission, hasRole, isAuthenticated } = useAuth();
   const toast = useToast();
 
@@ -70,6 +72,9 @@ export const HelpdeskPage = () => {
       hasRole(['Employee', 'Manager']));
 
   const [searchParams, setSearchParams] = useSearchParams();
+  const queryTicketId = searchParams.get('ticket') || searchParams.get('ticketId') || searchParams.get('id');
+  const targetTicketId = routeTicketId || queryTicketId;
+
   const urlTab = searchParams.get('tab');
   const [mainSection, setMainSection] = useState(
     urlTab === 'requests' || urlTab === 'service' ? 'requests' : 'tickets'
@@ -108,6 +113,29 @@ export const HelpdeskPage = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedTicketId, setSelectedTicketId] = useState(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+
+  // Auto-open ticket modal when targeted from notification route / URL param
+  useEffect(() => {
+    if (targetTicketId) {
+      setMainSection('tickets');
+      setSelectedTicketId(targetTicketId);
+      setIsDetailModalOpen(true);
+    }
+  }, [targetTicketId]);
+
+  const handleCloseDetail = () => {
+    setIsDetailModalOpen(false);
+    setSelectedTicketId(null);
+    if (routeTicketId) {
+      navigate('/helpdesk', { replace: true });
+    } else if (queryTicketId) {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete('ticket');
+      nextParams.delete('ticketId');
+      nextParams.delete('id');
+      setSearchParams(nextParams, { replace: true });
+    }
+  };
 
   // Fetch Tickets
   const fetchTickets = useCallback(
@@ -539,7 +567,7 @@ export const HelpdeskPage = () => {
       {/* Ticket Detail & Thread Modal */}
       <TicketDetailModal
         isOpen={isDetailModalOpen}
-        onClose={() => setIsDetailModalOpen(false)}
+        onClose={handleCloseDetail}
         ticketId={selectedTicketId}
         onTicketUpdated={() => fetchTickets(true)}
       />

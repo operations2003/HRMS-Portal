@@ -29,11 +29,13 @@ export const payrollService = {
   },
 
   /**
-   * Decide / update an employee's salary.
+   * Decide / update an employee's salary and structure.
    * Admin represents the CEO/organization head who decides and gives salaries.
+   * HR has payroll authority to manage and decide salaries.
    */
-  async updateEmployeeSalary(employeeId, salary) {
-    const res = await http.put(`/v1/payroll/employee/${employeeId}/salary`, { salary });
+  async updateEmployeeSalary(employeeId, payload) {
+    const body = typeof payload === 'object' && payload !== null ? payload : { salary: payload };
+    const res = await http.put(`/v1/payroll/employee/${employeeId}/salary`, body);
     return res.data;
   },
 };

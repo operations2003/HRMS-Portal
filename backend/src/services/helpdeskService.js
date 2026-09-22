@@ -71,10 +71,21 @@ export const helpdeskService = {
 
     const isStaff = this.isSupportStaff(user);
 
-    // IDOR Protection: verify ticket ownership if regular employee
+    // IDOR Protection: verify ticket access (staff, requester, or assignee)
     if (!isStaff) {
-      const emp = await this.resolveEmployee(user);
-      if (ticket.employeeId !== emp.id) {
+      let empId = null;
+      try {
+        const emp = await this.resolveEmployee(user);
+        empId = emp?.id || null;
+      } catch (e) {
+        // User may not have an employee record, but could be assigned by user.id
+      }
+      const isRequester = empId && ticket.employeeId === empId;
+      const isAssignee =
+        (ticket.assignedTo && ticket.assignedTo === user.id) ||
+        (ticket.assignee && ticket.assignee.id === user.id);
+
+      if (!isRequester && !isAssignee) {
         throw createError('Access denied: You are not authorized to view this ticket.', 403);
       }
     }
@@ -145,10 +156,21 @@ export const helpdeskService = {
 
     const isStaff = this.isSupportStaff(user);
 
-    // If employee, verify ticket ownership
+    // IDOR Protection: verify ticket access (staff, requester, or assignee)
     if (!isStaff) {
-      const emp = await this.resolveEmployee(user);
-      if (ticket.employeeId !== emp.id) {
+      let empId = null;
+      try {
+        const emp = await this.resolveEmployee(user);
+        empId = emp?.id || null;
+      } catch (e) {
+        // User may not have an employee record, but could be assigned by user.id
+      }
+      const isRequester = empId && ticket.employeeId === empId;
+      const isAssignee =
+        (ticket.assignedTo && ticket.assignedTo === user.id) ||
+        (ticket.assignee && ticket.assignee.id === user.id);
+
+      if (!isRequester && !isAssignee) {
         throw createError('Access denied: You cannot comment on this ticket.', 403);
       }
     }
@@ -170,7 +192,8 @@ export const helpdeskService = {
 
     // Notify recipient
     try {
-      const recipientUserId = isStaff ? ticket.requester?.userId : ticket.assignedTo;
+      const isRequester = ticket.requester?.userId === user.id;
+      const recipientUserId = isRequester ? ticket.assignedTo : ticket.requester?.userId;
       if (recipientUserId && !isInternal) {
         await notificationService.notifyTicketStatusChanged({
           orgId,

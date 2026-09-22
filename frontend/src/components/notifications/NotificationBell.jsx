@@ -28,7 +28,13 @@ export const getNotificationIcon = (eventType, title = '', entityType = '') => {
   const ent = (entityType || '').toUpperCase();
 
   // Phase 5: Helpdesk Tickets
-  if (type === 'TICKET_CREATED' || type === 'TICKET_STATUS_CHANGED') {
+  if (
+    type === 'TICKET_CREATED' ||
+    type === 'TICKET_STATUS_CHANGED' ||
+    type === 'TICKET_ASSIGNED' ||
+    ent === 'HELPDESK_TICKET' ||
+    lowerTitle.includes('ticket')
+  ) {
     return {
       icon: LifeBuoy,
       color: 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40',
@@ -262,7 +268,14 @@ export const NotificationBell = () => {
     }
 
     setIsOpen(false);
-    const targetUrl = notif.actionUrl || notif.action_url;
+    let targetUrl = notif.actionUrl || notif.action_url;
+    const ent = (notif.entityType || notif.entity_type || '').toUpperCase();
+    const entId = notif.entityId || notif.entity_id;
+
+    if ((!targetUrl || targetUrl === '/helpdesk') && (ent === 'HELPDESK_TICKET' || ent === 'TICKET') && entId) {
+      targetUrl = `/helpdesk/${entId}`;
+    }
+
     if (targetUrl) {
       navigate(targetUrl);
     } else {

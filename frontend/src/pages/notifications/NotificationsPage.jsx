@@ -94,7 +94,14 @@ export const NotificationsPage = () => {
   };
 
   const handleNavigate = (notif) => {
-    const targetUrl = notif.actionUrl || notif.action_url;
+    let targetUrl = notif.actionUrl || notif.action_url;
+    const ent = (notif.entityType || notif.entity_type || '').toUpperCase();
+    const entId = notif.entityId || notif.entity_id;
+
+    if ((!targetUrl || targetUrl === '/helpdesk') && (ent === 'HELPDESK_TICKET' || ent === 'TICKET') && entId) {
+      targetUrl = `/helpdesk/${entId}`;
+    }
+
     if (targetUrl) {
       navigate(targetUrl);
     } else {
@@ -333,7 +340,12 @@ export const NotificationsPage = () => {
                       <span>{new Date(notif.createdAt || notif.created_at).toLocaleString()}</span>
                       <span>•</span>
                       <span className="font-medium text-brand-600 dark:text-brand-400 flex items-center gap-1">
-                        View related module <ExternalLink className="w-3 h-3" />
+                        {(notif.entityType || notif.entity_type || '').toUpperCase().includes('TICKET') ||
+                        (notif.eventType || notif.event_type || '').toUpperCase().includes('TICKET') ||
+                        (notif.actionUrl || notif.action_url || '').includes('/helpdesk')
+                          ? 'View Ticket'
+                          : 'View related module'}{' '}
+                        <ExternalLink className="w-3 h-3" />
                       </span>
                     </div>
                   </div>
@@ -341,6 +353,21 @@ export const NotificationsPage = () => {
 
                 {/* Actions */}
                 <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                  {((notif.entityType || notif.entity_type || '').toUpperCase().includes('TICKET') ||
+                    (notif.eventType || notif.event_type || '').toUpperCase().includes('TICKET') ||
+                    (notif.actionUrl || notif.action_url || '').includes('/helpdesk')) && (
+                    <Button
+                      size="xs"
+                      variant="outline"
+                      icon={LifeBuoy}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleNavigate(notif);
+                      }}
+                    >
+                      View Ticket
+                    </Button>
+                  )}
                   {isUnread && (
                     <Button
                       size="xs"

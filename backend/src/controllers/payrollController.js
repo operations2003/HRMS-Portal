@@ -59,30 +59,75 @@ export const payrollController = {
   },
 
   /**
-   * Helper to compute complete salary structure using standard formulas
+   * Helper to compute complete salary structure using standard formulas or custom manual values
    */
   calculateSalaryBreakdown(emp) {
-    // Base gross salary (monthly or annualized) - preserve existing formula
-    const rawSalary = parseFloat(emp.salary) || 65000;
-    const monthlyGross = rawSalary > 150000 ? Math.round(rawSalary / 12) : rawSalary;
-    const annualCtc = monthlyGross * 12;
+    let custom = null;
+    if (emp.salary_structure) {
+      custom = typeof emp.salary_structure === 'string' ? JSON.parse(emp.salary_structure) : emp.salary_structure;
+    }
 
-    // Salary Structure
-    const basic = Math.round(monthlyGross * 0.50);
-    const hra = Math.round(monthlyGross * 0.25);
-    const conveyance = 1600;
-    const medical = 1250;
-    const special = Math.max(0, monthlyGross - basic - hra - conveyance - medical);
+    // Base gross salary (monthly or annualized) - preserve existing formula as default
+    const rawSalary = parseFloat(emp.salary) || 65000;
+    const defaultMonthlyGross = rawSalary > 150000 ? Math.round(rawSalary / 12) : rawSalary;
+    const defaultAnnualCtc = defaultMonthlyGross * 12;
+
+    const monthlyGross = (custom && custom.monthlyGross !== undefined && custom.monthlyGross !== null && custom.monthlyGross !== '')
+      ? Number(custom.monthlyGross)
+      : defaultMonthlyGross;
+
+    const annualCtc = (custom && custom.annualCtc !== undefined && custom.annualCtc !== null && custom.annualCtc !== '')
+      ? Number(custom.annualCtc)
+      : defaultAnnualCtc;
+
+    // Earnings
+    const basic = (custom && custom.basic !== undefined && custom.basic !== null && custom.basic !== '')
+      ? Number(custom.basic)
+      : Math.round(monthlyGross * 0.50);
+
+    const hra = (custom && custom.hra !== undefined && custom.hra !== null && custom.hra !== '')
+      ? Number(custom.hra)
+      : Math.round(monthlyGross * 0.25);
+
+    const conveyance = (custom && custom.conveyance !== undefined && custom.conveyance !== null && custom.conveyance !== '')
+      ? Number(custom.conveyance)
+      : 1600;
+
+    const medical = (custom && custom.medical !== undefined && custom.medical !== null && custom.medical !== '')
+      ? Number(custom.medical)
+      : 1250;
+
+    const special = (custom && custom.special !== undefined && custom.special !== null && custom.special !== '')
+      ? Number(custom.special)
+      : Math.max(0, monthlyGross - basic - hra - conveyance - medical);
 
     // Deductions
-    const epf = Math.round(Math.min(basic, 15000) * 0.12);
-    const professionalTax = 200;
-    const estimatedTds = Math.round(monthlyGross > 50000 ? monthlyGross * 0.05 : 0);
-    const totalDeductions = epf + professionalTax + estimatedTds;
-    const netTakeHome = monthlyGross - totalDeductions;
+    const epf = (custom && custom.epf !== undefined && custom.epf !== null && custom.epf !== '')
+      ? Number(custom.epf)
+      : Math.round(Math.min(basic, 15000) * 0.12);
+
+    const professionalTax = (custom && custom.professionalTax !== undefined && custom.professionalTax !== null && custom.professionalTax !== '')
+      ? Number(custom.professionalTax)
+      : 200;
+
+    const estimatedTds = (custom && custom.tds !== undefined && custom.tds !== null && custom.tds !== '')
+      ? Number(custom.tds)
+      : Math.round(monthlyGross > 50000 ? monthlyGross * 0.05 : 0);
+
+    const otherDeductions = (custom && custom.otherDeductions !== undefined && custom.otherDeductions !== null && custom.otherDeductions !== '')
+      ? Number(custom.otherDeductions)
+      : 0;
+
+    const totalDeductions = (custom && custom.totalDeductions !== undefined && custom.totalDeductions !== null && custom.totalDeductions !== '')
+      ? Number(custom.totalDeductions)
+      : (epf + professionalTax + estimatedTds + otherDeductions);
+
+    const netTakeHome = (custom && custom.netTakeHome !== undefined && custom.netTakeHome !== null && custom.netTakeHome !== '')
+      ? Number(custom.netTakeHome)
+      : (monthlyGross - totalDeductions);
 
     // Mask bank account number (show last 4 digits only)
-    const rawAcc = (emp.bank_account_number || emp.bankAccountNumber || '').trim();
+    const rawAcc = (custom?.bankAccountNumber || emp.bank_account_number || emp.bankAccountNumber || '').trim();
     const maskedAccount = rawAcc.length >= 4 
       ? '•••• •••• •••• ' + rawAcc.slice(-4) 
       : '•••• •••• •••• 5678';
@@ -100,6 +145,29 @@ export const payrollController = {
       paymentMethod: 'Direct Bank Transfer',
     }));
 
+    const earningsList = [
+      { component: 'Basic Salary', monthly: basic, annual: basic * 12, description: 'Base Pay Component' },
+      { component: 'House Rent Allowance (HRA)', monthly: hra, annual: hra * 12, description: 'Housing Allowance' },
+      { component: 'Special Allowance', monthly: special, annual: special * 12, description: 'Performance & Role Allowance' },
+      { component: 'Conveyance Allowance', monthly: conveyance, annual: conveyance * 12, description: 'Travel Reimbursement' },
+      { component: 'Medical Allowance', monthly: medical, annual: medical * 12, description: 'Health & Medical Support' },
+    ];
+
+    const deductionsList = [
+      { component: 'Employee Provident Fund (EPF)', monthly: epf, annual: epf * 12, description: 'Provident Fund Contribution' },
+      { component: 'Professional Tax (PT)', monthly: professionalTax, annual: professionalTax * 12, description: 'State Professional Tax' },
+      { component: 'Income Tax (TDS Estimate)', monthly: estimatedTds, annual: estimatedTds * 12, description: 'Tax Deducted at Source' },
+    ];
+
+    if (otherDeductions > 0) {
+      deductionsList.push({
+        component: 'Other Deductions',
+        monthly: otherDeductions,
+        annual: otherDeductions * 12,
+        description: 'Miscellaneous Deductions',
+      });
+    }
+
     return {
       employee: {
         id: emp.id,
@@ -114,41 +182,32 @@ export const payrollController = {
         employmentType: emp.employment_type || emp.employmentType || 'Full-Time',
         dateOfJoining: emp.date_of_joining || emp.dateOfJoining,
         rawSalary,
+        salaryStructure: custom || null,
       },
       ctcBreakdown: {
         monthlyGross,
         annualCtc,
         netTakeHome,
         totalDeductions,
-        earnings: [
-          { component: 'Basic Salary', monthly: basic, annual: basic * 12, description: '50% of Monthly Gross' },
-          { component: 'House Rent Allowance (HRA)', monthly: hra, annual: hra * 12, description: '25% of Monthly Gross' },
-          { component: 'Special Allowance', monthly: special, annual: special * 12, description: 'Performance & Role Allowance' },
-          { component: 'Conveyance Allowance', monthly: conveyance, annual: conveyance * 12, description: 'Travel Reimbursement' },
-          { component: 'Medical Allowance', monthly: medical, annual: medical * 12, description: 'Health & Medical Support' },
-        ],
-        deductions: [
-          { component: 'Employee Provident Fund (EPF)', monthly: epf, annual: epf * 12, description: '12% of Statutory Basic' },
-          { component: 'Professional Tax (PT)', monthly: professionalTax, annual: professionalTax * 12, description: 'State Government Tax' },
-          { component: 'Income Tax (TDS Estimate)', monthly: estimatedTds, annual: estimatedTds * 12, description: 'Monthly Tax Withholding' },
-        ],
+        earnings: earningsList,
+        deductions: deductionsList,
       },
       bankDetails: {
-        bankName: emp.bank_name || emp.bankName || 'HDFC Bank Ltd.',
+        bankName: custom?.bankName || emp.bank_name || emp.bankName || 'HDFC Bank Ltd.',
         accountNumberMasked: maskedAccount,
-        ifscCode: emp.bank_ifsc || emp.bankIfsc || 'HDFC0001234',
-        branch: emp.bank_branch || emp.bankBranch || 'Cyber City Branch',
+        ifscCode: custom?.bankIfsc || emp.bank_ifsc || emp.bankIfsc || 'HDFC0001234',
+        branch: custom?.bankBranch || emp.bank_branch || emp.bankBranch || 'Cyber City Branch',
         accountType: 'Salary Account',
-        changePolicyNotice: 'Bank account details are view-only. To request updates or corrections, please submit a ticket via Help Desk / Service Request.',
+        changePolicyNotice: 'Bank account details are managed by authorized Admin and HR personnel.',
       },
       statutoryDetails: {
-        uanNumber: emp.uan_number || emp.uanNumber || '101294820194',
-        pfNumber: 'KN/BLR/' + ((emp.uan_number || emp.uanNumber) ? (emp.uan_number || emp.uanNumber).slice(-7) : '1029384'),
-        esiNumber: 'N/A (Exempted above threshold)',
-        panStatus: 'Verified & Linked',
-        changePolicyNotice: 'Statutory UAN details are view-only. Submit a Service Request with supporting EPF documentation for any changes.',
+        uanNumber: custom?.uanNumber || emp.uan_number || emp.uanNumber || '101294820194',
+        pfNumber: custom?.pfNumber || (emp.uan_number ? 'KN/BLR/' + emp.uan_number.slice(-7) : 'KN/BLR/1029384'),
+        esiNumber: custom?.esiNumber || 'N/A (Exempted above threshold)',
+        panStatus: custom?.panNumber ? `Verified (${custom.panNumber})` : 'Verified & Linked',
+        changePolicyNotice: 'Statutory registrations are managed by authorized Admin and HR personnel.',
       },
-      uanNumber: emp.uan_number || emp.uanNumber || '101294820194',
+      uanNumber: custom?.uanNumber || emp.uan_number || emp.uanNumber || '101294820194',
       payHistory,
       payslipDownloadAllowed: false,
       payslipNotice: 'Payslip downloads are currently disabled as per organizational policy. For proof of income, bonafide letters can be requested via Help Desk / Service Request.',
@@ -224,6 +283,12 @@ export const payrollController = {
           monthlyGross: breakdown.ctcBreakdown.monthlyGross,
           netTakeHome: breakdown.ctcBreakdown.netTakeHome,
           totalDeductions: breakdown.ctcBreakdown.totalDeductions,
+          salaryStructure: row.salary_structure || breakdown.employee.salaryStructure,
+          bankName: row.bank_name,
+          bankAccountNumber: row.bank_account_number,
+          bankIfsc: row.bank_ifsc,
+          bankBranch: row.bank_branch,
+          uanNumber: row.uan_number,
         };
       });
 
@@ -314,40 +379,139 @@ export const payrollController = {
 
   /**
    * PUT /api/v1/payroll/employee/:id/salary
-   * Updates employee's salary and recalculates compensation structure.
+   * Updates employee's salary and stores custom manual numbers for all fields.
    * Admin is the CEO/organization head responsible for deciding and giving salaries.
-   * HR has payroll permission to handle/manage salaries according to existing RBAC.
+   * HR has payroll authority to manage and decide salaries according to RBAC.
    * Managers and Employees receive 403 Forbidden.
    */
   async updateEmployeeSalary(req, res, next) {
     try {
       const { id } = req.params;
       const caller = req.user;
-      const { salary } = req.body;
+      const body = req.body || {};
 
-      // Access control
+      // Access control: Only Admin / CEO and HR
       if (!payrollController.hasOrgPayrollAccess(caller)) {
         return sendError(
           res,
-          'Access Forbidden: Only Admin/CEO and HR are authorized to manage employee salaries.',
+          'Access Forbidden: Only Admin/CEO and HR are authorized to manage and decide employee salaries.',
           403
         );
-      }
-
-      // Validate salary
-      if (salary === undefined || salary === null || isNaN(Number(salary)) || Number(salary) < 0) {
-        return sendError(res, 'Salary must be a non-negative number.', 400);
       }
 
       const isSuperAdmin = (caller?.roleName || '').toLowerCase().includes('admin') && !caller?.orgId;
       const orgId = isSuperAdmin ? null : caller.orgId;
 
+      // Extract manually provided numbers
+      let annualCtc = body.annualCtc !== undefined && body.annualCtc !== null && body.annualCtc !== ''
+        ? parseFloat(body.annualCtc)
+        : (body.salary !== undefined && body.salary !== null && body.salary !== '' ? parseFloat(body.salary) : null);
+
+      let monthlyGross = body.monthlyGross !== undefined && body.monthlyGross !== null && body.monthlyGross !== ''
+        ? parseFloat(body.monthlyGross)
+        : null;
+
+      let netTakeHome = body.netTakeHome !== undefined && body.netTakeHome !== null && body.netTakeHome !== ''
+        ? parseFloat(body.netTakeHome)
+        : null;
+
+      let totalDeductions = body.totalDeductions !== undefined && body.totalDeductions !== null && body.totalDeductions !== ''
+        ? parseFloat(body.totalDeductions)
+        : null;
+
+      // Validate that numbers are non-negative if provided
+      if (annualCtc !== null && (isNaN(annualCtc) || annualCtc < 0)) {
+        return sendError(res, 'Annual CTC must be a non-negative number.', 400);
+      }
+      if (monthlyGross !== null && (isNaN(monthlyGross) || monthlyGross < 0)) {
+        return sendError(res, 'Monthly Gross must be a non-negative number.', 400);
+      }
+
+      // Default relationship: If only one is provided, deduce the other
+      if (annualCtc === null && monthlyGross !== null) {
+        annualCtc = monthlyGross * 12;
+      }
+      if (monthlyGross === null && annualCtc !== null) {
+        monthlyGross = Math.round(annualCtc / 12);
+      }
+
+      // Individual breakdown numbers (earnings & deductions)
+      const basic = body.basic !== undefined && body.basic !== null && body.basic !== '' ? parseFloat(body.basic) : undefined;
+      const hra = body.hra !== undefined && body.hra !== null && body.hra !== '' ? parseFloat(body.hra) : undefined;
+      const special = body.special !== undefined && body.special !== null && body.special !== '' ? parseFloat(body.special) : undefined;
+      const conveyance = body.conveyance !== undefined && body.conveyance !== null && body.conveyance !== '' ? parseFloat(body.conveyance) : undefined;
+      const medical = body.medical !== undefined && body.medical !== null && body.medical !== '' ? parseFloat(body.medical) : undefined;
+
+      const epf = body.epf !== undefined && body.epf !== null && body.epf !== '' ? parseFloat(body.epf) : undefined;
+      const professionalTax = body.professionalTax !== undefined && body.professionalTax !== null && body.professionalTax !== '' ? parseFloat(body.professionalTax) : undefined;
+      const tds = body.tds !== undefined && body.tds !== null && body.tds !== '' ? parseFloat(body.tds) : undefined;
+      const otherDeductions = body.otherDeductions !== undefined && body.otherDeductions !== null && body.otherDeductions !== '' ? parseFloat(body.otherDeductions) : undefined;
+
+      // If totalDeductions was not provided, calculate from individual deductions
+      if (totalDeductions === null && (epf !== undefined || professionalTax !== undefined || tds !== undefined || otherDeductions !== undefined)) {
+        totalDeductions = (epf || 0) + (professionalTax || 0) + (tds || 0) + (otherDeductions || 0);
+      }
+
+      // If netTakeHome was not provided, calculate from gross - deductions
+      if (netTakeHome === null && monthlyGross !== null && totalDeductions !== null) {
+        netTakeHome = Math.max(0, monthlyGross - totalDeductions);
+      }
+
+      const salaryStructureObj = {
+        annualCtc,
+        monthlyGross,
+        netTakeHome,
+        totalDeductions,
+        basic,
+        hra,
+        special,
+        conveyance,
+        medical,
+        epf,
+        professionalTax,
+        tds,
+        otherDeductions,
+        bankName: body.bankName || undefined,
+        bankAccountNumber: body.bankAccountNumber || undefined,
+        bankIfsc: body.bankIfsc || undefined,
+        bankBranch: body.bankBranch || undefined,
+        uanNumber: body.uanNumber || undefined,
+        pfNumber: body.pfNumber || undefined,
+        esiNumber: body.esiNumber || undefined,
+        panNumber: body.panNumber || undefined,
+        updatedBy: {
+          id: caller.id,
+          name: `${caller.firstName || ''} ${caller.lastName || ''}`.trim(),
+          role: caller.roleName,
+          updatedAt: new Date().toISOString(),
+        },
+      };
+
+      const finalSalary = annualCtc !== null ? annualCtc : (monthlyGross ? monthlyGross * 12 : 0);
+
       const updateRes = await pool.query(
         `UPDATE employees
-         SET salary = $1, updated_at = NOW()
-         WHERE id = $2 AND ($3::text IS NULL OR org_id = $3)
+         SET salary = $1,
+             salary_structure = $2,
+             bank_name = COALESCE($3, bank_name),
+             bank_account_number = COALESCE($4, bank_account_number),
+             bank_ifsc = COALESCE($5, bank_ifsc),
+             bank_branch = COALESCE($6, bank_branch),
+             uan_number = COALESCE($7, uan_number),
+             updated_at = NOW()
+         WHERE id = $8 AND ($9::text IS NULL OR org_id = $9)
          RETURNING *;`,
-        [Number(salary), id, orgId]
+        [
+          finalSalary,
+          JSON.stringify(salaryStructureObj),
+          body.bankName || null,
+          body.bankAccountNumber || null,
+          body.bankIfsc || null,
+          body.bankBranch || null,
+          body.uanNumber || null,
+          id,
+          orgId,
+        ]
       );
 
       if (updateRes.rows.length === 0) {
@@ -371,7 +535,7 @@ export const payrollController = {
       const updatedEmp = empRes.rows[0];
       const payrollData = payrollController.calculateSalaryBreakdown(updatedEmp);
 
-      return sendSuccess(res, 'Employee salary decided and updated successfully.', payrollData);
+      return sendSuccess(res, 'Employee salary structure updated successfully.', payrollData);
     } catch (error) {
       next(error);
     }

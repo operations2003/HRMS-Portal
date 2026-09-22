@@ -20,9 +20,11 @@ import {
   Eye,
   Edit3,
   Crown,
-  Briefcase,
   ChevronRight,
   Layers,
+  Calculator,
+  ChevronDown,
+  Sparkles,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { payrollService } from '../../services/payrollService.js';
@@ -65,7 +67,30 @@ export const PayrollPage = () => {
   // Salary Edit Modal (Admin/CEO deciding salaries, and HR)
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState(null);
-  const [newSalary, setNewSalary] = useState('');
+  const [salaryForm, setSalaryForm] = useState({
+    annualCtc: '',
+    monthlyGross: '',
+    netTakeHome: '',
+    totalDeductions: '',
+    basic: '',
+    hra: '',
+    special: '',
+    conveyance: '',
+    medical: '',
+    epf: '',
+    professionalTax: '',
+    tds: '',
+    otherDeductions: '',
+    bankName: '',
+    bankAccountNumber: '',
+    bankIfsc: '',
+    bankBranch: '',
+    uanNumber: '',
+    pfNumber: '',
+    esiNumber: '',
+    panNumber: '',
+  });
+  const [showBankStatutory, setShowBankStatutory] = useState(false);
   const [salarySaving, setSalarySaving] = useState(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState(null);
 
@@ -119,10 +144,112 @@ export const PayrollPage = () => {
     setActiveTab('structure');
   };
 
+  // Helper to initialize salary form from employee data
+  const initSalaryForm = (emp) => {
+    const s = emp?.salaryStructure || {};
+    const rawSalary = parseFloat(emp?.salary) || parseFloat(emp?.rawSalary) || 0;
+    const annualCtc = s.annualCtc ?? emp?.annualCtc ?? (rawSalary > 150000 ? rawSalary : rawSalary * 12) ?? 1200000;
+    const monthlyGross = s.monthlyGross ?? emp?.monthlyGross ?? Math.round(annualCtc / 12);
+
+    const basic = s.basic ?? Math.round(monthlyGross * 0.5);
+    const hra = s.hra ?? Math.round(monthlyGross * 0.25);
+    const conveyance = s.conveyance ?? 1600;
+    const medical = s.medical ?? 1250;
+    const special = s.special ?? Math.max(0, monthlyGross - basic - hra - conveyance - medical);
+
+    const epf = s.epf ?? Math.round(Math.min(basic, 15000) * 0.12);
+    const professionalTax = s.professionalTax ?? 200;
+    const tds = s.tds ?? Math.round(monthlyGross > 50000 ? monthlyGross * 0.05 : 0);
+    const otherDeductions = s.otherDeductions ?? 0;
+
+    const totalDeductions = s.totalDeductions ?? emp?.totalDeductions ?? (epf + professionalTax + tds + otherDeductions);
+    const netTakeHome = s.netTakeHome ?? emp?.netTakeHome ?? (monthlyGross - totalDeductions);
+
+    return {
+      annualCtc,
+      monthlyGross,
+      netTakeHome,
+      totalDeductions,
+      basic,
+      hra,
+      special,
+      conveyance,
+      medical,
+      epf,
+      professionalTax,
+      tds,
+      otherDeductions,
+      bankName: s.bankName || emp?.bankName || 'HDFC Bank Ltd.',
+      bankAccountNumber: s.bankAccountNumber || emp?.bankAccountNumber || '',
+      bankIfsc: s.bankIfsc || emp?.bankIfsc || 'HDFC0001234',
+      bankBranch: s.bankBranch || emp?.bankBranch || 'Corporate Branch',
+      uanNumber: s.uanNumber || emp?.uanNumber || '101294820194',
+      pfNumber: s.pfNumber || 'KN/BLR/1029384',
+      esiNumber: s.esiNumber || 'Exempted (Above statutory limit)',
+      panNumber: s.panNumber || '',
+    };
+  };
+
+  const handleSalaryFieldChange = (field, value) => {
+    setSalaryForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  // Auto-calculate breakdown based on Annual CTC
+  const handleAutoCalculateFromCtc = () => {
+    const ctc = parseFloat(salaryForm.annualCtc) || 0;
+    const gross = Math.round(ctc / 12);
+    const basic = Math.round(gross * 0.5);
+    const hra = Math.round(gross * 0.25);
+    const conveyance = 1600;
+    const medical = 1250;
+    const special = Math.max(0, gross - basic - hra - conveyance - medical);
+    const epf = Math.round(Math.min(basic, 15000) * 0.12);
+    const pt = 200;
+    const tds = Math.round(gross > 50000 ? gross * 0.05 : 0);
+    const totalDed = epf + pt + tds + (parseFloat(salaryForm.otherDeductions) || 0);
+    const net = Math.max(0, gross - totalDed);
+
+    setSalaryForm((prev) => ({
+      ...prev,
+      monthlyGross: gross,
+      basic,
+      hra,
+      special,
+      conveyance,
+      medical,
+      epf,
+      professionalTax: pt,
+      tds,
+      totalDeductions: totalDed,
+      netTakeHome: net,
+    }));
+  };
+
+  // Re-sum deductions and net take home
+  const handleSumDeductionsAndNet = () => {
+    const epf = parseFloat(salaryForm.epf) || 0;
+    const pt = parseFloat(salaryForm.professionalTax) || 0;
+    const tds = parseFloat(salaryForm.tds) || 0;
+    const other = parseFloat(salaryForm.otherDeductions) || 0;
+    const totalDed = epf + pt + tds + other;
+    const gross = parseFloat(salaryForm.monthlyGross) || 0;
+    const net = Math.max(0, gross - totalDed);
+
+    setSalaryForm((prev) => ({
+      ...prev,
+      totalDeductions: totalDed,
+      netTakeHome: net,
+    }));
+  };
+
   // Open salary decision modal
   const handleOpenEditSalary = (emp) => {
     setEditingEmployee(emp);
-    setNewSalary(emp.salary || emp.rawSalary || '');
+    setSalaryForm(initSalaryForm(emp));
+    setShowBankStatutory(false);
     setSaveSuccessMsg(null);
     setEditModalOpen(true);
   };
@@ -130,12 +257,12 @@ export const PayrollPage = () => {
   // Submit salary change
   const handleSaveSalary = async (e) => {
     e.preventDefault();
-    if (!editingEmployee || !newSalary) return;
+    if (!editingEmployee) return;
     try {
       setSalarySaving(true);
       setError(null);
-      await payrollService.updateEmployeeSalary(editingEmployee.id, newSalary);
-      setSaveSuccessMsg(`Salary successfully updated for ${editingEmployee.fullName || editingEmployee.name || 'employee'}.`);
+      await payrollService.updateEmployeeSalary(editingEmployee.id, salaryForm);
+      setSaveSuccessMsg(`Salary structure successfully saved for ${editingEmployee.fullName || editingEmployee.name || 'employee'}.`);
 
       // Refresh data
       await fetchOrgPayroll();
@@ -150,7 +277,7 @@ export const PayrollPage = () => {
       }, 1200);
     } catch (err) {
       console.error('Failed to update salary:', err);
-      setError(err.message || 'Failed to update employee salary.');
+      setError(err?.response?.data?.message || err.message || 'Failed to update employee salary.');
     } finally {
       setSalarySaving(false);
     }
@@ -870,14 +997,15 @@ export const PayrollPage = () => {
       <Modal
         isOpen={editModalOpen}
         onClose={() => setEditModalOpen(false)}
-        title={isCeoOrAdmin ? 'Decide Employee Salary' : 'Update Employee Salary'}
+        maxWidth="max-w-3xl"
+        title={isCeoOrAdmin ? 'Decide & Configure Employee Salary' : 'Update Employee Salary & Structure'}
         subtitle={
           editingEmployee
-            ? `Set official compensation for ${editingEmployee.fullName || editingEmployee.name} (${editingEmployee.employeeCode})`
+            ? `Manually edit and configure every salary field for ${editingEmployee.fullName || editingEmployee.name} (${editingEmployee.employeeCode})`
             : ''
         }
       >
-        <form onSubmit={handleSaveSalary} className="p-6 space-y-4">
+        <form onSubmit={handleSaveSalary} className="p-6 space-y-5 max-h-[80vh] overflow-y-auto">
           {saveSuccessMsg && (
             <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-semibold flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -885,60 +1013,424 @@ export const PayrollPage = () => {
             </div>
           )}
 
-          <div className="p-3.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl space-y-1.5 text-xs">
-            <div className="flex justify-between text-slate-500">
-              <span>Employee:</span>
-              <span className="font-bold text-slate-800 dark:text-slate-200">{editingEmployee?.fullName}</span>
+          {error && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs font-semibold flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+              {error}
             </div>
-            <div className="flex justify-between text-slate-500">
-              <span>Designation:</span>
-              <span className="font-medium text-slate-700 dark:text-slate-300">{editingEmployee?.designation}</span>
+          )}
+
+          {/* Employee Information Card */}
+          <div className="p-3.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs border border-slate-100 dark:border-slate-800">
+            <div>
+              <span className="text-slate-400 block text-[10px] uppercase font-semibold">Employee</span>
+              <span className="font-bold text-slate-900 dark:text-white text-sm">
+                {editingEmployee?.fullName || editingEmployee?.name}
+              </span>
+              <span className="text-slate-500 ml-1.5 font-mono text-[11px]">
+                ({editingEmployee?.employeeCode})
+              </span>
             </div>
-            <div className="flex justify-between text-slate-500">
-              <span>Current Annual CTC:</span>
-              <span className="font-mono font-bold text-slate-900 dark:text-white">
-                ₹{(editingEmployee?.annualCtc || editingEmployee?.salary || 0).toLocaleString('en-IN')}
+            <div>
+              <span className="text-slate-400 block text-[10px] uppercase font-semibold">Role / Dept</span>
+              <span className="font-medium text-slate-700 dark:text-slate-300">
+                {editingEmployee?.role || 'Staff'} • {editingEmployee?.department || 'General'}
+              </span>
+            </div>
+            <div>
+              <span className="text-slate-400 block text-[10px] uppercase font-semibold">Authority Access</span>
+              <span className="inline-flex items-center gap-1 font-bold text-brand-600 dark:text-brand-400">
+                <Crown className="w-3 h-3 text-amber-500" />
+                {isCeoOrAdmin ? 'Admin / CEO (Decide)' : 'HR Authority (Update)'}
               </span>
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-              {isCeoOrAdmin ? 'Decided Base Salary / Annual CTC (₹)' : 'Updated Base Salary / Annual CTC (₹)'}
-            </label>
-            <Input
-              type="number"
-              min="0"
-              step="1000"
-              placeholder="e.g. 1200000"
-              value={newSalary}
-              onChange={(e) => setNewSalary(e.target.value)}
-              required
-            />
-            <p className="text-[11px] text-slate-400 mt-1">
-              Enter annual CTC or gross amount. Standard statutory breakdown (Basic 50%, HRA 25%, EPF 12%, etc.) will be computed automatically.
-            </p>
-          </div>
-
-          {/* Quick preview calculation */}
-          {Number(newSalary) > 0 && (
-            <div className="p-3 bg-brand-50/60 dark:bg-brand-950/20 border border-brand-100 dark:border-brand-900/30 rounded-xl grid grid-cols-2 gap-2 text-xs">
+          {/* SECTION 1: 4 Core Numbers (Matching the 4 Columns in Payroll Table) */}
+          <div className="p-4 bg-brand-50/40 dark:bg-brand-950/20 border border-brand-100 dark:border-brand-900/40 rounded-2xl space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-brand-100/60 dark:border-brand-900/30 pb-2.5">
               <div>
-                <span className="text-slate-400 block text-[10px] uppercase font-semibold">Est. Monthly Gross</span>
-                <span className="font-mono font-bold text-slate-900 dark:text-white">
-                  ₹{(Number(newSalary) > 150000 ? Math.round(Number(newSalary) / 12) : Number(newSalary)).toLocaleString('en-IN')}
-                </span>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-brand-900 dark:text-brand-200 flex items-center gap-1.5">
+                  <Wallet className="w-3.5 h-3.5 text-brand-600" />
+                  Core Compensation Numbers (Table Columns)
+                </h4>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Every number can be edited manually. You can also use the auto-calculation helpers.
+                </p>
               </div>
-              <div>
-                <span className="text-slate-400 block text-[10px] uppercase font-semibold">Est. Annual CTC</span>
-                <span className="font-mono font-bold text-brand-600 dark:text-brand-400">
-                  ₹{(Number(newSalary) > 150000 ? Math.round(Number(newSalary) / 12) * 12 : Number(newSalary) * 12).toLocaleString('en-IN')}
-                </span>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="outline"
+                  icon={Calculator}
+                  onClick={handleAutoCalculateFromCtc}
+                  title="Auto-fill standard 50% Basic, 25% HRA, standard deductions from Annual CTC"
+                >
+                  Auto-fill from CTC
+                </Button>
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="outline"
+                  icon={Sparkles}
+                  onClick={handleSumDeductionsAndNet}
+                  title="Re-calculate Net In-Hand from Monthly Gross minus Deductions"
+                >
+                  Recalculate Net
+                </Button>
               </div>
             </div>
-          )}
 
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
+                  Annual CTC (₹) *
+                </label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder="e.g. 1800000"
+                  value={salaryForm.annualCtc}
+                  onChange={(e) => handleSalaryFieldChange('annualCtc', e.target.value)}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
+                  Monthly Gross (₹) *
+                </label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder="e.g. 150000"
+                  value={salaryForm.monthlyGross}
+                  onChange={(e) => handleSalaryFieldChange('monthlyGross', e.target.value)}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider mb-1">
+                  Net In-Hand (₹) *
+                </label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder="e.g. 140500"
+                  value={salaryForm.netTakeHome}
+                  onChange={(e) => handleSalaryFieldChange('netTakeHome', e.target.value)}
+                  className="font-bold text-emerald-600 dark:text-emerald-400"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider mb-1">
+                  Monthly Deductions (₹) *
+                </label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder="e.g. 9500"
+                  value={salaryForm.totalDeductions}
+                  onChange={(e) => handleSalaryFieldChange('totalDeductions', e.target.value)}
+                  className="font-semibold text-rose-600 dark:text-rose-400"
+                  required
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* SECTION 2: Monthly Earnings Breakdown */}
+          <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl space-y-3">
+            <div className="border-b border-slate-100 dark:border-slate-800 pb-2">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                <TrendingUp className="w-3.5 h-3.5 text-brand-600" />
+                Monthly Earnings Breakdown (₹)
+              </h4>
+              <p className="text-[11px] text-slate-400">
+                Manually edit individual allowance numbers for the Detailed Salary Structure view.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  Basic Salary (₹)
+                </label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder="e.g. 75000"
+                  value={salaryForm.basic}
+                  onChange={(e) => handleSalaryFieldChange('basic', e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  House Rent Allowance (HRA) (₹)
+                </label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder="e.g. 37500"
+                  value={salaryForm.hra}
+                  onChange={(e) => handleSalaryFieldChange('hra', e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  Special Allowance (₹)
+                </label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder="e.g. 34650"
+                  value={salaryForm.special}
+                  onChange={(e) => handleSalaryFieldChange('special', e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  Conveyance Allowance (₹)
+                </label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder="e.g. 1600"
+                  value={salaryForm.conveyance}
+                  onChange={(e) => handleSalaryFieldChange('conveyance', e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  Medical Allowance (₹)
+                </label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder="e.g. 1250"
+                  value={salaryForm.medical}
+                  onChange={(e) => handleSalaryFieldChange('medical', e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* SECTION 3: Monthly Deductions Breakdown */}
+          <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl space-y-3">
+            <div className="border-b border-slate-100 dark:border-slate-800 pb-2">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-rose-700 dark:text-rose-400 flex items-center gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5 text-rose-500" />
+                Monthly Deductions Breakdown (₹)
+              </h4>
+              <p className="text-[11px] text-slate-400">
+                Manually edit individual statutory and withholding deduction numbers.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  EPF / Provident Fund (₹)
+                </label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder="e.g. 1800"
+                  value={salaryForm.epf}
+                  onChange={(e) => handleSalaryFieldChange('epf', e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  Professional Tax (PT) (₹)
+                </label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder="e.g. 200"
+                  value={salaryForm.professionalTax}
+                  onChange={(e) => handleSalaryFieldChange('professionalTax', e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  Income Tax / TDS (₹)
+                </label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder="e.g. 7500"
+                  value={salaryForm.tds}
+                  onChange={(e) => handleSalaryFieldChange('tds', e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  Other Deductions (₹)
+                </label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder="e.g. 0"
+                  value={salaryForm.otherDeductions}
+                  onChange={(e) => handleSalaryFieldChange('otherDeductions', e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* SECTION 4: Direct Deposit Bank & Statutory Registrations (Collapsible) */}
+          <div className="border border-slate-200/80 dark:border-slate-800 rounded-2xl overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setShowBankStatutory(!showBankStatutory)}
+              className="w-full p-4 bg-slate-50/70 dark:bg-slate-800/40 flex items-center justify-between text-left hover:bg-slate-100/60 dark:hover:bg-slate-800/80 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-brand-600" />
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+                  Bank Account & Statutory Registrations (Optional)
+                </span>
+              </div>
+              <ChevronDown
+                className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${
+                  showBankStatutory ? 'rotate-180' : ''
+                }`}
+              />
+            </button>
+
+            {showBankStatutory && (
+              <div className="p-4 space-y-4 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                      Bank Name
+                    </label>
+                    <Input
+                      type="text"
+                      placeholder="e.g. HDFC Bank"
+                      value={salaryForm.bankName}
+                      onChange={(e) => handleSalaryFieldChange('bankName', e.target.value)}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                      Bank Account Number
+                    </label>
+                    <Input
+                      type="text"
+                      placeholder="e.g. 501002348572"
+                      value={salaryForm.bankAccountNumber}
+                      onChange={(e) => handleSalaryFieldChange('bankAccountNumber', e.target.value)}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                      IFSC Code
+                    </label>
+                    <Input
+                      type="text"
+                      placeholder="e.g. HDFC0001234"
+                      value={salaryForm.bankIfsc}
+                      onChange={(e) => handleSalaryFieldChange('bankIfsc', e.target.value)}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                      Branch
+                    </label>
+                    <Input
+                      type="text"
+                      placeholder="e.g. Cyber City Branch"
+                      value={salaryForm.bankBranch}
+                      onChange={(e) => handleSalaryFieldChange('bankBranch', e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+                  <div>
+                    <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                      UAN Number
+                    </label>
+                    <Input
+                      type="text"
+                      placeholder="e.g. 101294820194"
+                      value={salaryForm.uanNumber}
+                      onChange={(e) => handleSalaryFieldChange('uanNumber', e.target.value)}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                      PF Number
+                    </label>
+                    <Input
+                      type="text"
+                      placeholder="e.g. KN/BLR/1029384"
+                      value={salaryForm.pfNumber}
+                      onChange={(e) => handleSalaryFieldChange('pfNumber', e.target.value)}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                      ESI Scheme
+                    </label>
+                    <Input
+                      type="text"
+                      placeholder="e.g. Exempted"
+                      value={salaryForm.esiNumber}
+                      onChange={(e) => handleSalaryFieldChange('esiNumber', e.target.value)}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                      PAN Number
+                    </label>
+                    <Input
+                      type="text"
+                      placeholder="e.g. ABCDE1234F"
+                      value={salaryForm.panNumber}
+                      onChange={(e) => handleSalaryFieldChange('panNumber', e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
             <Button
               type="button"
               variant="outline"
@@ -955,7 +1447,7 @@ export const PayrollPage = () => {
               loading={salarySaving}
               icon={CheckCircle2}
             >
-              {isCeoOrAdmin ? 'Decide & Save Salary' : 'Save Salary'}
+              {isCeoOrAdmin ? 'Decide & Save Salary' : 'Save Salary Structure'}
             </Button>
           </div>
         </form>

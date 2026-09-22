@@ -191,6 +191,15 @@ export const App = () => {
               />
 
               <Route
+                path="helpdesk/:id"
+                element={
+                  <PermissionRoute permission={['helpdesk:read', 'request:read', 'employee:read']}>
+                    <HelpdeskPage />
+                  </PermissionRoute>
+                }
+              />
+
+              <Route
                 path="requests"
                 element={<Navigate to="/helpdesk?tab=requests" replace />}
               />
