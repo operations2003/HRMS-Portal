@@ -132,11 +132,29 @@ export const CreateAppraisalModal = ({ isOpen, onClose, onSuccess }) => {
     try {
       setIsSubmitting(true);
       const selectedPeriod = periods.find((p) => p.id === formData.period_id);
-      const reviewPeriod = selectedPeriod?.name || selectedPeriod?.code || 'Quarterly Review';
+      let reviewPeriod = selectedPeriod?.name || selectedPeriod?.code;
+      if (!reviewPeriod) {
+        if (formData.period_id === 'period-6-months' || formData.period_id === '6-months') {
+          reviewPeriod = '6 Months';
+        } else if (formData.period_id === 'period-12-months' || formData.period_id === '12-months') {
+          reviewPeriod = '12 Months';
+        } else {
+          reviewPeriod = formData.period_id || '6 Months';
+        }
+      }
+
+      let periodId = selectedPeriod?.id;
+      if (!periodId) {
+        if (formData.period_id === 'period-6-months' || formData.period_id === '6-months') {
+          periodId = periods.find((p) => p.id === 'period-6-months' || (p.name || '').toLowerCase() === '6 months')?.id || 'period-6-months';
+        } else if (formData.period_id === 'period-12-months' || formData.period_id === '12-months') {
+          periodId = periods.find((p) => p.id === 'period-12-months' || (p.name || '').toLowerCase() === '12 months')?.id || 'period-12-months';
+        }
+      }
 
       const payload = {
         employeeId: formData.employeeId,
-        periodId: formData.period_id,
+        periodId: periodId,
         reviewPeriod: reviewPeriod,
         rating: Number(formData.rating),
         score: Number(formData.rating),
@@ -236,11 +254,21 @@ export const CreateAppraisalModal = ({ isOpen, onClose, onSuccess }) => {
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 font-medium text-xs"
             >
               <option value="">Select appraisal period...</option>
-              {periods.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name} ({p.code || 'CYCLE'}) &bull; {p.status}
-                </option>
-              ))}
+              <option value="period-6-months">6 Months</option>
+              <option value="period-12-months">12 Months</option>
+              {periods
+                .filter(
+                  (p) =>
+                    p.id !== 'period-6-months' &&
+                    p.id !== 'period-12-months' &&
+                    (p.name || '').toLowerCase() !== '6 months' &&
+                    (p.name || '').toLowerCase() !== '12 months'
+                )
+                .map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} ({p.code || 'CYCLE'}) &bull; {p.status}
+                  </option>
+                ))}
             </select>
           </div>
         </div>

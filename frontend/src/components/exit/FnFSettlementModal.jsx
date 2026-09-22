@@ -101,7 +101,7 @@ export const FnFSettlementModal = ({
         subtitle={`Dossier Ref: ${exitRequestId}`}
         maxWidth="max-w-5xl"
       >
-        <div className="max-h-[80vh] overflow-y-auto pr-1">
+        <div className="space-y-4">
           {error && <Alert variant="danger" className="mb-4">{error}</Alert>}
 
           {isLoading ? (

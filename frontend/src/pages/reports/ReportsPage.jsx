@@ -25,6 +25,8 @@ import {
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import * as XLSX from 'xlsx';
+import { Button } from '../../components/common/Button.jsx';
+import { Badge } from '../../components/common/Badge.jsx';
 
 // Helper to generate the default cursive CEO signature canvas
 const generateDefaultSignatureDataUrl = (name = 'Sheetal', strokeColor = '#1e3a8a') => {
@@ -502,193 +504,174 @@ export const ReportsPage = () => {
   const getTheme = () => {
     if (department === 'operations') {
       return {
-        badgeBg: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800',
-        primaryBg: 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20',
-        accentColor: '#059669',
-        headerGradient: 'from-slate-950 via-slate-900 to-teal-950',
-        lineGradient: 'from-emerald-400 via-teal-400 to-cyan-400',
-        numBg: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20',
-        focusRing: 'focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20',
-        scoreBadge: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
-        sigCardBorder: 'border-emerald-200/90 dark:border-emerald-800/60',
-        tagText: 'Department of Operations • L&D',
+        badgeBg: 'bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-400 border-teal-200 dark:border-teal-800',
+        primaryBg: 'bg-brand-600 hover:bg-brand-700 text-white shadow-brand/20',
+        accentColor: '#4f46e5',
+        headerGradient: 'from-slate-900 via-brand-950 to-slate-900',
+        lineGradient: 'from-brand-500 via-indigo-400 to-brand-600',
+        numBg: 'bg-brand-50 text-brand-600 dark:bg-brand-950/50 dark:text-brand-400 border border-brand-200 dark:border-brand-800',
+        focusRing: 'focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20',
+        scoreBadge: 'bg-teal-50 dark:bg-teal-950/40 text-teal-800 dark:text-teal-300 border-teal-200 dark:border-teal-800',
+        sigCardBorder: 'border-slate-200 dark:border-slate-800',
+        tagText: 'Department of Operations & Logistics • L&D',
         title: 'Operations Team Performance Review',
         subtitle: 'Learning & Development | Operations Department Performance Calibration & Progression Review',
-        icon: '🏢',
+        Icon: Building2,
       };
     } else if (department === 'it') {
       return {
-        badgeBg: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800',
-        primaryBg: 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-500/20',
+        badgeBg: 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800',
+        primaryBg: 'bg-brand-600 hover:bg-brand-700 text-white shadow-brand/20',
         accentColor: '#4f46e5',
-        headerGradient: 'from-slate-950 via-slate-900 to-indigo-950',
-        lineGradient: 'from-sky-400 via-indigo-400 to-purple-400',
-        numBg: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20',
-        focusRing: 'focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20',
+        headerGradient: 'from-slate-900 via-brand-950 to-slate-900',
+        lineGradient: 'from-brand-500 via-indigo-400 to-brand-600',
+        numBg: 'bg-brand-50 text-brand-600 dark:bg-brand-950/50 dark:text-brand-400 border border-brand-200 dark:border-brand-800',
+        focusRing: 'focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20',
         scoreBadge: 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-800 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800',
-        sigCardBorder: 'border-indigo-200/90 dark:border-indigo-800/60',
-        tagText: 'Department of Information Technology • L&D',
+        sigCardBorder: 'border-slate-200 dark:border-slate-800',
+        tagText: 'Department of Information Technology & Engineering • L&D',
         title: 'IT & Engineering Performance Review Form',
         subtitle: 'Official periodic performance assessment, technical calibration, and career progression record.',
-        icon: '💻',
+        Icon: Laptop,
       };
     } else {
       return {
         badgeBg: 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800',
-        primaryBg: 'bg-purple-600 hover:bg-purple-700 text-white shadow-purple-500/20',
-        accentColor: '#7c3aed',
-        headerGradient: 'from-slate-950 via-slate-900 to-purple-950',
-        lineGradient: 'from-purple-400 via-fuchsia-400 to-pink-400',
-        numBg: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20',
-        focusRing: 'focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20',
+        primaryBg: 'bg-brand-600 hover:bg-brand-700 text-white shadow-brand/20',
+        accentColor: '#4f46e5',
+        headerGradient: 'from-slate-900 via-brand-950 to-slate-900',
+        lineGradient: 'from-brand-500 via-indigo-400 to-brand-600',
+        numBg: 'bg-brand-50 text-brand-600 dark:bg-brand-950/50 dark:text-brand-400 border border-brand-200 dark:border-brand-800',
+        focusRing: 'focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20',
         scoreBadge: 'bg-purple-50 dark:bg-purple-950/40 text-purple-800 dark:text-purple-300 border-purple-200 dark:border-purple-800',
-        sigCardBorder: 'border-purple-200/90 dark:border-purple-800/60',
+        sigCardBorder: 'border-slate-200 dark:border-slate-800',
         tagText: 'Department of Talent Acquisition • L&D',
         title: 'Talent Acquisition Performance Review',
         subtitle: 'Learning & Development | TA Department Performance Calibration & Progression Review',
-        icon: '🎯',
+        Icon: Target,
       };
     }
   };
 
   const theme = getTheme();
+  const ThemeIcon = theme.Icon;
 
   return (
-    <div className="min-h-screen py-6 px-4 sm:px-6 lg:px-8 text-slate-800 dark:text-slate-100">
-      <div className="max-w-5xl mx-auto space-y-6">
-        {/* Top Sticky Action Bar */}
-        <header className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-xs flex flex-col md:flex-row items-center justify-between gap-4 sticky top-4 z-30 transition-all">
-          <div className="flex items-center gap-3.5 w-full md:w-auto">
-            <div
-              className={`w-11 h-11 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-md ${
-                department === 'operations'
-                  ? 'bg-gradient-to-br from-teal-700 to-emerald-600'
-                  : department === 'it'
-                  ? 'bg-gradient-to-br from-indigo-700 to-blue-600'
-                  : 'bg-gradient-to-br from-purple-700 to-violet-600'
-              }`}
-            >
-              {theme.icon}
-            </div>
-            <div>
-              <h1 className="font-display text-base font-extrabold text-slate-900 dark:text-white tracking-tight">
-                Department Performance Evaluation Portal
+    <div className="space-y-6">
+      {/* Standard TaskNera Page Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-brand-500/10 text-brand-600 dark:bg-brand-500/20 dark:text-brand-400 flex items-center justify-center shrink-0">
+            <FileText className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
+                Reports &amp; Performance Dossiers
               </h1>
-              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                Operations, IT &amp; TA Department Evaluation, Scoring &amp; PDF Export
-              </p>
+              <Badge variant="brand">Executive Review</Badge>
             </div>
-          </div>
-
-          <div className="flex items-center gap-2.5 w-full md:w-auto justify-end flex-wrap">
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition cursor-pointer shadow-xs"
-            >
-              <Printer className="w-4 h-4 text-slate-500 dark:text-slate-400" />
-              <span>Print Form</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleDownloadExcel}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition cursor-pointer"
-            >
-              <FileSpreadsheet className="w-4 h-4" />
-              <span>Download Excel</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleDownloadPdf}
-              disabled={isGeneratingPdf}
-              className={`inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-xl shadow-xs transition cursor-pointer ${
-                theme.primaryBg
-              } ${isGeneratingPdf ? 'opacity-70 cursor-not-allowed' : ''}`}
-            >
-              <Download className="w-4 h-4" />
-              <span>{isGeneratingPdf ? 'Generating PDF...' : 'Download PDF'}</span>
-            </button>
-          </div>
-        </header>
-
-        {/* Department Switcher Tabs */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-2 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider pl-2 flex items-center gap-1.5">
-            <Target className="w-4 h-4 text-slate-400" />
-            <span>Select Review Department:</span>
-          </div>
-
-          <div className="flex gap-1.5 bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-xl w-full sm:w-auto">
-            <button
-              type="button"
-              onClick={() => setDepartment('operations')}
-              className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition cursor-pointer ${
-                department === 'operations'
-                  ? 'bg-white dark:bg-slate-900 text-teal-800 dark:text-teal-300 shadow-xs font-bold'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <span>🏢 Operations Team</span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-teal-50 dark:bg-teal-950/50 text-teal-700 dark:text-teal-400 font-bold border border-teal-200 dark:border-teal-800">
-                Operations
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setDepartment('it')}
-              className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition cursor-pointer ${
-                department === 'it'
-                  ? 'bg-white dark:bg-slate-900 text-indigo-800 dark:text-indigo-300 shadow-xs font-bold'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <span>💻 IT &amp; Engineering</span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-400 font-bold border border-indigo-200 dark:border-indigo-800">
-                IT
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setDepartment('ta')}
-              className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition cursor-pointer ${
-                department === 'ta'
-                  ? 'bg-white dark:bg-slate-900 text-purple-800 dark:text-purple-300 shadow-xs font-bold'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <span>🎯 Talent Acquisition</span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-400 font-bold border border-purple-200 dark:border-purple-800">
-                TA
-              </span>
-            </button>
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+              Department performance evaluation dossiers, competency scoring calibrations, and official PDF/Excel reports.
+            </p>
           </div>
         </div>
 
-        {/* MAIN DOCUMENT CARD (Rendered for view and canvas export) */}
-        <section
-          ref={documentRef}
-          className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-xl overflow-hidden print:border-none print:shadow-none"
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <Button
+            variant="outline"
+            size="sm"
+            icon={Printer}
+            onClick={() => window.print()}
+          >
+            Print Form
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            icon={FileSpreadsheet}
+            onClick={handleDownloadExcel}
+          >
+            Download Excel
+          </Button>
+
+          <Button
+            variant="primary"
+            size="sm"
+            icon={Download}
+            loading={isGeneratingPdf}
+            onClick={handleDownloadPdf}
+          >
+            {isGeneratingPdf ? 'Generating PDF...' : 'Download PDF'}
+          </Button>
+        </div>
+      </div>
+
+      {/* Modern Department Switcher Tabs */}
+      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-3 overflow-x-auto">
+        <button
+          type="button"
+          onClick={() => setDepartment('operations')}
+          className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            department === 'operations'
+              ? 'bg-brand-500 text-white shadow-brand shadow-sm'
+              : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+          }`}
         >
-          {/* Document Header Banner */}
-          <div className={`bg-gradient-to-br ${theme.headerGradient} text-white p-8 sm:p-10 relative overflow-hidden`}>
-            <div className="absolute top-0 right-0 w-96 h-96 bg-white/5 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
-            <div className="relative z-10 max-w-3xl">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-white/10 backdrop-blur-md border border-white/20 text-slate-100 mb-3 shadow-xs">
-                <span>{theme.icon}</span>
-                {theme.tagText}
-              </span>
-              <h2 className="font-display text-2xl sm:text-3xl font-black tracking-tight text-white mb-2 leading-tight">
-                {theme.title}
-              </h2>
-              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed font-normal">{theme.subtitle}</p>
-            </div>
-            {/* Color Accent Bar */}
-            <div className={`absolute bottom-0 left-0 right-0 h-1.5 bg-gradient-to-r ${theme.lineGradient}`} />
+          <Building2 className="w-4 h-4" />
+          <span>Operations &amp; Logistics</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setDepartment('it')}
+          className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            department === 'it'
+              ? 'bg-brand-500 text-white shadow-brand shadow-sm'
+              : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+          }`}
+        >
+          <Laptop className="w-4 h-4" />
+          <span>IT &amp; Platform Engineering</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setDepartment('ta')}
+          className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            department === 'ta'
+              ? 'bg-brand-500 text-white shadow-brand shadow-sm'
+              : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+          }`}
+        >
+          <Target className="w-4 h-4" />
+          <span>Talent Acquisition</span>
+        </button>
+      </div>
+
+      {/* MAIN DOCUMENT CARD (Rendered for view and canvas export) */}
+      <section
+        ref={documentRef}
+        className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-sm overflow-hidden print:border-none print:shadow-none"
+      >
+        {/* Document Header Banner */}
+        <div className="bg-gradient-to-r from-slate-900 via-brand-950 to-slate-900 text-white p-6 sm:p-8 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-96 h-96 bg-brand-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
+          <div className="relative z-10 max-w-3xl">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-white/10 backdrop-blur-md border border-white/20 text-slate-100 mb-3 shadow-xs">
+              <ThemeIcon className="w-3.5 h-3.5 text-brand-300" />
+              {theme.tagText}
+            </span>
+            <h2 className="font-display text-2xl sm:text-3xl font-black tracking-tight text-white mb-2 leading-tight">
+              {theme.title}
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed font-normal">{theme.subtitle}</p>
           </div>
+          {/* Color Accent Bar */}
+          <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-brand-500 via-indigo-400 to-brand-600" />
+        </div>
 
           {/* Form Body */}
           <div className="p-6 sm:p-10 space-y-10">
@@ -1456,50 +1439,29 @@ export const ReportsPage = () => {
 
             {/* Form Footer Actions */}
             <div className="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-800 print:hidden">
-              <button
-                type="button"
+              <Button
+                variant="outline"
+                size="sm"
+                icon={RotateCcw}
                 onClick={handleResetForm}
-                className="inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition cursor-pointer shadow-xs"
               >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Reset Form</span>
-              </button>
+                Reset Form
+              </Button>
 
-              <button
-                type="button"
+              <Button
+                variant="primary"
+                size="sm"
+                icon={Download}
+                loading={isGeneratingPdf}
                 onClick={handleDownloadPdf}
-                disabled={isGeneratingPdf}
-                className={`inline-flex items-center gap-2 px-6 py-2.5 text-xs font-bold rounded-xl shadow-md transition cursor-pointer ${
-                  theme.primaryBg
-                } ${isGeneratingPdf ? 'opacity-70 cursor-not-allowed' : ''}`}
               >
-                <Download className="w-4 h-4" />
-                <span>{isGeneratingPdf ? 'Generating PDF...' : 'Save & Download PDF'}</span>
-              </button>
+                {isGeneratingPdf ? 'Generating PDF...' : 'Save & Download PDF'}
+              </Button>
             </div>
           </div>
         </section>
-      </div>
 
-      {/* Floating Toast Notification */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 rounded-xl bg-slate-900 text-white text-xs font-semibold shadow-2xl border border-slate-700 animate-in fade-in slide-in-from-bottom-5">
-          {toastMessage.type === 'loading' ? (
-            <Clock className="w-4 h-4 text-blue-400 animate-spin" />
-          ) : toastMessage.type === 'success' ? (
-            <Check className="w-4 h-4 text-emerald-400" />
-          ) : (
-            <Info className="w-4 h-4 text-amber-400" />
-          )}
-          <span>{toastMessage.msg}</span>
-        </div>
-      )}
-    </div>
-  );
-};
-      </div>
-
-      {/* Floating Toast Notification */}
+        {/* Floating Toast Notification */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 rounded-xl bg-slate-900 text-white text-xs font-semibold shadow-2xl border border-slate-700 animate-in fade-in slide-in-from-bottom-5">
           {toastMessage.type === 'loading' ? (

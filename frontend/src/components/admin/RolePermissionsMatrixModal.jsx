@@ -143,7 +143,7 @@ export const RolePermissionsMatrixModal = ({ isOpen, onClose, onSuccess, role })
       subtitle={`Configure granular access authorizations for this system role (${selectedIds.size} granted)`}
       maxWidth="max-w-3xl"
     >
-      <div className="space-y-4 max-h-[75vh] overflow-y-auto pr-1">
+      <div className="space-y-4">
         {error && <Alert variant="danger">{error}</Alert>}
 
         {/* Global Controls & Search */}

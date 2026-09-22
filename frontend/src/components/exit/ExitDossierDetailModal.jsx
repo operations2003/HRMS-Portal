@@ -67,7 +67,7 @@ export const ExitDossierDetailModal = ({
       subtitle={`Employee Code: ${emp?.empCode || 'N/A'} | Status: ${dossier?.status || 'Active'}`}
       maxWidth="max-w-4xl"
     >
-      <div className="space-y-4 max-h-[75vh] overflow-y-auto pr-1">
+      <div className="space-y-4">
         {/* Dossier Tabs */}
         <div className="flex border-b border-slate-200">
           {[

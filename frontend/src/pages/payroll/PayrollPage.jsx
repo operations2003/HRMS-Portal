@@ -25,6 +25,7 @@ import {
   Calculator,
   ChevronDown,
   Sparkles,
+  Briefcase,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { payrollService } from '../../services/payrollService.js';
@@ -1005,7 +1006,7 @@ export const PayrollPage = () => {
             : ''
         }
       >
-        <form onSubmit={handleSaveSalary} className="p-6 space-y-5 max-h-[80vh] overflow-y-auto">
+        <form onSubmit={handleSaveSalary} className="space-y-5">
           {saveSuccessMsg && (
             <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-semibold flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
