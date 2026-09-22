@@ -164,8 +164,11 @@ export const calculateAutoLogoutCutoff = (record, shiftTiming, timezone = 'Asia/
 
 /**
  * Checks an unclosed attendance record and automatically logs out the employee if 10h post-shift passed
+ * @param {Object} record - The attendance record
+ * @param {string|null} shiftTimingOverride - Optional shift timing string
+ * @param {boolean} forceCheckout - If true, immediately finalizes the unclosed record (e.g. when checking in on a new day)
  */
-export const checkAndAutoLogoutRecord = async (record, shiftTimingOverride = null) => {
+export const checkAndAutoLogoutRecord = async (record, shiftTimingOverride = null, forceCheckout = false) => {
   if (!record || !record.checkIn || record.checkOut) {
     return record;
   }
@@ -175,19 +178,22 @@ export const checkAndAutoLogoutRecord = async (record, shiftTimingOverride = nul
   if (!cutoff) return record;
 
   const now = new Date();
-  if (now.getTime() < cutoff.getTime()) {
+  if (!forceCheckout && now.getTime() < cutoff.getTime()) {
     return record;
   }
 
-  // Threshold exceeded! Automatically finalize logout for the day
+  // Threshold exceeded or forced checkout for previous day session!
   const checkInTime = new Date(record.checkIn);
   const shift = parseShiftTiming(shiftTiming);
 
-  // If currently on break, close open break at cutoff time
+  // Determine effective check-out time (never in the future)
+  const effectiveCheckOut = new Date(Math.min(now.getTime(), cutoff.getTime()));
+
+  // If currently on break, close open break at effective check-out time
   let breakHistory = Array.isArray(record.breakHistory) ? [...record.breakHistory] : [];
   if (record.isOnBreak && record.currentBreakStart) {
     const breakStart = new Date(record.currentBreakStart);
-    const breakEnd = new Date(Math.min(now.getTime(), cutoff.getTime()));
+    const breakEnd = new Date(Math.min(now.getTime(), effectiveCheckOut.getTime()));
     const diffMs = Math.max(0, breakEnd.getTime() - breakStart.getTime());
     breakHistory.push({
       startTime: breakStart.toISOString(),
@@ -203,8 +209,8 @@ export const checkAndAutoLogoutRecord = async (record, shiftTimingOverride = nul
   );
   const totalBreakMinutes = Math.round(totalBreakSeconds / 60);
 
-  // Total working time capped at the 10h post-shift cutoff
-  const grossSeconds = Math.max(0, Math.floor((cutoff.getTime() - checkInTime.getTime()) / 1000));
+  // Total working time capped at the effective checkout time
+  const grossSeconds = Math.max(0, Math.floor((effectiveCheckOut.getTime() - checkInTime.getTime()) / 1000));
   const netSeconds = Math.max(0, grossSeconds - totalBreakSeconds);
   const totalHours = parseFloat((netSeconds / 3600).toFixed(2));
 
@@ -218,7 +224,7 @@ export const checkAndAutoLogoutRecord = async (record, shiftTimingOverride = nul
     : autoLogoutNote;
 
   const updated = await attendanceRepository.update(record.id, {
-    checkOut: cutoff,
+    checkOut: effectiveCheckOut,
     totalHours,
     overtimeHours,
     isOnBreak: false,
@@ -336,9 +342,10 @@ export const attendanceService = {
       }
     }
 
-    // Inactive/non-existing employees cannot create attendance
-    if (targetEmployee.status && targetEmployee.status.toLowerCase() !== 'active') {
-      const error = new Error(`Cannot record attendance: Employee account status is "${targetEmployee.status}". Only active employees can record attendance.`);
+    // Inactive/terminated employees cannot record attendance (Notice Period & Probation are permitted)
+    const NON_WORKING_STATUSES = ['inactive', 'terminated', 'suspended', 'exited', 'archived'];
+    if (targetEmployee.status && NON_WORKING_STATUSES.includes(targetEmployee.status.trim().toLowerCase())) {
+      const error = new Error(`Cannot record attendance: Employee account status is "${targetEmployee.status}". Inactive or terminated employees cannot record attendance.`);
       error.statusCode = 403;
       throw error;
     }
@@ -347,12 +354,14 @@ export const attendanceService = {
     const serverNow = new Date();
     const shiftTiming = targetEmployee.shiftTiming || data.shiftTiming || '11:00 AM - 07:00 PM';
 
-    // Auto-resolve any prior open records for targetEmployee exceeding cutoff
+    // Auto-resolve any prior open records for targetEmployee exceeding cutoff or from a previous day
     try {
       const unclosed = await attendanceRepository.findActiveUnclosedRecords(targetEmployee.orgId);
       for (const rec of unclosed) {
         if (rec.employeeId === targetEmployee.id) {
-          await checkAndAutoLogoutRecord(rec, shiftTiming);
+          const recDateStr = typeof rec.attendanceDate === 'string' ? rec.attendanceDate.split('T')[0] : '';
+          const isPriorDate = Boolean(recDateStr && recDateStr !== todayDate);
+          await checkAndAutoLogoutRecord(rec, shiftTiming, isPriorDate);
         }
       }
     } catch {
@@ -440,9 +449,10 @@ export const attendanceService = {
       }
     }
 
-    // Inactive/non-existing employees cannot create attendance
-    if (targetEmployee.status && targetEmployee.status.toLowerCase() !== 'active') {
-      const error = new Error(`Cannot record attendance: Employee account status is "${targetEmployee.status}". Only active employees can record attendance.`);
+    // Inactive/terminated employees cannot record attendance (Notice Period & Probation are permitted)
+    const NON_WORKING_STATUSES = ['inactive', 'terminated', 'suspended', 'exited', 'archived'];
+    if (targetEmployee.status && NON_WORKING_STATUSES.includes(targetEmployee.status.trim().toLowerCase())) {
+      const error = new Error(`Cannot record attendance: Employee account status is "${targetEmployee.status}". Inactive or terminated employees cannot record attendance.`);
       error.statusCode = 403;
       throw error;
     }
@@ -575,7 +585,16 @@ export const attendanceService = {
     }
 
     const todayDate = new Date().toISOString().split('T')[0];
-    const existing = await attendanceRepository.findByEmployeeAndDate(targetEmployee.id, todayDate, targetEmployee.orgId);
+    let existing = await attendanceRepository.findByEmployeeAndDate(targetEmployee.id, todayDate, targetEmployee.orgId);
+
+    // Fallback to active unclosed record across previous dates / overnight shifts
+    if (!existing || !existing.checkIn) {
+      const unclosed = await attendanceRepository.findActiveUnclosedRecords(targetEmployee.orgId);
+      const openRec = unclosed.find((r) => r.employeeId === targetEmployee.id);
+      if (openRec) {
+        existing = openRec;
+      }
+    }
 
     if (!existing || !existing.checkIn) {
       const error = new Error('Cannot pause: You must log in first before taking a break.');
@@ -613,7 +632,16 @@ export const attendanceService = {
     }
 
     const todayDate = new Date().toISOString().split('T')[0];
-    const existing = await attendanceRepository.findByEmployeeAndDate(targetEmployee.id, todayDate, targetEmployee.orgId);
+    let existing = await attendanceRepository.findByEmployeeAndDate(targetEmployee.id, todayDate, targetEmployee.orgId);
+
+    // Fallback to active unclosed record across previous dates / overnight shifts
+    if (!existing || !existing.checkIn) {
+      const unclosed = await attendanceRepository.findActiveUnclosedRecords(targetEmployee.orgId);
+      const openRec = unclosed.find((r) => r.employeeId === targetEmployee.id);
+      if (openRec) {
+        existing = openRec;
+      }
+    }
 
     if (!existing || !existing.checkIn) {
       const error = new Error('Cannot resume: No active login session found.');
