@@ -11,9 +11,46 @@ import {
   ChevronDown,
   ChevronUp,
   MapPin,
+  Zap,
+  AlertTriangle,
 } from 'lucide-react';
 import { Button } from '../common/Button.jsx';
 import { Alert } from '../common/Alert.jsx';
+
+/**
+ * Parse scheduled duration hours from shift timing string (e.g. "11:00 AM - 07:00 PM" -> 8.0)
+ */
+const parseShiftDurationHours = (shiftTiming) => {
+  if (!shiftTiming || typeof shiftTiming !== 'string') return 8.0;
+  const parts = shiftTiming.split('-');
+  if (parts.length !== 2) return 8.0;
+
+  const parseTime = (str) => {
+    const trimmed = str.trim();
+    const match12 = trimmed.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+    if (match12) {
+      let h = parseInt(match12[1], 10);
+      const m = parseInt(match12[2], 10);
+      const period = (match12[3] || '').toUpperCase();
+      if (period === 'PM' && h < 12) h += 12;
+      if (period === 'AM' && h === 12) h = 0;
+      return h * 60 + m;
+    }
+    const match24 = trimmed.match(/^(\d{1,2}):(\d{2})/);
+    if (match24) {
+      return parseInt(match24[1], 10) * 60 + parseInt(match24[2], 10);
+    }
+    return null;
+  };
+
+  const startM = parseTime(parts[0]);
+  const endM = parseTime(parts[1]);
+  if (startM === null || endM === null) return 8.0;
+
+  let diff = endM - startM;
+  if (diff <= 0) diff += 24 * 60;
+  return parseFloat((diff / 60).toFixed(2));
+};
 
 /**
  * Format total seconds into HH:MM:SS
@@ -68,6 +105,8 @@ export const AttendancePunchCard = ({
 }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [elapsedTime, setElapsedTime] = useState('00:00:00');
+  const [overtimeElapsed, setOvertimeElapsed] = useState('00:00:00');
+  const [isOvertimeActive, setIsOvertimeActive] = useState(false);
   const [breakElapsed, setBreakElapsed] = useState('00:00:00');
   const [totalBreakFormatted, setTotalBreakFormatted] = useState('0 mins');
   const [showBreakHistory, setShowBreakHistory] = useState(false);
@@ -126,13 +165,27 @@ export const AttendancePunchCard = ({
         const grossElapsedSeconds = Math.max(0, Math.floor((now.getTime() - checkInTime) / 1000));
         const netWorkingSeconds = Math.max(0, grossElapsedSeconds - totalBreakSecs);
         setElapsedTime(formatHMS(netWorkingSeconds));
+
+        // Overtime: work hours beyond scheduled shift duration (universal for all roles)
+        const scheduledDurationHours = parseShiftDurationHours(assignedShift);
+        const scheduledDurationSeconds = scheduledDurationHours * 3600;
+        if (netWorkingSeconds > scheduledDurationSeconds) {
+          const otSecs = netWorkingSeconds - scheduledDurationSeconds;
+          setOvertimeElapsed(formatHMS(otSecs));
+          setIsOvertimeActive(true);
+        } else {
+          setOvertimeElapsed('00:00:00');
+          setIsOvertimeActive(false);
+        }
+      } else {
+        setIsOvertimeActive(false);
       }
     };
 
     computeTimers();
     const interval = setInterval(computeTimers, 1000);
     return () => clearInterval(interval);
-  }, [todayRecord]);
+  }, [todayRecord, assignedShift]);
 
   const hasCheckedIn = Boolean(todayRecord?.checkIn);
   const hasCheckedOut = Boolean(todayRecord?.checkOut);
@@ -165,6 +218,13 @@ export const AttendancePunchCard = ({
           On Break (Shift Paused)
         </span>
       );
+    } else if (isOvertimeActive) {
+      statusBadge = (
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-900 border border-amber-300 ring-1 ring-amber-500/30 animate-pulse">
+          <Zap className="w-3.5 h-3.5 text-amber-600 animate-bounce" />
+          Active Shift • Overtime (OT)
+        </span>
+      );
     } else {
       statusBadge = (
         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 ring-1 ring-emerald-500/20">
@@ -174,10 +234,11 @@ export const AttendancePunchCard = ({
       );
     }
   } else if (hasCheckedIn && hasCheckedOut) {
+    const isAutoLoggedOut = todayRecord?.notes?.includes('[SYSTEM_AUTO_LOGOUT]');
     statusBadge = (
       <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-200 shadow-2xs">
         <CheckCircle2 className="w-3.5 h-3.5 text-sky-600" />
-        Completed ({todayRecord.status || 'HALF_DAY'})
+        {isAutoLoggedOut ? 'Auto-Logged Out (10h Post-Shift)' : `Completed (${todayRecord.status || 'HALF_DAY'})`}
       </span>
     );
   }
@@ -334,6 +395,16 @@ export const AttendancePunchCard = ({
                 (Shift Paused)
               </span>
             )}
+            {hasCheckedIn && !hasCheckedOut && !isOnBreak && isOvertimeActive && (
+              <span className="inline-flex items-center gap-1 text-[10px] text-purple-700 font-bold mt-1 bg-purple-100 px-1.5 py-0.5 rounded-full w-fit">
+                <Zap className="w-2.5 h-2.5" /> +{overtimeElapsed} OT
+              </span>
+            )}
+            {hasCheckedOut && Number(todayRecord?.overtimeHours || todayRecord?.overtime_hours || 0) > 0 && (
+              <span className="inline-flex items-center gap-1 text-[10px] text-purple-700 font-bold mt-1 bg-purple-100 px-1.5 py-0.5 rounded-full w-fit">
+                <Zap className="w-2.5 h-2.5" /> OT: {Number(todayRecord?.overtimeHours || todayRecord?.overtime_hours).toFixed(2)} hrs
+              </span>
+            )}
           </div>
 
           {/* 4. Total Break */}
@@ -368,33 +439,39 @@ export const AttendancePunchCard = ({
           </div>
         </div>
 
-        {/* Break Sessions Breakdown (collapsible) */}
+        {/* Break History expandable panel */}
         {showBreakHistory && breakHistory.length > 0 && (
-          <div className="p-4 rounded-2xl bg-amber-50/40 border border-amber-200/70 space-y-2.5 text-xs animate-in fade-in duration-200">
-            <div className="font-bold text-amber-900 flex items-center justify-between">
-              <span className="flex items-center gap-1.5">
-                <Coffee className="w-3.5 h-3.5 text-amber-600" />
+          <div className="mt-4 p-4 rounded-2xl bg-slate-50 border border-slate-200/80 transition-all animate-fadeIn">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-bold text-slate-700 tracking-wide uppercase">
                 Today's Break Sessions ({breakHistory.length})
               </span>
-              <span className="text-slate-400 font-normal text-[11px]">Audit Log</span>
+              <span className="text-[11px] font-medium text-slate-500">
+                Total paused: <strong className="text-slate-800">{totalBreakFormatted}</strong>
+              </span>
             </div>
-            <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
               {breakHistory.map((b, idx) => {
-                const durMin =
-                  b.durationMinutes ??
-                  (b.durationSeconds ? Math.round(b.durationSeconds / 60) : 0);
-                const durSec = b.durationSeconds ? `${b.durationSeconds % 60}s` : '';
+                const s = b.startTime ? formatTimeOnly(b.startTime) : '—';
+                const e = b.endTime ? formatTimeOnly(b.endTime) : (isOnBreak && idx === breakHistory.length - 1 ? 'Ongoing' : '—');
+                const dur = b.durationMinutes != null
+                  ? `${b.durationMinutes} mins`
+                  : (isOnBreak && idx === breakHistory.length - 1 ? 'In progress' : '—');
                 return (
                   <div
-                    key={idx}
-                    className="flex items-center justify-between py-1.5 px-3 rounded-xl bg-white border border-amber-200/60 text-slate-700 shadow-2xs"
+                    key={b.id || idx}
+                    className="flex items-center justify-between text-xs px-3 py-2 rounded-xl bg-white border border-slate-200/60"
                   >
-                    <span className="font-semibold text-slate-700">Break #{idx + 1}</span>
-                    <span className="text-slate-500 font-mono text-[11px]">
-                      {formatTimeOnly(b.startTime)} — {formatTimeOnly(b.endTime)}
-                    </span>
-                    <span className="font-bold text-amber-800 font-mono">
-                      {durMin}m {durSec}
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="w-5 h-5 rounded-full bg-amber-50 text-amber-700 font-bold text-[10px] flex items-center justify-center shrink-0 border border-amber-200">
+                        {idx + 1}
+                      </span>
+                      <span className="text-slate-700 font-medium">
+                        {s} → {e}
+                      </span>
+                    </div>
+                    <span className={`font-mono font-semibold shrink-0 ${!b.endTime ? 'text-amber-600' : 'text-slate-600'}`}>
+                      {dur}
                     </span>
                   </div>
                 );
@@ -403,6 +480,16 @@ export const AttendancePunchCard = ({
           </div>
         )}
       </div>
+
+      {/* Auto-logout system note banner if applicable */}
+      {todayRecord?.notes?.includes('[SYSTEM_AUTO_LOGOUT]') && (
+        <div className="mx-6 mb-2 p-3 rounded-xl bg-amber-50 border border-amber-200/80 flex items-start gap-2.5 text-xs text-amber-800 animate-fadeIn">
+          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <span className="font-bold">System Auto-Logout:</span> This session was automatically closed 10 hours after your shift ended. Total work and overtime hours have been finalized up to the cutoff.
+          </div>
+        </div>
+      )}
 
       {/* Action Punch Buttons */}
       <div className="p-6 pt-2">

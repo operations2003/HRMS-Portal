@@ -149,6 +149,24 @@ export const attendanceRepository = {
   },
 
   /**
+   * Find active unclosed attendance records (check_in present, check_out NULL)
+   */
+  async findActiveUnclosedRecords(orgId = null) {
+    let sql = `
+      ${BASE_ATTENDANCE_SELECT}
+      WHERE a.check_in IS NOT NULL AND a.check_out IS NULL
+    `;
+    const values = [];
+    if (orgId) {
+      sql += ' AND a.org_id = $1';
+      values.push(orgId);
+    }
+    sql += ' ORDER BY a.check_in ASC;';
+    const res = await pool.query(sql, values);
+    return res.rows.map(mapAttendanceRow);
+  },
+
+  /**
    * Create a new attendance record (Check-In)
    */
   async create(data) {

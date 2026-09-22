@@ -53,6 +53,212 @@ export const parseShiftStartTime = (shiftTiming) => {
 };
 
 /**
+ * Parse start, end, and scheduled duration hours from shift timing string
+ * Supports: "11:00 AM - 07:00 PM", "09:00 AM - 05:00 PM", "03:00 PM - 08:00 PM", "21:00 - 05:00", etc.
+ */
+export const parseShiftTiming = (shiftTiming) => {
+  const defaultShift = {
+    startHour: 11,
+    startMinute: 0,
+    endHour: 19,
+    endMinute: 0,
+    scheduledDurationHours: 8.0,
+  };
+
+  if (!shiftTiming || typeof shiftTiming !== 'string') {
+    return defaultShift;
+  }
+
+  const parts = shiftTiming.split('-');
+  if (parts.length !== 2) {
+    const start = parseShiftStartTime(shiftTiming);
+    const endH = (start.hour + 8) % 24;
+    return {
+      startHour: start.hour,
+      startMinute: start.minute,
+      endHour: endH,
+      endMinute: start.minute,
+      scheduledDurationHours: 8.0,
+    };
+  }
+
+  const parseTimeStr = (str) => {
+    const trimmed = str.trim();
+    const match12 = trimmed.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+    if (match12) {
+      let h = parseInt(match12[1], 10);
+      const m = parseInt(match12[2], 10);
+      const period = (match12[3] || '').toUpperCase();
+      if (period === 'PM' && h < 12) h += 12;
+      if (period === 'AM' && h === 12) h = 0;
+      return { hour: h, minute: m };
+    }
+    const match24 = trimmed.match(/^(\d{1,2}):(\d{2})/);
+    if (match24) {
+      return { hour: parseInt(match24[1], 10), minute: parseInt(match24[2], 10) };
+    }
+    return null;
+  };
+
+  const start = parseTimeStr(parts[0]);
+  const end = parseTimeStr(parts[1]);
+
+  if (!start || !end) {
+    return defaultShift;
+  }
+
+  let startMinutes = start.hour * 60 + start.minute;
+  let endMinutes = end.hour * 60 + end.minute;
+
+  if (endMinutes <= startMinutes) {
+    // Overnight shift crossing midnight (e.g. 9 PM to 5 AM)
+    endMinutes += 24 * 60;
+  }
+
+  const durationHours = parseFloat(((endMinutes - startMinutes) / 60).toFixed(2));
+
+  return {
+    startHour: start.hour,
+    startMinute: start.minute,
+    endHour: end.hour,
+    endMinute: end.minute,
+    scheduledDurationHours: durationHours > 0 ? durationHours : 8.0,
+  };
+};
+
+/**
+ * Calculate the auto-logout cutoff time for a given check-in and shift timing.
+ * Cutoff: 10 hours after the scheduled shift end.
+ */
+export const calculateAutoLogoutCutoff = (record, shiftTiming, timezone = 'Asia/Kolkata') => {
+  if (!record || !record.checkIn) return null;
+
+  const checkInDate = new Date(record.checkIn);
+  const shift = parseShiftTiming(shiftTiming);
+
+  let dateParts = [];
+  if (record.attendanceDate && typeof record.attendanceDate === 'string') {
+    dateParts = record.attendanceDate.split('T')[0].split('-').map(Number);
+  } else if (record.attendanceDate instanceof Date) {
+    dateParts = [record.attendanceDate.getFullYear(), record.attendanceDate.getMonth() + 1, record.attendanceDate.getDate()];
+  } else {
+    dateParts = [checkInDate.getFullYear(), checkInDate.getMonth() + 1, checkInDate.getDate()];
+  }
+
+  const [year, month, day] = dateParts;
+  const isOvernight = shift.endHour < shift.startHour || (shift.endHour === shift.startHour && shift.endMinute <= shift.startMinute);
+
+  const shiftEndDate = new Date(year, month - 1, day, shift.endHour, shift.endMinute, 0);
+  if (isOvernight) {
+    shiftEndDate.setDate(shiftEndDate.getDate() + 1);
+  }
+
+  // Handle late check-ins where employee clocked in after scheduled shift end
+  const dynamicShiftEnd = new Date(checkInDate.getTime() + shift.scheduledDurationHours * 3600 * 1000);
+  const effectiveShiftEnd = new Date(Math.max(shiftEndDate.getTime(), dynamicShiftEnd.getTime()));
+
+  // Auto-logout cutoff is exactly 10 hours after shift ends
+  const cutoff = new Date(effectiveShiftEnd.getTime() + 10 * 3600 * 1000);
+  return cutoff;
+};
+
+/**
+ * Checks an unclosed attendance record and automatically logs out the employee if 10h post-shift passed
+ */
+export const checkAndAutoLogoutRecord = async (record, shiftTimingOverride = null) => {
+  if (!record || !record.checkIn || record.checkOut) {
+    return record;
+  }
+
+  const shiftTiming = shiftTimingOverride || record.employee?.shiftTiming || '11:00 AM - 07:00 PM';
+  const cutoff = calculateAutoLogoutCutoff(record, shiftTiming, record.timezone);
+  if (!cutoff) return record;
+
+  const now = new Date();
+  if (now.getTime() < cutoff.getTime()) {
+    return record;
+  }
+
+  // Threshold exceeded! Automatically finalize logout for the day
+  const checkInTime = new Date(record.checkIn);
+  const shift = parseShiftTiming(shiftTiming);
+
+  // If currently on break, close open break at cutoff time
+  let breakHistory = Array.isArray(record.breakHistory) ? [...record.breakHistory] : [];
+  if (record.isOnBreak && record.currentBreakStart) {
+    const breakStart = new Date(record.currentBreakStart);
+    const breakEnd = new Date(Math.min(now.getTime(), cutoff.getTime()));
+    const diffMs = Math.max(0, breakEnd.getTime() - breakStart.getTime());
+    breakHistory.push({
+      startTime: breakStart.toISOString(),
+      endTime: breakEnd.toISOString(),
+      durationSeconds: Math.round(diffMs / 1000),
+      durationMinutes: Math.round(diffMs / 60000),
+    });
+  }
+
+  const totalBreakSeconds = breakHistory.reduce(
+    (sum, item) => sum + (item.durationSeconds !== undefined ? Number(item.durationSeconds) : ((Number(item.durationMinutes) || 0) * 60)),
+    0
+  );
+  const totalBreakMinutes = Math.round(totalBreakSeconds / 60);
+
+  // Total working time capped at the 10h post-shift cutoff
+  const grossSeconds = Math.max(0, Math.floor((cutoff.getTime() - checkInTime.getTime()) / 1000));
+  const netSeconds = Math.max(0, grossSeconds - totalBreakSeconds);
+  const totalHours = parseFloat((netSeconds / 3600).toFixed(2));
+
+  // Overtime: all work hours beyond scheduled shift duration
+  const scheduledHours = shift.scheduledDurationHours || 8.0;
+  const overtimeHours = totalHours > scheduledHours ? parseFloat((totalHours - scheduledHours).toFixed(2)) : 0.0;
+
+  const autoLogoutNote = '[SYSTEM_AUTO_LOGOUT] Automatically logged out 10 hours after shift completed.';
+  const updatedNotes = record.notes
+    ? `${record.notes} | ${autoLogoutNote}`
+    : autoLogoutNote;
+
+  const updated = await attendanceRepository.update(record.id, {
+    checkOut: cutoff,
+    totalHours,
+    overtimeHours,
+    isOnBreak: false,
+    currentBreakStart: null,
+    breakHistory,
+    breakDurationMinutes: totalBreakMinutes,
+    status: record.status || 'PRESENT',
+    notes: updatedNotes,
+  });
+
+  return updated;
+};
+
+/**
+ * Scans active unclosed records and auto-checks out any records exceeding shift + 10 hours
+ */
+export const autoCheckoutStaleRecords = async (orgId = null) => {
+  try {
+    const openRecords = await attendanceRepository.findActiveUnclosedRecords(orgId);
+    if (!openRecords || openRecords.length === 0) return 0;
+
+    let autoClosedCount = 0;
+    const now = new Date();
+
+    for (const rec of openRecords) {
+      const shiftTiming = rec.employee?.shiftTiming || '11:00 AM - 07:00 PM';
+      const cutoff = calculateAutoLogoutCutoff(rec, shiftTiming, rec.timezone);
+      if (cutoff && now.getTime() >= cutoff.getTime()) {
+        await checkAndAutoLogoutRecord(rec, shiftTiming);
+        autoClosedCount++;
+      }
+    }
+    return autoClosedCount;
+  } catch (err) {
+    console.error('Error in autoCheckoutStaleRecords:', err.message);
+    return 0;
+  }
+};
+
+/**
  * Determine if check-in is on time ('PRESENT') or late ('LATE') based on assigned shift and grace window
  * If employee logs in on time or early (e.g. at 02:59 PM for a 03:00 PM shift), status is 'PRESENT'
  * Grace period defaults to 10 minutes after shift start.
@@ -139,11 +345,32 @@ export const attendanceService = {
 
     const todayDate = data.date || new Date().toISOString().split('T')[0];
     const serverNow = new Date();
+    const shiftTiming = targetEmployee.shiftTiming || data.shiftTiming || '11:00 AM - 07:00 PM';
+
+    // Auto-resolve any prior open records for targetEmployee exceeding cutoff
+    try {
+      const unclosed = await attendanceRepository.findActiveUnclosedRecords(targetEmployee.orgId);
+      for (const rec of unclosed) {
+        if (rec.employeeId === targetEmployee.id) {
+          await checkAndAutoLogoutRecord(rec, shiftTiming);
+        }
+      }
+    } catch {
+      // Non-blocking
+    }
 
     // Check for existing attendance record for this employee today
-    const existing = await attendanceRepository.findByEmployeeAndDate(targetEmployee.id, todayDate, targetEmployee.orgId);
+    let existing = await attendanceRepository.findByEmployeeAndDate(targetEmployee.id, todayDate, targetEmployee.orgId);
 
-    if (existing && existing.checkIn) {
+    if (existing && existing.checkIn && !existing.checkOut) {
+      // Check if this existing record is already past cutoff
+      const cutoff = calculateAutoLogoutCutoff(existing, shiftTiming, existing.timezone || targetEmployee.timezone);
+      if (cutoff && serverNow.getTime() >= cutoff.getTime()) {
+        existing = await checkAndAutoLogoutRecord(existing, shiftTiming);
+      }
+    }
+
+    if (existing && existing.checkIn && !existing.checkOut) {
       const checkInTime = new Date(existing.checkIn).toLocaleTimeString();
       const error = new Error(`Employee has already checked in for today (${todayDate}) at ${checkInTime}. Duplicate check-in is not permitted.`);
       error.statusCode = 409;
@@ -151,7 +378,6 @@ export const attendanceService = {
     }
 
     // Determine status accurately based on employee's assigned shift timing and 10-minute grace period
-    const shiftTiming = targetEmployee.shiftTiming || data.shiftTiming || '11:00 AM - 07:00 PM';
     const tz = data.timezone || targetEmployee.timezone || 'Asia/Kolkata';
     const status = determineAttendanceStatus(serverNow, shiftTiming, tz, 10);
 
@@ -223,8 +449,18 @@ export const attendanceService = {
 
     const todayDate = data.date || new Date().toISOString().split('T')[0];
     const serverNow = new Date();
+    const shiftTiming = targetEmployee.shiftTiming || data.shiftTiming || '11:00 AM - 07:00 PM';
 
-    const existing = await attendanceRepository.findByEmployeeAndDate(targetEmployee.id, todayDate, targetEmployee.orgId);
+    let existing = await attendanceRepository.findByEmployeeAndDate(targetEmployee.id, todayDate, targetEmployee.orgId);
+
+    // If not found for todayDate, also check for any open check-in across previous dates for this employee
+    if (!existing || !existing.checkIn) {
+      const unclosed = await attendanceRepository.findActiveUnclosedRecords(targetEmployee.orgId);
+      const openRec = unclosed.find((r) => r.employeeId === targetEmployee.id);
+      if (openRec) {
+        existing = openRec;
+      }
+    }
 
     // Validate check-in exists before check-out
     if (!existing || !existing.checkIn) {
@@ -239,6 +475,12 @@ export const attendanceService = {
       const error = new Error(`Employee has already checked out for today at ${checkOutTime}. Duplicate check-out is not permitted.`);
       error.statusCode = 409;
       throw error;
+    }
+
+    // Check if session has exceeded shift + 10 hours auto-logout threshold
+    const cutoff = calculateAutoLogoutCutoff(existing, shiftTiming, existing.timezone || targetEmployee.timezone);
+    if (cutoff && serverNow.getTime() >= cutoff.getTime()) {
+      return checkAndAutoLogoutRecord(existing, shiftTiming);
     }
 
     // Validate chronological order: check-out must not be earlier than check-in
@@ -271,7 +513,6 @@ export const attendanceService = {
     );
     const calculatedBreakMinutes = Math.round(totalBreakSeconds / 60);
 
-    // If caller explicitly passed a custom break duration override (e.g. admin regularization), use it, otherwise dynamically calculated:
     const breakMinutes = (data.breakDurationMinutes !== undefined && data.breakDurationMinutes !== null && data.breakDurationMinutes !== '')
       ? parseInt(data.breakDurationMinutes, 10)
       : calculatedBreakMinutes;
@@ -285,16 +526,16 @@ export const attendanceService = {
     const netSeconds = Math.max(0, grossSeconds - effectiveBreakSeconds);
     const totalHours = parseFloat((netSeconds / 3600).toFixed(2));
 
-    // Calculate overtime if applicable (> 8 hours standard work day)
-    const overtimeHours = totalHours > 8.0 ? parseFloat((totalHours - 8.0).toFixed(2)) : 0.0;
+    // Calculate overtime beyond scheduled shift duration (universal for all roles)
+    const shiftInfo = parseShiftTiming(shiftTiming);
+    const scheduledHours = shiftInfo.scheduledDurationHours || 8.0;
+    const overtimeHours = totalHours > scheduledHours ? parseFloat((totalHours - scheduledHours).toFixed(2)) : 0.0;
 
     // Determine final status
     let finalStatus = 'PRESENT';
     if (totalHours < 4.0) {
       finalStatus = 'HALF_DAY';
     } else {
-      // Re-validate against shift timing to ensure accurate status
-      const shiftTiming = targetEmployee.shiftTiming || data.shiftTiming || '11:00 AM - 07:00 PM';
       const tz = data.timezone || existing.timezone || targetEmployee.timezone || 'Asia/Kolkata';
       finalStatus = existing.checkIn
         ? determineAttendanceStatus(new Date(existing.checkIn), shiftTiming, tz, 10)
@@ -425,6 +666,18 @@ export const attendanceService = {
       throw error;
     }
 
+    // Auto-resolve any active unclosed records for this employee that exceeded the 10h post-shift cutoff
+    try {
+      const unclosed = await attendanceRepository.findActiveUnclosedRecords(employee.orgId);
+      for (const rec of unclosed) {
+        if (rec.employeeId === employee.id) {
+          await checkAndAutoLogoutRecord(rec, employee.shiftTiming);
+        }
+      }
+    } catch {
+      // Non-blocking
+    }
+
     const history = await attendanceRepository.findByEmployeeHistory(employee.id, employee.orgId, query);
     return {
       ...history,
@@ -516,6 +769,9 @@ export const attendanceService = {
       deptId = managerEmp.deptId;
     }
 
+    // Automatically resolve stale sessions before returning team view
+    await autoCheckoutStaleRecords(user.orgId);
+
     return attendanceRepository.findTeamAttendance(deptId, user.orgId, query);
   },
 
@@ -529,6 +785,9 @@ export const attendanceService = {
       error.statusCode = 403;
       throw error;
     }
+
+    // Automatically resolve stale sessions across organization before returning view
+    await autoCheckoutStaleRecords(user.orgId);
 
     const [attendanceData, summary] = await Promise.all([
       attendanceRepository.findAllOrgAttendance(user.orgId, query),
@@ -589,7 +848,9 @@ export const attendanceService = {
       const breakMinutes = record.breakDurationMinutes || 0;
       const netHours = Math.max(0, grossHours - breakMinutes / 60);
       totalHours = parseFloat(netHours.toFixed(2));
-      overtimeHours = totalHours > 8.0 ? parseFloat((totalHours - 8.0).toFixed(2)) : 0.0;
+      const shiftInfo = parseShiftTiming(record.employee?.shiftTiming || '11:00 AM - 07:00 PM');
+      const scheduledHours = shiftInfo.scheduledDurationHours || 8.0;
+      overtimeHours = totalHours > scheduledHours ? parseFloat((totalHours - scheduledHours).toFixed(2)) : 0.0;
     }
 
     return attendanceRepository.update(id, {

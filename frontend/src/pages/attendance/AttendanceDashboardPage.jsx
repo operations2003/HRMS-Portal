@@ -312,12 +312,15 @@ export const AttendanceDashboardPage = () => {
                   : 'Standard Shift (11:00 AM – 07:00 PM)'}
               </h2>
               <p className="text-xs text-slate-300 mt-1 max-w-md">
-                Standard schedule with break tracking. 10-minute arrival grace applies. Overtime accrued automatically for work exceeding 8.0 net hours.
+                Standard schedule with live break tracking. Work beyond scheduled hours is counted as Overtime (OT). Unclosed sessions automatically log out 10 hours after shift end.
               </p>
             </div>
-            <div className="shrink-0">
+            <div className="shrink-0 flex flex-col items-start sm:items-end gap-1.5">
               <span className="px-3.5 py-1.5 rounded-xl bg-white/10 text-xs font-bold text-slate-200 border border-white/10 backdrop-blur-sm">
-                8.0 hrs Baseline
+                Universal Shift Policy
+              </span>
+              <span className="px-2.5 py-0.5 rounded-lg bg-brand-500/20 text-[11px] font-semibold text-brand-300 border border-brand-500/30">
+                +10h Auto-Logout Cap
               </span>
             </div>
           </div>

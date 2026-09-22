@@ -1,6 +1,7 @@
 import app from './app.js';
 import { config } from './config/index.js';
 import { initDataStore } from './repositories/dataStore.js';
+import { startAttendanceAutoLogoutJob } from './services/attendanceCronService.js';
 
 const startServer = async () => {
   try {
@@ -14,6 +15,9 @@ const startServer = async () => {
       console.log(`🌐 URL         : http://localhost:${config.port}`);
       console.log(`🩺 Health Check: http://localhost:${config.port}/api/v1/health`);
       console.log('====================================================');
+
+      // Initialize background attendance auto-logout job (runs every 10 mins)
+      startAttendanceAutoLogoutJob();
     });
   } catch (error) {
     console.error('Failed to start server:', error);
