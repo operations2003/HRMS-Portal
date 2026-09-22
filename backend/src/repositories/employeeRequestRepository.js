@@ -117,14 +117,19 @@ export const employeeRequestRepository = {
       sql += ` AND er.priority = $${params.length}`;
     }
 
-    if (filters.employeeId) {
-      params.push(filters.employeeId);
-      sql += ` AND er.employee_id = $${params.length}`;
-    }
-
-    if (filters.assignedTo) {
-      params.push(filters.assignedTo);
-      sql += ` AND er.assigned_to = $${params.length}`;
+    if (filters.myRequestsFor) {
+      params.push(filters.myRequestsFor.employeeId);
+      params.push(filters.myRequestsFor.userId);
+      sql += ` AND (er.employee_id = $${params.length - 1} OR er.assigned_to = $${params.length})`;
+    } else {
+      if (filters.employeeId) {
+        params.push(filters.employeeId);
+        sql += ` AND er.employee_id = $${params.length}`;
+      }
+      if (filters.assignedTo) {
+        params.push(filters.assignedTo);
+        sql += ` AND er.assigned_to = $${params.length}`;
+      }
     }
 
     if (filters.search) {
@@ -321,7 +326,7 @@ export const employeeRequestRepository = {
   // 3. STATS & METRICS
   // ==========================================
 
-  async getRequestStats(orgId, employeeId = null) {
+  async getRequestStats(orgId, employeeId = null, userId = null) {
     let sql = `
       SELECT 
         COUNT(*)::int AS total,
@@ -335,9 +340,16 @@ export const employeeRequestRepository = {
     `;
     const params = [orgId];
 
-    if (employeeId) {
+    if (employeeId && userId) {
+      params.push(employeeId);
+      params.push(userId);
+      sql += ` AND (employee_id = $${params.length - 1} OR assigned_to = $${params.length})`;
+    } else if (employeeId) {
       params.push(employeeId);
       sql += ` AND employee_id = $${params.length}`;
+    } else if (userId) {
+      params.push(userId);
+      sql += ` AND assigned_to = $${params.length}`;
     }
 
     const res = await pool.query(sql, params);

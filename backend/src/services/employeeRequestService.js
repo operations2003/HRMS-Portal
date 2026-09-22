@@ -35,10 +35,19 @@ export const employeeRequestService = {
   async getRequests(user, filters = {}) {
     const orgId = user.orgId || 'org-1';
 
-    // If regular employee, automatically constrain to own requests
+    // If regular employee, automatically constrain to own or assigned requests
     if (!this.isStaff(user)) {
-      const emp = await this.resolveEmployee(user);
-      filters.employeeId = emp.id;
+      let emp = null;
+      try {
+        emp = await this.resolveEmployee(user);
+      } catch {
+        // User without employee profile
+      }
+      if (emp) {
+        filters.myRequestsFor = { employeeId: emp.id, userId: user.id };
+      } else {
+        filters.assignedTo = user.id;
+      }
     }
 
     return await employeeRequestRepository.findRequests(orgId, filters);
@@ -46,8 +55,17 @@ export const employeeRequestService = {
 
   async getMyRequests(user, filters = {}) {
     const orgId = user.orgId || 'org-1';
-    const emp = await this.resolveEmployee(user);
-    filters.employeeId = emp.id;
+    let emp = null;
+    try {
+      emp = await this.resolveEmployee(user);
+    } catch {
+      // User without employee profile
+    }
+    if (emp) {
+      filters.myRequestsFor = { employeeId: emp.id, userId: user.id };
+    } else {
+      filters.assignedTo = user.id;
+    }
     return await employeeRequestRepository.findRequests(orgId, filters);
   },
 
@@ -60,10 +78,17 @@ export const employeeRequestService = {
 
     const staffMember = this.isStaff(user);
 
-    // IDOR Protection: verify request ownership if regular employee
+    // IDOR Protection: verify request ownership or assignment if regular employee
     if (!staffMember) {
-      const emp = await this.resolveEmployee(user);
-      if (request.employeeId !== emp.id) {
+      let emp = null;
+      try {
+        emp = await this.resolveEmployee(user);
+      } catch {
+        // User may only have user account
+      }
+      const isOwner = emp && request.employeeId === emp.id;
+      const isAssignee = request.assignedTo === user.id || request.assignee?.id === user.id;
+      if (!isOwner && !isAssignee) {
         throw createError('Access denied: You are not authorized to view this request.', 403);
       }
     }
@@ -147,10 +172,17 @@ export const employeeRequestService = {
 
     const staffMember = this.isStaff(user);
 
-    // If employee, verify request ownership
+    // If employee, verify request ownership or assignment
     if (!staffMember) {
-      const emp = await this.resolveEmployee(user);
-      if (request.employeeId !== emp.id) {
+      let emp = null;
+      try {
+        emp = await this.resolveEmployee(user);
+      } catch {
+        // ignore
+      }
+      const isOwner = emp && request.employeeId === emp.id;
+      const isAssignee = request.assignedTo === user.id || request.assignee?.id === user.id;
+      if (!isOwner && !isAssignee) {
         throw createError('Access denied: You cannot add updates to this request.', 403);
       }
     }
@@ -435,11 +467,17 @@ export const employeeRequestService = {
     const staffMember = this.isStaff(user);
 
     let employeeId = null;
+    let userId = null;
     if (!staffMember) {
-      const emp = await this.resolveEmployee(user);
-      employeeId = emp.id;
+      try {
+        const emp = await this.resolveEmployee(user);
+        employeeId = emp.id;
+        userId = user.id;
+      } catch {
+        userId = user.id;
+      }
     }
 
-    return await employeeRequestRepository.getRequestStats(orgId, employeeId);
+    return await employeeRequestRepository.getRequestStats(orgId, employeeId, userId);
   },
 };

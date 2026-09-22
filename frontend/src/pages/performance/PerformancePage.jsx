@@ -443,7 +443,7 @@ export const PerformancePage = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-            Performance & Appraisals
+            Appraisals
           </h1>
           <p className="text-sm text-slate-500 mt-1">
             Conduct evaluations, track quarterly objectives, and oversee organizational appraisal cycles.
@@ -702,7 +702,7 @@ export const PerformancePage = () => {
 
           <div className="space-y-3">
             <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">
-              Performance Review Cycles ({periods.length})
+              Appraisal Review Cycles ({periods.length})
             </h3>
             <DataTable
               columns={cycleColumns}
@@ -716,7 +716,7 @@ export const PerformancePage = () => {
           <div className="space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">
-                Organization Performance Records ({filteredOrgRecords.length})
+                Organization Appraisal Records ({filteredOrgRecords.length})
               </h3>
               <div className="flex items-center gap-2">
                 <div className="relative">

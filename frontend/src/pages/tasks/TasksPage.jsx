@@ -234,15 +234,15 @@ export const TasksPage = () => {
 
   return (
     <div className="space-y-6">
-      {/* Top Tab Navigation Bar (Matching User Screenshot) */}
-      <div className="flex items-center gap-8 border-b border-slate-200/90 pb-px">
+      {/* Top Tab Navigation Bar */}
+      <div className="flex items-center gap-8 border-b border-slate-200 dark:border-slate-800 pb-px">
         <button
           type="button"
           onClick={() => setActiveTab('performance')}
           className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
             activeTab === 'performance'
-              ? 'border-indigo-600 text-indigo-600'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
+              ? 'border-brand-500 text-brand-600 dark:text-brand-400'
+              : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
           }`}
         >
           <TrendingUp className="w-4 h-4" />
@@ -254,8 +254,8 @@ export const TasksPage = () => {
           onClick={() => setActiveTab('board')}
           className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
             activeTab === 'board'
-              ? 'border-indigo-600 text-indigo-600'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
+              ? 'border-brand-500 text-brand-600 dark:text-brand-400'
+              : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
           }`}
         >
           <Kanban className="w-4 h-4" />
@@ -269,38 +269,48 @@ export const TasksPage = () => {
         <>
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2.5">
-                <CheckSquare className="w-6 h-6 text-indigo-600" />
-                Internal Task & Work Management
-              </h1>
-              <p className="text-sm text-slate-500">
-                Collaborative task assignment, workload tracking, and Kanban delivery pipeline
-              </p>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-brand-500/10 text-brand-600 dark:text-brand-400 flex items-center justify-center shrink-0">
+                <CheckSquare className="w-5 h-5" />
+              </div>
+              <div>
+                <h1 className="font-display text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+                  Internal Task & Work Management
+                </h1>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  Collaborative task assignment, workload tracking, and Kanban delivery pipeline
+                </p>
+              </div>
             </div>
 
-        <div className="flex items-center gap-3">
-          {/* View toggle */}
-          <div className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200">
-            <button
-              onClick={() => setViewMode('kanban')}
-              className={`px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition ${
-                viewMode === 'kanban' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-600 hover:text-slate-800'
-              }`}
-            >
-              <Kanban className="w-3.5 h-3.5" />
-              Kanban
-            </button>
-            <button
-              onClick={() => setViewMode('list')}
-              className={`px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition ${
-                viewMode === 'list' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-600 hover:text-slate-800'
-              }`}
-            >
-              <List className="w-3.5 h-3.5" />
-              List
-            </button>
-          </div>
+            <div className="flex items-center gap-3">
+              {/* View toggle */}
+              <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('kanban')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
+                    viewMode === 'kanban'
+                      ? 'bg-white dark:bg-slate-900 text-brand-600 dark:text-brand-400 shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  <Kanban className="w-3.5 h-3.5" />
+                  Kanban
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('list')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
+                    viewMode === 'list'
+                      ? 'bg-white dark:bg-slate-900 text-brand-600 dark:text-brand-400 shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  <List className="w-3.5 h-3.5" />
+                  List
+                </button>
+              </div>
 
           {canAssign && (
             <Button onClick={() => setShowCreateModal(true)} icon={Plus}>

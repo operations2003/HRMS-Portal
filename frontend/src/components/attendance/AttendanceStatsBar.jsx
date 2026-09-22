@@ -80,10 +80,15 @@ export const AttendanceStatsBar = ({ statistics = {}, summary = {}, isOrgView = 
   }
 
   // Employee personal summary stats cards
+  const presentCount = Math.max(
+    Number(statistics.presentDays || 0),
+    Number(statistics.lateDays || 0)
+  );
+
   const employeeCards = [
     {
       title: 'Days Present',
-      value: statistics.presentDays || 0,
+      value: presentCount,
       subtext: `${statistics.lateDays || 0} marked late`,
       icon: CheckCircle2,
       color: 'text-emerald-600',

@@ -128,6 +128,15 @@ export const App = () => {
               />
 
               <Route
+                path="leaves/:id"
+                element={
+                  <PermissionRoute permission="leave:read">
+                    <LeaveManagementPage />
+                  </PermissionRoute>
+                }
+              />
+
+              <Route
                 path="organizations"
                 element={
                   <PermissionRoute permission="org:read">
@@ -191,6 +200,14 @@ export const App = () => {
               />
 
               <Route
+                path="helpdesk/:ticketId"
+                element={
+                  <PermissionRoute permission={['helpdesk:read', 'request:read', 'employee:read']}>
+                    <HelpdeskPage />
+                  </PermissionRoute>
+                }
+              />
+              <Route
                 path="helpdesk/:id"
                 element={
                   <PermissionRoute permission={['helpdesk:read', 'request:read', 'employee:read']}>
@@ -202,6 +219,15 @@ export const App = () => {
               <Route
                 path="requests"
                 element={<Navigate to="/helpdesk?tab=requests" replace />}
+              />
+
+              <Route
+                path="requests/:requestId"
+                element={
+                  <PermissionRoute permission={['helpdesk:read', 'request:read', 'employee:read']}>
+                    <HelpdeskPage />
+                  </PermissionRoute>
+                }
               />
 
               <Route
@@ -243,7 +269,7 @@ export const App = () => {
               <Route
                 path="departments"
                 element={
-                  <PermissionRoute permission="dept:read">
+                  <PermissionRoute permission={['dept:read', 'employee:read']}>
                     <DepartmentsPage />
                   </PermissionRoute>
                 }
@@ -270,6 +296,15 @@ export const App = () => {
 
               <Route
                 path="performance"
+                element={
+                  <PermissionRoute permission={['performance:read', 'employee:read']}>
+                    <PerformancePage />
+                  </PermissionRoute>
+                }
+              />
+
+              <Route
+                path="performance/:id"
                 element={
                   <PermissionRoute permission={['performance:read', 'employee:read']}>
                     <PerformancePage />
@@ -340,6 +375,20 @@ export const App = () => {
               <Route
                 path="fnf-settlement"
                 element={<Navigate to="/fnf" replace />}
+              />
+
+              {/* Exit Notification Redirects */}
+              <Route
+                path="exit/:id"
+                element={<Navigate to="/offboarding" replace />}
+              />
+              <Route
+                path="exit/:id/fnf"
+                element={<Navigate to="/fnf" replace />}
+              />
+              <Route
+                path="exit/clearances/:taskId"
+                element={<Navigate to="/exit-checklist" replace />}
               />
 
               <Route

@@ -42,10 +42,19 @@ export const helpdeskService = {
   async getTickets(user, filters = {}) {
     const orgId = user.orgId || 'org-1';
 
-    // If regular employee, automatically constrain to own tickets (ignore any passed filters.employeeId)
+    // If regular employee, automatically constrain to own or assigned tickets
     if (!this.isSupportStaff(user)) {
-      const emp = await this.resolveEmployee(user);
-      filters.employeeId = emp.id;
+      let emp = null;
+      try {
+        emp = await this.resolveEmployee(user);
+      } catch {
+        // User without employee profile
+      }
+      if (emp) {
+        filters.myTicketsFor = { employeeId: emp.id, userId: user.id };
+      } else {
+        filters.assignedTo = user.id;
+      }
     }
 
     return await helpdeskRepository.findTickets(orgId, filters);
@@ -53,8 +62,17 @@ export const helpdeskService = {
 
   async getMyTickets(user, filters = {}) {
     const orgId = user.orgId || 'org-1';
-    const emp = await this.resolveEmployee(user);
-    filters.employeeId = emp.id;
+    let emp = null;
+    try {
+      emp = await this.resolveEmployee(user);
+    } catch {
+      // User without employee profile
+    }
+    if (emp) {
+      filters.myTicketsFor = { employeeId: emp.id, userId: user.id };
+    } else {
+      filters.assignedTo = user.id;
+    }
     return await helpdeskRepository.findTickets(orgId, filters);
   },
 
@@ -68,8 +86,6 @@ export const helpdeskService = {
     if (!ticket) {
       throw createError('Helpdesk ticket not found.', 404);
     }
-
-    const isStaff = this.isSupportStaff(user);
 
     // IDOR Protection: verify ticket access (staff, requester, or assignee)
     if (!isStaff) {
@@ -153,8 +169,6 @@ export const helpdeskService = {
     if (!ticket) {
       throw createError('Helpdesk ticket not found.', 404);
     }
-
-    const isStaff = this.isSupportStaff(user);
 
     // IDOR Protection: verify ticket access (staff, requester, or assignee)
     if (!isStaff) {
@@ -450,12 +464,18 @@ export const helpdeskService = {
     const isStaff = this.isSupportStaff(user);
 
     let employeeId = null;
+    let userId = null;
     if (!isStaff) {
-      const emp = await this.resolveEmployee(user);
-      employeeId = emp.id;
+      try {
+        const emp = await this.resolveEmployee(user);
+        employeeId = emp.id;
+        userId = user.id;
+      } catch {
+        userId = user.id;
+      }
     }
 
-    return await helpdeskRepository.getTicketStats(orgId, employeeId);
+    return await helpdeskRepository.getTicketStats(orgId, employeeId, userId);
   },
 };
 

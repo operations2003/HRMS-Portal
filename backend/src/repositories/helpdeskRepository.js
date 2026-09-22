@@ -116,14 +116,19 @@ export const helpdeskRepository = {
       sql += ` AND ht.priority = $${params.length}`;
     }
 
-    if (filters.employeeId) {
-      params.push(filters.employeeId);
-      sql += ` AND ht.employee_id = $${params.length}`;
-    }
-
-    if (filters.assignedTo) {
-      params.push(filters.assignedTo);
-      sql += ` AND ht.assigned_to = $${params.length}`;
+    if (filters.myTicketsFor) {
+      params.push(filters.myTicketsFor.employeeId);
+      params.push(filters.myTicketsFor.userId);
+      sql += ` AND (ht.employee_id = $${params.length - 1} OR ht.assigned_to = $${params.length})`;
+    } else {
+      if (filters.employeeId) {
+        params.push(filters.employeeId);
+        sql += ` AND ht.employee_id = $${params.length}`;
+      }
+      if (filters.assignedTo) {
+        params.push(filters.assignedTo);
+        sql += ` AND ht.assigned_to = $${params.length}`;
+      }
     }
 
     if (filters.search) {
@@ -319,7 +324,7 @@ export const helpdeskRepository = {
   // 3. STATS & METRICS
   // ==========================================
 
-  async getTicketStats(orgId, employeeId = null) {
+  async getTicketStats(orgId, employeeId = null, userId = null) {
     let sql = `
       SELECT 
         COUNT(*)::int AS total,
@@ -333,9 +338,16 @@ export const helpdeskRepository = {
     `;
     const params = [orgId];
 
-    if (employeeId) {
+    if (employeeId && userId) {
+      params.push(employeeId);
+      params.push(userId);
+      sql += ` AND (employee_id = $${params.length - 1} OR assigned_to = $${params.length})`;
+    } else if (employeeId) {
       params.push(employeeId);
       sql += ` AND employee_id = $${params.length}`;
+    } else if (userId) {
+      params.push(userId);
+      sql += ` AND assigned_to = $${params.length}`;
     }
 
     const res = await pool.query(sql, params);

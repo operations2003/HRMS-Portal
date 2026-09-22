@@ -13,8 +13,14 @@ import {
   Sparkles,
   Award,
   Layers,
+  CheckSquare,
+  ShieldCheck,
+  Flame,
+  ArrowUpRight,
 } from 'lucide-react';
 import { taskService } from '../../services/taskService.js';
+import { Button } from '../common/Button.jsx';
+import { Badge } from '../common/Badge.jsx';
 import { LoadingSpinner } from '../common/LoadingSpinner.jsx';
 
 const TIMEFRAME_OPTIONS = [
@@ -69,19 +75,42 @@ export const MyPerformanceSection = ({ initialData = null }) => {
   };
 
   const trend = m.last30DaysTrend || [];
-  const maxCompleted = Math.max(...trend.map((t) => t.completed || 0), 5);
+  const maxCompleted = Math.max(...trend.map((t) => t.completed || 0), 4);
+  const totalTrendCompleted = trend.reduce((sum, item) => sum + (item.completed || 0), 0);
+
+  // Determine performance badge variant
+  const getStatusVariant = (score) => {
+    if (score >= 90) return 'success';
+    if (score >= 75) return 'info';
+    if (score >= 60) return 'warning';
+    return 'danger';
+  };
+
+  const scoreVariant = getStatusVariant(m.performanceScore);
+
+  // SVG Radial meter calculations
+  const radius = 42;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - (Math.min(100, Math.max(0, m.performanceScore)) / 100) * circumference;
+
+  const totalPriorityCount = (m.priority?.high || 0) + (m.priority?.medium || 0) + (m.priority?.low || 0);
 
   return (
     <div className="space-y-6">
-      {/* Top Header & Timeframe Filter */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-1">
-        <div>
-          <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-            My Performance
-          </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Real-time individual task completion, velocity, and quality analytics
-          </p>
+      {/* 1. Page Header & Timeframe Filter Toolbar */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-brand-500/10 text-brand-600 dark:text-brand-400 flex items-center justify-center shrink-0">
+            <TrendingUp className="w-5 h-5" />
+          </div>
+          <div>
+            <h1 className="font-display text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+              My Performance Analytics
+            </h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Real-time individual task completion velocity, delivery reliability, and quality metrics.
+            </p>
+          </div>
         </div>
 
         <div className="flex items-center gap-2.5">
@@ -89,7 +118,7 @@ export const MyPerformanceSection = ({ initialData = null }) => {
             <select
               value={timeframe}
               onChange={(e) => setTimeframe(e.target.value)}
-              className="appearance-none text-xs font-semibold bg-white border border-slate-200/90 hover:border-slate-300 text-slate-800 rounded-xl px-3.5 py-2 pr-8 shadow-2xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer transition-all"
+              className="appearance-none text-xs font-semibold bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 text-slate-800 dark:text-slate-200 rounded-xl px-3.5 py-2 pr-8 shadow-xs focus:outline-hidden focus:ring-2 focus:ring-brand-500/20 cursor-pointer transition-all"
             >
               {TIMEFRAME_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -100,114 +129,218 @@ export const MyPerformanceSection = ({ initialData = null }) => {
             <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>
 
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={RefreshCw}
+            isLoading={loading}
             onClick={fetchPerformance}
-            title="Refresh Metrics"
-            className="p-2 rounded-xl bg-white border border-slate-200/90 text-slate-500 hover:text-slate-800 hover:bg-slate-50 shadow-2xs transition-all cursor-pointer"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-indigo-600' : ''}`} />
-          </button>
+            Refresh
+          </Button>
         </div>
       </div>
 
-      {/* 1. Large Hero Performance Score Banner */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 p-6 sm:p-8 text-white shadow-xl shadow-indigo-500/15">
-        {/* Background decorative elements */}
-        <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 rounded-full bg-white/10 blur-2xl pointer-events-none" />
-        <div className="absolute bottom-0 left-1/3 -mb-12 w-48 h-48 rounded-full bg-purple-400/20 blur-xl pointer-events-none" />
-
-        <div className="relative z-10 flex items-center justify-between gap-6 flex-wrap">
-          <div className="space-y-1">
-            <span className="text-xs sm:text-sm font-semibold text-blue-100 tracking-wide uppercase">
-              Performance Score
-            </span>
-            <div className="text-4xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight">
-              {m.performanceScore}/100
-            </div>
-            <div className="flex items-center gap-2 pt-0.5">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-white/15 text-white backdrop-blur-xs border border-white/20">
-                <Sparkles className="w-3 h-3 text-amber-300" />
-                {m.performanceStatus}
-              </span>
-              <span className="text-xs text-blue-100/80 hidden sm:inline">
-                Based on delivery speed, on-time rate & task quality
-              </span>
-            </div>
-          </div>
-
-          {/* Glowing Graphic Illustration on Right */}
-          <div className="relative flex items-center justify-center">
-            <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center p-3 shadow-inner">
-              <svg viewBox="0 0 100 60" className="w-full h-full stroke-white fill-none stroke-[4] drop-shadow-md">
-                <path
-                  d="M5,45 Q30,40 50,25 T95,10"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+      {/* 2. Executive Performance Index Hero Card */}
+      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 p-6 lg:p-7 shadow-xs transition-all">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+          {/* Left Column: Radial Score & Status */}
+          <div className="lg:col-span-5 flex flex-col sm:flex-row items-center gap-6 border-b lg:border-b-0 lg:border-r border-slate-100 dark:border-slate-800 pb-6 lg:pb-0 lg:pr-6">
+            {/* Radial Gauge */}
+            <div className="relative w-28 h-28 shrink-0 flex items-center justify-center">
+              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                {/* Background circle */}
+                <circle
+                  cx="50"
+                  cy="50"
+                  r={radius}
+                  className="stroke-slate-100 dark:stroke-slate-800"
+                  strokeWidth="8"
+                  fill="transparent"
                 />
-                <polyline
-                  points="78,10 95,10 95,27"
+                {/* Progress circle */}
+                <circle
+                  cx="50"
+                  cy="50"
+                  r={radius}
+                  className={`${
+                    m.performanceScore >= 90
+                      ? 'stroke-emerald-500'
+                      : m.performanceScore >= 75
+                      ? 'stroke-brand-500'
+                      : m.performanceScore >= 60
+                      ? 'stroke-amber-500'
+                      : 'stroke-rose-500'
+                  } transition-all duration-1000 ease-out`}
+                  strokeWidth="8"
+                  strokeDasharray={circumference}
+                  strokeDashoffset={strokeDashoffset}
                   strokeLinecap="round"
-                  strokeLinejoin="round"
+                  fill="transparent"
                 />
               </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                <span className="text-2xl font-black text-slate-900 dark:text-white font-display tracking-tight">
+                  {m.performanceScore}
+                </span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  out of 100
+                </span>
+              </div>
+            </div>
+
+            {/* Score Meta Details */}
+            <div className="space-y-1.5 text-center sm:text-left">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                Overall Performance Index
+              </span>
+              <div className="flex items-center justify-center sm:justify-start gap-2">
+                <span className="text-xl font-extrabold text-slate-900 dark:text-white font-display">
+                  {m.performanceStatus}
+                </span>
+                <Badge variant={scoreVariant} size="sm">
+                  {m.performanceScore >= 90 ? 'Top Tier' : m.performanceScore >= 75 ? 'Target Met' : 'In Progress'}
+                </Badge>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs leading-relaxed">
+                Calculated from your on-time completion rate, quality review scores, and task turnaround velocity.
+              </p>
+            </div>
+          </div>
+
+          {/* Right Column: 3 Core Key Performance Indicators */}
+          <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* Pillar 1: On-Time Delivery */}
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 flex flex-col justify-between space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">On-Time Rate</span>
+                <div className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                  <Clock className="w-4 h-4" />
+                </div>
+              </div>
+              <div>
+                <div className="text-2xl font-black text-slate-900 dark:text-white font-display">
+                  {m.onTimeDelivery}%
+                </div>
+                <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 mt-2 overflow-hidden">
+                  <div
+                    className="bg-indigo-500 h-full rounded-full transition-all duration-500"
+                    style={{ width: `${Math.min(100, m.onTimeDelivery)}%` }}
+                  />
+                </div>
+              </div>
+              <span className="text-[11px] text-slate-400">
+                {m.completedTasks} of {m.totalTasks} completed
+              </span>
+            </div>
+
+            {/* Pillar 2: Review & Quality Score */}
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 flex flex-col justify-between space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Quality Rating</span>
+                <div className="w-7 h-7 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                  <Star className="w-4 h-4" />
+                </div>
+              </div>
+              <div>
+                <div className="text-2xl font-black text-slate-900 dark:text-white font-display">
+                  {m.averageRating ? Number(m.averageRating).toFixed(1) : '5.0'}
+                  <span className="text-sm text-slate-400 font-normal"> / 5.0</span>
+                </div>
+                {/* 5-star preview */}
+                <div className="flex items-center gap-1 mt-2">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <Star
+                      key={star}
+                      className={`w-3.5 h-3.5 ${
+                        star <= Math.round(Number(m.averageRating) || 5)
+                          ? 'text-amber-400 fill-amber-400'
+                          : 'text-slate-300 dark:text-slate-600'
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
+              <span className="text-[11px] text-slate-400">
+                {m.ratingCount || 0} reviews received
+              </span>
+            </div>
+
+            {/* Pillar 3: First-Time Pass Rate */}
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 flex flex-col justify-between space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">First-Time Pass</span>
+                <div className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                  <Award className="w-4 h-4" />
+                </div>
+              </div>
+              <div>
+                <div className="text-2xl font-black text-slate-900 dark:text-white font-display">
+                  {m.firstTimeCompletion}%
+                </div>
+                <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 mt-2 overflow-hidden">
+                  <div
+                    className="bg-emerald-500 h-full rounded-full transition-all duration-500"
+                    style={{ width: `${Math.min(100, m.firstTimeCompletion)}%` }}
+                  />
+                </div>
+              </div>
+              <span className="text-[11px] text-slate-400">
+                {m.tasksReopened || 0} tasks reopened
+              </span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* 2. Eight Stat Cards in 2 Rows of 4 */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+      {/* 3. Standard Eight Metric Stat Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Total Tasks */}
-        <div className="bg-blue-50/80 border border-blue-100/90 rounded-2xl p-4 sm:p-5 flex flex-col justify-between transition-all hover:shadow-sm">
+        <div className="group bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs transition-all duration-300 hover:shadow-card hover:-translate-y-0.5 hover:border-brand-200/80">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-blue-950">Total Tasks</span>
-            <div className="w-6 h-6 rounded-lg bg-blue-100/70 text-blue-600 flex items-center justify-center">
-              <CheckCircle2 className="w-3.5 h-3.5" />
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider group-hover:text-brand-600 transition-colors">
+              Total Assigned Tasks
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center transition-transform duration-300 group-hover:scale-110">
+              <CheckSquare className="w-4 h-4" />
             </div>
           </div>
-          <div className="my-2">
-            <span className="text-2xl sm:text-3xl font-black text-blue-600 font-mono">
-              {m.totalTasks}
-            </span>
+          <div className="mt-2 text-2xl font-black text-slate-900 dark:text-white font-display">
+            {m.totalTasks}
           </div>
-          <div className="text-[11px] font-medium text-blue-700/80">
-            {m.completedTasks} completed
-          </div>
+          <p className="text-xs text-slate-400 mt-1">{m.completedTasks} completed</p>
         </div>
 
         {/* Card 2: Created Tasks */}
-        <div className="bg-purple-50/80 border border-purple-100/90 rounded-2xl p-4 sm:p-5 flex flex-col justify-between transition-all hover:shadow-sm">
+        <div className="group bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs transition-all duration-300 hover:shadow-card hover:-translate-y-0.5 hover:border-brand-200/80">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-purple-950">Created Tasks</span>
-            <div className="w-6 h-6 rounded-lg bg-purple-100/70 text-purple-600 flex items-center justify-center">
-              <FileCheck className="w-3.5 h-3.5" />
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider group-hover:text-brand-600 transition-colors">
+              Self-Created Tasks
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center transition-transform duration-300 group-hover:scale-110">
+              <FileCheck className="w-4 h-4" />
             </div>
           </div>
-          <div className="my-2">
-            <span className="text-2xl sm:text-3xl font-black text-purple-600 font-mono">
-              {m.createdTasks}
-            </span>
+          <div className="mt-2 text-2xl font-black text-slate-900 dark:text-white font-display">
+            {m.createdTasks}
           </div>
-          <div className="text-[11px] font-medium text-purple-700/80">
-            Tasks you created
-          </div>
+          <p className="text-xs text-slate-400 mt-1">Initiated by you</p>
         </div>
 
         {/* Card 3: Completion Rate */}
-        <div className="bg-emerald-50/80 border border-emerald-100/90 rounded-2xl p-4 sm:p-5 flex flex-col justify-between transition-all hover:shadow-sm">
+        <div className="group bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs transition-all duration-300 hover:shadow-card hover:-translate-y-0.5 hover:border-brand-200/80">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-emerald-950">Completion Rate</span>
-            <div className="w-6 h-6 rounded-lg bg-emerald-100/70 text-emerald-600 flex items-center justify-center">
-              <CheckCircle2 className="w-3.5 h-3.5" />
+            <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
+              Completion Rate
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center transition-transform duration-300 group-hover:scale-110">
+              <CheckCircle2 className="w-4 h-4" />
             </div>
           </div>
-          <div className="my-2">
-            <span className="text-2xl sm:text-3xl font-black text-emerald-600 font-mono">
-              {m.completionRate}%
-            </span>
+          <div className="mt-2 text-2xl font-black text-slate-900 dark:text-white font-display">
+            {m.completionRate}%
           </div>
-          <div className="w-full bg-emerald-200/60 rounded-full h-1.5 mt-1 overflow-hidden">
+          <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 mt-2 overflow-hidden">
             <div
               className="bg-emerald-500 h-full rounded-full transition-all duration-500"
               style={{ width: `${Math.min(100, m.completionRate)}%` }}
@@ -216,200 +349,246 @@ export const MyPerformanceSection = ({ initialData = null }) => {
         </div>
 
         {/* Card 4: On-Time Delivery */}
-        <div className="bg-amber-50/80 border border-amber-100/90 rounded-2xl p-4 sm:p-5 flex flex-col justify-between transition-all hover:shadow-sm">
+        <div className="group bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs transition-all duration-300 hover:shadow-card hover:-translate-y-0.5 hover:border-brand-200/80">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-amber-950">On-Time Delivery</span>
-            <div className="w-6 h-6 rounded-lg bg-amber-100/70 text-amber-600 flex items-center justify-center">
-              <Clock className="w-3.5 h-3.5" />
+            <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">
+              On-Time Delivery
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center transition-transform duration-300 group-hover:scale-110">
+              <Clock className="w-4 h-4" />
             </div>
           </div>
-          <div className="my-2">
-            <span className="text-2xl sm:text-3xl font-black text-amber-600 font-mono">
-              {m.onTimeDelivery}%
-            </span>
+          <div className="mt-2 text-2xl font-black text-slate-900 dark:text-white font-display">
+            {m.onTimeDelivery}%
           </div>
-          <div className="w-full bg-amber-200/60 rounded-full h-1.5 mt-1 overflow-hidden">
+          <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 mt-2 overflow-hidden">
             <div
-              className="bg-amber-500 h-full rounded-full transition-all duration-500"
+              className="bg-indigo-500 h-full rounded-full transition-all duration-500"
               style={{ width: `${Math.min(100, m.onTimeDelivery)}%` }}
             />
           </div>
         </div>
 
         {/* Card 5: Average Rating */}
-        <div className="bg-fuchsia-50/80 border border-fuchsia-100/90 rounded-2xl p-4 sm:p-5 flex flex-col justify-between transition-all hover:shadow-sm">
+        <div className="group bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs transition-all duration-300 hover:shadow-card hover:-translate-y-0.5 hover:border-brand-200/80">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-fuchsia-950">Average Rating</span>
-            <div className="w-6 h-6 rounded-lg bg-fuchsia-100/70 text-fuchsia-600 flex items-center justify-center">
-              <Star className="w-3.5 h-3.5" />
+            <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider">
+              Average Rating
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center transition-transform duration-300 group-hover:scale-110">
+              <Star className="w-4 h-4" />
             </div>
           </div>
-          <div className="my-2">
-            <span className="text-2xl sm:text-3xl font-black text-fuchsia-600 font-mono">
-              {m.averageRating}/5
-            </span>
+          <div className="mt-2 text-2xl font-black text-slate-900 dark:text-white font-display">
+            {m.averageRating ? `${m.averageRating}/5` : '5/5'}
           </div>
-          <div className="text-[11px] font-medium text-fuchsia-700/80">
-            {m.ratingCount} ratings
-          </div>
+          <p className="text-xs text-slate-400 mt-1">{m.ratingCount} reviews recorded</p>
         </div>
 
         {/* Card 6: First-Time Completion */}
-        <div className="bg-emerald-50/80 border border-emerald-100/90 rounded-2xl p-4 sm:p-5 flex flex-col justify-between transition-all hover:shadow-sm">
+        <div className="group bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs transition-all duration-300 hover:shadow-card hover:-translate-y-0.5 hover:border-brand-200/80">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-emerald-950">First-Time Completion</span>
-            <div className="w-6 h-6 rounded-lg bg-emerald-100/70 text-emerald-600 flex items-center justify-center">
-              <CheckCircle2 className="w-3.5 h-3.5" />
+            <span className="text-xs font-semibold text-teal-600 dark:text-teal-400 uppercase tracking-wider">
+              First-Time Pass
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-teal-50 dark:bg-teal-950/40 text-teal-600 dark:text-teal-400 flex items-center justify-center transition-transform duration-300 group-hover:scale-110">
+              <Award className="w-4 h-4" />
             </div>
           </div>
-          <div className="my-2">
-            <span className="text-2xl sm:text-3xl font-black text-emerald-600 font-mono">
-              {m.firstTimeCompletion}%
-            </span>
+          <div className="mt-2 text-2xl font-black text-slate-900 dark:text-white font-display">
+            {m.firstTimeCompletion}%
           </div>
-          <div className="text-[11px] font-medium text-emerald-700/80">
-            Completed without rework
-          </div>
+          <p className="text-xs text-slate-400 mt-1">Delivered without rework</p>
         </div>
 
         {/* Card 7: Tasks Reopened */}
-        <div className="bg-orange-50/80 border border-orange-100/90 rounded-2xl p-4 sm:p-5 flex flex-col justify-between transition-all hover:shadow-sm">
+        <div className="group bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs transition-all duration-300 hover:shadow-card hover:-translate-y-0.5 hover:border-brand-200/80">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-orange-950">Tasks Reopened</span>
-            <div className="w-6 h-6 rounded-lg bg-orange-100/70 text-orange-600 flex items-center justify-center">
-              <RotateCcw className="w-3.5 h-3.5" />
+            <span className="text-xs font-semibold text-orange-600 dark:text-orange-400 uppercase tracking-wider">
+              Tasks Reopened
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 flex items-center justify-center transition-transform duration-300 group-hover:scale-110">
+              <RotateCcw className="w-4 h-4" />
             </div>
           </div>
-          <div className="my-2">
-            <span className="text-2xl sm:text-3xl font-black text-orange-600 font-mono">
-              {m.tasksReopened}
-            </span>
+          <div className="mt-2 text-2xl font-black text-slate-900 dark:text-white font-display">
+            {m.tasksReopened}
           </div>
-          <div className="text-[11px] font-medium text-orange-700/80">
-            {m.reopenRate}% reopen rate
-          </div>
+          <p className="text-xs text-slate-400 mt-1">{m.reopenRate}% revision rate</p>
         </div>
 
         {/* Card 8: Overdue Tasks */}
-        <div className="bg-rose-50/80 border border-rose-100/90 rounded-2xl p-4 sm:p-5 flex flex-col justify-between transition-all hover:shadow-sm">
+        <div className="group bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs transition-all duration-300 hover:shadow-card hover:-translate-y-0.5 hover:border-brand-200/80">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-rose-950">Overdue Tasks</span>
-            <div className="w-6 h-6 rounded-lg bg-rose-100/70 text-rose-600 flex items-center justify-center">
-              <AlertCircle className="w-3.5 h-3.5" />
-            </div>
-          </div>
-          <div className="my-2">
-            <span className="text-2xl sm:text-3xl font-black text-rose-600 font-mono">
-              {m.overdueTasks}
+            <span className="text-xs font-semibold text-rose-600 dark:text-rose-400 uppercase tracking-wider">
+              Overdue Tasks
             </span>
+            <div className="w-8 h-8 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center justify-center transition-transform duration-300 group-hover:scale-110">
+              <AlertCircle className="w-4 h-4" />
+            </div>
           </div>
-          <div className="text-[11px] font-medium text-rose-700/80">
+          <div className="mt-2 text-2xl font-black text-slate-900 dark:text-white font-display">
+            {m.overdueTasks}
+          </div>
+          <p className="text-xs text-slate-400 mt-1">
             {m.overdueTasks > 0 ? 'Urgent attention required' : 'All tasks on schedule'}
-          </div>
+          </p>
         </div>
       </div>
 
-      {/* 3. Tasks by Priority Card */}
-      <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs space-y-3">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">
-          Tasks by Priority
-        </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {/* High Priority */}
-          <div className="p-4 rounded-2xl bg-rose-50/70 border border-rose-100 text-center transition hover:bg-rose-50">
-            <div className="text-3xl font-black text-rose-600 font-mono">
-              {m.priority?.high || 0}
-            </div>
-            <div className="text-xs font-semibold text-rose-700 mt-1">
-              High Priority
-            </div>
-          </div>
-
-          {/* Medium Priority */}
-          <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-100 text-center transition hover:bg-amber-50">
-            <div className="text-3xl font-black text-amber-600 font-mono">
-              {m.priority?.medium || 0}
-            </div>
-            <div className="text-xs font-semibold text-amber-700 mt-1">
-              Medium Priority
-            </div>
-          </div>
-
-          {/* Low Priority */}
-          <div className="p-4 rounded-2xl bg-blue-50/70 border border-blue-100 text-center transition hover:bg-blue-50">
-            <div className="text-3xl font-black text-blue-600 font-mono">
-              {m.priority?.low || 0}
-            </div>
-            <div className="text-xs font-semibold text-blue-700 mt-1">
-              Low Priority
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 4. Tasks Completed (Last 30 Days) Chart Section */}
-      <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
-        <div className="flex items-center justify-between flex-wrap gap-2">
+      {/* 4. Dual Grid: Tasks by Priority Breakdown & 30-Day Completion Velocity Chart */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Left Column: Tasks by Priority Breakdown */}
+        <div className="lg:col-span-4 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 p-6 shadow-xs flex flex-col justify-between space-y-4">
           <div>
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">
-              Tasks Completed (Last 30 Days)
-            </h3>
-            <p className="text-[11px] text-slate-400">
-              Daily task completion velocity over the last month
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white font-display uppercase tracking-wider">
+                Tasks by Priority
+              </h3>
+              <span className="text-xs font-semibold text-slate-400">
+                {totalPriorityCount} total
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Urgency distribution of your active and delivered tasks.
             </p>
           </div>
-          <div className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-xl">
-            Total: {trend.reduce((sum, item) => sum + (item.completed || 0), 0)} completed
+
+          <div className="space-y-3 my-auto">
+            {/* High / Urgent Priority */}
+            <div className="p-3.5 rounded-2xl bg-rose-50/50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/40 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
+                <span className="text-xs font-bold text-rose-900 dark:text-rose-300">
+                  High Priority
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-black text-rose-700 dark:text-rose-400 font-mono">
+                  {m.priority?.high || 0}
+                </span>
+                <span className="text-[11px] text-slate-400 font-medium">
+                  ({totalPriorityCount > 0 ? Math.round(((m.priority?.high || 0) / totalPriorityCount) * 100) : 0}%)
+                </span>
+              </div>
+            </div>
+
+            {/* Medium Priority */}
+            <div className="p-3.5 rounded-2xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/40 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0" />
+                <span className="text-xs font-bold text-amber-900 dark:text-amber-300">
+                  Medium Priority
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-black text-amber-700 dark:text-amber-400 font-mono">
+                  {m.priority?.medium || 0}
+                </span>
+                <span className="text-[11px] text-slate-400 font-medium">
+                  ({totalPriorityCount > 0 ? Math.round(((m.priority?.medium || 0) / totalPriorityCount) * 100) : 0}%)
+                </span>
+              </div>
+            </div>
+
+            {/* Low Priority */}
+            <div className="p-3.5 rounded-2xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/40 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0" />
+                <span className="text-xs font-bold text-blue-900 dark:text-blue-300">
+                  Low Priority
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-black text-blue-700 dark:text-blue-400 font-mono">
+                  {m.priority?.low || 0}
+                </span>
+                <span className="text-[11px] text-slate-400 font-medium">
+                  ({totalPriorityCount > 0 ? Math.round(((m.priority?.low || 0) / totalPriorityCount) * 100) : 0}%)
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
+            <span>Prioritized workload allocation</span>
+            <span className="font-semibold text-brand-600 dark:text-brand-400 flex items-center gap-0.5">
+              Live Sync <ArrowUpRight className="w-3 h-3" />
+            </span>
           </div>
         </div>
 
-        {/* Bar Distribution Chart */}
-        <div className="relative pt-4 pb-2">
-          <div className="flex items-end justify-between gap-1 sm:gap-1.5 h-36 px-1 border-b border-slate-100">
-            {trend.map((item, idx) => {
-              const heightPercent = maxCompleted > 0 ? (item.completed / maxCompleted) * 100 : 0;
-              const isHovered = hoveredBarIndex === idx;
-
-              return (
-                <div
-                  key={item.date || idx}
-                  onMouseEnter={() => setHoveredBarIndex(idx)}
-                  onMouseLeave={() => setHoveredBarIndex(null)}
-                  className="flex-1 flex flex-col items-center justify-end h-full relative group cursor-pointer"
-                >
-                  {/* Tooltip on hover */}
-                  {isHovered && (
-                    <div className="absolute -top-10 z-20 bg-slate-900 text-white text-[10px] font-bold px-2 py-1 rounded-md shadow-md whitespace-nowrap pointer-events-none">
-                      {item.label}: {item.completed} task{item.completed === 1 ? '' : 's'}
-                    </div>
-                  )}
-
-                  {/* Bar */}
-                  <div
-                    className={`w-full max-w-[14px] rounded-t-md transition-all duration-300 ${
-                      item.completed > 0
-                        ? isHovered
-                          ? 'bg-indigo-600 shadow-sm'
-                          : 'bg-indigo-500'
-                        : 'bg-slate-100 hover:bg-slate-200'
-                    }`}
-                    style={{
-                      height: `${Math.max(heightPercent, 6)}%`,
-                    }}
-                  />
-                </div>
-              );
-            })}
+        {/* Right Column: 30-Day Completion Velocity Chart */}
+        <div className="lg:col-span-8 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 p-6 shadow-xs flex flex-col justify-between space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white font-display uppercase tracking-wider">
+                Completion Velocity (Last 30 Days)
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Daily task completion throughput and cadence over the past month.
+              </p>
+            </div>
+            <span className="text-xs font-bold text-brand-700 dark:text-brand-300 bg-brand-50 dark:bg-brand-950/50 border border-brand-200/60 dark:border-brand-800/60 px-3 py-1 rounded-xl">
+              Total: {totalTrendCompleted} completed
+            </span>
           </div>
 
-          {/* X-axis date labels */}
-          <div className="flex justify-between items-center text-[10px] text-slate-400 pt-2 px-1">
-            <span>{trend[0]?.label || '30 days ago'}</span>
-            <span>{trend[14]?.label || '15 days ago'}</span>
-            <span>{trend[trend.length - 1]?.label || 'Today'}</span>
+          {/* Interactive Bar Chart Visualization */}
+          <div className="relative pt-6 pb-2">
+            <div className="flex items-end justify-between gap-1 sm:gap-2 h-40 px-1 border-b border-slate-100 dark:border-slate-800">
+              {trend.map((item, idx) => {
+                const heightPercent = maxCompleted > 0 ? (item.completed / maxCompleted) * 100 : 0;
+                const isHovered = hoveredBarIndex === idx;
+
+                return (
+                  <div
+                    key={item.date || idx}
+                    onMouseEnter={() => setHoveredBarIndex(idx)}
+                    onMouseLeave={() => setHoveredBarIndex(null)}
+                    className="flex-1 flex flex-col items-center justify-end h-full relative group cursor-pointer"
+                  >
+                    {/* Tooltip on hover */}
+                    {isHovered && (
+                      <div className="absolute -top-10 z-30 bg-slate-900 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg shadow-lg whitespace-nowrap pointer-events-none animate-in fade-in duration-200">
+                        {item.label}: {item.completed} task{item.completed === 1 ? '' : 's'}
+                      </div>
+                    )}
+
+                    {/* Bar element */}
+                    <div
+                      className={`w-full max-w-[16px] rounded-t-md transition-all duration-300 ${
+                        item.completed > 0
+                          ? isHovered
+                            ? 'bg-brand-600 dark:bg-brand-500 shadow-md shadow-brand-500/30'
+                            : 'bg-brand-500 dark:bg-brand-600 hover:bg-brand-600'
+                          : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700'
+                      }`}
+                      style={{
+                        height: `${Math.max(heightPercent, 8)}%`,
+                      }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* X-axis date labels */}
+            <div className="flex justify-between items-center text-[11px] font-medium text-slate-400 pt-3 px-1">
+              <span>{trend[0]?.label || '30 days ago'}</span>
+              <span>{trend[Math.floor(trend.length / 2)]?.label || '15 days ago'}</span>
+              <span className="font-bold text-brand-600 dark:text-brand-400">{trend[trend.length - 1]?.label || 'Today'}</span>
+            </div>
+          </div>
+
+          <div className="pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
+            <span>Steady workflow pacing</span>
+            <span>Average: {trend.length > 0 ? (totalTrendCompleted / trend.length).toFixed(1) : '0.0'} tasks/day</span>
           </div>
         </div>
       </div>
     </div>
   );
 };
+
+export default MyPerformanceSection;

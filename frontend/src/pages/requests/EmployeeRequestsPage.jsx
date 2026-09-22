@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useSearchParams, useParams, useNavigate } from 'react-router-dom';
 import {
   Inbox,
   Plus,
@@ -49,9 +50,14 @@ const STATUS_FILTERS = [
   { value: 'CANCELLED', label: 'Cancelled' },
 ];
 
-export const EmployeeRequestsPage = ({ isEmbedded = false }) => {
+export const EmployeeRequestsPage = ({ isEmbedded = false, initialRequestId = null }) => {
   const { user, hasPermission, hasRole, isAuthenticated } = useAuth();
   const toast = useToast();
+  const navigate = useNavigate();
+  const { requestId: routeRequestId } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const targetRequestId = initialRequestId || routeRequestId || searchParams.get('requestId');
 
   const canManageRequests =
     hasPermission('request:manage') ||
@@ -82,6 +88,25 @@ export const EmployeeRequestsPage = ({ isEmbedded = false }) => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedRequestId, setSelectedRequestId] = useState(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (targetRequestId) {
+      setSelectedRequestId(targetRequestId);
+      setIsDetailModalOpen(true);
+    }
+  }, [targetRequestId]);
+
+  const handleCloseDetailModal = () => {
+    setIsDetailModalOpen(false);
+    setSelectedRequestId(null);
+    if (routeRequestId) {
+      navigate('/helpdesk?tab=requests', { replace: true });
+    } else if (searchParams.get('requestId')) {
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('requestId');
+      setSearchParams(newParams, { replace: true });
+    }
+  };
 
   // Fetch requests
   const fetchRequests = useCallback(
@@ -477,7 +502,7 @@ export const EmployeeRequestsPage = ({ isEmbedded = false }) => {
       {/* Request Detail Modal */}
       <RequestDetailModal
         isOpen={isDetailModalOpen}
-        onClose={() => setIsDetailModalOpen(false)}
+        onClose={handleCloseDetailModal}
         requestId={selectedRequestId}
         onRequestUpdated={() => fetchRequests(true)}
       />

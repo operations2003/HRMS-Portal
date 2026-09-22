@@ -57,7 +57,7 @@ const STATUS_FILTER_OPTIONS = [
 
 export const HelpdeskPage = () => {
   const navigate = useNavigate();
-  const { id: routeTicketId } = useParams();
+  const { id, ticketId, requestId } = useParams();
   const { user, hasPermission, hasRole, isAuthenticated } = useAuth();
   const toast = useToast();
 
@@ -72,27 +72,17 @@ export const HelpdeskPage = () => {
       hasRole(['Employee', 'Manager']));
 
   const [searchParams, setSearchParams] = useSearchParams();
+  const routeTicketId = ticketId || id;
+  const routeRequestId = requestId;
   const queryTicketId = searchParams.get('ticket') || searchParams.get('ticketId') || searchParams.get('id');
+  const queryRequestId = searchParams.get('requestId') || searchParams.get('request');
   const targetTicketId = routeTicketId || queryTicketId;
+  const targetRequestId = routeRequestId || queryRequestId;
 
   const urlTab = searchParams.get('tab');
   const [mainSection, setMainSection] = useState(
-    urlTab === 'requests' || urlTab === 'service' ? 'requests' : 'tickets'
+    targetRequestId || urlTab === 'requests' || urlTab === 'service' ? 'requests' : 'tickets'
   );
-
-  useEffect(() => {
-    const tab = searchParams.get('tab');
-    if (tab === 'requests' || tab === 'service') {
-      setMainSection('requests');
-    } else if (tab === 'tickets') {
-      setMainSection('tickets');
-    }
-  }, [searchParams]);
-
-  const handleSectionSwitch = (sec) => {
-    setMainSection(sec);
-    setSearchParams({ tab: sec });
-  };
 
   // Tab: 'my' | 'all' (only for HR/Admin)
   const [activeTab, setActiveTab] = useState(canManageHelpdesk ? 'all' : 'my');
@@ -114,16 +104,29 @@ export const HelpdeskPage = () => {
   const [selectedTicketId, setSelectedTicketId] = useState(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
-  // Auto-open ticket modal when targeted from notification route / URL param
   useEffect(() => {
     if (targetTicketId) {
-      setMainSection('tickets');
       setSelectedTicketId(targetTicketId);
       setIsDetailModalOpen(true);
+      setMainSection('tickets');
+    } else if (targetRequestId) {
+      setMainSection('requests');
+    } else {
+      const tab = searchParams.get('tab');
+      if (tab === 'requests' || tab === 'service') {
+        setMainSection('requests');
+      } else if (tab === 'tickets') {
+        setMainSection('tickets');
+      }
     }
-  }, [targetTicketId]);
+  }, [targetTicketId, targetRequestId, searchParams]);
 
-  const handleCloseDetail = () => {
+  const handleSectionSwitch = (sec) => {
+    setMainSection(sec);
+    setSearchParams({ tab: sec });
+  };
+
+  const handleCloseDetailModal = () => {
     setIsDetailModalOpen(false);
     setSelectedTicketId(null);
     if (routeTicketId) {
@@ -136,6 +139,7 @@ export const HelpdeskPage = () => {
       setSearchParams(nextParams, { replace: true });
     }
   };
+  const handleCloseDetail = handleCloseDetailModal;
 
   // Fetch Tickets
   const fetchTickets = useCallback(
@@ -354,7 +358,7 @@ export const HelpdeskPage = () => {
       </div>
 
       {mainSection === 'requests' ? (
-        <EmployeeRequestsPage isEmbedded />
+        <EmployeeRequestsPage isEmbedded initialRequestId={targetRequestId} />
       ) : (
         <>
           {/* Page Header */}
@@ -567,7 +571,7 @@ export const HelpdeskPage = () => {
       {/* Ticket Detail & Thread Modal */}
       <TicketDetailModal
         isOpen={isDetailModalOpen}
-        onClose={handleCloseDetail}
+        onClose={handleCloseDetailModal}
         ticketId={selectedTicketId}
         onTicketUpdated={() => fetchTickets(true)}
       />

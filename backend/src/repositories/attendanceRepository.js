@@ -360,12 +360,41 @@ export const attendanceRepository = {
     // Metrics calculation (present days, total hours, half days, overtime)
     const statsSql = `
       SELECT
-        COUNT(*) FILTER (WHERE a.status = 'PRESENT')::int AS "presentDays",
+        COUNT(*) FILTER (WHERE a.status IN ('PRESENT', 'LATE'))::int AS "presentDays",
         COUNT(*) FILTER (WHERE a.status = 'HALF_DAY')::int AS "halfDays",
         COUNT(*) FILTER (WHERE a.status = 'LATE')::int AS "lateDays",
         COUNT(*) FILTER (WHERE a.status = 'ABSENT')::int AS "absentDays",
-        COALESCE(SUM(a.total_hours), 0)::float AS "totalHoursWorked",
-        COALESCE(SUM(a.overtime_hours), 0)::float AS "totalOvertimeHours"
+        COALESCE(
+          SUM(
+            CASE
+              WHEN a.check_out IS NOT NULL THEN a.total_hours
+              WHEN a.check_in IS NOT NULL THEN
+                GREATEST(0, ROUND(
+                  ((EXTRACT(EPOCH FROM (NOW() - a.check_in)) - COALESCE(a.break_duration_minutes, 0) * 60 - CASE WHEN a.is_on_break AND a.current_break_start IS NOT NULL THEN EXTRACT(EPOCH FROM (NOW() - a.current_break_start)) ELSE 0 END) / 3600.0)::numeric,
+                  2
+                ))
+              ELSE 0
+            END
+          ),
+          0
+        )::float AS "totalHoursWorked",
+        COALESCE(
+          SUM(
+            CASE
+              WHEN a.check_out IS NOT NULL THEN a.overtime_hours
+              WHEN a.check_in IS NOT NULL THEN
+                GREATEST(
+                  0,
+                  ROUND(
+                    (((EXTRACT(EPOCH FROM (NOW() - a.check_in)) - COALESCE(a.break_duration_minutes, 0) * 60 - CASE WHEN a.is_on_break AND a.current_break_start IS NOT NULL THEN EXTRACT(EPOCH FROM (NOW() - a.current_break_start)) ELSE 0 END) / 3600.0) - 8.0)::numeric,
+                    2
+                  )
+                )
+              ELSE 0
+            END
+          ),
+          0
+        )::float AS "totalOvertimeHours"
       FROM attendance_records a
       ${whereClause};
     `;
@@ -580,7 +609,7 @@ export const attendanceRepository = {
     const summarySql = `
       SELECT
         (SELECT COUNT(*)::int FROM employees WHERE org_id = $1 AND status = 'Active') AS "totalEmployees",
-        COUNT(a.id) FILTER (WHERE a.status = 'PRESENT')::int AS "presentCount",
+        COUNT(a.id) FILTER (WHERE a.status IN ('PRESENT', 'LATE'))::int AS "presentCount",
         COUNT(a.id) FILTER (WHERE a.status = 'HALF_DAY')::int AS "halfDayCount",
         COUNT(a.id) FILTER (WHERE a.status = 'LATE')::int AS "lateCount",
         COUNT(a.id) FILTER (WHERE a.status = 'ON_LEAVE')::int AS "onLeaveCount",

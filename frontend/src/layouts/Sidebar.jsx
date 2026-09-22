@@ -38,16 +38,16 @@ export const Sidebar = ({ isOpen, onClose }) => {
 
   const navItems = [
     {
-      name: 'Dashboard',
-      path: '/dashboard',
-      icon: LayoutDashboard,
-      permission: 'dashboard:read',
-    },
-    {
       name: 'My Profile',
       path: '/profile',
       icon: User,
       permission: ['employee:read'],
+    },
+    {
+      name: 'Dashboard',
+      path: '/dashboard',
+      icon: LayoutDashboard,
+      permission: 'dashboard:read',
     },
     {
       name: 'Attendance',
@@ -56,16 +56,28 @@ export const Sidebar = ({ isOpen, onClose }) => {
       permission: 'attendance:read',
     },
     {
+      name: 'Team',
+      path: '/team',
+      icon: Users,
+      roles: ['Manager', 'HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
+    },
+    {
       name: 'Manager Cockpit',
       path: '/manager',
       icon: Briefcase,
       roles: ['Manager', 'HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
     },
     {
-      name: 'Team',
-      path: '/team',
-      icon: Users,
-      roles: ['Manager', 'HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
+      name: 'Leaves',
+      path: '/leaves',
+      icon: CalendarDays,
+      permission: 'leave:read',
+    },
+    {
+      name: 'Departments',
+      path: '/departments',
+      icon: Briefcase,
+      permission: ['dept:read', 'employee:read'],
     },
     {
       name: 'Approvals',
@@ -74,7 +86,19 @@ export const Sidebar = ({ isOpen, onClose }) => {
       roles: ['Manager', 'HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
     },
     {
-      name: 'Performance',
+      name: 'Payroll',
+      path: '/payroll',
+      icon: Wallet,
+      permission: ['employee:read'],
+    },
+    {
+      name: 'Performance & Tasks',
+      path: '/tasks',
+      icon: CheckSquare,
+      permission: ['task:read', 'employee:read'],
+    },
+    {
+      name: 'Appraisals',
       path: '/performance',
       icon: Award,
       permission: ['performance:read', 'employee:read'],
@@ -104,28 +128,10 @@ export const Sidebar = ({ isOpen, onClose }) => {
       permission: ['employee:read'],
     },
     {
-      name: 'Leaves',
-      path: '/leaves',
-      icon: CalendarDays,
-      permission: 'leave:read',
-    },
-    {
-      name: 'Payroll',
-      path: '/payroll',
-      icon: Wallet,
-      permission: ['employee:read'],
-    },
-    {
       name: 'Policies',
       path: '/policies',
       icon: BookOpen,
       permission: ['employee:read'],
-    },
-    {
-      name: 'Work Tasks',
-      path: '/tasks',
-      icon: CheckSquare,
-      permission: ['task:read', 'employee:read'],
     },
     {
       name: 'Training & Skills',
@@ -168,12 +174,6 @@ export const Sidebar = ({ isOpen, onClose }) => {
       path: '/helpdesk',
       icon: LifeBuoy,
       permission: ['helpdesk:read', 'request:read', 'employee:read'],
-    },
-    {
-      name: 'Departments',
-      path: '/departments',
-      icon: Briefcase,
-      permission: 'dept:read',
     },
     {
       name: 'User Accounts',
