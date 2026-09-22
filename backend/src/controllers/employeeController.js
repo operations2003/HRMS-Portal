@@ -25,6 +25,21 @@ export const employeeController = {
         limit: limit ? parseInt(limit, 10) : 20,
       });
 
+      const role = (req.user?.roleName || '').toLowerCase();
+      const isHrOrAdmin = ['admin', 'superadmin', 'hr', 'hrmanager', 'orgadmin'].some((r) => role.includes(r));
+
+      // Redact sensitive compensation/bank details for employees/managers viewing other staff
+      if (!isHrOrAdmin && result?.employees) {
+        result.employees = result.employees.map((emp) => {
+          const isSelf = emp.id === req.user?.employeeId || emp.userId === req.user?.id || emp.email === req.user?.email;
+          if (!isSelf) {
+            const { salary, bankAccountNumber, ...sanitized } = emp;
+            return sanitized;
+          }
+          return emp;
+        });
+      }
+
       return sendSuccess(res, 'Employees retrieved successfully.', result);
     } catch (error) {
       next(error);
@@ -48,7 +63,7 @@ export const employeeController = {
    */
   async getById(req, res, next) {
     try {
-      const employee = await employeeService.getEmployeeById(req.params.id);
+      let employee = await employeeService.getEmployeeById(req.params.id);
       if (req.user?.orgId && employee.orgId !== req.user.orgId) {
         const isSuperAdmin = (req.user?.roleName || '').toLowerCase().includes('admin') && !req.user.orgId;
         if (!isSuperAdmin) {
@@ -57,6 +72,16 @@ export const employeeController = {
           throw error;
         }
       }
+
+      const role = (req.user?.roleName || '').toLowerCase();
+      const isHrOrAdmin = ['admin', 'superadmin', 'hr', 'hrmanager', 'orgadmin'].some((r) => role.includes(r));
+      const isSelf = employee.id === req.user?.employeeId || employee.userId === req.user?.id || employee.email === req.user?.email;
+
+      if (!isHrOrAdmin && !isSelf) {
+        const { salary, bankAccountNumber, ...sanitized } = employee;
+        employee = sanitized;
+      }
+
       return sendSuccess(res, 'Employee details retrieved.', employee);
     } catch (error) {
       next(error);

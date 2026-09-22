@@ -430,7 +430,6 @@ export const teamService = {
     }
 
     const isSelfOrPrivileged = this.isHrOrAdmin(currentUser) || 
-      this.isManager(currentUser) || 
       (await this.resolveEmployee(currentUser))?.id === targetEmp.id;
 
     return {

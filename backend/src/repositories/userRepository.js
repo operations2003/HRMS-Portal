@@ -78,6 +78,9 @@ export const HARDCODED_SUPERADMIN = {
     'leave:read',
     'leave:write',
     'leave:approve',
+    'payroll:read',
+    'payroll:read_all',
+    'payroll:write',
   ],
   organization: { id: 'org-1', name: 'Tasknera Global HR Solutions', code: 'TASKNERA' },
 };

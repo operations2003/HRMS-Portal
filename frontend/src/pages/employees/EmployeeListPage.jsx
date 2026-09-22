@@ -591,13 +591,14 @@ export const EmployeeListPage = () => {
 
   const hasActiveFilters = Boolean(search || orgFilter || deptFilter || statusFilter);
 
-  // Determine if logged in user has salary view privilege
+  // Determine if logged in user has salary view privilege (Admin/CEO, HR, or self only)
   const canViewSalary = (emp) => {
     if (!emp) return false;
-    if (['Admin', 'HR', 'Manager'].includes(user?.roleName)) {
+    const role = (user?.roleName || '').toLowerCase();
+    if (['admin', 'superadmin', 'hr', 'hrmanager', 'orgadmin'].some((r) => role.includes(r))) {
       return true;
     }
-    return user?.email === emp.email;
+    return user?.email === emp.email || user?.id === emp.userId || user?.employeeId === emp.id;
   };
 
   const columns = [
