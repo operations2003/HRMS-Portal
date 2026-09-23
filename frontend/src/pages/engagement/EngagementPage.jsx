@@ -11,6 +11,9 @@ import {
   User,
   X,
   Share2,
+  Star,
+  Send,
+  Trash2,
 } from 'lucide-react';
 import { engagementService } from '../../services/engagementService.js';
 import { employeeService } from '../../services/employeeService.js';
@@ -50,6 +53,21 @@ export const EngagementPage = () => {
     badgeType: 'KUDOS',
     message: '',
   });
+
+  const [surveyForm, setSurveyForm] = useState({
+    title: '',
+    description: '',
+    isAnonymous: true,
+    targetType: 'ALL',
+    questions: [
+      { id: 'q1', text: 'How satisfied are you with team collaboration and support?', type: 'rating' },
+      { id: 'q2', text: 'What is one suggestion you have to improve our workflow?', type: 'text' },
+    ],
+  });
+
+  const [answeringSurvey, setAnsweringSurvey] = useState(null);
+  const [surveyAnswers, setSurveyAnswers] = useState({});
+  const [submittingSurvey, setSubmittingSurvey] = useState(false);
 
   const isHrOrAdmin = hasRole(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']);
 
@@ -136,6 +154,48 @@ export const EngagementPage = () => {
     }
   };
 
+  const handleCreateSurvey = async (e) => {
+    e.preventDefault();
+    if (!surveyForm.title.trim()) {
+      toast.error('Survey title is required.');
+      return;
+    }
+    try {
+      await engagementService.createSurvey(surveyForm);
+      toast.success('Survey launched successfully!');
+      setShowSurveyModal(false);
+      setSurveyForm({
+        title: '',
+        description: '',
+        isAnonymous: true,
+        targetType: 'ALL',
+        questions: [
+          { id: 'q1', text: 'How satisfied are you with team collaboration and support?', type: 'rating' },
+          { id: 'q2', text: 'What is one suggestion you have to improve our workflow?', type: 'text' },
+        ],
+      });
+      loadData();
+    } catch (err) {
+      toast.error(err.message || 'Failed to create survey.');
+    }
+  };
+
+  const handleSubmitSurveyResponse = async (e) => {
+    e.preventDefault();
+    if (!answeringSurvey) return;
+    setSubmittingSurvey(true);
+    try {
+      await engagementService.submitSurveyResponse(answeringSurvey.id, surveyAnswers);
+      toast.success('Survey response submitted!');
+      setAnsweringSurvey(null);
+      loadData();
+    } catch (err) {
+      toast.error(err.message || 'Failed to submit survey response.');
+    } finally {
+      setSubmittingSurvey(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -165,6 +225,11 @@ export const EngagementPage = () => {
           {isHrOrAdmin && activeTab === 'announcements' && (
             <Button onClick={() => setShowAnnounceModal(true)} icon={Plus}>
               Broadcast Notice
+            </Button>
+          )}
+          {isHrOrAdmin && activeTab === 'surveys' && (
+            <Button onClick={() => setShowSurveyModal(true)} icon={Plus}>
+              Launch Survey & Poll
             </Button>
           )}
         </div>
@@ -305,7 +370,15 @@ export const EngagementPage = () => {
                   {s.has_responded ? (
                     <Badge variant="success">Submitted</Badge>
                   ) : (
-                    <Button size="sm">Participate</Button>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        setAnsweringSurvey(s);
+                        setSurveyAnswers({});
+                      }}
+                    >
+                      Participate
+                    </Button>
                   )}
                 </div>
               </div>
@@ -502,6 +575,260 @@ export const EngagementPage = () => {
                   Cancel
                 </Button>
                 <Button type="submit">Post Kudos</Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* CREATE SURVEY MODAL (HR / ADMIN) */}
+      {showSurveyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600">
+                  <Vote className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-800">Launch New Survey / Poll</h3>
+                  <p className="text-xs text-slate-400">Gather company feedback and pulse metrics</p>
+                </div>
+              </div>
+              <button onClick={() => setShowSurveyModal(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateSurvey} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Survey Title *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g., Q1 Workplace & Culture Pulse"
+                  value={surveyForm.title}
+                  onChange={(e) => setSurveyForm({ ...surveyForm, title: e.target.value })}
+                  className="w-full text-xs border border-slate-300 rounded-lg p-2.5 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Description</label>
+                <textarea
+                  rows="2"
+                  placeholder="Briefly explain the purpose of this survey..."
+                  value={surveyForm.description}
+                  onChange={(e) => setSurveyForm({ ...surveyForm, description: e.target.value })}
+                  className="w-full text-xs border border-slate-300 rounded-lg p-2.5 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
+                <div>
+                  <div className="text-xs font-bold text-slate-800">Anonymous Participation</div>
+                  <div className="text-[11px] text-slate-500">Protect employee identity on responses</div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={surveyForm.isAnonymous}
+                  onChange={(e) => setSurveyForm({ ...surveyForm, isAnonymous: e.target.checked })}
+                  className="w-4 h-4 rounded text-indigo-600"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700">Survey Questions</label>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSurveyForm({
+                        ...surveyForm,
+                        questions: [
+                          ...surveyForm.questions,
+                          { id: `q_${Date.now()}`, text: '', type: 'rating' },
+                        ],
+                      })
+                    }
+                    className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add Question
+                  </button>
+                </div>
+
+                {surveyForm.questions.map((q, idx) => (
+                  <div key={q.id || idx} className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-600">Question {idx + 1}</span>
+                      {surveyForm.questions.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSurveyForm({
+                              ...surveyForm,
+                              questions: surveyForm.questions.filter((_, i) => i !== idx),
+                            })
+                          }
+                          className="text-slate-400 hover:text-rose-600"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+
+                    <input
+                      type="text"
+                      required
+                      placeholder="Enter question text..."
+                      value={q.text}
+                      onChange={(e) => {
+                        const updated = [...surveyForm.questions];
+                        updated[idx].text = e.target.value;
+                        setSurveyForm({ ...surveyForm, questions: updated });
+                      }}
+                      className="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white focus:outline-none"
+                    />
+
+                    <div className="flex items-center gap-4 text-xs">
+                      <label className="flex items-center gap-1 cursor-pointer">
+                        <input
+                          type="radio"
+                          name={`type_${idx}`}
+                          value="rating"
+                          checked={q.type === 'rating'}
+                          onChange={() => {
+                            const updated = [...surveyForm.questions];
+                            updated[idx].type = 'rating';
+                            setSurveyForm({ ...surveyForm, questions: updated });
+                          }}
+                        />
+                        <span>1-5 Rating Scale</span>
+                      </label>
+                      <label className="flex items-center gap-1 cursor-pointer">
+                        <input
+                          type="radio"
+                          name={`type_${idx}`}
+                          value="text"
+                          checked={q.type === 'text'}
+                          onChange={() => {
+                            const updated = [...surveyForm.questions];
+                            updated[idx].type = 'text';
+                            setSurveyForm({ ...surveyForm, questions: updated });
+                          }}
+                        />
+                        <span>Open Text Response</span>
+                      </label>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <Button variant="neutral" type="button" onClick={() => setShowSurveyModal(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit">Launch Survey</Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ANSWER SURVEY MODAL */}
+      {answeringSurvey && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div>
+                <h3 className="text-base font-bold text-slate-800">{answeringSurvey.title}</h3>
+                <p className="text-xs text-slate-500">{answeringSurvey.description || 'Employee pulse survey'}</p>
+              </div>
+              <button onClick={() => setAnsweringSurvey(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitSurveyResponse} className="space-y-4">
+              {(() => {
+                const questions = Array.isArray(answeringSurvey.questions)
+                  ? answeringSurvey.questions
+                  : typeof answeringSurvey.questions === 'string'
+                  ? JSON.parse(answeringSurvey.questions || '[]')
+                  : [];
+
+                if (questions.length === 0) {
+                  return (
+                    <div className="space-y-3">
+                      <label className="block text-xs font-semibold text-slate-700">
+                        How satisfied are you with work environment and culture?
+                      </label>
+                      <div className="grid grid-cols-5 gap-2">
+                        {[1, 2, 3, 4, 5].map((val) => (
+                          <button
+                            type="button"
+                            key={val}
+                            onClick={() => setSurveyAnswers({ ...surveyAnswers, rating: val })}
+                            className={`py-2 rounded-lg border text-xs font-bold transition ${
+                              surveyAnswers.rating === val
+                                ? 'bg-indigo-600 border-indigo-600 text-white'
+                                : 'bg-slate-50 border-slate-200 text-slate-700'
+                            }`}
+                          >
+                            {val}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                }
+
+                return questions.map((q, idx) => {
+                  const qId = q.id || `q_${idx}`;
+                  return (
+                    <div key={qId} className="space-y-2 p-3 rounded-xl bg-slate-50 border border-slate-100">
+                      <label className="block text-xs font-bold text-slate-800">
+                        {idx + 1}. {q.text || 'Question'}
+                      </label>
+                      {q.type === 'rating' ? (
+                        <div className="grid grid-cols-5 gap-2">
+                          {[1, 2, 3, 4, 5].map((val) => (
+                            <button
+                              type="button"
+                              key={val}
+                              onClick={() => setSurveyAnswers({ ...surveyAnswers, [qId]: val })}
+                              className={`py-2 rounded-lg border text-xs font-bold transition flex items-center justify-center gap-1 ${
+                                surveyAnswers[qId] === val
+                                  ? 'bg-indigo-600 border-indigo-600 text-white'
+                                  : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
+                              }`}
+                            >
+                              <Star className={`w-3.5 h-3.5 ${surveyAnswers[qId] === val ? 'fill-white' : ''}`} />
+                              <span>{val}</span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <textarea
+                          rows="2"
+                          placeholder="Your answer..."
+                          value={surveyAnswers[qId] || ''}
+                          onChange={(e) => setSurveyAnswers({ ...surveyAnswers, [qId]: e.target.value })}
+                          className="w-full text-xs bg-white border border-slate-300 rounded-lg p-2.5 focus:outline-none"
+                        />
+                      )}
+                    </div>
+                  );
+                });
+              })()}
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <Button variant="neutral" type="button" onClick={() => setAnsweringSurvey(null)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={submittingSurvey}>
+                  {submittingSurvey ? 'Submitting...' : 'Submit Feedback'}
+                </Button>
               </div>
             </form>
           </div>

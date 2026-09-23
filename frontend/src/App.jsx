@@ -433,7 +433,7 @@ export const App = () => {
               <Route
                 path="engagement"
                 element={
-                  <PermissionRoute permission={['engagement:read', 'employee:read']}>
+                  <PermissionRoute roles={['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']}>
                     <EngagementPage />
                   </PermissionRoute>
                 }

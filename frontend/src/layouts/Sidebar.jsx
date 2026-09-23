@@ -196,7 +196,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
           name: 'Engagement & Surveys',
           path: '/engagement',
           icon: Megaphone,
-          permission: ['engagement:read', 'employee:read'],
+          roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
         },
         {
           name: 'Reports',

@@ -21,6 +21,7 @@ import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
 import { EmptyState } from '../../components/common/EmptyState.jsx';
 import { Can } from '../../components/rbac/Can.jsx';
 import { ManagerDashboardView } from './ManagerDashboardView.jsx';
+import { EmployeeEngagementHub } from '../../components/dashboard/EmployeeEngagementHub.jsx';
 
 export const DashboardPage = () => {
   const navigate = useNavigate();
@@ -71,7 +72,8 @@ export const DashboardPage = () => {
     );
   }
 
-  const isEmployee = user?.roleName === 'Employee';
+  const userRoleStr = (user?.roleName || user?.role?.name || user?.role || '').toLowerCase().trim();
+  const isEmployee = !['admin', 'superadmin', 'orgadmin', 'hr', 'hrmanager'].includes(userRoleStr);
 
   const adminStatCards = [
     {
@@ -231,126 +233,138 @@ export const DashboardPage = () => {
               </div>
               <div className="mt-4">
                 <div className="text-3xl font-bold text-slate-900 tracking-tight">{card.value}</div>
-                <div className="text-xs text-slate-500 mt-1">{card.subtext}</div>
+                <div className="text-sm text-slate-500 mt-1">{card.subtext}</div>
               </div>
             </div>
           );
         })}
       </div>
 
-      {/* Dashboard 2-Column Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Recent Employees Table */}
-        <div className="lg:col-span-2 rounded-2xl border border-slate-200/80 bg-white shadow-sm overflow-hidden flex flex-col">
-          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-            <div>
-              <h3 className="text-base font-semibold text-slate-900">Recent Employees</h3>
-              <p className="text-xs text-slate-500 mt-0.5">Recently registered staff across departments</p>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={ArrowRight}
-              onClick={() => navigate('/employees')}
-            >
-              View Directory
-            </Button>
-          </div>
-
-          <div className="overflow-x-auto flex-1">
-            {stats?.recentEmployees && stats.recentEmployees.length > 0 ? (
-              <table className="w-full text-left text-sm">
-                <thead className="bg-slate-50/60 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                  <tr>
-                    <th className="px-6 py-3">Employee</th>
-                    <th className="px-6 py-3">Department</th>
-                    <th className="px-6 py-3">Type</th>
-                    <th className="px-6 py-3">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {stats.recentEmployees.map((emp) => (
-                    <tr
-                      key={emp.id}
-                      onClick={() => navigate('/employees')}
-                      className="hover:bg-slate-50/70 transition-colors cursor-pointer"
-                    >
-                      <td className="px-6 py-3.5">
-                        <div className="font-semibold text-slate-800">
-                          {emp.firstName} {emp.lastName}
-                        </div>
-                        <div className="text-xs text-slate-400">{emp.email}</div>
-                      </td>
-                      <td className="px-6 py-3.5 text-slate-600">
-                        {emp.department?.name || 'General'}
-                      </td>
-                      <td className="px-6 py-3.5 text-slate-600">{emp.employmentType}</td>
-                      <td className="px-6 py-3.5">
-                        <Badge variant="neutral" size="sm">
-                          {emp.status}
-                        </Badge>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <div className="p-8">
-                <EmptyState
-                  icon={Inbox}
-                  title="No employee records"
-                  description="Staff registrations will appear in this feed."
-                  actionLabel="Add Employee"
-                  onAction={() => navigate('/employees?action=new')}
-                />
+      {/* Employee Engagement & Surveys Hub for Employees */}
+      {isEmployee ? (
+        <EmployeeEngagementHub />
+      ) : (
+        <>
+          {/* Dashboard 2-Column Section for Admins */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Recent Employees Table */}
+            <div className="lg:col-span-2 rounded-2xl border border-slate-200/80 bg-white shadow-sm overflow-hidden flex flex-col">
+              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-semibold text-slate-900">Recent Employees</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">Recently registered staff across departments</p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={ArrowRight}
+                  onClick={() => navigate('/employees')}
+                >
+                  View Directory
+                </Button>
               </div>
-            )}
-          </div>
-        </div>
 
-        {/* Department Distribution */}
-        <div className="rounded-2xl border border-slate-200/80 bg-white shadow-sm p-6 flex flex-col">
-          <h3 className="text-base font-semibold text-slate-900 mb-1">Department Breakdown</h3>
-          <p className="text-xs text-slate-500 mb-6">Staff headcount allocated across departments</p>
-
-          <div className="space-y-4 flex-1">
-            {stats?.departmentDistribution && stats.departmentDistribution.length > 0 ? (
-              stats.departmentDistribution.map((dept) => {
-                const percentage =
-                  stats.totalEmployees > 0
-                    ? Math.round((dept.count / stats.totalEmployees) * 100)
-                    : 0;
-
-                return (
-                  <div key={dept.id}>
-                    <div className="flex items-center justify-between text-xs mb-1.5 font-medium">
-                      <span className="text-slate-700">{dept.name}</span>
-                      <span className="text-slate-500">
-                        {dept.count} ({percentage}%)
-                      </span>
-                    </div>
-                    <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-brand-500 transition-all duration-500"
-                        style={{ width: `${percentage}%` }}
-                      />
-                    </div>
+              <div className="overflow-x-auto flex-1">
+                {stats?.recentEmployees && stats.recentEmployees.length > 0 ? (
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-slate-50/60 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                      <tr>
+                        <th className="px-6 py-3">Employee</th>
+                        <th className="px-6 py-3">Department</th>
+                        <th className="px-6 py-3">Type</th>
+                        <th className="px-6 py-3">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {stats.recentEmployees.map((emp) => (
+                        <tr
+                          key={emp.id}
+                          onClick={() => navigate('/employees')}
+                          className="hover:bg-slate-50/70 transition-colors cursor-pointer"
+                        >
+                          <td className="px-6 py-3.5">
+                            <div className="font-semibold text-slate-800">
+                              {emp.firstName} {emp.lastName}
+                            </div>
+                            <div className="text-xs text-slate-400">{emp.email}</div>
+                          </td>
+                          <td className="px-6 py-3.5 text-slate-600">
+                            {emp.department?.name || 'General'}
+                          </td>
+                          <td className="px-6 py-3.5 text-slate-600">{emp.employmentType}</td>
+                          <td className="px-6 py-3.5">
+                            <Badge variant="neutral" size="sm">
+                              {emp.status}
+                            </Badge>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div className="p-8">
+                    <EmptyState
+                      icon={Inbox}
+                      title="No employee records"
+                      description="Staff registrations will appear in this feed."
+                      actionLabel="Add Employee"
+                      onAction={() => navigate('/employees?action=new')}
+                    />
                   </div>
-                );
-              })
-            ) : (
-              <p className="text-xs text-slate-400 text-center py-6">No departmental distributions available.</p>
-            )}
-          </div>
+                )}
+              </div>
+            </div>
 
-          <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-            <span>Your Session:</span>
-            <div className="flex items-center gap-1.5">
-              <Badge variant="brand">{user?.roleName}</Badge>
+            {/* Department Distribution */}
+            <div className="rounded-2xl border border-slate-200/80 bg-white shadow-sm p-6 flex flex-col">
+              <h3 className="text-base font-semibold text-slate-900 mb-1">Department Breakdown</h3>
+              <p className="text-xs text-slate-500 mb-6">Staff headcount allocated across departments</p>
+
+              <div className="space-y-4 flex-1">
+                {stats?.departmentDistribution && stats.departmentDistribution.length > 0 ? (
+                  stats.departmentDistribution.map((dept) => {
+                    const percentage =
+                      stats.totalEmployees > 0
+                        ? Math.round((dept.count / stats.totalEmployees) * 100)
+                        : 0;
+
+                    return (
+                      <div key={dept.id}>
+                        <div className="flex items-center justify-between text-xs mb-1.5 font-medium">
+                          <span className="text-slate-700">{dept.name}</span>
+                          <span className="text-slate-500">
+                            {dept.count} ({percentage}%)
+                          </span>
+                        </div>
+                        <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-brand-500 transition-all duration-500"
+                            style={{ width: `${percentage}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p className="text-xs text-slate-400 text-center py-6">No departmental distributions available.</p>
+                )}
+              </div>
+
+              <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                <span>Your Session:</span>
+                <div className="flex items-center gap-1.5">
+                  <Badge variant="brand">{user?.roleName}</Badge>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
+
+          {/* Admin Engagement Hub Preview */}
+          <div className="mt-8">
+            <EmployeeEngagementHub />
+          </div>
+        </>
+      )}
     </div>
   );
 };
