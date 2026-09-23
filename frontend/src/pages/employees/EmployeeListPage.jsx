@@ -1149,13 +1149,21 @@ export const EmployeeListPage = () => {
                 }));
               }}
             />
-            <Input
-              label="Annual Salary (₹)"
-              type="number"
-              value={formData.salary}
-              onChange={(e) => setFormData({ ...formData, salary: e.target.value })}
-              placeholder="e.g. 1200000"
-            />
+            <div>
+              <Input
+                label="Annual Salary / CTC (₹)"
+                type="number"
+                value={formData.salary}
+                onChange={(e) => setFormData({ ...formData, salary: e.target.value })}
+                placeholder="e.g. 1200000"
+              />
+              {formData.salary && Number(formData.salary) > 0 && (
+                <p className="text-[11px] text-slate-500 mt-1 font-medium flex items-center justify-between">
+                  <span>Annual CTC: ₹{Number(formData.salary).toLocaleString('en-IN')} / yr</span>
+                  <span className="text-brand-600 font-semibold">Monthly: ~₹{Math.round(Number(formData.salary) / 12).toLocaleString('en-IN')} / mo</span>
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Interactive Probation Period Assignment Section */}

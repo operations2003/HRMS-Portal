@@ -160,22 +160,22 @@ export const PayrollPage = () => {
   const initSalaryForm = (emp) => {
     const s = emp?.salaryStructure || {};
     const rawSalary = parseFloat(emp?.salary) || parseFloat(emp?.rawSalary) || 0;
-    const annualCtc = s.annualCtc ?? emp?.annualCtc ?? (rawSalary > 150000 ? rawSalary : rawSalary * 12) ?? 1200000;
-    const monthlyGross = s.monthlyGross ?? emp?.monthlyGross ?? Math.round(annualCtc / 12);
+    const annualCtc = s.annualCtc ?? emp?.annualCtc ?? rawSalary;
+    const monthlyGross = s.monthlyGross ?? emp?.monthlyGross ?? (annualCtc > 0 ? Math.round(annualCtc / 12) : 0);
 
     const basic = s.basic ?? Math.round(monthlyGross * 0.5);
     const hra = s.hra ?? Math.round(monthlyGross * 0.25);
-    const conveyance = s.conveyance ?? 1600;
-    const medical = s.medical ?? 1250;
+    const conveyance = s.conveyance ?? (monthlyGross >= 15000 ? 1600 : Math.round(monthlyGross * 0.10));
+    const medical = s.medical ?? (monthlyGross >= 15000 ? 1250 : Math.round(monthlyGross * 0.05));
     const special = s.special ?? Math.max(0, monthlyGross - basic - hra - conveyance - medical);
 
     const epf = s.epf ?? Math.round(Math.min(basic, 15000) * 0.12);
-    const professionalTax = s.professionalTax ?? 200;
-    const tds = s.tds ?? Math.round(monthlyGross > 50000 ? monthlyGross * 0.05 : 0);
+    const professionalTax = s.professionalTax ?? (monthlyGross >= 15000 ? 200 : 0);
+    const tds = s.tds ?? (monthlyGross > 50000 ? Math.round(monthlyGross * 0.05) : 0);
     const otherDeductions = s.otherDeductions ?? 0;
 
     const totalDeductions = s.totalDeductions ?? emp?.totalDeductions ?? (epf + professionalTax + tds + otherDeductions);
-    const netTakeHome = s.netTakeHome ?? emp?.netTakeHome ?? (monthlyGross - totalDeductions);
+    const netTakeHome = s.netTakeHome ?? emp?.netTakeHome ?? Math.max(0, monthlyGross - totalDeductions);
 
     return {
       annualCtc,
@@ -212,15 +212,15 @@ export const PayrollPage = () => {
   // Auto-calculate breakdown based on Annual CTC
   const handleAutoCalculateFromCtc = () => {
     const ctc = parseFloat(salaryForm.annualCtc) || 0;
-    const gross = Math.round(ctc / 12);
+    const gross = ctc > 0 ? Math.round(ctc / 12) : 0;
     const basic = Math.round(gross * 0.5);
     const hra = Math.round(gross * 0.25);
-    const conveyance = 1600;
-    const medical = 1250;
+    const conveyance = gross >= 15000 ? 1600 : Math.round(gross * 0.10);
+    const medical = gross >= 15000 ? 1250 : Math.round(gross * 0.05);
     const special = Math.max(0, gross - basic - hra - conveyance - medical);
     const epf = Math.round(Math.min(basic, 15000) * 0.12);
-    const pt = 200;
-    const tds = Math.round(gross > 50000 ? gross * 0.05 : 0);
+    const pt = gross >= 15000 ? 200 : 0;
+    const tds = gross > 50000 ? Math.round(gross * 0.05) : 0;
     const totalDed = epf + pt + tds + (parseFloat(salaryForm.otherDeductions) || 0);
     const net = Math.max(0, gross - totalDed);
 

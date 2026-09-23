@@ -68,18 +68,16 @@ export const payrollController = {
       custom = typeof emp.salary_structure === 'string' ? JSON.parse(emp.salary_structure) : emp.salary_structure;
     }
 
-    // Base gross salary (monthly or annualized) - preserve existing formula as default
-    const rawSalary = parseFloat(emp.salary) || 65000;
-    const defaultMonthlyGross = rawSalary > 150000 ? Math.round(rawSalary / 12) : rawSalary;
-    const defaultAnnualCtc = defaultMonthlyGross * 12;
-
-    const monthlyGross = (custom && custom.monthlyGross !== undefined && custom.monthlyGross !== null && custom.monthlyGross !== '')
-      ? Number(custom.monthlyGross)
-      : defaultMonthlyGross;
+    // Base salary added during Add Employee is always the Annual CTC
+    const rawSalary = parseFloat(emp.salary) || 0;
 
     const annualCtc = (custom && custom.annualCtc !== undefined && custom.annualCtc !== null && custom.annualCtc !== '')
       ? Number(custom.annualCtc)
-      : defaultAnnualCtc;
+      : rawSalary;
+
+    const monthlyGross = (custom && custom.monthlyGross !== undefined && custom.monthlyGross !== null && custom.monthlyGross !== '')
+      ? Number(custom.monthlyGross)
+      : (annualCtc > 0 ? Math.round(annualCtc / 12) : 0);
 
     // Earnings
     const basic = (custom && custom.basic !== undefined && custom.basic !== null && custom.basic !== '')
@@ -92,11 +90,11 @@ export const payrollController = {
 
     const conveyance = (custom && custom.conveyance !== undefined && custom.conveyance !== null && custom.conveyance !== '')
       ? Number(custom.conveyance)
-      : 1600;
+      : (monthlyGross >= 15000 ? 1600 : Math.round(monthlyGross * 0.10));
 
     const medical = (custom && custom.medical !== undefined && custom.medical !== null && custom.medical !== '')
       ? Number(custom.medical)
-      : 1250;
+      : (monthlyGross >= 15000 ? 1250 : Math.round(monthlyGross * 0.05));
 
     const special = (custom && custom.special !== undefined && custom.special !== null && custom.special !== '')
       ? Number(custom.special)
@@ -109,7 +107,7 @@ export const payrollController = {
 
     const professionalTax = (custom && custom.professionalTax !== undefined && custom.professionalTax !== null && custom.professionalTax !== '')
       ? Number(custom.professionalTax)
-      : 200;
+      : (monthlyGross >= 15000 ? 200 : 0);
 
     const estimatedTds = (custom && custom.tds !== undefined && custom.tds !== null && custom.tds !== '')
       ? Number(custom.tds)
@@ -125,7 +123,7 @@ export const payrollController = {
 
     const netTakeHome = (custom && custom.netTakeHome !== undefined && custom.netTakeHome !== null && custom.netTakeHome !== '')
       ? Number(custom.netTakeHome)
-      : (monthlyGross - totalDeductions);
+      : Math.max(0, monthlyGross - totalDeductions);
 
     // Mask bank account number (show last 4 digits only)
     const rawAcc = (custom?.bankAccountNumber || emp.bank_account_number || emp.bankAccountNumber || '').trim();
