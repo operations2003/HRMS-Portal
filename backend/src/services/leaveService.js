@@ -20,7 +20,7 @@ const resolveRequesterEmployee = async (user) => {
     if (emp) return emp;
   }
 
-  if (user.email && (user.id === 'user-superadmin-shubham' || normalizeRole(user.roleName) === 'superadmin')) {
+  if (user.email && (user.id === 'user-superadmin-shubham' || normalizeRole(user.roleName) === 'superadmin' || normalizeRole(user.roleName) === 'admin')) {
     emp = await employeeRepository.findByEmail(user.email);
     if (emp) return emp;
   }
@@ -591,7 +591,7 @@ export const leaveService = {
     const normRole = normalizeRole(user.roleName);
 
     // Organization boundary check
-    if (normRole !== 'superadmin' && record.orgId !== user.orgId) {
+    if (normRole !== 'superadmin' && normRole !== 'admin' && record.orgId !== user.orgId) {
       const error = new Error('Access denied: Leave request belongs to a different organization.');
       error.statusCode = 403;
       throw error;
@@ -792,7 +792,7 @@ export const leaveService = {
     }
 
     // Organization boundary check
-    if (normRole !== 'superadmin' && record.orgId !== user.orgId) {
+    if (normRole !== 'superadmin' && normRole !== 'admin' && record.orgId !== user.orgId) {
       const error = new Error('Access denied: Leave request belongs to a different organization.');
       error.statusCode = 403;
       throw error;
@@ -904,7 +904,7 @@ export const leaveService = {
     }
 
     // Organization boundary check
-    if (normRole !== 'superadmin' && record.orgId !== user.orgId) {
+    if (normRole !== 'superadmin' && normRole !== 'admin' && record.orgId !== user.orgId) {
       const error = new Error('Access denied: Leave request belongs to a different organization.');
       error.statusCode = 403;
       throw error;

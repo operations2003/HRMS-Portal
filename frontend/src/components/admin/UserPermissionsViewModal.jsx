@@ -41,7 +41,7 @@ export const UserPermissionsViewModal = ({ isOpen, onClose, user }) => {
             {isAdminRole && (
               <span className="text-xs font-semibold text-emerald-600 flex items-center gap-1">
                 <ShieldCheck className="w-3.5 h-3.5" />
-                Unrestricted SuperAdmin Scope
+                Unrestricted Admin Scope
               </span>
             )}
           </div>

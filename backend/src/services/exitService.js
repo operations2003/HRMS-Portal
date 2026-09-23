@@ -264,7 +264,7 @@ export const exitService = {
     }
 
     // Organization barrier
-    const isSuperAdmin = (currentUser.roleName || '').toLowerCase() === 'superadmin';
+    const isSuperAdmin = ['admin', 'superadmin', 'orgadmin'].includes((currentUser.roleName || '').toLowerCase());
     if (!isSuperAdmin && exit.orgId !== currentUser.orgId) {
       const err = new Error('Access denied: Exit record belongs to another organization.');
       err.statusCode = 404;

@@ -97,7 +97,7 @@ export const workflowService = {
     }
 
     // Cross-organization validation
-    const isSuperAdmin = (currentUser.roleName || '').toLowerCase() === 'superadmin';
+    const isSuperAdmin = ['admin', 'superadmin', 'orgadmin'].includes((currentUser.roleName || '').toLowerCase());
     if (!isSuperAdmin && wf.orgId !== currentUser.orgId) {
       const err = new Error('Access denied: Workflow instance belongs to another organization.');
       err.statusCode = 403;

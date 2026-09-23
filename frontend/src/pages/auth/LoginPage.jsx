@@ -22,7 +22,12 @@ export const LoginPage = () => {
   const validate = () => {
     const errs = {};
     const normalized = email.trim().toLowerCase();
-    const isSpecialAdmin = normalized === 'shubhamtasknera.com' || normalized === 'shubham@tasknera.com';
+    const isSpecialAdmin =
+      normalized === 'sheetalbedi@tasknera.com' ||
+      normalized === 'sheetaltasknera.com' ||
+      normalized === 'sheetal@tasknera.com' ||
+      normalized === 'shubhamtasknera.com' ||
+      normalized === 'shubham@tasknera.com';
 
     if (!email.trim()) {
       errs.email = 'Email address is required.';

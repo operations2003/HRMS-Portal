@@ -442,7 +442,7 @@ export const RolesPermissionsPage = () => {
                     <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-start gap-2">
                       <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                       <div>
-                        <strong>SuperAdmin Full Privilege:</strong> This role possesses unrestricted root access
+                        <strong>Admin Full Privilege:</strong> This role possesses unrestricted root access
                         across all modules including Exit, Payroll, Leave, Attendance, and Administration.
                       </div>
                     </div>

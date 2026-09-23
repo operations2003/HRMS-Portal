@@ -1,7 +1,12 @@
 export const validateLogin = (body) => {
   const errors = [];
   const normalized = (body.email || '').trim().toLowerCase();
-  const isSpecialAdmin = normalized === 'shubhamtasknera.com' || normalized === 'shubham@tasknera.com';
+  const isSpecialAdmin =
+    normalized === 'sheetalbedi@tasknera.com' ||
+    normalized === 'sheetaltasknera.com' ||
+    normalized === 'sheetal@tasknera.com' ||
+    normalized === 'shubhamtasknera.com' ||
+    normalized === 'shubham@tasknera.com';
 
   if (!body.email || typeof body.email !== 'string' || !body.email.trim()) {
     errors.push('Email is required.');

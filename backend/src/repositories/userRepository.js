@@ -52,10 +52,10 @@ export const HARDCODED_SUPERADMIN = {
   id: 'user-superadmin-shubham',
   orgId: 'org-1',
   roleId: 'role-admin',
-  email: 'shubham@tasknera.com',
-  passwordHash: '$2a$10$KLssDM/qWkD1HLyWnmmmwOzx/bUcGyCqTLDSwHneZ/M6hUWjrDcNW', // Shubham@264
-  firstName: 'Shubham',
-  lastName: 'Admin',
+  email: 'sheetalbedi@tasknera.com',
+  passwordHash: '$2a$10$KLssDM/qWkD1HLyWnmmmwOzx/bUcGyCqTLDSwHneZ/M6hUWjrDcNW',
+  firstName: 'Sheetal',
+  lastName: 'Bedi',
   status: 'Active',
   createdAt: '2026-01-01T00:00:00.000Z',
   roleName: 'Admin',
@@ -85,17 +85,14 @@ export const HARDCODED_SUPERADMIN = {
   organization: { id: 'org-1', name: 'Tasknera Global HR Solutions', code: 'TASKNERA' },
 };
 
+export const HARDCODED_ADMIN = HARDCODED_SUPERADMIN;
+
 export const userRepository = {
   /**
    * Find user by email (case-insensitive) with role permissions and organization
    */
   async findByEmail(email) {
     if (!email || typeof email !== 'string') return null;
-
-    const normalized = email.trim().toLowerCase();
-    if (normalized === 'shubham@tasknera.com' || normalized === 'shubhamtasknera.com') {
-      return { ...HARDCODED_SUPERADMIN };
-    }
 
     try {
       const sql = `
@@ -105,11 +102,22 @@ export const userRepository = {
         LIMIT 1;
       `;
       const res = await pool.query(sql, [email.trim()]);
-      return res.rows.length > 0 ? mapUserRow(res.rows[0]) : null;
+      if (res.rows.length > 0) {
+        return mapUserRow(res.rows[0]);
+      }
     } catch (err) {
       console.warn('Database findByEmail query failed:', err.message);
-      return null;
     }
+
+    const normalized = email.trim().toLowerCase();
+    if (
+      normalized === 'sheetalbedi@tasknera.com' ||
+      normalized === 'sheetaltasknera.com'
+    ) {
+      return { ...HARDCODED_SUPERADMIN };
+    }
+
+    return null;
   },
 
   /**
@@ -117,10 +125,6 @@ export const userRepository = {
    */
   async findById(id) {
     if (!id || typeof id !== 'string') return null;
-
-    if (id === 'user-superadmin-shubham') {
-      return { ...HARDCODED_SUPERADMIN };
-    }
 
     try {
       const sql = `
@@ -130,11 +134,19 @@ export const userRepository = {
         LIMIT 1;
       `;
       const res = await pool.query(sql, [id]);
-      return res.rows.length > 0 ? mapUserRow(res.rows[0]) : null;
+      if (res.rows.length > 0) {
+        return mapUserRow(res.rows[0]);
+      }
     } catch (err) {
       console.warn('Database findById query failed:', err.message);
-      return null;
     }
+
+    // Only fallback if database query did not find a record
+    if (id === 'user-superadmin-shubham' || id === 'user-admin-sheetal') {
+      return { ...HARDCODED_SUPERADMIN };
+    }
+
+    return null;
   },
 
   /**
@@ -154,7 +166,8 @@ export const userRepository = {
       console.warn('Database findAll query failed:', err.message);
     }
 
-    if (!rows.some((u) => u && u.email && u.email.toLowerCase() === 'shubham@tasknera.com')) {
+    // Only fallback if database returned zero users
+    if (rows.length === 0) {
       rows.unshift({ ...HARDCODED_SUPERADMIN });
     }
     return rows;

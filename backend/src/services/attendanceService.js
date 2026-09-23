@@ -19,8 +19,8 @@ const resolveRequesterEmployee = async (user) => {
     if (emp) return emp;
   }
 
-  // 3. Fall back without org constraint if user is superadmin
-  if (user.email && (user.id === 'user-superadmin-shubham' || normalizeRole(user.roleName) === 'superadmin')) {
+  // 3. Fall back without org constraint if user is superadmin or admin
+  if (user.email && (user.id === 'user-superadmin-shubham' || normalizeRole(user.roleName) === 'superadmin' || normalizeRole(user.roleName) === 'admin')) {
     emp = await employeeRepository.findByEmail(user.email);
     if (emp) return emp;
   }
@@ -328,7 +328,7 @@ export const attendanceService = {
         error.statusCode = 404;
         throw error;
       }
-      if (normRole !== 'superadmin' && targetEmployee.orgId !== user.orgId) {
+      if (normRole !== 'superadmin' && normRole !== 'admin' && targetEmployee.orgId !== user.orgId) {
         const error = new Error('Access denied: Cannot record attendance for an employee in a different organization.');
         error.statusCode = 403;
         throw error;
@@ -435,7 +435,7 @@ export const attendanceService = {
         error.statusCode = 404;
         throw error;
       }
-      if (normRole !== 'superadmin' && targetEmployee.orgId !== user.orgId) {
+      if (normRole !== 'superadmin' && normRole !== 'admin' && targetEmployee.orgId !== user.orgId) {
         const error = new Error('Access denied: Cannot record attendance for an employee in a different organization.');
         error.statusCode = 403;
         throw error;
@@ -733,7 +733,7 @@ export const attendanceService = {
     const normRole = normalizeRole(user.roleName);
 
     // Organization boundary check
-    if (normRole !== 'superadmin' && record.orgId !== user.orgId) {
+    if (normRole !== 'superadmin' && normRole !== 'admin' && record.orgId !== user.orgId) {
       const error = new Error('Access denied: Attendance record belongs to a different organization.');
       error.statusCode = 403;
       throw error;
@@ -859,7 +859,7 @@ export const attendanceService = {
     const normRole = normalizeRole(user.roleName);
 
     // Organization boundary check
-    if (normRole !== 'superadmin' && record.orgId !== user.orgId) {
+    if (normRole !== 'superadmin' && normRole !== 'admin' && record.orgId !== user.orgId) {
       const error = new Error('Access denied: Attendance record belongs to a different organization.');
       error.statusCode = 403;
       throw error;
@@ -933,7 +933,7 @@ export const attendanceService = {
     }
 
     // Organization boundary check
-    if (normRole !== 'superadmin' && record.orgId !== user.orgId) {
+    if (normRole !== 'superadmin' && normRole !== 'admin' && record.orgId !== user.orgId) {
       const error = new Error('Access denied: Attendance record belongs to a different organization.');
       error.statusCode = 403;
       throw error;
