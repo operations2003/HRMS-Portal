@@ -82,9 +82,11 @@ export const ApplyLeaveModal = ({
   leaveBalances = [],
 }) => {
   const { user, hasRole } = useAuth();
+  const normRole = (user?.roleName || '').toLowerCase();
+  const isAdminOrCeo = ['admin', 'superadmin', 'orgadmin'].some(r => normRole.includes(r)) || user?.email === 'sheetalbedi@tasknera.com';
   const canApplyForTeam = hasRole(['Manager', 'HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']);
   
-  const [targetEmployeeId, setTargetEmployeeId] = useState('SELF');
+  const [targetEmployeeId, setTargetEmployeeId] = useState(isAdminOrCeo ? '' : 'SELF');
   const [teamMembers, setTeamMembers] = useState([]);
   const [loadingTeam, setLoadingTeam] = useState(false);
 
@@ -97,13 +99,16 @@ export const ApplyLeaveModal = ({
         .then((res) => {
           const list = Array.isArray(res) ? res : res?.data || [];
           setTeamMembers(list);
+          if (isAdminOrCeo && list.length > 0 && (!targetEmployeeId || targetEmployeeId === 'SELF')) {
+            setTargetEmployeeId(list[0].id);
+          }
         })
         .catch((err) => {
           console.warn('Could not load direct reports for manager leave application:', err);
         })
         .finally(() => setLoadingTeam(false));
     }
-  }, [isOpen, canApplyForTeam]);
+  }, [isOpen, canApplyForTeam, isAdminOrCeo]);
 
   const selectedMember = teamMembers.find((m) => m.id === targetEmployeeId);
   const userGender = String(user?.gender || user?.employee?.gender || '').toUpperCase();
@@ -365,7 +370,7 @@ export const ApplyLeaveModal = ({
               value={targetEmployeeId}
               onChange={(e) => setTargetEmployeeId(e.target.value)}
               options={[
-                { value: 'SELF', label: `Self (${user?.firstName || 'My Account'}) - Standard Leaves` },
+                ...(!isAdminOrCeo ? [{ value: 'SELF', label: `Self (${user?.firstName || 'My Account'}) - Standard Leaves` }] : []),
                 ...teamMembers.map((m) => ({
                   value: m.id,
                   label: `${m.firstName} ${m.lastName} (${m.employeeCode || m.designation?.title || 'Reportee'})`,

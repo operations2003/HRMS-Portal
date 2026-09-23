@@ -375,6 +375,14 @@ export const leaveService = {
     const targetEmployeeId = data.employeeId && data.employeeId.trim() ? data.employeeId.trim() : callerEmp.id;
     const isSelf = targetEmployeeId === callerEmp.id;
 
+    const normRole = (user.roleName || user.role || '').toLowerCase();
+    const isAdminOrCeo = ['admin', 'superadmin', 'orgadmin'].some((r) => normRole.includes(r)) || (user.email || '').toLowerCase() === 'sheetalbedi@tasknera.com';
+    if (isSelf && isAdminOrCeo) {
+      const error = new Error('Access denied: Company Administrators and executive CEOs do not apply for employee leave.');
+      error.statusCode = 403;
+      throw error;
+    }
+
     let targetEmp = callerEmp;
     if (!isSelf) {
       targetEmp = await employeeRepository.findById(targetEmployeeId);
