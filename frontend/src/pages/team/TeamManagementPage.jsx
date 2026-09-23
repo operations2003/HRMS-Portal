@@ -19,15 +19,22 @@ import {
   Timer,
   ChevronRight,
   TrendingUp,
+  FileText,
+  Download,
+  Check,
+  X,
+  FileCheck,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { teamService } from '../../services/teamService.js';
 import { managerService } from '../../services/managerService.js';
 import { departmentService } from '../../services/departmentService.js';
+import { documentService } from '../../services/documentService.js';
 import { Button } from '../../components/common/Button.jsx';
 import { Badge } from '../../components/common/Badge.jsx';
 import { DataTable } from '../../components/common/DataTable.jsx';
+import { Modal } from '../../components/common/Modal.jsx';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
 import { EmptyState } from '../../components/common/EmptyState.jsx';
 import { TeamMemberDetailModal } from '../../components/team/TeamMemberDetailModal.jsx';
@@ -73,9 +80,22 @@ export const TeamManagementPage = () => {
   const [approvalAction, setApprovalAction] = useState({ isOpen: false, item: null, type: 'APPROVE' });
   const [selectedAttendanceDetail, setSelectedAttendanceDetail] = useState(null);
 
+  // Team Documents State
+  const [teamDocuments, setTeamDocuments] = useState([]);
+  const [pendingDocCount, setPendingDocCount] = useState(0);
+  const [docPage, setDocPage] = useState(1);
+  const [docSearchQuery, setDocSearchQuery] = useState('');
+  const [docStatusFilter, setDocStatusFilter] = useState('ALL');
+  const [docCategoryFilter, setDocCategoryFilter] = useState('ALL');
+  const [rejectModalDoc, setRejectModalDoc] = useState(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [isVerifyingDoc, setIsVerifyingDoc] = useState(false);
+  const [previewDocModal, setPreviewDocModal] = useState(null);
+
   useEffect(() => {
     if (isAuthorized) {
       loadDepartments();
+      loadPendingDocCount();
     }
   }, [isAuthorized]);
 
@@ -85,13 +105,33 @@ export const TeamManagementPage = () => {
     } else {
       setIsLoading(false);
     }
-  }, [activeTab, selectedDate, selectedDept, selectedStatus, attendanceStatusFilter, isAuthorized]);
+  }, [
+    activeTab,
+    selectedDate,
+    selectedDept,
+    selectedStatus,
+    attendanceStatusFilter,
+    docSearchQuery,
+    docStatusFilter,
+    docCategoryFilter,
+    isAuthorized,
+  ]);
 
   const loadDepartments = async () => {
     try {
       const res = await departmentService.getAllDepartments();
       const list = res.items || res.data || (Array.isArray(res) ? res : []);
       setDepartments(list);
+    } catch {
+      // Non-blocking
+    }
+  };
+
+  const loadPendingDocCount = async () => {
+    try {
+      const res = await teamService.getTeamDocuments({ status: 'PENDING' });
+      const list = Array.isArray(res) ? res : (res?.data || []);
+      setPendingDocCount(list.length);
     } catch {
       // Non-blocking
     }
@@ -130,6 +170,14 @@ export const TeamManagementPage = () => {
       } else if (activeTab === 'leaves') {
         const res = await managerService.getTeamLeaves();
         setLeaves(res.items || res.data || (Array.isArray(res) ? res : []));
+      } else if (activeTab === 'documents') {
+        const docs = await teamService.getTeamDocuments({
+          search: docSearchQuery || undefined,
+          status: docStatusFilter !== 'ALL' ? docStatusFilter : undefined,
+          category: docCategoryFilter !== 'ALL' ? docCategoryFilter : undefined,
+        });
+        const docList = Array.isArray(docs) ? docs : (docs?.data || []);
+        setTeamDocuments(docList);
       }
     } catch (err) {
       const msg = err.message || `Failed to load ${activeTab} data.`;
@@ -464,6 +512,243 @@ export const TeamManagementPage = () => {
     },
   ];
 
+  // Document Actions
+  const handleApproveDoc = async (doc) => {
+    try {
+      setIsVerifyingDoc(true);
+      await teamService.verifyTeamDocument(doc.id, { verificationStatus: 'VERIFIED' });
+      toast.success(`Approved "${doc.title}".`);
+      setPendingDocCount((prev) => Math.max(0, prev - 1));
+      loadTabData();
+    } catch (err) {
+      toast.error(err.message || 'Failed to approve document.');
+    } finally {
+      setIsVerifyingDoc(false);
+    }
+  };
+
+  const handleRejectDoc = async () => {
+    if (!rejectModalDoc) return;
+    if (!rejectReason.trim()) {
+      toast.error('Please enter or select a rejection reason.');
+      return;
+    }
+    try {
+      setIsVerifyingDoc(true);
+      await teamService.verifyTeamDocument(rejectModalDoc.id, {
+        verificationStatus: 'REJECTED',
+        rejectionReason: rejectReason.trim(),
+      });
+      toast.success(`Rejected "${rejectModalDoc.title}".`);
+      setPendingDocCount((prev) => Math.max(0, prev - 1));
+      setRejectModalDoc(null);
+      setRejectReason('');
+      loadTabData();
+    } catch (err) {
+      toast.error(err.message || 'Failed to reject document.');
+    } finally {
+      setIsVerifyingDoc(false);
+    }
+  };
+
+  const handlePreviewDoc = async (doc) => {
+    try {
+      const { blob, contentType } = await documentService.getDocumentBlob(doc.id);
+      const blobUrl = window.URL.createObjectURL(blob);
+      setPreviewDocModal({
+        doc,
+        blobUrl,
+        contentType,
+        isImage: (contentType || doc.mimeType || '').startsWith('image/'),
+        isPdf: (contentType || doc.mimeType || '').includes('pdf'),
+      });
+    } catch (err) {
+      documentService.downloadDocument(doc.id, doc.title);
+    }
+  };
+
+  const QUICK_DOC_REJECTION_REASONS = [
+    'Blurry or difficult to read',
+    'Document has expired',
+    'Name does not match profile',
+    'Missing signature or official stamp',
+    'Incomplete pages or cut-off corners',
+  ];
+
+  const totalDocPages = Math.ceil(teamDocuments.length / pageSize) || 1;
+  const paginatedDocs = teamDocuments.slice((docPage - 1) * pageSize, docPage * pageSize);
+  const docPagination = {
+    page: docPage,
+    totalPages: totalDocPages,
+    totalItems: teamDocuments.length,
+    pageSize,
+  };
+
+  const documentColumns = [
+    {
+      header: 'Team Member',
+      render: (row) => {
+        const name = row.employeeName || `${row.employeeFirstName || ''} ${row.employeeLastName || ''}`.trim() || 'Team Member';
+        const code = row.employeeCode || row.ownerId?.slice(0, 8);
+        const dept = row.departmentName || 'Team';
+        return (
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-brand-50 text-brand-700 flex items-center justify-center font-bold text-xs shrink-0 ring-1 ring-brand-200">
+              {row.employeeFirstName?.[0] || name?.[0] || 'U'}
+            </div>
+            <div>
+              <p className="font-semibold text-slate-800 text-xs">{name}</p>
+              <p className="text-[11px] text-slate-400">
+                {dept} • <span className="font-mono">ID: {code}</span>
+              </p>
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      header: 'Document Name & Category',
+      render: (row) => {
+        const catMap = {
+          IDENTITY: 'ID Proof',
+          OFFER: 'Offer Letter',
+          EDUCATION: 'Education',
+          EXPERIENCE: 'Experience',
+          TAX: 'Tax Document',
+          MEDICAL: 'Medical',
+          OTHER: 'Other',
+        };
+        const catLabel = catMap[row.category] || row.category || 'General';
+        return (
+          <div>
+            <p className="text-xs font-semibold text-slate-900 flex items-center gap-1.5">
+              <FileText className="w-3.5 h-3.5 text-brand-600 shrink-0" />
+              {row.title}
+            </p>
+            <span className="inline-block mt-0.5 text-[10px] font-medium text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+              {catLabel}
+            </span>
+          </div>
+        );
+      },
+    },
+    {
+      header: 'Uploaded On',
+      render: (row) => {
+        const dateStr = row.createdAt
+          ? new Date(row.createdAt).toLocaleDateString(undefined, {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric',
+            })
+          : 'Recent';
+        return <span className="text-xs text-slate-600 font-medium">{dateStr}</span>;
+      },
+    },
+    {
+      header: 'Status',
+      render: (row) => {
+        const st = (row.verificationStatus || 'PENDING').toUpperCase();
+        if (st === 'VERIFIED' || st === 'APPROVED') {
+          return (
+            <Badge variant="success" size="sm">
+              Approved
+            </Badge>
+          );
+        }
+        if (st === 'REJECTED') {
+          return (
+            <div>
+              <Badge variant="danger" size="sm">
+                Rejected
+              </Badge>
+              {row.rejectionReason && (
+                <p className="text-[10px] text-rose-600 mt-0.5 max-w-xs truncate" title={row.rejectionReason}>
+                  {row.rejectionReason}
+                </p>
+              )}
+            </div>
+          );
+        }
+        return (
+          <Badge variant="warning" size="sm">
+            Pending Review
+          </Badge>
+        );
+      },
+    },
+    {
+      header: 'Action',
+      className: 'text-right',
+      render: (row) => {
+        const st = (row.verificationStatus || 'PENDING').toUpperCase();
+        return (
+          <div className="flex items-center justify-end gap-1.5">
+            <Button
+              size="xs"
+              variant="ghost"
+              icon={Eye}
+              title="View Document"
+              onClick={() => handlePreviewDoc(row)}
+            >
+              View
+            </Button>
+            <Button
+              size="xs"
+              variant="ghost"
+              icon={Download}
+              title="Download Document"
+              onClick={() => documentService.downloadDocument(row.id, row.title)}
+            >
+              Download
+            </Button>
+
+            {st === 'PENDING' ? (
+              <>
+                <Button
+                  size="xs"
+                  variant="success"
+                  icon={CheckCircle2}
+                  disabled={isVerifyingDoc}
+                  onClick={() => handleApproveDoc(row)}
+                >
+                  Approve
+                </Button>
+                <Button
+                  size="xs"
+                  variant="danger"
+                  icon={XCircle}
+                  disabled={isVerifyingDoc}
+                  onClick={() => {
+                    setRejectModalDoc(row);
+                    setRejectReason('');
+                  }}
+                >
+                  Reject
+                </Button>
+              </>
+            ) : (
+              <Button
+                size="xs"
+                variant="outline"
+                onClick={() => {
+                  if (st === 'VERIFIED' || st === 'APPROVED') {
+                    setRejectModalDoc(row);
+                    setRejectReason('');
+                  } else {
+                    handleApproveDoc(row);
+                  }
+                }}
+              >
+                {st === 'VERIFIED' || st === 'APPROVED' ? 'Reject' : 'Approve'}
+              </Button>
+            )}
+          </div>
+        );
+      },
+    },
+  ];
+
   return (
     <div className="space-y-6 pb-12">
       {/* Top Header */}
@@ -475,10 +760,10 @@ export const TeamManagementPage = () => {
             </span>
           </div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-            Team Supervision & Attendance Console
+            Team Management
           </h1>
           <p className="text-sm text-slate-500">
-            Monitor direct reports, inspect daily clock-in records, and manage supervisory approvals.
+            View your team members, check daily attendance, review leaves, and check documents.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -505,7 +790,7 @@ export const TeamManagementPage = () => {
           }`}
         >
           <Users className="w-4 h-4" />
-          Team Roster ({members.length})
+          Team Members ({members.length})
         </button>
         <button
           type="button"
@@ -517,7 +802,7 @@ export const TeamManagementPage = () => {
           }`}
         >
           <Clock className="w-4 h-4" />
-          Team Attendance ({attendance.length})
+          Attendance ({attendance.length})
         </button>
         <button
           type="button"
@@ -529,7 +814,19 @@ export const TeamManagementPage = () => {
           }`}
         >
           <CalendarDays className="w-4 h-4" />
-          Team Leaves ({safeLeaves.filter((l) => l.status === 'PENDING').length} Pending)
+          Leaves ({safeLeaves.filter((l) => l.status === 'PENDING').length} Pending)
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('documents')}
+          className={`pb-3 transition-colors flex items-center gap-2 ${
+            activeTab === 'documents'
+              ? 'text-brand-600 border-b-2 border-brand-600'
+              : 'text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          <FileText className="w-4 h-4" />
+          Team Documents ({pendingDocCount > 0 ? `${pendingDocCount} Pending` : teamDocuments.length})
         </button>
       </div>
 
@@ -786,6 +1083,138 @@ export const TeamManagementPage = () => {
         </div>
       )}
 
+      {/* Tab 4: Team Documents */}
+      {activeTab === 'documents' && (
+        <div className="space-y-4">
+          {/* Filters toolbar */}
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50/70 p-3 rounded-2xl border border-slate-200/80">
+            {/* Search Input */}
+            <div className="relative w-full sm:w-72">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search by member name or title..."
+                value={docSearchQuery}
+                onChange={(e) => {
+                  setDocSearchQuery(e.target.value);
+                  setDocPage(1);
+                }}
+                className="w-full pl-9 pr-4 py-2 text-xs rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+              />
+            </div>
+
+            {/* Quick Status and Category Filters */}
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Category Dropdown */}
+              <select
+                value={docCategoryFilter}
+                onChange={(e) => {
+                  setDocCategoryFilter(e.target.value);
+                  setDocPage(1);
+                }}
+                className="text-xs px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-500"
+              >
+                <option value="ALL">All Categories</option>
+                <option value="IDENTITY">ID Proof</option>
+                <option value="OFFER">Offer Letter & Contract</option>
+                <option value="EDUCATION">Education Certificates</option>
+                <option value="EXPERIENCE">Experience Letters</option>
+                <option value="TAX">Tax Documents</option>
+                <option value="MEDICAL">Medical Certificates</option>
+                <option value="OTHER">Other Documents</option>
+              </select>
+
+              {/* Status Buttons */}
+              <div className="flex items-center gap-1 bg-slate-200/60 p-1 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDocStatusFilter('ALL');
+                    setDocPage(1);
+                  }}
+                  className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-all ${
+                    docStatusFilter === 'ALL'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  All
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDocStatusFilter('PENDING');
+                    setDocPage(1);
+                  }}
+                  className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-all ${
+                    docStatusFilter === 'PENDING'
+                      ? 'bg-amber-500 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-amber-700'
+                  }`}
+                >
+                  Pending Review ({pendingDocCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDocStatusFilter('VERIFIED');
+                    setDocPage(1);
+                  }}
+                  className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-all ${
+                    docStatusFilter === 'VERIFIED'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-emerald-700'
+                  }`}
+                >
+                  Approved
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDocStatusFilter('REJECTED');
+                    setDocPage(1);
+                  }}
+                  className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-all ${
+                    docStatusFilter === 'REJECTED'
+                      ? 'bg-rose-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-rose-700'
+                  }`}
+                >
+                  Rejected
+                </button>
+              </div>
+
+              {(docSearchQuery || docStatusFilter !== 'ALL' || docCategoryFilter !== 'ALL') && (
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  onClick={() => {
+                    setDocSearchQuery('');
+                    setDocStatusFilter('ALL');
+                    setDocCategoryFilter('ALL');
+                    setDocPage(1);
+                  }}
+                >
+                  Reset
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Documents Table */}
+          <DataTable
+            columns={documentColumns}
+            data={paginatedDocs}
+            pagination={docPagination}
+            onPageChange={setDocPage}
+            isLoading={isLoading}
+            error={error}
+            emptyTitle="No team documents found"
+            emptyDescription="Documents uploaded by your team members will appear here for verification."
+          />
+        </div>
+      )}
+
       {/* Modals */}
       <TeamMemberDetailModal
         isOpen={Boolean(selectedMember)}
@@ -814,6 +1243,135 @@ export const TeamManagementPage = () => {
         onClose={() => setSelectedAttendanceDetail(null)}
         record={selectedAttendanceDetail}
       />
+
+      {/* Document Rejection Modal */}
+      <Modal
+        isOpen={Boolean(rejectModalDoc)}
+        onClose={() => {
+          setRejectModalDoc(null);
+          setRejectReason('');
+        }}
+        title="Reject Document"
+        subtitle={`Please give a reason for rejecting "${rejectModalDoc?.title || 'this document'}".`}
+        maxWidth="max-w-md"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+              Quick Reasons (click to select)
+            </label>
+            <div className="flex flex-wrap gap-1.5">
+              {QUICK_DOC_REJECTION_REASONS.map((reason) => (
+                <button
+                  key={reason}
+                  type="button"
+                  onClick={() => setRejectReason(reason)}
+                  className={`text-[11px] px-2.5 py-1 rounded-lg border transition-all text-left ${
+                    rejectReason === reason
+                      ? 'bg-rose-50 border-rose-300 text-rose-700 font-semibold'
+                      : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  {reason}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Rejection Reason <span className="text-rose-500">*</span>
+            </label>
+            <textarea
+              rows={3}
+              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500"
+              placeholder="Explain why this document is being rejected..."
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                setRejectModalDoc(null);
+                setRejectReason('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              loading={isVerifyingDoc}
+              onClick={handleRejectDoc}
+            >
+              Confirm Rejection
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Document Preview Modal */}
+      {previewDocModal && (
+        <Modal
+          isOpen={Boolean(previewDocModal)}
+          onClose={() => {
+            if (previewDocModal.blobUrl) window.URL.revokeObjectURL(previewDocModal.blobUrl);
+            setPreviewDocModal(null);
+          }}
+          title={previewDocModal.doc.title || 'Document Preview'}
+          subtitle={previewDocModal.doc.employeeName ? `Uploaded by ${previewDocModal.doc.employeeName}` : ''}
+          maxWidth="max-w-3xl"
+        >
+          <div className="space-y-4">
+            <div className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50 min-h-[350px] max-h-[550px] flex items-center justify-center p-2">
+              {previewDocModal.isImage ? (
+                <img
+                  src={previewDocModal.blobUrl}
+                  alt={previewDocModal.doc.title}
+                  className="max-h-[500px] w-auto mx-auto object-contain rounded"
+                />
+              ) : previewDocModal.isPdf ? (
+                <iframe
+                  src={previewDocModal.blobUrl}
+                  title={previewDocModal.doc.title}
+                  className="w-full h-[500px] rounded"
+                />
+              ) : (
+                <div className="text-center p-8">
+                  <FileText className="w-12 h-12 text-slate-400 mx-auto mb-2" />
+                  <p className="text-sm font-semibold text-slate-700">Preview not available for this file type</p>
+                  <p className="text-xs text-slate-400 mt-1">Please download the file to view its contents.</p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-between items-center pt-2 border-t border-slate-100">
+              <Button
+                variant="outline"
+                size="sm"
+                icon={Download}
+                onClick={() => documentService.downloadDocument(previewDocModal.doc.id, previewDocModal.doc.title)}
+              >
+                Download Document
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  if (previewDocModal.blobUrl) window.URL.revokeObjectURL(previewDocModal.blobUrl);
+                  setPreviewDocModal(null);
+                }}
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };

@@ -52,4 +52,10 @@ router.patch(
   teamController.assignTeamManager
 );
 
+// =====================================================================
+// 7. Team Documents & Approvals
+// =====================================================================
+router.get('/documents', teamController.getTeamDocuments);
+router.patch('/documents/:id/verify', teamController.verifyTeamDocument);
+
 export default router;

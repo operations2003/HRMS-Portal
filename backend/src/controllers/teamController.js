@@ -209,6 +209,54 @@ export const teamController = {
       next(error);
     }
   },
+
+  /**
+   * GET /api/v1/team/documents
+   * Get documents uploaded by team members
+   */
+  async getTeamDocuments(req, res, next) {
+    try {
+      const filters = {
+        search: req.query.search,
+        status: req.query.status,
+        category: req.query.category,
+      };
+      const docs = await teamService.getTeamDocuments(req.user, filters);
+      return sendSuccess(res, 'Team documents retrieved successfully.', docs);
+    } catch (error) {
+      if (error.statusCode) {
+        return sendError(res, error.message, error.statusCode);
+      }
+      next(error);
+    }
+  },
+
+  /**
+   * PATCH /api/v1/team/documents/:id/verify
+   * Approve or reject a team member's document
+   */
+  async verifyTeamDocument(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { verificationStatus, rejectionReason } = req.body;
+      const updated = await teamService.verifyTeamDocument(req.user, id, {
+        verificationStatus,
+        rejectionReason,
+      });
+      return sendSuccess(
+        res,
+        verificationStatus === 'VERIFIED'
+          ? 'Document approved successfully.'
+          : 'Document rejected successfully.',
+        updated
+      );
+    } catch (error) {
+      if (error.statusCode) {
+        return sendError(res, error.message, error.statusCode);
+      }
+      next(error);
+    }
+  },
 };
 
 export default teamController;

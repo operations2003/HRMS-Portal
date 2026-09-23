@@ -32,21 +32,21 @@ import { Input } from '../common/Input.jsx';
 import { Select } from '../common/Select.jsx';
 
 const CATEGORY_OPTIONS = [
-  { value: 'IDENTITY', label: 'Identity (Passport, PAN, Aadhaar, National ID)' },
-  { value: 'OFFER', label: 'Offer & Employment Contracts' },
-  { value: 'EDUCATION', label: 'Educational Certificates & Degrees' },
-  { value: 'EXPERIENCE', label: 'Previous Experience & Relieving Letters' },
-  { value: 'TAX', label: 'Tax Forms & Declarations' },
+  { value: 'IDENTITY', label: 'ID Proof (Aadhaar, PAN, Passport)' },
+  { value: 'OFFER', label: 'Offer Letter & Job Contract' },
+  { value: 'EDUCATION', label: 'Degree & Educational Certificates' },
+  { value: 'EXPERIENCE', label: 'Past Experience & Relieving Letters' },
+  { value: 'TAX', label: 'Tax Documents (Form 16, etc.)' },
   { value: 'MEDICAL', label: 'Medical & Fitness Certificates' },
-  { value: 'OTHER', label: 'Other Onboarding Documents' },
+  { value: 'OTHER', label: 'Other Documents' },
 ];
 
 const QUICK_REJECTION_REASONS = [
-  'Blurry or illegible scan quality',
-  'Document expired / past validity date',
-  'Name mismatch with HR records',
-  'Missing mandatory signature or official seal',
-  'Incomplete pages / cut-off document borders',
+  'Blurry or difficult to read',
+  'Document has expired',
+  'Name does not match profile',
+  'Missing signature or official stamp',
+  'Incomplete pages or cut-off corners',
 ];
 
 const formatBytes = (bytes, decimals = 1) => {
@@ -128,8 +128,8 @@ export const DocumentVaultUploader = ({
   onUpload,
   onVerify,
   onAcknowledge,
-  titlePrefix = 'Document Vault',
-  subtitle = 'Securely stored verification documents and contract terms.',
+  titlePrefix = 'Documents',
+  subtitle = 'Uploaded documents and files.',
   onDocumentsUpdated,
 }) => {
   const { showSuccess, showError } = useToast();
@@ -331,10 +331,10 @@ export const DocumentVaultUploader = ({
               </div>
               <div>
                 <h3 className="text-sm font-bold text-slate-900 font-display">
-                  Upload Document to Vault
+                  Upload a Document
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Select identity documents, contracts, or educational records for secure cloud storage.
+                  Select an ID card, certificate, or contract to upload.
                 </p>
               </div>
             </div>

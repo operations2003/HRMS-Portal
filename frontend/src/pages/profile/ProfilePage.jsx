@@ -21,8 +21,16 @@ import {
   Upload,
   Trash2,
   Image as ImageIcon,
+  FileText,
+  Download,
+  CheckCircle2,
+  Clock,
+  AlertCircle,
+  File,
+  Eye,
 } from 'lucide-react';
 import { profileService } from '../../services/profileService.js';
+import { documentService } from '../../services/documentService.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { Button } from '../../components/common/Button.jsx';
 import { Input } from '../../components/common/Input.jsx';
@@ -35,12 +43,26 @@ import { useToast } from '../../context/ToastContext.jsx';
 export const ProfilePage = () => {
   const navigate = useNavigate();
   const toast = useToast();
-  const { updateUser } = useAuth();
+  const { user, updateUser } = useAuth();
+
+  const isAdmin = ['admin', 'superadmin', 'orgadmin'].includes(
+    (user?.roleName || user?.role?.name || '').toLowerCase()
+  );
 
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+
+  // Employee Documents State (for non-admin users)
+  const [documents, setDocuments] = useState([]);
+  const [loadingDocs, setLoadingDocs] = useState(false);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+  const [uploadCategory, setUploadCategory] = useState('IDENTITY');
+  const [uploadTitle, setUploadTitle] = useState('');
+  const [uploadFile, setUploadFile] = useState(null);
+  const [uploadError, setUploadError] = useState(null);
+  const docFileInputRef = React.useRef(null);
 
   // Edit Modal State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -86,9 +108,54 @@ export const ProfilePage = () => {
     }
   };
 
+  const fetchMyDocs = async () => {
+    try {
+      setLoadingDocs(true);
+      const docs = await documentService.getMyDocuments();
+      setDocuments(Array.isArray(docs) ? docs : []);
+    } catch (err) {
+      console.error('Failed to load my documents:', err);
+    } finally {
+      setLoadingDocs(false);
+    }
+  };
+
   useEffect(() => {
     fetchProfile();
-  }, []);
+    if (!isAdmin) {
+      fetchMyDocs();
+    }
+  }, [isAdmin]);
+
+  const handleUploadDocument = async (e) => {
+    e.preventDefault();
+    if (!uploadFile) {
+      toast.error('Please select a file to upload.');
+      return;
+    }
+    try {
+      setUploadingDoc(true);
+      setUploadError(null);
+      const formData = new FormData();
+      formData.append('file', uploadFile);
+      formData.append('category', uploadCategory);
+      formData.append('title', uploadTitle || uploadFile.name);
+      formData.append('documentType', uploadCategory === 'IDENTITY' ? 'AADHAAR' : 'CERTIFICATE');
+
+      await documentService.uploadMyDocument(formData);
+      toast.success('Document uploaded successfully.');
+      setUploadFile(null);
+      setUploadTitle('');
+      if (docFileInputRef.current) docFileInputRef.current.value = '';
+      fetchMyDocs();
+    } catch (err) {
+      const msg = err.message || 'Failed to upload document.';
+      setUploadError(msg);
+      toast.error(msg);
+    } finally {
+      setUploadingDoc(false);
+    }
+  };
 
   const handleOpenEdit = () => {
     setFormData({
@@ -448,18 +515,18 @@ export const ProfilePage = () => {
         </div>
       </div>
 
-      {/* Verified Banking & Statutory Details (Protected) */}
+      {/* Verified Banking Details (Protected) */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-6 shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-emerald-600" />
             <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">
-              Banking & Statutory Registrations
+              Banking &amp; Account Details
             </h3>
           </div>
           <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">
             <Lock className="w-3 h-3 text-slate-400" />
-            Read-Only Protection
+            Protected
           </span>
         </div>
 
@@ -486,7 +553,7 @@ export const ProfilePage = () => {
           </div>
 
           <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 space-y-1">
-            <span className="text-slate-400 block">Universal Account No. (UAN)</span>
+            <span className="text-slate-400 block">PF / UAN Number</span>
             <span className="font-mono font-bold text-brand-600 dark:text-brand-400 text-sm">
               {profile?.uanNumber || '101294820194'}
             </span>
@@ -496,7 +563,7 @@ export const ProfilePage = () => {
         {/* Change Request Callout */}
         <div className="p-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
           <p className="text-slate-600 dark:text-slate-300">
-            Need to update bank details or your UAN? Official changes are securely verified by HR & Operations via the Help Desk.
+            Need to update your bank details or UAN? Please submit a request to HR via the Help Desk.
           </p>
           <Button
             size="sm"
@@ -505,10 +572,222 @@ export const ProfilePage = () => {
             onClick={() => navigate('/helpdesk?tab=requests')}
             className="shrink-0"
           >
-            Submit Service Request
+            Submit Request
           </Button>
         </div>
       </div>
+
+      {/* Employee Documents Upload & Verification Section (Hidden for Admin) */}
+      {!isAdmin && (
+        <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-6 shadow-xs space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center ring-1 ring-brand-100">
+                <FileText className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                  My Documents
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Upload your ID proofs, educational certificates, or address documents for verification.
+                </p>
+              </div>
+            </div>
+            <span className="text-xs font-semibold text-slate-500 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-lg">
+              {documents.length} {documents.length === 1 ? 'document' : 'documents'}
+            </span>
+          </div>
+
+          {/* Upload Document Box */}
+          <div className="bg-slate-50/70 dark:bg-slate-800/40 p-4 sm:p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80">
+            <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+              <Upload className="w-3.5 h-3.5 text-brand-600" />
+              Upload a New Document
+            </h4>
+
+            <form onSubmit={handleUploadDocument} className="space-y-4">
+              {uploadError && <Alert variant="danger" message={uploadError} />}
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                    Document Category <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={uploadCategory}
+                    onChange={(e) => setUploadCategory(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  >
+                    <option value="IDENTITY">ID Proof (Aadhaar, PAN, Passport)</option>
+                    <option value="EDUCATION">Degree & Education Certificates</option>
+                    <option value="EXPERIENCE">Past Experience & Relieving Letters</option>
+                    <option value="TAX">Tax Forms & Declarations</option>
+                    <option value="MEDICAL">Medical & Fitness Certificates</option>
+                    <option value="OTHER">Other Documents</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                    Document Title (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Aadhaar Card Copy"
+                    value={uploadTitle}
+                    onChange={(e) => setUploadTitle(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                    Select File (PDF, PNG, JPG up to 10MB) <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    ref={docFileInputRef}
+                    type="file"
+                    accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx"
+                    onChange={(e) => {
+                      if (e.target.files?.[0]) {
+                        setUploadFile(e.target.files[0]);
+                        if (!uploadTitle) {
+                          const nameWithoutExt = e.target.files[0].name.replace(/\.[^/.]+$/, '');
+                          setUploadTitle(nameWithoutExt);
+                        }
+                      }
+                    }}
+                    className="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100 cursor-pointer"
+                  />
+                </div>
+              </div>
+
+              {uploadFile && (
+                <div className="flex items-center justify-between pt-2">
+                  <span className="text-xs text-slate-500">
+                    Selected file: <strong className="text-slate-700 dark:text-slate-200">{uploadFile.name}</strong> ({(uploadFile.size / 1024).toFixed(0)} KB)
+                  </span>
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="sm"
+                    loading={uploadingDoc}
+                    icon={Upload}
+                  >
+                    Confirm &amp; Upload
+                  </Button>
+                </div>
+              )}
+            </form>
+          </div>
+
+          {/* List of Uploaded Documents */}
+          <div className="space-y-3">
+            <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+              Uploaded Documents
+            </h4>
+
+            {loadingDocs ? (
+              <div className="py-8 flex flex-col items-center justify-center">
+                <LoadingSpinner size="md" />
+                <p className="text-xs text-slate-500 mt-2">Loading documents...</p>
+              </div>
+            ) : documents.length === 0 ? (
+              <div className="text-center py-8 bg-slate-50 dark:bg-slate-800/20 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+                <File className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  No documents uploaded yet
+                </p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Use the upload section above to submit your documents.
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200/80 dark:border-slate-800 rounded-xl overflow-hidden">
+                {documents.map((doc) => {
+                  const status = (doc.verificationStatus || 'PENDING').toUpperCase();
+                  const catMap = {
+                    IDENTITY: 'ID Proof',
+                    OFFER: 'Offer Letter',
+                    EDUCATION: 'Education',
+                    EXPERIENCE: 'Experience',
+                    TAX: 'Tax Form',
+                    MEDICAL: 'Medical',
+                    OTHER: 'Other',
+                  };
+                  return (
+                    <div
+                      key={doc.id}
+                      className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center shrink-0">
+                          <FileText className="w-5 h-5 text-brand-600" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h5 className="text-xs font-bold text-slate-900 dark:text-white">
+                              {doc.title}
+                            </h5>
+                            {status === 'VERIFIED' || status === 'APPROVED' ? (
+                              <Badge variant="success" size="sm">
+                                Approved
+                              </Badge>
+                            ) : status === 'REJECTED' ? (
+                              <Badge variant="danger" size="sm">
+                                Rejected
+                              </Badge>
+                            ) : (
+                              <Badge variant="warning" size="sm">
+                                Pending Review
+                              </Badge>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-2 text-[11px] text-slate-500 mt-1 flex-wrap">
+                            <span className="font-semibold text-slate-600 dark:text-slate-400">
+                              {catMap[doc.category] || doc.category || 'General'}
+                            </span>
+                            <span>•</span>
+                            <span>
+                              Uploaded on{' '}
+                              {doc.createdAt
+                                ? new Date(doc.createdAt).toLocaleDateString(undefined, {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    year: 'numeric',
+                                  })
+                                : 'Recent'}
+                            </span>
+                          </div>
+
+                          {status === 'REJECTED' && doc.rejectionReason && (
+                            <p className="text-[11px] text-rose-600 bg-rose-50 border border-rose-200 rounded px-2 py-0.5 mt-1.5">
+                              <strong>Reason:</strong> {doc.rejectionReason}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                        <Button
+                          size="xs"
+                          variant="ghost"
+                          icon={Download}
+                          onClick={() => documentService.downloadDocument(doc.id, doc.title)}
+                        >
+                          Download
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Edit Personal Information Modal */}
       <Modal

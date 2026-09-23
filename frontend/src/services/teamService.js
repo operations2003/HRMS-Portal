@@ -93,6 +93,21 @@ export const teamService = {
     const res = await http.patch('/v1/team/assign', data);
     return res.data;
   },
+
+  async getTeamDocuments(params = {}) {
+    const query = new URLSearchParams();
+    if (params.search) query.append('search', params.search);
+    if (params.status && params.status !== 'ALL') query.append('status', params.status);
+    if (params.category && params.category !== 'ALL') query.append('category', params.category);
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    const res = await http.get(`/v1/team/documents${qs}`);
+    return res.data;
+  },
+
+  async verifyTeamDocument(documentId, data) {
+    const res = await http.patch(`/v1/team/documents/${documentId}/verify`, data);
+    return res.data;
+  },
 };
 
 export default teamService;

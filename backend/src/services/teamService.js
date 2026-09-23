@@ -1123,6 +1123,198 @@ export const teamService = {
 
     return updated;
   },
+
+  // =========================================================================
+  // 7. Team Documents & Approvals
+  // =========================================================================
+
+  async getTeamDocuments(currentUser, { search = '', status = '', category = '' } = {}) {
+    const isHrAdmin = this.isHrOrAdmin(currentUser);
+    const requesterEmp = await this.resolveEmployee(currentUser);
+
+    let allowedEmployeeIds = [];
+
+    if (isHrAdmin) {
+      // HR and Admin can see all team documents in the organization
+      const emps = await employeeRepository.findAll({ orgId: currentUser.orgId, limit: 500 });
+      allowedEmployeeIds = (emps.employees || emps || []).map((e) => e.id);
+    } else if (this.isManager(currentUser)) {
+      if (!requesterEmp) {
+        return [];
+      }
+      const directReports = await employeeRepository.findDirectReports(requesterEmp.id, currentUser.orgId);
+      allowedEmployeeIds = directReports.map((r) => r.id);
+    } else {
+      if (!requesterEmp) return [];
+      allowedEmployeeIds = [requesterEmp.id];
+    }
+
+    if (allowedEmployeeIds.length === 0) {
+      return [];
+    }
+
+    const whereClauses = [
+      `d.owner_type = 'EMPLOYEE'`,
+      `d.owner_id = ANY($1::varchar[])`,
+    ];
+    const values = [allowedEmployeeIds];
+    let paramIdx = 2;
+
+    if (status && status !== 'ALL') {
+      const normStatus = status.toUpperCase() === 'APPROVED' ? 'VERIFIED' : status.toUpperCase();
+      whereClauses.push(`d.verification_status = $${paramIdx++}`);
+      values.push(normStatus);
+    }
+
+    if (category && category !== 'ALL') {
+      whereClauses.push(`d.category = $${paramIdx++}`);
+      values.push(category);
+    }
+
+    if (search && search.trim()) {
+      const term = `%${search.trim().toLowerCase()}%`;
+      whereClauses.push(`(
+        LOWER(d.title) LIKE $${paramIdx} OR
+        LOWER(e.first_name) LIKE $${paramIdx} OR
+        LOWER(e.last_name) LIKE $${paramIdx} OR
+        LOWER(e.employee_code) LIKE $${paramIdx}
+      )`);
+      values.push(term);
+      paramIdx++;
+    }
+
+    const sql = `
+      SELECT 
+        d.id,
+        d.org_id AS "orgId",
+        d.owner_type AS "ownerType",
+        d.owner_id AS "ownerId",
+        d.category,
+        d.document_type AS "documentType",
+        d.title,
+        d.version,
+        d.file_url AS "fileUrl",
+        d.file_size AS "fileSize",
+        d.mime_type AS "mimeType",
+        d.verification_status AS "verificationStatus",
+        d.verified_by AS "verifiedBy",
+        d.verified_at AS "verifiedAt",
+        d.rejection_reason AS "rejectionReason",
+        d.created_at AS "createdAt",
+        d.updated_at AS "updatedAt",
+        e.first_name AS "employeeFirstName",
+        e.last_name AS "employeeLastName",
+        e.employee_code AS "employeeCode",
+        e.avatar_url AS "employeeAvatar",
+        dept.name AS "departmentName"
+      FROM document_vault d
+      JOIN employees e ON e.id = d.owner_id
+      LEFT JOIN departments dept ON dept.id = e.dept_id
+      WHERE ${whereClauses.join(' AND ')}
+      ORDER BY 
+        CASE WHEN d.verification_status = 'PENDING' THEN 0 ELSE 1 END,
+        d.created_at DESC;
+    `;
+
+    try {
+      const res = await pool.query(sql, values);
+      return res.rows.map((row) => ({
+        ...row,
+        employeeName: `${row.employeeFirstName || ''} ${row.employeeLastName || ''}`.trim() || 'Team Member',
+      }));
+    } catch (err) {
+      logger.error('TeamService', `Failed to query team documents: ${err.message}`);
+      throw err;
+    }
+  },
+
+  async verifyTeamDocument(currentUser, documentId, { verificationStatus, rejectionReason = '' }) {
+    if (!documentId) {
+      const err = new Error('Document ID is required.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const normStatus = (verificationStatus || '').toUpperCase() === 'APPROVED' ? 'VERIFIED' : (verificationStatus || '').toUpperCase();
+    if (!['VERIFIED', 'REJECTED'].includes(normStatus)) {
+      const err = new Error("Verification status must be 'VERIFIED' or 'REJECTED'.");
+      err.statusCode = 400;
+      throw err;
+    }
+
+    // Fetch existing document
+    const docCheck = await pool.query('SELECT * FROM document_vault WHERE id = $1 LIMIT 1', [documentId]);
+    if (docCheck.rows.length === 0) {
+      const err = new Error('Document not found in vault.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const doc = docCheck.rows[0];
+    const isHrAdmin = this.isHrOrAdmin(currentUser);
+
+    // Permission enforcement: Managers can only verify direct reports
+    if (!isHrAdmin) {
+      const requesterEmp = await this.resolveEmployee(currentUser);
+      if (!requesterEmp) {
+        const err = new Error('No employee profile found for your manager account.');
+        err.statusCode = 403;
+        throw err;
+      }
+
+      const targetEmp = await employeeRepository.findById(doc.owner_id);
+      if (!targetEmp || targetEmp.managerId !== requesterEmp.id) {
+        const err = new Error('Access denied: You can only approve or reject documents for your direct team members.');
+        err.statusCode = 403;
+        throw err;
+      }
+    }
+
+    const updateSql = `
+      UPDATE document_vault
+      SET 
+        verification_status = $1,
+        verified_by = $2,
+        verified_at = NOW(),
+        rejection_reason = $3,
+        updated_at = NOW()
+      WHERE id = $4
+      RETURNING *;
+    `;
+
+    const updatedRes = await pool.query(updateSql, [
+      normStatus,
+      currentUser.id,
+      normStatus === 'REJECTED' ? (rejectionReason ? rejectionReason.trim() : 'Document rejected by reviewer') : null,
+      documentId,
+    ]);
+
+    const updatedDoc = updatedRes.rows[0];
+
+    // Notify employee about verification decision
+    try {
+      const targetEmp = await employeeRepository.findById(doc.owner_id);
+      if (targetEmp?.userId) {
+        await pool.query(
+          `INSERT INTO notifications (id, user_id, title, message, type, is_read, created_at)
+           VALUES ($1, $2, $3, $4, $5, false, NOW())`,
+          [
+            `notif-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            targetEmp.userId,
+            normStatus === 'VERIFIED' ? 'Document Approved' : 'Document Rejected',
+            normStatus === 'VERIFIED'
+              ? `Your document '${doc.title}' has been reviewed and approved.`
+              : `Your document '${doc.title}' was rejected. Reason: ${rejectionReason || 'Please resubmit with valid details.'}`,
+            normStatus === 'VERIFIED' ? 'SUCCESS' : 'WARNING',
+          ]
+        );
+      }
+    } catch (notifErr) {
+      logger.warn('TeamService', `Failed to send document verification notification: ${notifErr.message}`);
+    }
+
+    return updatedDoc;
+  },
 };
 
 export default teamService;

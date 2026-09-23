@@ -225,15 +225,15 @@ export const EmployeeDocumentsPage = () => {
             <div>
               <div className="flex items-center gap-2.5 flex-wrap">
                 <h1 className="text-2xl font-black tracking-tight text-slate-900 font-display">
-                  Enterprise Document Vault
+                  Employee Documents
                 </h1>
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                  Encrypted Binary Storage
+                  Safe &amp; Secure
                 </span>
               </div>
               <p className="text-sm text-slate-500 mt-1 max-w-2xl leading-relaxed">
-                Centralized cloud repository for verified identities, employee contracts, regulatory compliance records, and digital acknowledgements.
+                View, upload, and check employee documents like ID cards, certificates, and job contracts.
               </p>
             </div>
           </div>
@@ -295,7 +295,7 @@ export const EmployeeDocumentsPage = () => {
               }`}
             >
               <Users className="w-4 h-4 text-indigo-600" />
-              <span>By Employee Vault</span>
+              <span>By Employee</span>
             </button>
 
             <button
@@ -343,7 +343,7 @@ export const EmployeeDocumentsPage = () => {
           </div>
           <p className="text-xs text-slate-500 mt-1.5 flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-brand-500"></span>
-            Uploaded to secure database vault
+            Stored safely and securely
           </p>
         </div>
 
@@ -368,7 +368,7 @@ export const EmployeeDocumentsPage = () => {
           </div>
           <p className="text-xs text-slate-500 mt-1.5 flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-            Compliance checks passed
+            Verified and approved
           </p>
         </div>
 
@@ -389,13 +389,13 @@ export const EmployeeDocumentsPage = () => {
             </span>
             {pendingCount > 0 && (
               <span className="text-xs font-semibold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded-md animate-pulse">
-                Action required
+                Needs attention
               </span>
             )}
           </div>
           <p className="text-xs text-slate-500 mt-1.5 flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-            Awaiting verification & sign-off
+            Waiting for review
           </p>
         </div>
 
@@ -404,7 +404,7 @@ export const EmployeeDocumentsPage = () => {
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-sky-500 to-blue-500 opacity-90" />
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-sky-700 uppercase tracking-wider">
-              Acknowledged
+              Signed & Accepted
             </span>
             <div className="w-9 h-9 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center ring-1 ring-sky-100 group-hover:scale-105 transition-transform">
               <FileCheck className="w-4 h-4" />
@@ -418,7 +418,7 @@ export const EmployeeDocumentsPage = () => {
           </div>
           <p className="text-xs text-slate-500 mt-1.5 flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-sky-500"></span>
-            Digital receipt acknowledged
+            Signed and accepted
           </p>
         </div>
       </div>
@@ -427,7 +427,7 @@ export const EmployeeDocumentsPage = () => {
       {error && (
         <Alert
           variant="danger"
-          title="Document Vault Error"
+          title="Document Error"
           message={error}
           action={
             <Button size="xs" variant="outline" onClick={() => fetchMyDocuments()}>
@@ -442,9 +442,9 @@ export const EmployeeDocumentsPage = () => {
         <div className="bg-white rounded-2xl border border-slate-200/80 p-16 flex flex-col items-center justify-center text-center shadow-xs">
           <LoadingSpinner size="lg" />
           <p className="text-sm font-semibold text-slate-700 mt-4 font-display">
-            Loading secure document vault...
+            Loading documents...
           </p>
-          <p className="text-xs text-slate-400 mt-1">Verifying encrypted signatures and database records</p>
+          <p className="text-xs text-slate-400 mt-1">Please wait while we load your files</p>
         </div>
       ) : activeTab === 'all' ? (
         /* HR / Admin: Organization-Wide Document Repository */
@@ -574,8 +574,8 @@ export const EmployeeDocumentsPage = () => {
               canUpload={false}
               canVerify={true}
               canAcknowledge={false}
-              titlePrefix="Company Document Repository"
-              subtitle="All documents uploaded across organization departments with real-time verification and compliance controls."
+              titlePrefix="All Documents"
+              subtitle="All documents uploaded by employees across the company."
               onDocumentsUpdated={() => fetchAllDocuments(true)}
             />
           )}
@@ -587,8 +587,8 @@ export const EmployeeDocumentsPage = () => {
           canUpload={true}
           canAcknowledge={true}
           canVerify={false}
-          titlePrefix="My Document Vault"
-          subtitle="Your personal identity verification documents, compliance submissions, and signed employment contracts."
+          titlePrefix="My Documents"
+          subtitle="Your identity proofs, certificates, and employment contracts."
           onDocumentsUpdated={() => fetchMyDocuments(true)}
         />
       ) : (
@@ -603,10 +603,10 @@ export const EmployeeDocumentsPage = () => {
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-slate-900 font-display">
-                    Select Employee Vault
+                    Select Employee
                   </h3>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Review specific employee files, verify submitted certificates, or upload contracts directly.
+                    View and review documents for a specific employee.
                   </p>
                 </div>
               </div>
@@ -675,7 +675,7 @@ export const EmployeeDocumentsPage = () => {
             <div className="bg-white rounded-2xl border border-slate-200/80 p-16 flex flex-col items-center justify-center text-center shadow-xs">
               <LoadingSpinner size="md" />
               <p className="text-xs font-semibold text-slate-600 mt-3 font-display">
-                Loading employee document vault...
+                Loading employee documents...
               </p>
             </div>
           ) : (
@@ -687,10 +687,10 @@ export const EmployeeDocumentsPage = () => {
               canAcknowledge={false}
               titlePrefix={
                 selectedEmpObj
-                  ? `${selectedEmpObj.firstName} ${selectedEmpObj.lastName}'s Document Vault`
-                  : 'Employee Document Vault'
+                  ? `${selectedEmpObj.firstName} ${selectedEmpObj.lastName}'s Documents`
+                  : 'Employee Documents'
               }
-              subtitle="Review verification status, verify submitted proofs, or upload employer-issued contracts."
+              subtitle="Review uploaded documents, approve or reject them, or upload new files."
               onUpload={async (formData) => {
                 await documentService.uploadDocumentForOwner('EMPLOYEE', selectedEmployeeId, formData);
               }}
