@@ -71,6 +71,16 @@ app.use('/api', apiRateLimiter);
 // Mount API Routes
 app.use('/api', apiRouter);
 
+// Root Health / Info endpoint for deployment verification
+app.get('/', (req, res) => {
+  res.status(200).json({
+    status: 'success',
+    message: 'HRMS Portal API Server Running',
+    version: '1.0.0',
+    health: '/api/v1/health',
+  });
+});
+
 // 404 & Centralized Error Handlers
 app.use(notFoundHandler);
 app.use(errorHandler);
