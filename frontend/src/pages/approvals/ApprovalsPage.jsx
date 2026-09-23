@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   CheckCircle2,
   Clock,
@@ -10,6 +11,10 @@ import {
   Award,
   HelpCircle,
   AlertTriangle,
+  ArrowRight,
+  ShieldCheck,
+  Wallet,
+  UserMinus,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
@@ -21,6 +26,7 @@ import { DataTable } from '../../components/common/DataTable.jsx';
 import { ApprovalActionModal } from '../../components/approvals/ApprovalActionModal.jsx';
 
 export const ApprovalsPage = () => {
+  const navigate = useNavigate();
   const { user, hasRole } = useAuth();
   const toast = useToast();
 
@@ -224,6 +230,94 @@ export const ApprovalsPage = () => {
             Refresh Queue
           </Button>
         </div>
+      </div>
+
+      {/* Native Module Jump Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <button
+          type="button"
+          onClick={() => navigate('/leaves?tab=team')}
+          className="flex items-center justify-between p-3 rounded-xl bg-white border border-slate-200 hover:border-brand-300 hover:shadow-xs text-left group transition-all"
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="p-2 rounded-lg bg-brand-50 text-brand-600 group-hover:scale-105 transition-transform shrink-0">
+              <CalendarDays className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-slate-800 truncate">Leave Approvals</p>
+              <p className="text-[10px] text-slate-400">Team Requests</p>
+            </div>
+          </div>
+          <ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-brand-600 group-hover:translate-x-0.5 transition-all shrink-0 ml-1" />
+        </button>
+
+        <button
+          type="button"
+          onClick={() => navigate('/performance')}
+          className="flex items-center justify-between p-3 rounded-xl bg-white border border-slate-200 hover:border-amber-300 hover:shadow-xs text-left group transition-all"
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="p-2 rounded-lg bg-amber-50 text-amber-600 group-hover:scale-105 transition-transform shrink-0">
+              <Award className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-slate-800 truncate">Appraisals</p>
+              <p className="text-[10px] text-slate-400">Reviews & Ratings</p>
+            </div>
+          </div>
+          <ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-amber-600 group-hover:translate-x-0.5 transition-all shrink-0 ml-1" />
+        </button>
+
+        <button
+          type="button"
+          onClick={() => navigate('/attendance')}
+          className="flex items-center justify-between p-3 rounded-xl bg-white border border-slate-200 hover:border-blue-300 hover:shadow-xs text-left group transition-all"
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="p-2 rounded-lg bg-blue-50 text-blue-600 group-hover:scale-105 transition-transform shrink-0">
+              <Clock className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-slate-800 truncate">Attendance</p>
+              <p className="text-[10px] text-slate-400">Regularization</p>
+            </div>
+          </div>
+          <ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-blue-600 group-hover:translate-x-0.5 transition-all shrink-0 ml-1" />
+        </button>
+
+        <button
+          type="button"
+          onClick={() => navigate('/offboarding')}
+          className="flex items-center justify-between p-3 rounded-xl bg-white border border-slate-200 hover:border-purple-300 hover:shadow-xs text-left group transition-all"
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="p-2 rounded-lg bg-purple-50 text-purple-600 group-hover:scale-105 transition-transform shrink-0">
+              <UserMinus className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-slate-800 truncate">Offboarding</p>
+              <p className="text-[10px] text-slate-400">Exit Clearances</p>
+            </div>
+          </div>
+          <ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-purple-600 group-hover:translate-x-0.5 transition-all shrink-0 ml-1" />
+        </button>
+
+        <button
+          type="button"
+          onClick={() => navigate('/payroll')}
+          className="flex items-center justify-between p-3 rounded-xl bg-white border border-slate-200 hover:border-emerald-300 hover:shadow-xs text-left group transition-all"
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="p-2 rounded-lg bg-emerald-50 text-emerald-600 group-hover:scale-105 transition-transform shrink-0">
+              <Wallet className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-slate-800 truncate">Payroll</p>
+              <p className="text-[10px] text-slate-400">Disbursements</p>
+            </div>
+          </div>
+          <ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-emerald-600 group-hover:translate-x-0.5 transition-all shrink-0 ml-1" />
+        </button>
       </div>
 
       {/* Filter Tabs */}
