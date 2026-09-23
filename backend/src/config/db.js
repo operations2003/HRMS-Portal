@@ -4,18 +4,58 @@ import { config } from './index.js';
 const { Pool, Client } = pg;
 
 /**
+ * Validates and sanitizes database connection URLs:
+ * - Strips accidental surrounding quotes
+ * - Safely percent-encodes passwords containing special characters (e.g. '@' -> '%40')
+ *   to prevent connection string parsers from mistaking password fragments for hostnames.
+ */
+export const sanitizeDatabaseUrl = (rawUrl) => {
+  if (!rawUrl || typeof rawUrl !== 'string') return rawUrl;
+
+  let url = rawUrl.trim();
+  if ((url.startsWith('"') && url.endsWith('"')) || (url.startsWith("'") && url.endsWith("'"))) {
+    url = url.slice(1, -1).trim();
+  }
+
+  const lastAt = url.lastIndexOf('@');
+  if (lastAt === -1) return url;
+
+  const credentialsPart = url.substring(0, lastAt);
+  const hostPart = url.substring(lastAt + 1);
+
+  const schemeEnd = credentialsPart.indexOf('://');
+  if (schemeEnd === -1) return url;
+
+  const scheme = credentialsPart.substring(0, schemeEnd + 3);
+  const userInfo = credentialsPart.substring(schemeEnd + 3);
+
+  const colonIdx = userInfo.indexOf(':');
+  if (colonIdx === -1) return url;
+
+  const username = userInfo.substring(0, colonIdx);
+  const password = userInfo.substring(colonIdx + 1);
+
+  const safePassword = encodeURIComponent(decodeURIComponent(password));
+
+  return `${scheme}${username}:${safePassword}@${hostPart}`;
+};
+
+const activeDatabaseUrl = sanitizeDatabaseUrl(config.db.databaseUrl);
+const activeDirectUrl = sanitizeDatabaseUrl(config.db.directUrl);
+
+/**
  * Validates presence of connection strings without printing them.
  */
-if (!config.db.databaseUrl) {
+if (!activeDatabaseUrl) {
   console.warn('⚠️ WARNING: DATABASE_URL is not defined in environment variables.');
 }
 
 /**
  * Standard SSL configuration for Supabase PostgreSQL
  */
-const isLocalDb = !config.db.databaseUrl || 
-  config.db.databaseUrl.includes('localhost') || 
-  config.db.databaseUrl.includes('127.0.0.1') || 
+const isLocalDb = !activeDatabaseUrl || 
+  activeDatabaseUrl.includes('localhost') || 
+  activeDatabaseUrl.includes('127.0.0.1') || 
   process.env.DB_SSL === 'false';
 
 const sslConfig = isLocalDb ? false : {
@@ -27,7 +67,7 @@ const sslConfig = isLocalDb ? false : {
  * Uses DATABASE_URL (Supabase Transaction-mode Pooler, Port 6543)
  */
 export const pool = new Pool({
-  connectionString: config.db.databaseUrl,
+  connectionString: activeDatabaseUrl,
   ssl: sslConfig,
   max: 20, // Max concurrent connections in pool
   idleTimeoutMillis: 30000,
@@ -47,12 +87,12 @@ pool.on('error', (err) => {
  * @returns {Client}
  */
 export const getDirectClient = () => {
-  if (!config.db.directUrl) {
+  if (!activeDirectUrl) {
     throw new Error('DIRECT_URL is not configured in environment variables.');
   }
 
   return new Client({
-    connectionString: config.db.directUrl,
+    connectionString: activeDirectUrl,
     ssl: sslConfig,
     connectionTimeoutMillis: 10000,
   });
