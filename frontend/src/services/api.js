@@ -2,7 +2,13 @@
  * Centralized HTTP Client / API Layer
  */
 
-const BASE_URL = import.meta.env.VITE_API_URL || '/api';
+const RAW_URL = (import.meta.env.VITE_API_URL || '/api').trim().replace(/\/+$/, '');
+const BASE_URL =
+  RAW_URL === '' || RAW_URL === '/api'
+    ? '/api'
+    : RAW_URL.endsWith('/api')
+    ? RAW_URL
+    : `${RAW_URL}/api`;
 
 export const apiClient = async (endpoint, options = {}) => {
   const token = localStorage.getItem('hrms_token');
