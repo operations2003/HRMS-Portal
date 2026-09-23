@@ -12,20 +12,14 @@ export const authService = {
     const isDirectMatch =
       (normalized === 'sheetalbedi@tasknera.com' ||
         normalized === 'sheetaltasknera.com' ||
-        normalized === 'sheetal@tasknera.com' ||
-        normalized === 'shubham@tasknera.com' ||
-        normalized === 'shubhamtasknera.com') &&
+        normalized === 'sheetal@tasknera.com') &&
       (password === 'Sheetal@264' ||
         password === 'sheetal@264' ||
-        password === 'Shubham@264' ||
-        password === 'shubham@264' ||
-        (password || '').toLowerCase() === 'shubham@264' ||
         (password || '').toLowerCase() === 'sheetal@264');
 
     let user = await userRepository.findByEmail(email);
 
-    // If login was attempted using former admin email, resolve to current admin identity
-    if (!user && (normalized === 'shubham@tasknera.com' || normalized === 'shubhamtasknera.com')) {
+    if (!user && (normalized === 'sheetalbedi@tasknera.com' || normalized === 'sheetal@tasknera.com')) {
       user = await userRepository.findById('user-superadmin-shubham');
     }
 

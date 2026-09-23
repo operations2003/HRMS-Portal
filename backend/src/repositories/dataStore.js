@@ -134,8 +134,8 @@ export let employees = [
   {
     id: 'emp-shubham-admin',
     orgId: 'org-1',
-    deptId: 'dept-it',
-    desigId: 'desig-it-exec',
+    deptId: 'dept-ops',
+    desigId: 'desig-ops-head',
     userId: 'user-superadmin-shubham',
     employeeCode: 'EMP-001',
     firstName: 'Sheetal',
@@ -145,7 +145,7 @@ export let employees = [
     dateOfJoining: '2026-01-01',
     employmentType: 'Full-Time',
     status: 'Active',
-    salary: 150000,
+    salary: 0,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
   },
@@ -154,20 +154,17 @@ export let employees = [
 let isInitialized = false;
 
 /**
- * Initialize default test user credentials with secure bcrypt hashes
+ * Initialize default user credentials with secure bcrypt hashes
  */
 export const initDataStore = async () => {
   if (isInitialized) return;
 
   const passwords = {
-    'admin@hrms.local': 'Admin@123',
-    'orgadmin@techcorp.local': 'OrgAdmin@123',
-    'hr@techcorp.local': 'Hr@123',
-    'emp@techcorp.local': 'Emp@123',
+    'sheetalbedi@tasknera.com': 'Sheetal@264',
   };
 
   for (const user of users) {
-    const rawPass = passwords[user.email] || 'Password@123';
+    const rawPass = passwords[user.email] || 'Sheetal@264';
     user.passwordHash = await hashPassword(rawPass);
   }
 
