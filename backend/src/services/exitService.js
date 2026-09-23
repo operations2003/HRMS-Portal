@@ -984,7 +984,12 @@ export const exitService = {
     }
 
     const emp = await employeeRepository.findById(exit.employeeId);
-    const monthlySalary = emp.salary || 0.0;
+    let monthlySalary = 0.0;
+    if (emp.salaryStructure?.monthlyGross) {
+      monthlySalary = parseFloat(emp.salaryStructure.monthlyGross);
+    } else if (emp.salary) {
+      monthlySalary = Math.round((parseFloat(emp.salary) / 12) * 100) / 100;
+    }
     const dailyRate = Math.round((monthlySalary / 30.0) * 100) / 100;
 
     // Calculate payable days

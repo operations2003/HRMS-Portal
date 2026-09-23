@@ -147,6 +147,15 @@ export const LeaveManagementPage = () => {
     try {
       setLoadingBalances(true);
       setBalanceError(null);
+
+      if (isAdminOrCeo) {
+        const types = await leaveService.getLeaveTypes();
+        setLeaveTypes(types || []);
+        setLeaveBalances([]);
+        setLoadingBalances(false);
+        return;
+      }
+
       const [types, balances] = await Promise.all([
         leaveService.getLeaveTypes(),
         leaveService.getMyBalances(),
@@ -158,7 +167,7 @@ export const LeaveManagementPage = () => {
     } finally {
       setLoadingBalances(false);
     }
-  }, []);
+  }, [isAdminOrCeo]);
 
   // Fetch Team KPI stats directly matching leave requests scope
   const fetchTeamStats = useCallback(async () => {
@@ -970,17 +979,17 @@ export const LeaveManagementPage = () => {
               : statusFilter === 'REJECTED'
               ? 'No Rejected Leave Requests'
               : statusFilter === 'ON_LEAVE_TODAY'
-              ? 'No Team Members On Leave Today'
-              : 'No Team Requests Found'
+              ? (isAdminOrCeo ? 'No Employees On Leave Today' : 'No Team Members On Leave Today')
+              : (isAdminOrCeo ? 'No Organization Leave Requests Found' : 'No Team Requests Found')
             : 'No Leave Requests Found'
         }
         emptyDescription={
           activeTab === 'team'
             ? statusFilter === 'PENDING'
-              ? 'All leave requests from your reporting team have been reviewed and actioned.'
+              ? (isAdminOrCeo ? 'All employee leave requests across the organization have been reviewed.' : 'All leave requests from your reporting team have been reviewed and actioned.')
               : statusFilter === 'ON_LEAVE_TODAY'
-              ? 'No team members have active approved leave scheduled for today.'
-              : 'There are no leave requests matching this filter from your authorized team members.'
+              ? (isAdminOrCeo ? 'No employees across the organization have active approved leave scheduled for today.' : 'No team members have active approved leave scheduled for today.')
+              : (isAdminOrCeo ? 'There are no leave requests matching this filter across the organization.' : 'There are no leave requests matching this filter from your authorized team members.')
             : 'You have not submitted any leave requests matching the current filter.'
         }
         pagination={pagination}

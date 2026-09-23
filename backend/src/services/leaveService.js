@@ -324,6 +324,17 @@ export const leaveService = {
    * Get leave balances for the authenticated employee
    */
   async getMyBalances(user, year = new Date().getFullYear(), options = {}) {
+    const allRoles = (Array.isArray(user.roles) ? user.roles : [user.roleName || user.role || ''])
+      .filter(Boolean)
+      .map((r) => String(r).toLowerCase());
+    const isAdminOrCeo =
+      allRoles.some((r) => ['admin', 'superadmin', 'orgadmin'].some((adm) => r.includes(adm))) ||
+      (user.email || '').toLowerCase() === 'sheetalbedi@tasknera.com';
+
+    if (isAdminOrCeo) {
+      return [];
+    }
+
     const emp = await resolveRequesterEmployee(user);
     if (!emp) {
       const error = new Error('No employee profile found for your user account.');
@@ -375,8 +386,13 @@ export const leaveService = {
     const targetEmployeeId = data.employeeId && data.employeeId.trim() ? data.employeeId.trim() : callerEmp.id;
     const isSelf = targetEmployeeId === callerEmp.id;
 
-    const normRole = (user.roleName || user.role || '').toLowerCase();
-    const isAdminOrCeo = ['admin', 'superadmin', 'orgadmin'].some((r) => normRole.includes(r)) || (user.email || '').toLowerCase() === 'sheetalbedi@tasknera.com';
+    const allRoles = (Array.isArray(user.roles) ? user.roles : [user.roleName || user.role || ''])
+      .filter(Boolean)
+      .map((r) => String(r).toLowerCase());
+    const isAdminOrCeo =
+      allRoles.some((r) => ['admin', 'superadmin', 'orgadmin'].some((adm) => r.includes(adm))) ||
+      (user.email || '').toLowerCase() === 'sheetalbedi@tasknera.com';
+
     if (isSelf && isAdminOrCeo) {
       const error = new Error('Access denied: Company Administrators and executive CEOs do not apply for employee leave.');
       error.statusCode = 403;
@@ -575,6 +591,20 @@ export const leaveService = {
    * Get employee's own leave requests
    */
   async getMyLeaves(user, query = {}) {
+    const allRoles = (Array.isArray(user.roles) ? user.roles : [user.roleName || user.role || ''])
+      .filter(Boolean)
+      .map((r) => String(r).toLowerCase());
+    const isAdminOrCeo =
+      allRoles.some((r) => ['admin', 'superadmin', 'orgadmin'].some((adm) => r.includes(adm))) ||
+      (user.email || '').toLowerCase() === 'sheetalbedi@tasknera.com';
+
+    if (isAdminOrCeo) {
+      return {
+        records: [],
+        pagination: { total: 0, page: 1, limit: 15, totalPages: 0 },
+      };
+    }
+
     const emp = await resolveRequesterEmployee(user);
     if (!emp) {
       const error = new Error('No employee profile found for your user account.');
