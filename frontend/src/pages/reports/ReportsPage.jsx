@@ -27,6 +27,7 @@ import { jsPDF } from 'jspdf';
 import * as XLSX from 'xlsx';
 import { Button } from '../../components/common/Button.jsx';
 import { Badge } from '../../components/common/Badge.jsx';
+import { useAuth } from '../../context/AuthContext.jsx';
 
 // Helper to generate the default cursive CEO signature canvas
 const generateDefaultSignatureDataUrl = (name = 'Sheetal', strokeColor = '#1e3a8a') => {
@@ -60,7 +61,59 @@ const generateDefaultSignatureDataUrl = (name = 'Sheetal', strokeColor = '#1e3a8
 };
 
 export const ReportsPage = () => {
-  const [department, setDepartment] = useState('operations'); // 'operations' | 'it' | 'ta'
+  const { user } = useAuth();
+  const userRoleStr = (user?.roleName || user?.role?.name || user?.role || '').toLowerCase().trim();
+  const isAdminOrHr = ['admin', 'superadmin', 'orgadmin', 'hr', 'hrmanager'].some((r) =>
+    userRoleStr.includes(r)
+  );
+
+  // Helper to match logged in employee with their specific performance dossier
+  const resolveUserDepartment = () => {
+    if (!user) return 'operations';
+    const email = (user.email || '').toLowerCase();
+    const name = `${user.firstName || ''} ${user.lastName || ''}`.toLowerCase();
+    const empCode = (user.employeeCode || user.employeeId || '').toLowerCase();
+    const dept = (user.department || user.departmentName || user.department?.name || '').toLowerCase();
+
+    if (
+      email.includes('ajay') ||
+      name.includes('ajay') ||
+      empCode.includes('it') ||
+      dept.includes('it') ||
+      dept.includes('eng') ||
+      dept.includes('tech')
+    ) {
+      return 'it';
+    }
+    if (
+      email.includes('harsh') ||
+      name.includes('harsh') ||
+      empCode.includes('ta') ||
+      dept.includes('talent') ||
+      dept.includes('recruit')
+    ) {
+      return 'ta';
+    }
+    if (
+      email.includes('pooja') ||
+      name.includes('pooja') ||
+      empCode.includes('ops') ||
+      dept.includes('operat') ||
+      dept.includes('logist')
+    ) {
+      return 'operations';
+    }
+    return 'operations';
+  };
+
+  const [department, setDepartment] = useState(() => resolveUserDepartment());
+
+  useEffect(() => {
+    if (!isAdminOrHr) {
+      setDepartment(resolveUserDepartment());
+    }
+  }, [user, isAdminOrHr]);
+
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
 
@@ -227,6 +280,30 @@ export const ReportsPage = () => {
     else if (department === 'it') setItData(updater);
     else setTaData(updater);
   };
+
+  // For standard employees not matching pre-seeded templates, personalize the form with their own identity
+  useEffect(() => {
+    if (!isAdminOrHr && user) {
+      const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
+      const empCode = user.employeeCode || user.employeeId;
+      const dept = user.departmentName || user.department?.name || user.department;
+      const desig = user.designation || user.designationName || user.designation?.name;
+
+      const matchesPreset = ['Pooja Sharma', 'Maurya Ajay Munnalal', 'Harsh Agarwal'].some(
+        (n) => fullName && fullName.toLowerCase().includes(n.toLowerCase())
+      );
+
+      if (fullName && !matchesPreset) {
+        setCurrentData((p) => ({
+          ...p,
+          employeeName: fullName,
+          ...(empCode ? { employeeId: empCode } : {}),
+          ...(dept ? { department: dept } : {}),
+          ...(desig ? { designation: desig } : {}),
+        }));
+      }
+    }
+  }, [user, isAdminOrHr, department]);
 
   // Average score calculation
   const calculateAverage = (competencies) => {
@@ -567,12 +644,14 @@ export const ReportsPage = () => {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
-                Reports &amp; Performance Dossiers
+                {isAdminOrHr ? 'Reports & Performance Dossiers' : 'My Performance Review Dossier'}
               </h1>
-              <Badge variant="brand">Executive Review</Badge>
+              <Badge variant="brand">{isAdminOrHr ? 'Executive Review' : currentData.employeeName}</Badge>
             </div>
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-              Department performance evaluation dossiers, competency scoring calibrations, and official PDF/Excel reports.
+              {isAdminOrHr
+                ? 'Department performance evaluation dossiers, competency scoring calibrations, and official PDF/Excel reports.'
+                : 'Official performance assessment record, skill calibration ratings, and career progression dossier.'}
             </p>
           </div>
         </div>
@@ -609,47 +688,49 @@ export const ReportsPage = () => {
         </div>
       </div>
 
-      {/* Modern Department Switcher Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-3 overflow-x-auto">
-        <button
-          type="button"
-          onClick={() => setDepartment('operations')}
-          className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-            department === 'operations'
-              ? 'bg-brand-500 text-white shadow-brand shadow-sm'
-              : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
-          }`}
-        >
-          <Building2 className="w-4 h-4" />
-          <span>Operations &amp; Logistics</span>
-        </button>
+      {/* Modern Department Switcher Tabs (Visible ONLY to HR & Admin) */}
+      {isAdminOrHr && (
+        <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-3 overflow-x-auto">
+          <button
+            type="button"
+            onClick={() => setDepartment('operations')}
+            className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              department === 'operations'
+                ? 'bg-brand-500 text-white shadow-brand shadow-sm'
+                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+            }`}
+          >
+            <Building2 className="w-4 h-4" />
+            <span>Operations &amp; Logistics</span>
+          </button>
 
-        <button
-          type="button"
-          onClick={() => setDepartment('it')}
-          className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-            department === 'it'
-              ? 'bg-brand-500 text-white shadow-brand shadow-sm'
-              : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
-          }`}
-        >
-          <Laptop className="w-4 h-4" />
-          <span>IT &amp; Platform Engineering</span>
-        </button>
+          <button
+            type="button"
+            onClick={() => setDepartment('it')}
+            className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              department === 'it'
+                ? 'bg-brand-500 text-white shadow-brand shadow-sm'
+                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+            }`}
+          >
+            <Laptop className="w-4 h-4" />
+            <span>IT &amp; Platform Engineering</span>
+          </button>
 
-        <button
-          type="button"
-          onClick={() => setDepartment('ta')}
-          className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-            department === 'ta'
-              ? 'bg-brand-500 text-white shadow-brand shadow-sm'
-              : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
-          }`}
-        >
-          <Target className="w-4 h-4" />
-          <span>Talent Acquisition</span>
-        </button>
-      </div>
+          <button
+            type="button"
+            onClick={() => setDepartment('ta')}
+            className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              department === 'ta'
+                ? 'bg-brand-500 text-white shadow-brand shadow-sm'
+                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+            }`}
+          >
+            <Target className="w-4 h-4" />
+            <span>Talent Acquisition</span>
+          </button>
+        </div>
+      )}
 
       {/* MAIN DOCUMENT CARD (Rendered for view and canvas export) */}
       <section

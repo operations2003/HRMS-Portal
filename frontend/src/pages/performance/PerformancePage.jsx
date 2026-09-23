@@ -64,6 +64,12 @@ export const PerformancePage = () => {
   const [isActing, setIsActing] = useState(false);
 
   useEffect(() => {
+    if (!isManager && !isHrOrAdmin && activeTab !== 'my') {
+      setActiveTab('my');
+    }
+  }, [isManager, isHrOrAdmin, activeTab]);
+
+  useEffect(() => {
     loadData();
   }, [activeTab]);
 

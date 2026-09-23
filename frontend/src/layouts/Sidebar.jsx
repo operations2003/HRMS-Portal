@@ -48,8 +48,8 @@ export const Sidebar = ({ isOpen, onClose }) => {
   // Collapsible dropdown navigation groups
   const navGroups = [
     {
-      id: 'time-attendance',
-      title: 'Time & Attendance',
+      id: 'attendance-leave',
+      title: 'Attendance & Leave',
       icon: CalendarCheck,
       items: [
         {
@@ -84,23 +84,25 @@ export const Sidebar = ({ isOpen, onClose }) => {
           permission: ['task:read', 'employee:read'],
         },
         {
-          name: 'Probation Confirmation',
-          path: '/probation',
-          icon: Clock,
-          roles: ['Manager', 'HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
-        },
-        {
           name: 'Training & Skills',
           path: '/training',
           icon: GraduationCap,
           permission: ['training:read', 'employee:read'],
         },
+        {
+          name: 'Probation Confirmation',
+          path: '/probation',
+          icon: Clock,
+          roles: ['Manager', 'HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
+        },
       ],
     },
     {
-      id: 'people-organization',
-      title: 'People & Teams',
+      id: 'team-management',
+      title: 'Team',
       icon: Users,
+      roles: ['Manager', 'HRManager'],
+      excludeRoles: ['Admin', 'SuperAdmin', 'OrgAdmin'],
       items: [
         {
           name: 'Team Management',
@@ -115,6 +117,13 @@ export const Sidebar = ({ isOpen, onClose }) => {
           roles: ['Manager', 'HR', 'HRManager'],
           excludeRoles: ['Admin', 'SuperAdmin', 'OrgAdmin'],
         },
+      ],
+    },
+    {
+      id: 'people',
+      title: 'People',
+      icon: Building2,
+      items: [
         {
           name: 'Employees Directory',
           path: '/employees',
@@ -125,31 +134,19 @@ export const Sidebar = ({ isOpen, onClose }) => {
           name: 'Departments',
           path: '/departments',
           icon: Building2,
-          permission: ['dept:read', 'employee:read'],
+          roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
         },
         {
           name: 'Onboarding',
           path: '/onboarding',
           icon: UserCheck,
-          permission: 'onboarding:read',
+          roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
         },
         {
           name: 'Offboarding & Clearances',
           path: '/offboarding',
           icon: UserMinus,
-          permission: ['exit:read', 'exit:admin', 'employee:read'],
-        },
-        {
-          name: 'Resignation',
-          path: '/resignation',
-          icon: LogOut,
-          permission: ['exit:read', 'exit:write', 'employee:read'],
-        },
-        {
-          name: 'Exit Checklist',
-          path: '/exit-checklist',
-          icon: ClipboardList,
-          permission: ['exit:read', 'exit:write', 'employee:read'],
+          roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
         },
       ],
     },
@@ -173,8 +170,8 @@ export const Sidebar = ({ isOpen, onClose }) => {
       ],
     },
     {
-      id: 'company-workspace',
-      title: 'Company Workspace',
+      id: 'company',
+      title: 'Company',
       icon: BookOpen,
       items: [
         {
@@ -207,10 +204,43 @@ export const Sidebar = ({ isOpen, onClose }) => {
           icon: FileText,
           permission: ['employee:read'],
         },
+      ],
+    },
+    {
+      id: 'hr-operations',
+      title: 'HR Operations',
+      icon: ShieldCheck,
+      roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
+      items: [
         {
           name: 'HR Operations & Analytics',
           path: '/hr-operations',
           icon: ShieldCheck,
+          roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
+        },
+      ],
+    },
+    {
+      id: 'exit-management',
+      title: 'Exit Management',
+      icon: LogOut,
+      items: [
+        {
+          name: 'Resignation',
+          path: '/resignation',
+          icon: LogOut,
+          permission: ['exit:read', 'exit:write', 'employee:read'],
+        },
+        {
+          name: 'Exit Checklist',
+          path: '/exit-checklist',
+          icon: ClipboardList,
+          permission: ['exit:read', 'exit:write', 'employee:read'],
+        },
+        {
+          name: 'Offboarding & Clearances',
+          path: '/offboarding',
+          icon: UserMinus,
           roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
         },
       ],
@@ -266,6 +296,11 @@ export const Sidebar = ({ isOpen, onClose }) => {
 
   const visibleGroups = navGroups
     .map((group) => {
+      if (group.excludeRoles) {
+        const userRoleStr = (user?.roleName || user?.role?.name || user?.role || '').toLowerCase().trim();
+        const excluded = group.excludeRoles.map((r) => r.toLowerCase().trim());
+        if (excluded.includes(userRoleStr)) return null;
+      }
       if (group.roles && !hasRole(group.roles)) return null;
       const permittedItems = group.items.filter(isItemPermitted);
       if (permittedItems.length === 0) return null;
