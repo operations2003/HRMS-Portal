@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   ShieldAlert,
   Users,
@@ -23,6 +24,7 @@ import {
   AlertTriangle,
   UserPlus,
   TrendingUp,
+  BarChart3,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
@@ -41,13 +43,23 @@ import { BroadcastAnnouncementModal } from '../../components/hr/BroadcastAnnounc
 import { TeamRosterModal } from '../../components/hr/TeamRosterModal.jsx';
 import { AssignManagerModal } from '../../components/team/AssignManagerModal.jsx';
 import { ApprovalActionModal } from '../../components/approvals/ApprovalActionModal.jsx';
+import { WorkforceAnalyticsTab } from '../../components/hr/WorkforceAnalyticsTab.jsx';
 
 export const HROperationsPage = () => {
   const { user } = useAuth();
   const toast = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  // Active Tab: 'overview' | 'employees' | 'teams' | 'managers' | 'attendance' | 'leaves' | 'performance' | 'approvals'
-  const [activeTab, setActiveTab] = useState('overview');
+  // Active Tab: 'overview' | 'analytics' | 'employees' | 'teams' | 'managers' | 'attendance' | 'leaves' | 'performance' | 'approvals'
+  const initialTab = searchParams.get('tab') || 'overview';
+  const [activeTab, setActiveTab] = useState(initialTab);
+
+  useEffect(() => {
+    const t = searchParams.get('tab');
+    if (t && t !== activeTab) {
+      setActiveTab(t);
+    }
+  }, [searchParams]);
 
   // HR Scope & Partner Filter States
   const isHrUser = (user?.roleName || '').toLowerCase().includes('hr');
@@ -781,12 +793,12 @@ export const HROperationsPage = () => {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-              HR Operations Cockpit
+              HR Operations & Analytics Cockpit
             </h1>
             <Badge variant="brand" size="sm">Phase 6 Authorized</Badge>
           </div>
           <p className="text-sm text-slate-500 mt-1">
-            Operational intelligence across workforce employees, manager teams, attendance, leaves, and approvals.
+            Unified cockpit for enterprise workforce administration, real-time analytics intelligence, and operational governance.
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -909,6 +921,7 @@ export const HROperationsPage = () => {
       <div className="flex border-b border-slate-200 gap-2 sm:gap-6 text-xs sm:text-sm font-semibold overflow-x-auto no-scrollbar">
         {[
           { id: 'overview', label: 'Operational Overview', icon: Layers },
+          { id: 'analytics', label: 'Workforce Analytics', icon: BarChart3 },
           { id: 'employees', label: `Employees (${allEmployees.length || overview.workforce?.totalEmployees || 0})`, icon: Users },
           { id: 'teams', label: `Teams (${teams.length})`, icon: Users },
           { id: 'managers', label: 'Managers Oversight', icon: UserCheck },
@@ -1060,6 +1073,11 @@ export const HROperationsPage = () => {
           </div>
         </div>
       )}
+
+      {/* ------------------------------------------------------------------- */}
+      {/* TAB: WORKFORCE ANALYTICS & INTELLIGENCE */}
+      {/* ------------------------------------------------------------------- */}
+      {activeTab === 'analytics' && <WorkforceAnalyticsTab />}
 
       {/* ------------------------------------------------------------------- */}
       {/* TAB 2: EMPLOYEES DIRECTORY */}

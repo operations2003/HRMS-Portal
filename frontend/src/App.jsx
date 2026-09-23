@@ -34,7 +34,6 @@ import { TasksPage } from './pages/tasks/TasksPage.jsx';
 import { TrainingPage } from './pages/training/TrainingPage.jsx';
 import { EngagementPage } from './pages/engagement/EngagementPage.jsx';
 import { ProbationDashboardPage } from './pages/probation/ProbationDashboardPage.jsx';
-import { AnalyticsPage } from './pages/analytics/AnalyticsPage.jsx';
 import { ReportsPage } from './pages/reports/ReportsPage.jsx';
 import { ForbiddenPage } from './pages/common/ForbiddenPage.jsx';
 import { NotFoundPage } from './pages/common/NotFoundPage.jsx';
@@ -450,14 +449,10 @@ export const App = () => {
                 }
               />
 
-              {/* HR Analytics & Workforce Intelligence */}
+              {/* HR Analytics & Workforce Intelligence (Merged with HR Operations) */}
               <Route
                 path="analytics"
-                element={
-                  <PermissionRoute roles={['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']}>
-                    <AnalyticsPage />
-                  </PermissionRoute>
-                }
+                element={<Navigate to="/hr-operations?tab=analytics" replace />}
               />
 
               {/* Department Performance Review Reports */}

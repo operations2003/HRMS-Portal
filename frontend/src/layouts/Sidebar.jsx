@@ -25,7 +25,6 @@ import {
   GraduationCap,
   Megaphone,
   Clock,
-  BarChart3,
   BookOpen,
   ChevronDown,
 } from 'lucide-react';
@@ -208,13 +207,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
           permission: ['employee:read'],
         },
         {
-          name: 'HR Analytics',
-          path: '/analytics',
-          icon: BarChart3,
-          roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
-        },
-        {
-          name: 'HR Operations',
+          name: 'HR Operations & Analytics',
           path: '/hr-operations',
           icon: ShieldCheck,
           roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
