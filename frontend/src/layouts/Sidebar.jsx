@@ -156,7 +156,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
       icon: Wallet,
       items: [
         {
-          name: 'Payroll & Slips',
+          name: (user?.roleName || '').toLowerCase().includes('admin') ? 'Payroll Management' : 'Payroll & Slips',
           path: '/payroll',
           icon: Wallet,
           permission: ['employee:read'],

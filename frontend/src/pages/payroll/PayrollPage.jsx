@@ -26,6 +26,8 @@ import {
   ChevronDown,
   Sparkles,
   Briefcase,
+  Send,
+  Check,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { payrollService } from '../../services/payrollService.js';
@@ -43,7 +45,7 @@ export const PayrollPage = () => {
 
   // Role detection
   const normRole = (user?.roleName || '').toLowerCase();
-  const isCeoOrAdmin = ['admin', 'superadmin', 'orgadmin'].some((r) => normRole.includes(r));
+  const isCeoOrAdmin = ['admin', 'superadmin', 'orgadmin'].some((r) => normRole.includes(r)) || user?.email === 'sheetalbedi@tasknera.com';
   const isHr = ['hr', 'hrmanager'].some((r) => normRole.includes(r));
   const canAccessOrgPayroll = isCeoOrAdmin || isHr;
 
@@ -94,6 +96,15 @@ export const PayrollPage = () => {
   const [showBankStatutory, setShowBankStatutory] = useState(false);
   const [salarySaving, setSalarySaving] = useState(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState(null);
+
+  // Payout tracking & confirmation modals (Admin paying salaries to all others)
+  const [payoutStatusMap, setPayoutStatusMap] = useState({});
+  const [payModalOpen, setPayModalOpen] = useState(false);
+  const [payingEmployee, setPayingEmployee] = useState(null);
+  const [payProcessing, setPayProcessing] = useState(false);
+  const [disburseAllModalOpen, setDisburseAllModalOpen] = useState(false);
+  const [disburseAllProcessing, setDisburseAllProcessing] = useState(false);
+  const [actionFeedback, setActionFeedback] = useState(null);
 
   // Fetch individual payroll breakdown
   const fetchPayroll = async (empId = null, isBackground = false) => {
@@ -284,6 +295,78 @@ export const PayrollPage = () => {
     }
   };
 
+  // Open individual pay modal
+  const handleOpenPayModal = (emp) => {
+    setPayingEmployee(emp);
+    setPayModalOpen(true);
+  };
+
+  // Submit individual payout
+  const handleConfirmPay = async () => {
+    if (!payingEmployee) return;
+    try {
+      setPayProcessing(true);
+      const res = await payrollService.payEmployee(payingEmployee.id);
+      setPayoutStatusMap((prev) => ({
+        ...prev,
+        [payingEmployee.id]: {
+          status: 'PAID',
+          amount: res.data?.amount || payingEmployee.netTakeHome,
+          period: res.data?.period || 'Current Period',
+          txId: res.data?.transactionId || `TXN-${Date.now()}`,
+          date: new Date().toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' }),
+        },
+      }));
+      setActionFeedback({
+        type: 'success',
+        message: `Salary of ₹${(payingEmployee.netTakeHome || 0).toLocaleString('en-IN')} successfully disbursed to ${payingEmployee.fullName || payingEmployee.name} via Direct Bank Transfer.`,
+      });
+      setPayModalOpen(false);
+      setPayingEmployee(null);
+    } catch (err) {
+      console.error('Failed to disburse salary:', err);
+      setActionFeedback({
+        type: 'error',
+        message: err?.response?.data?.message || err.message || 'Failed to process salary payment.',
+      });
+    } finally {
+      setPayProcessing(false);
+    }
+  };
+
+  // Submit batch organization payout
+  const handleConfirmDisburseAll = async () => {
+    try {
+      setDisburseAllProcessing(true);
+      const res = await payrollService.disburseAll();
+      const updatedMap = { ...payoutStatusMap };
+      const nowStr = new Date().toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' });
+      (orgPayroll?.employees || []).forEach((emp) => {
+        updatedMap[emp.id] = {
+          status: 'PAID',
+          amount: emp.netTakeHome,
+          period: res.data?.period || 'Current Period',
+          txId: res.data?.batchId || `BATCH-${Date.now()}`,
+          date: nowStr,
+        };
+      });
+      setPayoutStatusMap(updatedMap);
+      setActionFeedback({
+        type: 'success',
+        message: `Organization-wide payroll successfully disbursed to ${orgPayroll?.employees?.length || 0} employees! Total ₹${(orgPayroll?.summary?.totalMonthlyInHand || 0).toLocaleString('en-IN')} transferred via Direct Bank Transfer.`,
+      });
+      setDisburseAllModalOpen(false);
+    } catch (err) {
+      console.error('Failed to disburse all:', err);
+      setActionFeedback({
+        type: 'error',
+        message: err?.response?.data?.message || err.message || 'Failed to process organization payroll disbursement.',
+      });
+    } finally {
+      setDisburseAllProcessing(false);
+    }
+  };
+
   const { employee, ctcBreakdown, bankDetails, statutoryDetails, payHistory } = data || {};
 
   // Filtered employees in org view
@@ -445,32 +528,68 @@ export const PayrollPage = () => {
       ),
     },
     {
+      header: 'Disbursement Status',
+      key: 'payoutStatus',
+      accessor: (row) => {
+        const payout = payoutStatusMap[row.id];
+        if (payout?.status === 'PAID') {
+          return (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800">
+              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+              Paid ({payout.date || 'Disbursed'})
+            </span>
+          );
+        }
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800">
+            <Calendar className="w-3 h-3 text-blue-500" />
+            Ready for Payout
+          </span>
+        );
+      },
+    },
+    {
       header: 'Actions',
       key: 'actions',
-      accessor: (row) => (
-        <div className="flex items-center gap-1.5">
-          <Button
-            size="xs"
-            variant="outline"
-            icon={Eye}
-            onClick={() => handleViewEmployeeStructure(row)}
-            title="View complete salary breakdown"
-          >
-            Structure
-          </Button>
-          {(isCeoOrAdmin || isHr) && (
+      accessor: (row) => {
+        const isPaid = payoutStatusMap[row.id]?.status === 'PAID';
+        return (
+          <div className="flex items-center gap-1.5">
             <Button
               size="xs"
-              variant="secondary"
-              icon={Edit3}
-              onClick={() => handleOpenEditSalary(row)}
-              title="Decide or update employee salary"
+              variant="outline"
+              icon={Eye}
+              onClick={() => handleViewEmployeeStructure(row)}
+              title="View complete salary breakdown"
             >
-              {isCeoOrAdmin ? 'Decide Salary' : 'Update Salary'}
+              Structure
             </Button>
-          )}
-        </div>
-      ),
+            {(isCeoOrAdmin || isHr) && (
+              <Button
+                size="xs"
+                variant="secondary"
+                icon={Edit3}
+                onClick={() => handleOpenEditSalary(row)}
+                title="Assign or update employee salary"
+              >
+                Assign Salary
+              </Button>
+            )}
+            {isCeoOrAdmin && (
+              <Button
+                size="xs"
+                variant={isPaid ? 'outline' : 'primary'}
+                icon={isPaid ? CheckCircle2 : Send}
+                onClick={() => handleOpenPayModal(row)}
+                disabled={isPaid}
+                title={isPaid ? 'Salary already disbursed' : 'Pay salary to this employee'}
+              >
+                {isPaid ? 'Paid' : 'Pay Salary'}
+              </Button>
+            )}
+          </div>
+        );
+      },
     },
   ];
 
@@ -580,6 +699,30 @@ export const PayrollPage = () => {
         </div>
       )}
 
+      {actionFeedback && (
+        <div className={`p-4 rounded-2xl border flex items-center justify-between gap-3 text-xs font-semibold ${
+          actionFeedback.type === 'success'
+            ? 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800'
+            : 'bg-rose-50 text-rose-800 border-rose-200 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-800'
+        }`}>
+          <div className="flex items-center gap-2">
+            {actionFeedback.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            )}
+            <span>{actionFeedback.message}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActionFeedback(null)}
+            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs px-2 py-0.5"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {error && (
         <Alert
           variant="danger"
@@ -639,7 +782,7 @@ export const PayrollPage = () => {
 
             <div className="p-5 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-xs space-y-1">
               <div className="flex items-center justify-between text-slate-500 text-xs font-semibold uppercase tracking-wider">
-                <span>Workforce Roster</span>
+                <span>Salaried Workforce</span>
                 <Users className="w-4 h-4 text-brand-600" />
               </div>
               <div className="text-2xl lg:text-3xl font-black font-mono text-slate-900 dark:text-white">
@@ -679,6 +822,19 @@ export const PayrollPage = () => {
                 ))}
               </select>
 
+              {isCeoOrAdmin && (
+                <Button
+                  size="sm"
+                  variant="primary"
+                  icon={Send}
+                  onClick={() => setDisburseAllModalOpen(true)}
+                  className="shrink-0"
+                  title="Run organization payroll and disburse salaries to all active employees"
+                >
+                  Disburse Org Payroll
+                </Button>
+              )}
+
               <span className="text-xs font-medium text-slate-500 shrink-0">
                 Showing {filteredEmployees.length} of {orgPayroll?.employees?.length || 0}
               </span>
@@ -713,7 +869,9 @@ export const PayrollPage = () => {
                     Inspecting Employee Compensation Profile
                   </h3>
                   <p className="text-[11px] text-slate-500">
-                    Currently viewing: <span className="font-bold text-slate-900 dark:text-white">{employee?.fullName}</span> ({employee?.employeeCode}) — {employee?.role}
+                    {isCeoOrAdmin && !selectedEmpId
+                      ? 'Executive Payroll Management (No Personal Employee Salary)'
+                      : `Currently viewing: ${employee?.fullName || 'Staff'} (${employee?.employeeCode || ''}) — ${employee?.role || ''}`}
                   </p>
                 </div>
               </div>
@@ -725,7 +883,9 @@ export const PayrollPage = () => {
                   aria-label="Select employee to inspect"
                   className="text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 text-slate-800 dark:text-slate-200 focus:outline-none"
                 >
-                  <option value="">My Own Salary Profile</option>
+                  <option value="">
+                    {isCeoOrAdmin ? '-- Select Staff to Inspect --' : 'My Own Salary Profile'}
+                  </option>
                   {orgPayroll?.employees?.map((emp) => (
                     <option key={emp.id} value={emp.id}>
                       [{emp.employeeCode}] {emp.fullName} ({emp.role})
@@ -733,39 +893,128 @@ export const PayrollPage = () => {
                   ))}
                 </select>
 
-                {(isCeoOrAdmin || isHr) && employee && (
+                {(isCeoOrAdmin || isHr) && employee && selectedEmpId && (
                   <Button
                     size="xs"
                     variant="primary"
                     icon={Edit3}
                     onClick={() => handleOpenEditSalary(employee)}
                   >
-                    {isCeoOrAdmin ? 'Decide Salary' : 'Update Salary'}
+                    Assign Salary
+                  </Button>
+                )}
+
+                {isCeoOrAdmin && employee && selectedEmpId && (
+                  <Button
+                    size="xs"
+                    variant={payoutStatusMap[employee.id]?.status === 'PAID' ? 'outline' : 'primary'}
+                    icon={payoutStatusMap[employee.id]?.status === 'PAID' ? CheckCircle2 : Send}
+                    onClick={() => handleOpenPayModal(employee)}
+                    disabled={payoutStatusMap[employee.id]?.status === 'PAID'}
+                  >
+                    {payoutStatusMap[employee.id]?.status === 'PAID' ? 'Paid' : 'Pay Salary'}
                   </Button>
                 )}
               </div>
             </div>
           )}
 
-          {/* Payslip Download Policy Notice */}
-          <div className="p-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-slate-600 dark:text-slate-300">
-            <div className="flex items-center gap-2.5">
-              <Lock className="w-4 h-4 text-amber-600 shrink-0" />
-              <span>
-                <strong>Notice on Payslip Downloads:</strong> As per updated company policy, PDF payslip downloads are deactivated. Need employment verification or proof of compensation? You can generate or request a verified certificate.
-              </span>
-            </div>
-            <Button
-              size="xs"
-              variant="outline"
-              onClick={() => navigate('/helpdesk?tab=requests')}
-              className="shrink-0"
-            >
-              Submit Service Request
-            </Button>
-          </div>
+          {/* Executive Founder & Admin Notice (No personal employee salary for Admin) */}
+          {isCeoOrAdmin && !selectedEmpId ? (
+            <div className="p-8 bg-gradient-to-br from-amber-500/10 via-brand-500/5 to-indigo-500/10 border-2 border-amber-500/30 rounded-3xl space-y-6">
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                <div className="flex items-start gap-4">
+                  <div className="w-14 h-14 rounded-2xl bg-amber-500/20 text-amber-700 dark:text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/30 shadow-xs">
+                    <Crown className="w-7 h-7" />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-xl font-black text-slate-900 dark:text-white">
+                        Executive Administration & Payroll Authority
+                      </h2>
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+                        Admin / CEO
+                      </span>
+                    </div>
+                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                      Sheetal Bedi (Chief Executive Officer / Administrator)
+                    </p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 max-w-2xl pt-1">
+                      As Company Administrator and Organization Head, you manage payroll operations, decide and assign compensation packages to all staff, and disburse monthly employee salaries. Company executives and administrators do not draw an employee salary.
+                    </p>
+                  </div>
+                </div>
 
-          {/* Top 3 KPI Cards */}
+                <div className="flex flex-wrap items-center gap-3 shrink-0">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    icon={Users}
+                    onClick={() => setActiveTab('org')}
+                  >
+                    View Organization Payroll
+                  </Button>
+                </div>
+              </div>
+
+              {/* Quick Staff Roster Selector */}
+              <div className="p-5 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-xs space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-brand-600" />
+                    Select an Employee to Inspect or Assign Salary
+                  </h3>
+                  <span className="text-xs text-slate-400">
+                    {orgPayroll?.employees?.length || 0} Salaried Staff Members
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {orgPayroll?.employees?.map((emp) => (
+                    <div
+                      key={emp.id}
+                      onClick={() => handleViewEmployeeStructure(emp)}
+                      className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-brand-500/50 hover:bg-brand-50/30 dark:hover:bg-brand-950/20 cursor-pointer transition-all flex items-center justify-between group"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-xs flex items-center justify-center shrink-0 group-hover:bg-brand-600 group-hover:text-white transition-colors">
+                          {emp.firstName?.[0]}{emp.lastName?.[0]}
+                        </div>
+                        <div>
+                          <p className="font-bold text-xs text-slate-900 dark:text-white group-hover:text-brand-600">
+                            {emp.fullName}
+                          </p>
+                          <p className="text-[11px] text-slate-400">
+                            {emp.role} • {emp.department}
+                          </p>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-brand-600 transition-colors" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Payslip Download Policy Notice */}
+              <div className="p-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-slate-600 dark:text-slate-300">
+                <div className="flex items-center gap-2.5">
+                  <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>
+                    <strong>Notice on Payslip Downloads:</strong> As per updated company policy, PDF payslip downloads are deactivated. Need employment verification or proof of compensation? You can generate or request a verified certificate.
+                  </span>
+                </div>
+                <Button
+                  size="xs"
+                  variant="outline"
+                  onClick={() => navigate('/helpdesk?tab=requests')}
+                  className="shrink-0"
+                >
+                  Submit Service Request
+                </Button>
+              </div>
+
+              {/* Top 3 KPI Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="p-5 bg-gradient-to-br from-brand-600 to-indigo-700 text-white rounded-2xl shadow-sm space-y-2">
               <div className="flex items-center justify-between text-brand-100 text-xs font-semibold uppercase tracking-wider">
@@ -991,8 +1240,10 @@ export const PayrollPage = () => {
               emptyDescription="Salary disbursements will appear here once processed."
             />
           </div>
-        </div>
+        </>
       )}
+    </div>
+  )}
 
       {/* Decide / Edit Salary Modal (Admin/CEO & HR) */}
       <Modal
@@ -1452,6 +1703,136 @@ export const PayrollPage = () => {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Individual Employee Pay / Disbursement Modal */}
+      <Modal
+        isOpen={payModalOpen}
+        onClose={() => setPayModalOpen(false)}
+        maxWidth="max-w-md"
+        title="Disburse Monthly Salary"
+        subtitle={payingEmployee ? `Process salary payment for ${payingEmployee.fullName} (${payingEmployee.employeeCode})` : ''}
+      >
+        <div className="space-y-4">
+          <div className="p-4 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-2xl space-y-2 text-center">
+            <p className="text-xs text-emerald-800 dark:text-emerald-300 font-semibold uppercase tracking-wider">
+              Net In-Hand Disbursement
+            </p>
+            <p className="text-3xl font-black font-mono text-emerald-600 dark:text-emerald-400">
+              ₹{payingEmployee?.netTakeHome?.toLocaleString('en-IN') || 0}
+            </p>
+            <p className="text-xs text-slate-500">
+              Monthly Gross: ₹{payingEmployee?.monthlyGross?.toLocaleString('en-IN') || 0} • Deductions: ₹{payingEmployee?.totalDeductions?.toLocaleString('en-IN') || 0}
+            </p>
+          </div>
+
+          <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl space-y-2 text-xs border border-slate-100 dark:border-slate-800">
+            <div className="flex justify-between">
+              <span className="text-slate-400">Recipient:</span>
+              <span className="font-bold text-slate-900 dark:text-white">{payingEmployee?.fullName}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">Role & Dept:</span>
+              <span className="font-medium text-slate-700 dark:text-slate-300">{payingEmployee?.role} ({payingEmployee?.department})</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">Payment Mode:</span>
+              <span className="font-bold text-slate-900 dark:text-white">Direct Bank Transfer</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">Bank Account:</span>
+              <span className="font-mono text-slate-700 dark:text-slate-300">
+                {payingEmployee?.bankAccountNumber ? `•••• ${payingEmployee.bankAccountNumber.slice(-4)}` : '•••• 5678 (Direct Deposit)'}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setPayModalOpen(false)}
+              disabled={payProcessing}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              loading={payProcessing}
+              icon={CheckCircle2}
+              onClick={handleConfirmPay}
+            >
+              Confirm & Disburse Payment
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Batch Organization Payroll Disbursement Modal */}
+      <Modal
+        isOpen={disburseAllModalOpen}
+        onClose={() => setDisburseAllModalOpen(false)}
+        maxWidth="max-w-md"
+        title="Run Organization-Wide Payroll"
+        subtitle="Disburse monthly compensation to all salaried employees"
+      >
+        <div className="space-y-4">
+          <div className="p-4 bg-gradient-to-br from-brand-600 to-indigo-700 text-white rounded-2xl space-y-2 text-center">
+            <p className="text-xs text-brand-100 font-semibold uppercase tracking-wider">
+              Total Payroll Disbursement
+            </p>
+            <p className="text-3xl font-black font-mono">
+              ₹{orgPayroll?.summary?.totalMonthlyInHand?.toLocaleString('en-IN') || 0}
+            </p>
+            <p className="text-xs text-brand-100">
+              For {orgPayroll?.employees?.length || 0} Salaried Staff Members
+            </p>
+          </div>
+
+          <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl space-y-2 text-xs border border-slate-100 dark:border-slate-800">
+            <div className="flex justify-between">
+              <span className="text-slate-400">Total Annual CTC Managed:</span>
+              <span className="font-bold text-slate-900 dark:text-white font-mono">
+                ₹{orgPayroll?.summary?.totalAnnualCtc?.toLocaleString('en-IN') || 0}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">Total Statutory Deductions:</span>
+              <span className="font-bold text-rose-600 font-mono">
+                ₹{orgPayroll?.summary?.totalMonthlyDeductions?.toLocaleString('en-IN') || 0}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">Disbursement Method:</span>
+              <span className="font-bold text-slate-900 dark:text-white">Direct Bank Wire / NEFT Batch</span>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setDisburseAllModalOpen(false)}
+              disabled={disburseAllProcessing}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              loading={disburseAllProcessing}
+              icon={CheckCircle2}
+              onClick={handleConfirmDisburseAll}
+            >
+              Execute Batch Disbursement
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

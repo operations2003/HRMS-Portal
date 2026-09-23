@@ -21,6 +21,10 @@ router.get('/employee/:id', payrollController.getEmployeePayrollById);
 router.put('/employee/:id/salary', authorize(['payroll:write', 'employee:write']), payrollController.updateEmployeeSalary);
 router.patch('/employee/:id/salary', authorize(['payroll:write', 'employee:write']), payrollController.updateEmployeeSalary);
 
+// 5. Pay / Disburse Employee Salary (Admin / CEO and HR)
+router.post('/employee/:id/pay', authorize(['payroll:write', 'employee:write']), payrollController.payEmployeeSalary);
+router.post('/disburse-all', authorize(['payroll:write', 'employee:write']), payrollController.disburseAllPayroll);
+
 // 5. Reject all payslip download attempts explicitly with 403 Forbidden
 router.get('/my/payslip/:id/download', payrollController.blockPayslipDownload);
 router.get('/payslips/:id/download', payrollController.blockPayslipDownload);

@@ -38,6 +38,24 @@ export const payrollService = {
     const res = await http.put(`/v1/payroll/employee/${employeeId}/salary`, body);
     return res.data;
   },
+
+  /**
+   * Pay / disburse monthly salary to a specific employee.
+   * Admin & HR authority.
+   */
+  async payEmployee(employeeId, data = {}) {
+    const res = await http.post(`/v1/payroll/employee/${employeeId}/pay`, data);
+    return res.data;
+  },
+
+  /**
+   * Run organization-wide payroll disbursement for all salaried staff.
+   * Admin & HR authority.
+   */
+  async disburseAll(data = {}) {
+    const res = await http.post('/v1/payroll/disburse-all', data);
+    return res.data;
+  },
 };
 
 export default payrollService;
