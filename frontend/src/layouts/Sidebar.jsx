@@ -34,7 +34,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { TaskNeraLogo } from '../components/common/TaskNeraLogo.jsx';
 
 export const Sidebar = ({ isOpen, onClose }) => {
-  const { hasPermission, hasRole } = useAuth();
+  const { user, hasPermission, hasRole } = useAuth();
   const location = useLocation();
 
   // Top-level direct shortcuts
@@ -120,7 +120,8 @@ export const Sidebar = ({ isOpen, onClose }) => {
           name: 'Manager Cockpit',
           path: '/manager',
           icon: Briefcase,
-          roles: ['Manager', 'HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
+          roles: ['Manager', 'HR', 'HRManager'],
+          excludeRoles: ['Admin', 'SuperAdmin', 'OrgAdmin'],
         },
         {
           name: 'Employees Directory',
@@ -264,6 +265,11 @@ export const Sidebar = ({ isOpen, onClose }) => {
 
   // Helper to check user permissions & roles for a nav item
   const isItemPermitted = (item) => {
+    if (item.excludeRoles) {
+      const userRoleStr = (user?.roleName || user?.role?.name || user?.role || '').toLowerCase().trim();
+      const excluded = item.excludeRoles.map((r) => r.toLowerCase().trim());
+      if (excluded.includes(userRoleStr)) return false;
+    }
     if (item.roles && !hasRole(item.roles)) return false;
     if (item.permission && !hasPermission(item.permission)) return false;
     return true;

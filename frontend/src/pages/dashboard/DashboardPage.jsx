@@ -180,16 +180,17 @@ export const DashboardPage = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            {hasRole(['Manager', 'HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']) && (
-              <Button
-                variant="secondary"
-                size="md"
-                icon={Briefcase}
-                onClick={() => navigate('/manager')}
-                className="bg-white/10 hover:bg-white/20 text-white border-white/20 shadow-none text-xs"
-              >
-                Manager Cockpit
-              </Button>
+            {!['admin', 'superadmin', 'orgadmin'].includes((user?.roleName || '').toLowerCase()) &&
+              hasRole(['Manager', 'HR', 'HRManager']) && (
+                <Button
+                  variant="secondary"
+                  size="md"
+                  icon={Briefcase}
+                  onClick={() => navigate('/manager')}
+                  className="bg-white/10 hover:bg-white/20 text-white border-white/20 shadow-none text-xs"
+                >
+                  Manager Cockpit
+                </Button>
             )}
             <Can permission="employee:write">
               <Button
