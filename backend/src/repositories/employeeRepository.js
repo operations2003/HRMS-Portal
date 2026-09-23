@@ -20,6 +20,7 @@ const mapEmployeeRow = (row) => {
     employmentType: row.employmentType || 'Full-Time',
     status: row.status || 'Active',
     salary: parseFloat(row.salary) || 0,
+    salaryStructure: row.salaryStructure || null,
     shiftTiming: row.shiftTiming || '11:00 AM - 07:00 PM',
     gender: row.gender || 'Male',
     fatherName: row.fatherName || '',
@@ -81,6 +82,7 @@ const BASE_EMPLOYEE_SELECT = `
     e.employment_type AS "employmentType",
     e.status,
     e.salary::float AS salary,
+    e.salary_structure AS "salaryStructure",
     e.shift_timing AS "shiftTiming",
     e.father_name AS "fatherName",
     e.mother_name AS "motherName",
@@ -315,8 +317,9 @@ export const employeeRepository = {
         employment_type, status, salary, shift_timing, gender, manager_id, hr_id,
         father_name, mother_name, emergency_contact, address,
         bank_name, bank_account_number, bank_ifsc, bank_branch, uan_number,
-        probation_status, probation_start_date, probation_end_date, probation_notes
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31)
+        probation_status, probation_start_date, probation_end_date, probation_notes,
+        salary_structure
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32)
       RETURNING id;
     `;
 
@@ -352,6 +355,7 @@ export const employeeRepository = {
       probationStartDate,
       probationEndDate,
       probationNotes,
+      data.salaryStructure ? (typeof data.salaryStructure === 'string' ? data.salaryStructure : JSON.stringify(data.salaryStructure)) : null,
     ]);
 
     return this.findById(id);
@@ -430,6 +434,11 @@ export const employeeRepository = {
     if (data.salary !== undefined) {
       setClauses.push(`salary = $${paramIndex++}`);
       values.push(Number(data.salary) || 0);
+    }
+
+    if (data.salaryStructure !== undefined) {
+      setClauses.push(`salary_structure = $${paramIndex++}`);
+      values.push(data.salaryStructure ? (typeof data.salaryStructure === 'string' ? data.salaryStructure : JSON.stringify(data.salaryStructure)) : null);
     }
 
     if (data.shiftTiming !== undefined) {

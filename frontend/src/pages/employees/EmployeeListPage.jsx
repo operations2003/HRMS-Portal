@@ -26,6 +26,13 @@ import {
   UserCheck,
   Home,
   User as UserIcon,
+  Wallet,
+  Calculator,
+  Sparkles,
+  TrendingUp,
+  AlertCircle,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { DataTable } from '../../components/common/DataTable.jsx';
 import { Button } from '../../components/common/Button.jsx';
@@ -108,6 +115,89 @@ export const EmployeeListPage = () => {
   const [shiftFromPeriod, setShiftFromPeriod] = useState('AM');
   const [shiftToTime, setShiftToTime] = useState('07:00');
   const [shiftToPeriod, setShiftToPeriod] = useState('PM');
+
+  // Comprehensive Salary Structure State (Decided by Admin)
+  const [salaryStructure, setSalaryStructure] = useState({
+    annualCtc: '',
+    monthlyGross: '',
+    netTakeHome: '',
+    totalDeductions: '',
+    basic: '',
+    hra: '',
+    special: '',
+    conveyance: '',
+    medical: '',
+    epf: '',
+    professionalTax: '',
+    tds: '',
+    otherDeductions: '',
+  });
+  const [showEarningsBreakdown, setShowEarningsBreakdown] = useState(true);
+  const [showDeductionsBreakdown, setShowDeductionsBreakdown] = useState(true);
+
+  // Auto-calculate full breakdown based on Annual CTC
+  const handleAutoCalculateFromCtc = (customCtc) => {
+    const ctc = parseFloat(customCtc !== undefined ? customCtc : salaryStructure.annualCtc) || 0;
+    const gross = ctc > 0 ? Math.round(ctc / 12) : 0;
+    const basic = Math.round(gross * 0.5);
+    const hra = Math.round(gross * 0.25);
+    const conveyance = gross >= 15000 ? 1600 : Math.round(gross * 0.10);
+    const medical = gross >= 15000 ? 1250 : Math.round(gross * 0.05);
+    const special = Math.max(0, gross - basic - hra - conveyance - medical);
+    const epf = Math.round(Math.min(basic, 15000) * 0.12);
+    const pt = gross >= 15000 ? 200 : 0;
+    const tds = gross > 50000 ? Math.round(gross * 0.05) : 0;
+    const other = parseFloat(salaryStructure.otherDeductions) || 0;
+    const totalDed = epf + pt + tds + other;
+    const net = Math.max(0, gross - totalDed);
+
+    setSalaryStructure((prev) => ({
+      ...prev,
+      annualCtc: ctc > 0 ? ctc.toString() : '',
+      monthlyGross: gross > 0 ? gross.toString() : '',
+      basic: basic > 0 ? basic.toString() : '',
+      hra: hra > 0 ? hra.toString() : '',
+      special: special > 0 ? special.toString() : '',
+      conveyance: conveyance > 0 ? conveyance.toString() : '',
+      medical: medical > 0 ? medical.toString() : '',
+      epf: epf > 0 ? epf.toString() : '',
+      professionalTax: pt > 0 ? pt.toString() : '',
+      tds: tds > 0 ? tds.toString() : '',
+      totalDeductions: totalDed > 0 ? totalDed.toString() : '',
+      netTakeHome: net > 0 ? net.toString() : '',
+    }));
+    setFormData((prev) => ({
+      ...prev,
+      salary: ctc > 0 ? ctc.toString() : '',
+    }));
+  };
+
+  // Re-sum deductions and net take home
+  const handleSumDeductionsAndNet = () => {
+    const epf = parseFloat(salaryStructure.epf) || 0;
+    const pt = parseFloat(salaryStructure.professionalTax) || 0;
+    const tds = parseFloat(salaryStructure.tds) || 0;
+    const other = parseFloat(salaryStructure.otherDeductions) || 0;
+    const totalDed = epf + pt + tds + other;
+    const gross = parseFloat(salaryStructure.monthlyGross) || 0;
+    const net = Math.max(0, gross - totalDed);
+
+    setSalaryStructure((prev) => ({
+      ...prev,
+      totalDeductions: totalDed > 0 ? totalDed.toString() : '0',
+      netTakeHome: net > 0 ? net.toString() : '0',
+    }));
+  };
+
+  const handleSalaryStructureFieldChange = (field, val) => {
+    setSalaryStructure((prev) => {
+      const updated = { ...prev, [field]: val };
+      if (field === 'annualCtc') {
+        setFormData((fd) => ({ ...fd, salary: val }));
+      }
+      return updated;
+    });
+  };
 
   const parseShiftTiming = (str) => {
     if (!str) return { fromTime: '11:00', fromPeriod: 'AM', toTime: '07:00', toPeriod: 'PM' };
@@ -414,6 +504,22 @@ export const EmployeeListPage = () => {
     setShiftToTime('07:00');
     setShiftToPeriod('PM');
 
+    setSalaryStructure({
+      annualCtc: '',
+      monthlyGross: '',
+      netTakeHome: '',
+      totalDeductions: '',
+      basic: '',
+      hra: '',
+      special: '',
+      conveyance: '',
+      medical: '',
+      epf: '',
+      professionalTax: '',
+      tds: '',
+      otherDeductions: '',
+    });
+
     // Reset leave allocations to 0 (admin decides the exact numbers)
     const initialAlloc = {};
     leaveTypes.forEach((lt) => {
@@ -470,6 +576,63 @@ export const EmployeeListPage = () => {
     setShiftFromPeriod(parsedShift.fromPeriod);
     setShiftToTime(parsedShift.toTime);
     setShiftToPeriod(parsedShift.toPeriod);
+
+    // Prefill salary structure for existing employee
+    const s = emp.salaryStructure || {};
+    const rawSal = emp.salary ? String(emp.salary) : '';
+    if (canViewSalary(emp)) {
+      if (s.annualCtc || s.monthlyGross) {
+        setSalaryStructure({
+          annualCtc: s.annualCtc?.toString() || rawSal,
+          monthlyGross: s.monthlyGross?.toString() || (rawSal ? String(Math.round(Number(rawSal) / 12)) : ''),
+          netTakeHome: s.netTakeHome?.toString() || '',
+          totalDeductions: s.totalDeductions?.toString() || '',
+          basic: s.basic?.toString() || '',
+          hra: s.hra?.toString() || '',
+          special: s.special?.toString() || '',
+          conveyance: s.conveyance?.toString() || '',
+          medical: s.medical?.toString() || '',
+          epf: s.epf?.toString() || '',
+          professionalTax: s.professionalTax?.toString() || '',
+          tds: s.tds?.toString() || '',
+          otherDeductions: s.otherDeductions?.toString() || '',
+        });
+      } else if (rawSal && Number(rawSal) > 0) {
+        handleAutoCalculateFromCtc(rawSal);
+      } else {
+        setSalaryStructure({
+          annualCtc: '',
+          monthlyGross: '',
+          netTakeHome: '',
+          totalDeductions: '',
+          basic: '',
+          hra: '',
+          special: '',
+          conveyance: '',
+          medical: '',
+          epf: '',
+          professionalTax: '',
+          tds: '',
+          otherDeductions: '',
+        });
+      }
+    } else {
+      setSalaryStructure({
+        annualCtc: '',
+        monthlyGross: '',
+        netTakeHome: '',
+        totalDeductions: '',
+        basic: '',
+        hra: '',
+        special: '',
+        conveyance: '',
+        medical: '',
+        epf: '',
+        professionalTax: '',
+        tds: '',
+        otherDeductions: '',
+      });
+    }
 
     // Prefill leave allocations for existing employee
     setLoadingLeaveBalances(true);
@@ -535,8 +698,34 @@ export const EmployeeListPage = () => {
     try {
       setIsSubmitting(true);
       const computedShift = `${shiftFromTime.trim() || '11:00'} ${shiftFromPeriod} - ${shiftToTime.trim() || '07:00'} ${shiftToPeriod}`;
+      
+      const finalCtc = salaryStructure.annualCtc
+        ? Number(salaryStructure.annualCtc)
+        : (formData.salary ? Number(formData.salary) : 0);
+
       const payload = {
         ...formData,
+        salary: finalCtc,
+        salaryStructure: {
+          annualCtc: finalCtc,
+          monthlyGross: parseFloat(salaryStructure.monthlyGross) || 0,
+          netTakeHome: parseFloat(salaryStructure.netTakeHome) || 0,
+          totalDeductions: parseFloat(salaryStructure.totalDeductions) || 0,
+          basic: parseFloat(salaryStructure.basic) || 0,
+          hra: parseFloat(salaryStructure.hra) || 0,
+          special: parseFloat(salaryStructure.special) || 0,
+          conveyance: parseFloat(salaryStructure.conveyance) || 0,
+          medical: parseFloat(salaryStructure.medical) || 0,
+          epf: parseFloat(salaryStructure.epf) || 0,
+          professionalTax: parseFloat(salaryStructure.professionalTax) || 0,
+          tds: parseFloat(salaryStructure.tds) || 0,
+          otherDeductions: parseFloat(salaryStructure.otherDeductions) || 0,
+          bankName: formData.bankName || undefined,
+          bankAccountNumber: formData.bankAccountNumber || undefined,
+          bankIfsc: formData.bankIfsc || undefined,
+          bankBranch: formData.bankBranch || undefined,
+          uanNumber: formData.uanNumber || undefined,
+        },
         managerId: formData.managerId || null,
         hrId: formData.hrId || null,
         shiftTiming: computedShift,
@@ -549,6 +738,7 @@ export const EmployeeListPage = () => {
 
       if (editingEmployee && !canViewSalary(editingEmployee)) {
         delete payload.salary;
+        delete payload.salaryStructure;
       }
 
       if (editingEmployee) {
@@ -1190,36 +1380,303 @@ export const EmployeeListPage = () => {
                 }));
               }}
             />
-            <div>
-              {(!editingEmployee || canViewSalary(editingEmployee)) ? (
-                <>
-                  <Input
-                    label="Annual Salary / CTC (₹)"
-                    type="number"
-                    value={formData.salary}
-                    onChange={(e) => setFormData({ ...formData, salary: e.target.value })}
-                    placeholder="e.g. 1200000"
-                  />
-                  {formData.salary && Number(formData.salary) > 0 && (
-                    <p className="text-[11px] text-slate-500 mt-1 font-medium flex items-center justify-between">
-                      <span>Annual CTC: ₹{Number(formData.salary).toLocaleString('en-IN')} / yr</span>
-                      <span className="text-brand-600 font-semibold">Monthly: ~₹{Math.round(Number(formData.salary) / 12).toLocaleString('en-IN')} / mo</span>
-                    </p>
-                  )}
-                </>
-              ) : (
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Annual Salary / CTC (₹)
-                  </label>
-                  <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-500 text-sm">
-                    <Lock className="w-4 h-4 text-slate-400" />
-                    <span className="font-semibold text-xs tracking-wide">Confidential (Executive & HR Access Only)</span>
-                  </div>
-                </div>
-              )}
-            </div>
           </div>
+
+          {/* COMPENSATION & SALARY STRUCTURE SEGMENT (Decided by Admin) */}
+          {(!editingEmployee || canViewSalary(editingEmployee)) ? (
+            <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-indigo-50/60 via-purple-50/30 to-brand-50/40 border border-brand-200/90 shadow-2xs space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-brand-100 pb-3">
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-brand-900 flex items-center gap-1.5">
+                    <Wallet className="w-4 h-4 text-brand-600" />
+                    Compensation & Salary Structure (Decided by Admin)
+                  </h4>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Every number can be edited manually. You can also use the auto-calculation helpers.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="outline"
+                    icon={Calculator}
+                    onClick={() => handleAutoCalculateFromCtc()}
+                    className="bg-white hover:bg-brand-50 border-brand-300 text-brand-700 font-semibold"
+                    title="Auto-fill standard 50% Basic, 25% HRA, standard deductions from Annual CTC"
+                  >
+                    CTC
+                  </Button>
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="outline"
+                    icon={Sparkles}
+                    onClick={handleSumDeductionsAndNet}
+                    className="bg-white hover:bg-brand-50 border-brand-300 text-brand-700 font-semibold"
+                    title="Re-calculate Net In-Hand from Monthly Gross minus Deductions"
+                  >
+                    Net
+                  </Button>
+                </div>
+              </div>
+
+              {/* Core 4 Numbers Grid (Matching Table Columns & Screenshot) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="bg-white p-3 rounded-xl border border-brand-100/80 shadow-2xs">
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Annual CTC (₹) *
+                  </label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="1"
+                    placeholder="e.g. 1200000"
+                    value={salaryStructure.annualCtc}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      handleSalaryStructureFieldChange('annualCtc', val);
+                    }}
+                    required
+                  />
+                  {salaryStructure.annualCtc && Number(salaryStructure.annualCtc) > 0 && (
+                    <span className="text-[10px] text-slate-400 mt-1 block font-medium">
+                      ~₹{Math.round(Number(salaryStructure.annualCtc) / 12).toLocaleString('en-IN')} / mo gross
+                    </span>
+                  )}
+                </div>
+
+                <div className="bg-white p-3 rounded-xl border border-brand-100/80 shadow-2xs">
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Monthly Gross (₹) *
+                  </label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="1"
+                    placeholder="e.g. 100000"
+                    value={salaryStructure.monthlyGross}
+                    onChange={(e) => handleSalaryStructureFieldChange('monthlyGross', e.target.value)}
+                    required
+                  />
+                  {salaryStructure.monthlyGross && Number(salaryStructure.monthlyGross) > 0 && (
+                    <span className="text-[10px] text-slate-400 mt-1 block font-medium">
+                      Annual: ₹{(Number(salaryStructure.monthlyGross) * 12).toLocaleString('en-IN')}
+                    </span>
+                  )}
+                </div>
+
+                <div className="bg-white p-3 rounded-xl border border-emerald-100 shadow-2xs">
+                  <label className="block text-[11px] font-bold text-emerald-700 uppercase tracking-wider mb-1.5">
+                    Net In-Hand (₹) *
+                  </label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="1"
+                    placeholder="e.g. 94000"
+                    value={salaryStructure.netTakeHome}
+                    onChange={(e) => handleSalaryStructureFieldChange('netTakeHome', e.target.value)}
+                    className="font-bold text-emerald-700"
+                    required
+                  />
+                  <span className="text-[10px] text-emerald-600 mt-1 block font-medium">
+                    Take-home pay
+                  </span>
+                </div>
+
+                <div className="bg-white p-3 rounded-xl border border-rose-100 shadow-2xs">
+                  <label className="block text-[11px] font-bold text-rose-600 uppercase tracking-wider mb-1.5">
+                    Monthly Deductions (₹) *
+                  </label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="1"
+                    placeholder="e.g. 6000"
+                    value={salaryStructure.totalDeductions}
+                    onChange={(e) => handleSalaryStructureFieldChange('totalDeductions', e.target.value)}
+                    className="font-semibold text-rose-600"
+                    required
+                  />
+                  <span className="text-[10px] text-rose-500 mt-1 block font-medium">
+                    EPF, PT, TDS & deductions
+                  </span>
+                </div>
+              </div>
+
+              {/* 1. Monthly Earnings Breakdown (Collapsible) */}
+              <div className="bg-white rounded-xl border border-slate-200/90 overflow-hidden shadow-2xs">
+                <button
+                  type="button"
+                  onClick={() => setShowEarningsBreakdown(!showEarningsBreakdown)}
+                  className="w-full px-4 py-2.5 bg-slate-50/80 hover:bg-slate-100/80 flex items-center justify-between text-left transition-colors border-b border-slate-200/80 cursor-pointer"
+                >
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                    <TrendingUp className="w-3.5 h-3.5 text-brand-600" />
+                    1. Monthly Earnings Breakdown (₹)
+                  </span>
+                  <span className="text-slate-400">
+                    {showEarningsBreakdown ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </span>
+                </button>
+
+                {showEarningsBreakdown && (
+                  <div className="p-3.5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-600 uppercase mb-1">
+                        Basic Salary (₹)
+                      </label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="1"
+                        placeholder="e.g. 50000"
+                        value={salaryStructure.basic}
+                        onChange={(e) => handleSalaryStructureFieldChange('basic', e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-600 uppercase mb-1">
+                        House Rent Allowance (HRA) (₹)
+                      </label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="1"
+                        placeholder="e.g. 25000"
+                        value={salaryStructure.hra}
+                        onChange={(e) => handleSalaryStructureFieldChange('hra', e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-600 uppercase mb-1">
+                        Special Allowance (₹)
+                      </label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="1"
+                        placeholder="e.g. 21150"
+                        value={salaryStructure.special}
+                        onChange={(e) => handleSalaryStructureFieldChange('special', e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-600 uppercase mb-1">
+                        Conveyance Allowance (₹)
+                      </label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="1"
+                        placeholder="e.g. 1600"
+                        value={salaryStructure.conveyance}
+                        onChange={(e) => handleSalaryStructureFieldChange('conveyance', e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-600 uppercase mb-1">
+                        Medical Allowance (₹)
+                      </label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="1"
+                        placeholder="e.g. 1250"
+                        value={salaryStructure.medical}
+                        onChange={(e) => handleSalaryStructureFieldChange('medical', e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 2. Statutory & Monthly Deductions (Collapsible) */}
+              <div className="bg-white rounded-xl border border-slate-200/90 overflow-hidden shadow-2xs">
+                <button
+                  type="button"
+                  onClick={() => setShowDeductionsBreakdown(!showDeductionsBreakdown)}
+                  className="w-full px-4 py-2.5 bg-slate-50/80 hover:bg-slate-100/80 flex items-center justify-between text-left transition-colors border-b border-slate-200/80 cursor-pointer"
+                >
+                  <span className="text-xs font-bold uppercase tracking-wider text-rose-700 flex items-center gap-1.5">
+                    <AlertCircle className="w-3.5 h-3.5 text-rose-500" />
+                    2. Statutory & Monthly Deductions (₹)
+                  </span>
+                  <span className="text-slate-400">
+                    {showDeductionsBreakdown ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </span>
+                </button>
+
+                {showDeductionsBreakdown && (
+                  <div className="p-3.5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-600 uppercase mb-1">
+                        EPF / Provident Fund (₹)
+                      </label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="1"
+                        placeholder="e.g. 1800"
+                        value={salaryStructure.epf}
+                        onChange={(e) => handleSalaryStructureFieldChange('epf', e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-600 uppercase mb-1">
+                        Professional Tax (PT) (₹)
+                      </label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="1"
+                        placeholder="e.g. 200"
+                        value={salaryStructure.professionalTax}
+                        onChange={(e) => handleSalaryStructureFieldChange('professionalTax', e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-600 uppercase mb-1">
+                        Income Tax / TDS (₹)
+                      </label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="1"
+                        placeholder="e.g. 5000"
+                        value={salaryStructure.tds}
+                        onChange={(e) => handleSalaryStructureFieldChange('tds', e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-600 uppercase mb-1">
+                        Other Deductions (₹)
+                      </label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="1"
+                        placeholder="e.g. 0"
+                        value={salaryStructure.otherDeductions}
+                        onChange={(e) => handleSalaryStructureFieldChange('otherDeductions', e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200">
+              <div className="flex items-center gap-2 text-slate-500">
+                <Lock className="w-4 h-4 text-slate-400" />
+                <span className="font-semibold text-xs tracking-wide">
+                  Compensation & Salary Structure is Confidential (Executive & HR Access Only)
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* Interactive Probation Period Assignment Section */}
           <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200 space-y-3">
@@ -1999,6 +2456,47 @@ export const EmployeeListPage = () => {
                   )}
                 </div>
               </div>
+
+              {/* Detailed Compensation Breakdown Card (Visible if allowed) */}
+              {canViewSalary(viewingEmployee) && viewingEmployee.salaryStructure && (
+                <div className="p-3.5 rounded-xl bg-indigo-50/50 border border-indigo-100 col-span-2 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs font-bold uppercase tracking-wider text-indigo-900 flex items-center gap-1.5">
+                      <Wallet className="w-3.5 h-3.5 text-indigo-600" />
+                      Salary Structure & Compensation Breakdown
+                    </div>
+                    <span className="text-[10px] font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full">
+                      Annual CTC: ₹{Number(viewingEmployee.salary || viewingEmployee.salaryStructure.annualCtc || 0).toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                    <div className="bg-white p-2 rounded-lg border border-indigo-100 text-center">
+                      <div className="text-[10px] font-bold text-slate-500 uppercase">Monthly Gross</div>
+                      <div className="text-xs font-bold text-slate-800 mt-0.5">
+                        ₹{Number(viewingEmployee.salaryStructure.monthlyGross || 0).toLocaleString('en-IN')}
+                      </div>
+                    </div>
+                    <div className="bg-white p-2 rounded-lg border border-emerald-100 text-center">
+                      <div className="text-[10px] font-bold text-emerald-600 uppercase">Net In-Hand</div>
+                      <div className="text-xs font-bold text-emerald-700 mt-0.5">
+                        ₹{Number(viewingEmployee.salaryStructure.netTakeHome || 0).toLocaleString('en-IN')}
+                      </div>
+                    </div>
+                    <div className="bg-white p-2 rounded-lg border border-rose-100 text-center">
+                      <div className="text-[10px] font-bold text-rose-600 uppercase">Deductions</div>
+                      <div className="text-xs font-bold text-rose-700 mt-0.5">
+                        ₹{Number(viewingEmployee.salaryStructure.totalDeductions || 0).toLocaleString('en-IN')}
+                      </div>
+                    </div>
+                    <div className="bg-white p-2 rounded-lg border border-indigo-100 text-center">
+                      <div className="text-[10px] font-bold text-slate-500 uppercase">Basic Salary</div>
+                      <div className="text-xs font-bold text-slate-800 mt-0.5">
+                        ₹{Number(viewingEmployee.salaryStructure.basic || 0).toLocaleString('en-IN')}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 col-span-2">
                 <div className="text-xs text-slate-400 flex items-center gap-1.5 mb-1">
