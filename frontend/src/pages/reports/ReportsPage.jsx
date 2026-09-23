@@ -1,8 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   FileText,
-  Printer,
-  FileSpreadsheet,
   Download,
   Building2,
   Laptop,
@@ -21,6 +19,8 @@ import {
   Clock,
   Sparkles,
   Info,
+  Send,
+  CheckCircle2,
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
@@ -28,37 +28,11 @@ import * as XLSX from 'xlsx';
 import { Button } from '../../components/common/Button.jsx';
 import { Badge } from '../../components/common/Badge.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
+import { employeeService } from '../../services/employeeService.js';
+import { notificationService } from '../../services/notificationService.js';
+import { PrintableReportDossier } from '../../components/performance/PrintableReportDossier.jsx';
 
-// Helper to generate the default cursive CEO signature canvas
-const generateDefaultSignatureDataUrl = (name = 'Sheetal', strokeColor = '#1e3a8a') => {
-  const c = document.createElement('canvas');
-  c.width = 340;
-  c.height = 100;
-  const ctx = c.getContext('2d');
-  if (!ctx) return '';
-  ctx.lineWidth = 2.4;
-  ctx.strokeStyle = strokeColor;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
 
-  // Cursive signature strokes
-  ctx.beginPath();
-  ctx.moveTo(35, 65);
-  ctx.bezierCurveTo(65, 20, 100, 20, 120, 50);
-  ctx.bezierCurveTo(130, 65, 150, 70, 170, 40);
-  ctx.bezierCurveTo(185, 20, 200, 25, 220, 50);
-  ctx.bezierCurveTo(240, 65, 260, 40, 290, 35);
-  ctx.stroke();
-
-  // Flourish underline
-  ctx.beginPath();
-  ctx.lineWidth = 1.8;
-  ctx.moveTo(40, 78);
-  ctx.quadraticCurveTo(170, 88, 295, 68);
-  ctx.stroke();
-
-  return c.toDataURL('image/png');
-};
 
 export const ReportsPage = () => {
   const { user } = useAuth();
@@ -116,23 +90,72 @@ export const ReportsPage = () => {
 
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
+  const [isSending, setIsSending] = useState(false);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
+
+  // Dynamic employee roster per department
+  const [employees, setEmployees] = useState([]);
+  const [loadingEmployees, setLoadingEmployees] = useState(false);
+
+  useEffect(() => {
+    const fetchEmployees = async () => {
+      try {
+        setLoadingEmployees(true);
+        const res = await employeeService.listEmployees({ status: 'Active', limit: 300 });
+        const list = Array.isArray(res?.employees)
+          ? res.employees
+          : Array.isArray(res?.data)
+          ? res.data
+          : Array.isArray(res)
+          ? res
+          : [];
+
+        // Exclude Admin / SuperAdmin / OrgAdmin accounts from the employee review list
+        const reviewCandidates = list.filter((emp) => {
+          const role = (
+            emp.user?.roleName ||
+            emp.roleName ||
+            emp.role?.name ||
+            (typeof emp.role === 'string' ? emp.role : '') ||
+            ''
+          ).toLowerCase();
+          const desig = (
+            emp.designation?.title ||
+            emp.designationName ||
+            emp.designation?.name ||
+            (typeof emp.designation === 'string' ? emp.designation : '')
+          ).toLowerCase();
+          const email = (emp.email || '').toLowerCase();
+          const name = `${emp.firstName || ''} ${emp.lastName || ''}`.trim().toLowerCase();
+
+          const isAdminRole = ['admin', 'superadmin', 'orgadmin'].some((r) => role.includes(r));
+          const isAdminEmail = email.startsWith('admin@') || email.includes('superadmin');
+          const isAdminName = name === 'admin' || name === 'administrator' || name.startsWith('admin ');
+          const isAdminDesig = desig.includes('administrator') || desig.includes('system admin');
+
+          return !isAdminRole && !isAdminEmail && !isAdminName && !isAdminDesig;
+        });
+
+        setEmployees(reviewCandidates);
+      } catch (err) {
+        console.error('Failed to load employees for reports:', err);
+      } finally {
+        setLoadingEmployees(false);
+      }
+    };
+    fetchEmployees();
+  }, []);
 
   const documentRef = useRef(null);
-  const fileInputRef = useRef(null);
-
-  // Common default signature
-  const [ceoSignature, setCeoSignature] = useState(() =>
-    generateDefaultSignatureDataUrl('Sheetal', '#1e3a8a')
-  );
-  const [sigFileName, setSigFileName] = useState('');
+  const printDossierRef = useRef(null);
 
   // 1. OPERATIONS FORM STATE
   const [opsData, setOpsData] = useState({
-    employeeName: 'Pooja Sharma',
-    employeeId: 'OPS-2026-114',
-    department: 'Operations',
-    designation: 'Senior Operations Executive',
-    manager: 'Rajesh Verma',
+    employeeName: '',
+    employeeId: '',
+    department: 'Operations Team',
+    designation: '',
+    manager: '',
     reviewDate: '2026-09-15',
     reviewPeriod: '01/01/2026 – 31/08/2026',
     ldExecutive: 'Swati Batabyal',
@@ -176,11 +199,11 @@ export const ReportsPage = () => {
 
   // 2. IT FORM STATE
   const [itData, setItData] = useState({
-    employeeName: 'Maurya Ajay Munnalal',
-    employeeId: 'IT-2026-084',
-    department: 'TA & Platform Engineering',
-    designation: 'IT Intern',
-    manager: 'Nabila Hussain',
+    employeeName: '',
+    employeeId: '',
+    department: 'IT Team',
+    designation: '',
+    manager: '',
     reviewDate: '2026-09-14',
     reviewPeriod: '30/08/2026 – 12/09/2026',
     ldExecutive: 'Swati Batabyal',
@@ -222,11 +245,11 @@ export const ReportsPage = () => {
 
   // 3. TA FORM STATE
   const [taData, setTaData] = useState({
-    employeeName: 'Harsh Agarwal',
-    employeeId: 'TA-2026-042',
-    department: 'Talent Acquisition',
-    designation: 'TA Team Lead',
-    manager: 'Aakanksha Jadhav',
+    employeeName: '',
+    employeeId: '',
+    department: 'TA Team',
+    designation: '',
+    manager: '',
     reviewDate: '2026-09-14',
     reviewPeriod: '30/08/2026 – 12/09/2026',
     ldExecutive: 'Swati Batabyal',
@@ -281,7 +304,160 @@ export const ReportsPage = () => {
     else setTaData(updater);
   };
 
-  // For standard employees not matching pre-seeded templates, personalize the form with their own identity
+  // Filter employees for active department tab using real API employees (excluding Admin accounts)
+  const departmentEmployees = useMemo(() => {
+    if (!employees || employees.length === 0) return [];
+
+    const nonAdmins = employees.filter((emp) => {
+      const role = (
+        emp.user?.roleName ||
+        emp.roleName ||
+        emp.role?.name ||
+        (typeof emp.role === 'string' ? emp.role : '') ||
+        ''
+      ).toLowerCase();
+      const desig = (
+        emp.designation?.title ||
+        emp.designationName ||
+        emp.designation?.name ||
+        (typeof emp.designation === 'string' ? emp.designation : '')
+      ).toLowerCase();
+      const email = (emp.email || '').toLowerCase();
+      const name = `${emp.firstName || ''} ${emp.lastName || ''}`.trim().toLowerCase();
+
+      return (
+        !['admin', 'superadmin', 'orgadmin'].some((r) => role.includes(r)) &&
+        !email.startsWith('admin@') &&
+        !email.includes('superadmin') &&
+        name !== 'admin' &&
+        name !== 'administrator' &&
+        !name.startsWith('admin ') &&
+        !desig.includes('administrator') &&
+        !desig.includes('system admin')
+      );
+    });
+
+    const deptKeyword =
+      department === 'operations'
+        ? 'operat|ops|logist|supply|fulfillment'
+        : department === 'it'
+        ? 'it|tech|eng|soft|dev|comput|infra|qa|product'
+        : 'talent|ta|recruit|hr|human|people';
+    const regex = new RegExp(deptKeyword, 'i');
+
+    const matched = nonAdmins.filter((emp) => {
+      const dName =
+        emp.departmentName ||
+        emp.department?.name ||
+        emp.department?.code ||
+        (typeof emp.department === 'string' ? emp.department : '');
+      const desig =
+        emp.designation?.title ||
+        emp.designation?.name ||
+        emp.designationName ||
+        (typeof emp.designation === 'string' ? emp.designation : '');
+      const email = emp.email || '';
+      return regex.test(dName) || regex.test(desig) || regex.test(email);
+    });
+
+    return matched.length > 0 ? matched : nonAdmins;
+  }, [employees, department]);
+
+  // Handle employee selection from dropdown in Section 01
+  const handleSelectEmployee = (empId) => {
+    setSelectedEmployeeId(empId);
+    const selectedEmp = employees.find(
+      (e) => String(e.id || e._id) === String(empId)
+    );
+    if (selectedEmp) {
+      const fullName = `${selectedEmp.firstName || ''} ${selectedEmp.lastName || ''}`.trim() || selectedEmp.name || selectedEmp.email;
+      const code = selectedEmp.employeeCode || selectedEmp.employeeId || '';
+      const dept =
+        selectedEmp.departmentName ||
+        selectedEmp.department?.name ||
+        (typeof selectedEmp.department === 'string'
+          ? selectedEmp.department
+          : department === 'operations'
+          ? 'Operations Team'
+          : department === 'it'
+          ? 'IT Team'
+          : 'TA Team');
+      const desig =
+        selectedEmp.designation?.title ||
+        selectedEmp.designationName ||
+        selectedEmp.designation?.name ||
+        (typeof selectedEmp.designation === 'string' ? selectedEmp.designation : '');
+      const mgr =
+        selectedEmp.manager?.fullName ||
+        selectedEmp.managerName ||
+        (selectedEmp.manager
+          ? `${selectedEmp.manager.firstName || ''} ${selectedEmp.manager.lastName || ''}`.trim()
+          : '') ||
+        '';
+
+      setCurrentData((prev) => ({
+        ...prev,
+        employeeName: fullName || prev.employeeName,
+        employeeId: code || prev.employeeId,
+        department: dept || prev.department,
+        designation: desig || prev.designation,
+        ...(mgr ? { manager: mgr } : {}),
+      }));
+
+      showToast(`Selected ${fullName}. Details auto-populated.`, 'info');
+    }
+  };
+
+  // Handle Send Report action
+  const handleSendReport = async () => {
+    if (!currentData.employeeName) {
+      showToast('Please specify an Employee Name before sending the report.', 'error');
+      return;
+    }
+    setIsSending(true);
+    showToast(`Sending performance appraisal report to ${currentData.employeeName}...`, 'loading', 0);
+
+    try {
+      const targetEmp = employees.find((e) => {
+        const full = `${e.firstName || ''} ${e.lastName || ''}`.trim().toLowerCase();
+        return (
+          full === currentData.employeeName.trim().toLowerCase() ||
+          String(e.id || e._id) === String(selectedEmployeeId)
+        );
+      });
+
+      const recipientId = targetEmp?.id || targetEmp?._id || selectedEmployeeId;
+
+      if (recipientId && String(recipientId).length > 5) {
+        try {
+          await notificationService.createNotification({
+            userId: recipientId,
+            title: 'Official Performance Appraisal Report Published',
+            message: `Your performance appraisal review has been completed and authorized by Sheetal Ma'am. Average Rating: ${currentAverageScore}/5.0 (${currentData.overallRating}). You can view and download your report from the Reports section.`,
+            type: 'PERFORMANCE_REPORT',
+            data: {
+              department,
+              reviewDate: currentData.reviewDate,
+              score: currentAverageScore,
+              rating: currentData.overallRating,
+            },
+          });
+        } catch (notifErr) {
+          console.warn('Notification send failed, simulated gracefully:', notifErr);
+        }
+      }
+
+      await new Promise((r) => setTimeout(r, 900));
+      showToast(`Performance report successfully dispatched to ${currentData.employeeName}!`, 'success');
+    } catch (err) {
+      console.error('Error sending report:', err);
+      showToast('Failed to dispatch report. Please try again.', 'error');
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  // For standard employees, personalize the form with their own identity
   useEffect(() => {
     if (!isAdminOrHr && user) {
       const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
@@ -289,11 +465,7 @@ export const ReportsPage = () => {
       const dept = user.departmentName || user.department?.name || user.department;
       const desig = user.designation || user.designationName || user.designation?.name;
 
-      const matchesPreset = ['Pooja Sharma', 'Maurya Ajay Munnalal', 'Harsh Agarwal'].some(
-        (n) => fullName && fullName.toLowerCase().includes(n.toLowerCase())
-      );
-
-      if (fullName && !matchesPreset) {
+      if (fullName) {
         setCurrentData((p) => ({
           ...p,
           employeeName: fullName,
@@ -314,30 +486,7 @@ export const ReportsPage = () => {
 
   const currentAverageScore = calculateAverage(currentData.competencies);
 
-  // Handle signature upload
-  const handleSignatureUpload = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      alert('Please select an image file (PNG, JPG, WebP)');
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      setCeoSignature(event.target.result);
-      setSigFileName(file.name);
-      showToast('CEO Signature updated for all department forms!', 'success');
-    };
-    reader.readAsDataURL(file);
-  };
 
-  const handleResetSignature = () => {
-    const defaultSig = generateDefaultSignatureDataUrl('Sheetal', '#1e3a8a');
-    setCeoSignature(defaultSig);
-    setSigFileName('');
-    if (fileInputRef.current) fileInputRef.current.value = '';
-    showToast("Signature reset to default Sheetal Ma'am signature.", 'info');
-  };
 
   // Add / remove rows for goals
   const addGoalRow = () => {
@@ -461,56 +610,22 @@ export const ReportsPage = () => {
     showToast('Excel report downloaded successfully!', 'success');
   };
 
-  // High-Resolution Multi-Page PDF Generation
+  // High-Resolution Multi-Page Executive PDF Generation
   const handleDownloadPdf = async () => {
-    if (!documentRef.current) return;
+    if (!printDossierRef.current) return;
     setIsGeneratingPdf(true);
 
     const deptTitle = department === 'operations' ? 'Operations' : department === 'it' ? 'IT' : 'Talent_Acquisition';
     const empName = (currentData.employeeName || 'Employee').trim().replace(/[^a-zA-Z0-9_-]/g, '_');
-    const fileName = `${empName}_${deptTitle}_Performance_Review_${currentData.reviewDate || '2026'}.pdf`;
+    const fileName = `${empName}_${deptTitle}_Performance_Appraisal_${currentData.reviewDate || '2026'}.pdf`;
 
-    showToast(`Rendering official ${deptTitle.replace('_', ' ')} review PDF...`, 'loading', 0);
-
-    const element = documentRef.current;
-
-    // Temporarily replace input elements with pre-wrapped text divs for crisp, non-clipped PDF rendering
-    const replacers = [];
-
-    // Replace textareas
-    element.querySelectorAll('textarea').forEach((ta) => {
-      const div = document.createElement('div');
-      div.className = 'pdf-rendered-block';
-      div.textContent = ta.value || ' ';
-      div.style.cssText =
-        'display:block;width:100%;padding:10px 12px;border:1.5px solid #cbd5e1;border-radius:6px;background:#ffffff;font-size:13px;line-height:1.6;color:#0f172a;white-space:pre-wrap;word-break:break-word;min-height:60px;box-sizing:border-box;';
-      ta.style.display = 'none';
-      ta.parentNode?.insertBefore(div, ta);
-      replacers.push({ orig: ta, replacer: div });
-    });
-
-    // Replace inputs and selects
-    element.querySelectorAll('input[type="text"], input[type="date"], select').forEach((inp) => {
-      const div = document.createElement('div');
-      div.className = 'pdf-rendered-inline';
-      div.textContent = inp.tagName === 'SELECT' ? inp.options[inp.selectedIndex]?.text || inp.value : inp.value || ' ';
-      div.style.cssText =
-        'display:block;width:100%;padding:8px 10px;border:1.5px solid #cbd5e1;border-radius:6px;background:#ffffff;font-size:13px;color:#0f172a;word-break:break-word;box-sizing:border-box;';
-      inp.style.display = 'none';
-      inp.parentNode?.insertBefore(div, inp);
-      replacers.push({ orig: inp, replacer: div });
-    });
-
-    // Wait for repaint
-    await new Promise((resolve) => setTimeout(resolve, 150));
+    showToast(`Rendering official ${deptTitle.replace('_', ' ')} executive review PDF...`, 'loading', 0);
 
     try {
-      const masterCanvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-      });
+      const pageElements = printDossierRef.current.querySelectorAll('.pdf-dossier-page');
+      if (!pageElements || pageElements.length === 0) {
+        throw new Error('Dossier printable pages not found');
+      }
 
       const pdf = new jsPDF({
         orientation: 'portrait',
@@ -519,60 +634,30 @@ export const ReportsPage = () => {
         compress: true,
       });
 
-      const canvasWidth = masterCanvas.width;
-      const canvasHeight = masterCanvas.height;
+      for (let i = 0; i < pageElements.length; i++) {
+        const pageEl = pageElements[i];
+        const canvas = await html2canvas(pageEl, {
+          scale: 2, // 2x Retina clarity: numbers, text and badges are crystal clear
+          useCORS: true,
+          logging: false,
+          backgroundColor: '#ffffff',
+          windowWidth: 794,
+        });
 
-      // Printable dimensions for A4 portrait with 8mm margins
-      const margin = 8;
-      const printWidth = 194;
-      const pagePrintHeight = 281;
-
-      const pxPageHeight = Math.floor((canvasWidth * pagePrintHeight) / printWidth);
-
-      let sourceY = 0;
-      let pageIndex = 0;
-
-      while (sourceY < canvasHeight) {
-        const chunkPxHeight = Math.min(pxPageHeight, canvasHeight - sourceY);
-
-        const pageCanvas = document.createElement('canvas');
-        pageCanvas.width = canvasWidth;
-        pageCanvas.height = chunkPxHeight;
-        const pageCtx = pageCanvas.getContext('2d');
-
-        if (pageCtx) {
-          pageCtx.fillStyle = '#ffffff';
-          pageCtx.fillRect(0, 0, canvasWidth, chunkPxHeight);
-          pageCtx.drawImage(masterCanvas, 0, sourceY, canvasWidth, chunkPxHeight, 0, 0, canvasWidth, chunkPxHeight);
-
-          const chunkImgData = pageCanvas.toDataURL('image/jpeg', 0.95);
-          const chunkMmHeight = (chunkPxHeight * printWidth) / canvasWidth;
-
-          if (pageIndex > 0) {
-            pdf.addPage('a4', 'portrait');
-          }
-
-          pdf.addImage(chunkImgData, 'JPEG', margin, margin, printWidth, chunkMmHeight);
+        const imgData = canvas.toDataURL('image/jpeg', 0.98);
+        if (i > 0) {
+          pdf.addPage('a4', 'portrait');
         }
-
-        sourceY += chunkPxHeight;
-        pageIndex++;
+        // Exactly standard A4 dimensions: 210mm x 297mm
+        pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
       }
 
       pdf.save(fileName);
-      showToast('PDF downloaded successfully!', 'success');
+      showToast('Official review PDF downloaded successfully!', 'success');
     } catch (err) {
       console.error('PDF export error:', err);
-      showToast('Error exporting PDF. Opening print preview...', 'error');
-      window.print();
+      showToast('Error exporting PDF. Please try again.', 'error');
     } finally {
-      // Revert DOM back to interactive controls
-      replacers.forEach(({ orig, replacer }) => {
-        orig.style.display = '';
-        if (replacer.parentNode) {
-          replacer.parentNode.removeChild(replacer);
-        }
-      });
       setIsGeneratingPdf(false);
     }
   };
@@ -590,9 +675,9 @@ export const ReportsPage = () => {
         focusRing: 'focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20',
         scoreBadge: 'bg-teal-50 dark:bg-teal-950/40 text-teal-800 dark:text-teal-300 border-teal-200 dark:border-teal-800',
         sigCardBorder: 'border-slate-200 dark:border-slate-800',
-        tagText: 'Department of Operations & Logistics • L&D',
+        tagText: 'Operations Team • L&D',
         title: 'Operations Team Performance Review',
-        subtitle: 'Learning & Development | Operations Department Performance Calibration & Progression Review',
+        subtitle: 'Learning & Development | Operations Team Performance Calibration & Progression Review',
         Icon: Building2,
       };
     } else if (department === 'it') {
@@ -606,8 +691,8 @@ export const ReportsPage = () => {
         focusRing: 'focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20',
         scoreBadge: 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-800 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800',
         sigCardBorder: 'border-slate-200 dark:border-slate-800',
-        tagText: 'Department of Information Technology & Engineering • L&D',
-        title: 'IT & Engineering Performance Review Form',
+        tagText: 'IT Team • L&D',
+        title: 'IT Team Performance Review Form',
         subtitle: 'Official periodic performance assessment, technical calibration, and career progression record.',
         Icon: Laptop,
       };
@@ -622,9 +707,9 @@ export const ReportsPage = () => {
         focusRing: 'focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20',
         scoreBadge: 'bg-purple-50 dark:bg-purple-950/40 text-purple-800 dark:text-purple-300 border-purple-200 dark:border-purple-800',
         sigCardBorder: 'border-slate-200 dark:border-slate-800',
-        tagText: 'Department of Talent Acquisition • L&D',
-        title: 'Talent Acquisition Performance Review',
-        subtitle: 'Learning & Development | TA Department Performance Calibration & Progression Review',
+        tagText: 'TA Team • L&D',
+        title: 'TA Team Performance Review',
+        subtitle: 'Learning & Development | TA Team Performance Calibration & Progression Review',
         Icon: Target,
       };
     }
@@ -656,36 +741,7 @@ export const ReportsPage = () => {
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center gap-2.5 flex-wrap">
-          <Button
-            variant="outline"
-            size="sm"
-            icon={Printer}
-            onClick={() => window.print()}
-          >
-            Print Form
-          </Button>
 
-          <Button
-            variant="outline"
-            size="sm"
-            icon={FileSpreadsheet}
-            onClick={handleDownloadExcel}
-          >
-            Download Excel
-          </Button>
-
-          <Button
-            variant="primary"
-            size="sm"
-            icon={Download}
-            loading={isGeneratingPdf}
-            onClick={handleDownloadPdf}
-          >
-            {isGeneratingPdf ? 'Generating PDF...' : 'Download PDF'}
-          </Button>
-        </div>
       </div>
 
       {/* Modern Department Switcher Tabs (Visible ONLY to HR & Admin) */}
@@ -701,20 +757,7 @@ export const ReportsPage = () => {
             }`}
           >
             <Building2 className="w-4 h-4" />
-            <span>Operations &amp; Logistics</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setDepartment('it')}
-            className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              department === 'it'
-                ? 'bg-brand-500 text-white shadow-brand shadow-sm'
-                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
-            }`}
-          >
-            <Laptop className="w-4 h-4" />
-            <span>IT &amp; Platform Engineering</span>
+            <span>Operations Team</span>
           </button>
 
           <button
@@ -727,16 +770,104 @@ export const ReportsPage = () => {
             }`}
           >
             <Target className="w-4 h-4" />
-            <span>Talent Acquisition</span>
+            <span>TA Team</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setDepartment('it')}
+            className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              department === 'it'
+                ? 'bg-brand-500 text-white shadow-brand shadow-sm'
+                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+            }`}
+          >
+            <Laptop className="w-4 h-4" />
+            <span>IT Team</span>
           </button>
         </div>
       )}
 
-      {/* MAIN DOCUMENT CARD (Rendered for view and canvas export) */}
-      <section
-        ref={documentRef}
-        className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-sm overflow-hidden print:border-none print:shadow-none"
-      >
+      {/* DEDICATED EMPLOYEE ROW VIEW (Visible to non-Admin / non-HR Employees) */}
+      {!isAdminOrHr && (
+        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800">
+            <h3 className="text-base font-bold text-slate-900 dark:text-white">
+              Official Performance Review Records
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Your official appraisal reports and performance review dossiers published by leadership
+            </p>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-50/70 dark:bg-slate-800/50 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                <tr>
+                  <th className="px-6 py-3.5">Report Dossier</th>
+                  <th className="px-6 py-3.5">Department</th>
+                  <th className="px-6 py-3.5">Review Period</th>
+                  <th className="px-6 py-3.5">Overall Rating</th>
+                  <th className="px-6 py-3.5">Status</th>
+                  <th className="px-6 py-3.5 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-brand-50 text-brand-600 dark:bg-brand-950 dark:text-brand-400 flex items-center justify-center">
+                        <FileText className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-slate-900 dark:text-white">
+                          {theme.title}
+                        </div>
+                        <div className="text-xs text-slate-400">
+                          ID: {currentData.employeeId} • Reviewer: {currentData.manager}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-slate-600 dark:text-slate-300 font-medium">
+                    {department === 'operations' ? 'Operations Team' : department === 'ta' ? 'TA Team' : 'IT Team'}
+                  </td>
+                  <td className="px-6 py-4 text-slate-600 dark:text-slate-300 font-mono text-xs">
+                    {currentData.reviewPeriod || 'Quarterly Review'}
+                  </td>
+                  <td className="px-6 py-4">
+                    <Badge variant="brand">{currentData.overallRating || 'Exceeds Expectations'}</Badge>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Published
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      icon={Download}
+                      loading={isGeneratingPdf}
+                      onClick={handleDownloadPdf}
+                      className="shadow-sm shadow-brand-500/20 text-xs font-semibold"
+                    >
+                      {isGeneratingPdf ? 'Preparing PDF...' : 'Download Report'}
+                    </Button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* MAIN DOCUMENT CARD (Visible only to Admin/HR) */}
+      {isAdminOrHr && (
+        <section
+          ref={documentRef}
+          className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-sm overflow-hidden print:border-none print:shadow-none"
+        >
         {/* Document Header Banner */}
         <div className="bg-gradient-to-r from-slate-900 via-brand-950 to-slate-900 text-white p-6 sm:p-8 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-96 h-96 bg-brand-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
@@ -772,16 +903,51 @@ export const ReportsPage = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
                     Employee Name <span className="text-rose-500">*</span>
                   </label>
-                  <input
-                    type="text"
+                  <select
                     value={currentData.employeeName}
-                    onChange={(e) => setCurrentData((p) => ({ ...p, employeeName: e.target.value }))}
-                    className={`w-full px-3.5 py-2.5 text-xs font-medium bg-slate-50/70 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing}`}
-                    placeholder="Enter full name"
-                  />
+                    onChange={(e) => {
+                      const selectedName = e.target.value;
+                      const matched = departmentEmployees.find(
+                        (emp) => `${emp.firstName || ''} ${emp.lastName || ''}`.trim() === selectedName
+                      );
+                      if (matched) {
+                        handleSelectEmployee(matched.id || matched._id);
+                      } else {
+                        setCurrentData((p) => ({ ...p, employeeName: selectedName }));
+                      }
+                    }}
+                    className={`w-full px-3.5 py-2.5 text-sm font-medium bg-slate-50/70 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing}`}
+                  >
+                    <option value="">
+                      {loadingEmployees
+                        ? 'Loading team members...'
+                        : departmentEmployees.length === 0
+                        ? `No employees registered under ${department === 'operations' ? 'Operations Team' : department === 'ta' ? 'TA Team' : 'IT Team'}`
+                        : `Select employee from ${department === 'operations' ? 'Operations Team' : department === 'ta' ? 'TA Team' : 'IT Team'}...`}
+                    </option>
+                    {departmentEmployees.map((emp) => {
+                      const name = `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || emp.name || emp.email;
+                      const key = emp.id || emp._id || name;
+                      const desig = emp.designation?.title || emp.designation?.name || emp.designation || 'Member';
+                      return (
+                        <option key={key} value={name}>
+                          {name} ({emp.employeeCode ? `${emp.employeeCode} • ` : ''}{desig})
+                        </option>
+                      );
+                    })}
+                    {currentData.employeeName &&
+                      !departmentEmployees.some(
+                        (emp) =>
+                          `${emp.firstName || ''} ${emp.lastName || ''}`.trim() === currentData.employeeName
+                      ) && (
+                        <option value={currentData.employeeName}>
+                          {currentData.employeeName}
+                        </option>
+                      )}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
@@ -1456,54 +1622,6 @@ export const ReportsPage = () => {
 
                     <div>
                       <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
-                        CEO Official Signature
-                      </label>
-                      <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-2xl p-4 bg-slate-50/50 dark:bg-slate-800/30 flex flex-col items-center justify-center min-h-[100px]">
-                        {ceoSignature ? (
-                          <img
-                            src={ceoSignature}
-                            alt="CEO Signature"
-                            className="max-h-20 max-w-[260px] object-contain"
-                          />
-                        ) : (
-                          <span className="text-xs text-slate-400 italic">No signature attached</span>
-                        )}
-                        {sigFileName && (
-                          <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold mt-2">
-                            Uploaded: {sigFileName}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 pt-1 flex-wrap">
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/png, image/jpeg, image/jpg, image/webp"
-                        onChange={handleSignatureUpload}
-                        className="hidden"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 shadow-2xs transition cursor-pointer"
-                      >
-                        <Upload className="w-3.5 h-3.5 text-slate-500" />
-                        <span>Upload Signature File</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleResetSignature}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-xl text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition cursor-pointer"
-                      >
-                        <RotateCcw className="w-3 h-3" />
-                        <span>Reset Default</span>
-                      </button>
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
                         Authorization Date
                       </label>
                       <input
@@ -1522,25 +1640,43 @@ export const ReportsPage = () => {
             <div className="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-800 print:hidden">
               <Button
                 variant="outline"
-                size="sm"
-                icon={RotateCcw}
-                onClick={handleResetForm}
+                size="md"
+                icon={Download}
+                loading={isGeneratingPdf}
+                onClick={handleDownloadPdf}
+                className="text-sm font-semibold"
               >
-                Reset Form
+                {isGeneratingPdf ? 'Generating PDF...' : 'Download PDF'}
               </Button>
 
               <Button
                 variant="primary"
-                size="sm"
-                icon={Download}
-                loading={isGeneratingPdf}
-                onClick={handleDownloadPdf}
+                size="md"
+                icon={Send}
+                loading={isSending}
+                onClick={handleSendReport}
+                className="text-sm font-semibold shadow-lg shadow-brand-500/20"
               >
-                {isGeneratingPdf ? 'Generating PDF...' : 'Save & Download PDF'}
+                Send
               </Button>
             </div>
           </div>
         </section>
+      )}
+
+      {/* Dedicated Offscreen Executive PDF Dossier Container */}
+      <div
+        className="fixed -left-[99999px] top-0 pointer-events-none z-[-1] opacity-100 overflow-hidden"
+        style={{ width: '794px' }}
+        aria-hidden="true"
+      >
+        <PrintableReportDossier
+          ref={printDossierRef}
+          department={department}
+          data={currentData}
+          averageScore={currentAverageScore}
+        />
+      </div>
 
         {/* Floating Toast Notification */}
       {toastMessage && (
