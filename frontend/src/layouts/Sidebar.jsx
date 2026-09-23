@@ -25,9 +25,7 @@ import {
   GraduationCap,
   Megaphone,
   Clock,
-  BarChart3,
   BookOpen,
-  User,
   ChevronDown,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -44,12 +42,6 @@ export const Sidebar = ({ isOpen, onClose }) => {
       path: '/dashboard',
       icon: LayoutDashboard,
       permission: 'dashboard:read',
-    },
-    {
-      name: 'My Profile',
-      path: '/profile',
-      icon: User,
-      permission: ['employee:read'],
     },
   ];
 
@@ -216,13 +208,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
           permission: ['employee:read'],
         },
         {
-          name: 'HR Analytics',
-          path: '/analytics',
-          icon: BarChart3,
-          roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
-        },
-        {
-          name: 'HR Operations',
+          name: 'HR Operations & Analytics',
           path: '/hr-operations',
           icon: ShieldCheck,
           roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
