@@ -386,7 +386,16 @@ export const attendanceRepository = {
                 GREATEST(
                   0,
                   ROUND(
-                    (((EXTRACT(EPOCH FROM (NOW() - a.check_in)) - COALESCE(a.break_duration_minutes, 0) * 60 - CASE WHEN a.is_on_break AND a.current_break_start IS NOT NULL THEN EXTRACT(EPOCH FROM (NOW() - a.current_break_start)) ELSE 0 END) / 3600.0) - 8.0)::numeric,
+                    (((EXTRACT(EPOCH FROM (NOW() - a.check_in)) - COALESCE(a.break_duration_minutes, 0) * 60 - CASE WHEN a.is_on_break AND a.current_break_start IS NOT NULL THEN EXTRACT(EPOCH FROM (NOW() - a.current_break_start)) ELSE 0 END) / 3600.0) - 
+                    -- Derive shift duration dynamically from shift_timing or default 8.0
+                    COALESCE(
+                      CASE 
+                        WHEN e.shift_timing ILIKE '%01:00 AM%07:00 PM%' OR e.shift_timing ILIKE '%1:00 AM%7:00 PM%' THEN 18.0
+                        WHEN e.shift_timing ILIKE '%06:08 PM%07:00 AM%' OR e.shift_timing ILIKE '%6:08 PM%7:00 AM%' THEN 12.87
+                        ELSE 8.0
+                      END,
+                      8.0
+                    ))::numeric,
                     2
                   )
                 )
@@ -396,6 +405,7 @@ export const attendanceRepository = {
           0
         )::float AS "totalOvertimeHours"
       FROM attendance_records a
+      LEFT JOIN employees e ON e.id = a.employee_id
       ${whereClause};
     `;
     const statsRes = await pool.query(statsSql, values);

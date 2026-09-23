@@ -464,6 +464,7 @@ export const managerService = {
         a.check_in AS "punchIn",
         a.check_out AS "punchOut",
         a.total_hours AS "totalHours",
+        a.overtime_hours AS "overtimeHours",
         (CASE WHEN a.status = 'LATE' THEN true ELSE false END) AS "isLate"
       FROM employees e
       LEFT JOIN departments d ON e.dept_id = d.id
@@ -493,6 +494,7 @@ export const managerService = {
             punchIn: r.punchIn,
             punchOut: r.punchOut,
             totalHours: parseFloat(r.totalHours) || 0,
+            overtimeHours: parseFloat(r.overtimeHours) || 0,
             isLate: !!r.isLate,
           }
         : {
@@ -500,6 +502,7 @@ export const managerService = {
             punchIn: null,
             punchOut: null,
             totalHours: 0,
+            overtimeHours: 0,
             isLate: false,
           },
     }));
