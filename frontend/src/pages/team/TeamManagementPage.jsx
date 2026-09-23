@@ -155,7 +155,7 @@ export const TeamManagementPage = () => {
     }
 
     const hrs = row.attendance?.totalHours ?? row.totalHours ?? 0;
-    const ot = hrs > 8.0 ? Number((hrs - 8.0).toFixed(2)) : 0;
+    const ot = row.attendance?.overtimeHours ?? row.overtimeHours ?? 0;
     setSelectedAttendanceDetail({
       id: row.attendance?.id || row.id,
       attendanceDate: row.attendance?.attendanceDate || selectedDate,
@@ -413,8 +413,9 @@ export const TeamManagementPage = () => {
     {
       header: 'Hours & Overtime',
       render: (row) => {
-        const hrs = row.attendance?.totalHours || 0;
-        const overtime = hrs > 8.0 ? (hrs - 8.0).toFixed(1) : null;
+        const hrs = Number(row.attendance?.totalHours ?? row.totalHours ?? 0);
+        const otVal = Number(row.attendance?.overtimeHours ?? row.overtimeHours ?? 0);
+        const overtime = otVal > 0 ? otVal.toFixed(1) : null;
         return (
           <div>
             <span className="text-xs font-medium text-slate-800">{hrs.toFixed(1)} hrs</span>
