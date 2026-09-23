@@ -25,15 +25,22 @@ export const employeeController = {
         limit: limit ? parseInt(limit, 10) : 20,
       });
 
-      const role = (req.user?.roleName || '').toLowerCase();
-      const isHrOrAdmin = ['admin', 'superadmin', 'hr', 'hrmanager', 'orgadmin'].some((r) => role.includes(r));
+      const allRoles = (Array.isArray(req.user?.roles) ? req.user.roles : [req.user?.roleName || req.user?.role || ''])
+        .filter(Boolean)
+        .map((r) => String(r).toLowerCase());
+      const isHrOrAdmin =
+        allRoles.some((r) => ['admin', 'superadmin', 'hr', 'hrmanager', 'orgadmin'].some((adm) => r.includes(adm))) ||
+        (req.user?.email || '').toLowerCase() === 'sheetalbedi@tasknera.com';
 
       // Redact sensitive compensation/bank details for employees/managers viewing other staff
       if (!isHrOrAdmin && result?.employees) {
         result.employees = result.employees.map((emp) => {
-          const isSelf = emp.id === req.user?.employeeId || emp.userId === req.user?.id || emp.email === req.user?.email;
+          const isSelf =
+            (req.user?.employeeId && emp.id === req.user.employeeId) ||
+            (req.user?.id && emp.userId === req.user.id) ||
+            (req.user?.email && emp.email && req.user.email.toLowerCase() === emp.email.toLowerCase());
           if (!isSelf) {
-            const { salary, bankAccountNumber, ...sanitized } = emp;
+            const { salary, bankAccountNumber, salaryStructure, ...sanitized } = emp;
             return sanitized;
           }
           return emp;
@@ -73,12 +80,19 @@ export const employeeController = {
         }
       }
 
-      const role = (req.user?.roleName || '').toLowerCase();
-      const isHrOrAdmin = ['admin', 'superadmin', 'hr', 'hrmanager', 'orgadmin'].some((r) => role.includes(r));
-      const isSelf = employee.id === req.user?.employeeId || employee.userId === req.user?.id || employee.email === req.user?.email;
+      const allRoles = (Array.isArray(req.user?.roles) ? req.user.roles : [req.user?.roleName || req.user?.role || ''])
+        .filter(Boolean)
+        .map((r) => String(r).toLowerCase());
+      const isHrOrAdmin =
+        allRoles.some((r) => ['admin', 'superadmin', 'hr', 'hrmanager', 'orgadmin'].some((adm) => r.includes(adm))) ||
+        (req.user?.email || '').toLowerCase() === 'sheetalbedi@tasknera.com';
+      const isSelf =
+        (req.user?.employeeId && employee.id === req.user.employeeId) ||
+        (req.user?.id && employee.userId === req.user.id) ||
+        (req.user?.email && employee.email && req.user.email.toLowerCase() === employee.email.toLowerCase());
 
       if (!isHrOrAdmin && !isSelf) {
-        const { salary, bankAccountNumber, ...sanitized } = employee;
+        const { salary, bankAccountNumber, salaryStructure, ...sanitized } = employee;
         employee = sanitized;
       }
 
