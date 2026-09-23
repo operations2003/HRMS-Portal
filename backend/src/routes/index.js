@@ -30,15 +30,22 @@ import analyticsRoutes from './analyticsRoutes.js';
 import payrollRoutes from './payrollRoutes.js';
 import policyRoutes from './policyRoutes.js';
 import { sendSuccess } from '../utils/apiResponse.js';
+import { config } from '../config/index.js';
 
 const router = Router();
 
 // Health Check
-router.get(['/health', '/v1/health'], (req, res) => {
+router.get(['/', '/health', '/v1/health'], (req, res) => {
   return sendSuccess(res, 'HRMS Portal Backend API is running smoothly.', {
     status: 'healthy',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
+    diagnostics: {
+      dbConfigured: Boolean(config.db.databaseUrl),
+      jwtConfigured: Boolean(process.env.JWT_SECRET),
+      clientUrl: config.clientUrl || '(default)',
+      nodeEnv: config.nodeEnv,
+    },
   });
 });
 

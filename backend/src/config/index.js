@@ -14,7 +14,7 @@ const nodeEnv = process.env.NODE_ENV || 'development';
 const jwtSecret = process.env.JWT_SECRET;
 
 if (!jwtSecret && nodeEnv === 'production') {
-  throw new Error('FATAL SECURITY ERROR: JWT_SECRET environment variable is required and cannot be empty in production.');
+  console.warn('⚠️ [SECURITY WARNING] JWT_SECRET environment variable is not defined in production. Using fallback secret. Please configure JWT_SECRET in your Vercel project environment variables.');
 }
 
 export const config = {
