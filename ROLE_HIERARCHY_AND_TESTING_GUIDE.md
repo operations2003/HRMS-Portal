@@ -45,36 +45,36 @@ Think of the HRMS portal like a real company office building:
 
 Here is a simple checklist of every menu item in the portal and which roles have access to it:
 
-| Menu Feature | What is it for? | 👑 Admin | 💼 HR | 👔 Manager | 👤 Employee |
-| :--- | :--- | :---: | :---: | :---: | :---: |
-| **Dashboard** | Main homepage with real-time stats | ✅ (Admin Stats) | ✅ (Admin/HR Stats) | ✅ **(Manager Overview)** | ✅ (My Work Hub) |
-| **Manager Cockpit** | Supervisor command center for direct reports | ✅ | ✅ | ✅ | ❌ |
-| **Team Management** | View team members, profiles & supervisor logs | ✅ | ✅ | ✅ (Own Team) | ❌ |
-| **Approvals Center** | Approve or reject pending team requests | ✅ | ✅ | ✅ (Own Team) | ❌ |
-| **Performance** | Quarterly appraisal reviews & performance scores | ✅ | ✅ | ✅ (Review team) | ✅ (Self-review only) |
-| **HR Operations** | Manage contracts, employee states & audits | ✅ | ✅ | ❌ | ❌ |
-| **Probation Pipeline** | Review new hires completing probation period | ✅ | ✅ | ✅ (Own Team) | ❌ |
-| **HR Analytics** | Charts on attendance trends & headcount | ✅ | ✅ | ❌ | ❌ |
-| **Attendance** | Daily punch clock (Clock In / Clock Out) & logs | ✅ | ✅ | ✅ | ✅ |
-| **Leaves** | View holiday calendar, leave balances, apply leave | ✅ (Manage all) | ✅ (Manage all) | ✅ (Self + Team) | ✅ (Self only) |
-| **Work Tasks** | Assign, track, and complete daily tasks | ✅ | ✅ | ✅ | ✅ |
-| **Expenses** | Submit travel or food bills for reimbursement | ✅ (Approve) | ✅ (Approve) | ✅ (Approve team) | ✅ (Submit bills) |
-| **Training & Skills**| Skill courses, training programs & certifications | ✅ | ✅ | ✅ | ✅ |
-| **Engagement** | Company polls, surveys, and announcements | ✅ | ✅ | ✅ | ✅ |
-| **Organizations** | Company profile & branches | ✅ | ❌ | ❌ | ❌ |
-| **Onboarding** | Candidate onboarding progress & checklist | ✅ | ✅ | ❌ | ❌ |
-| **Employees** | Master company employee directory | ✅ | ✅ | ❌ | ❌ |
-| **Document Vault** | Upload ID, passport, contracts (stored in database) | ✅ (All company) | ✅ (All company) | ❌ (Own docs) | ✅ (Own docs only) |
-| **Helpdesk** | Support tickets for IT or HR assistance | ✅ (Resolve) | ✅ (Resolve) | ✅ | ✅ (Raise ticket) |
-| **Requests** | Internal requests (equipment, certificates) | ✅ | ✅ | ✅ | ✅ |
-| **Departments** | Department creation & department heads | ✅ | ✅ | ❌ | ❌ |
-| **User Accounts** | Create or edit user logins & passwords | ✅ | ❌ | ❌ | ❌ |
-| **Resignation** | Submit resignation & initiate exit | ✅ | ✅ | ✅ | ✅ |
-| **Exit Checklist** | Department clearances (IT, Finance, Admin) | ✅ | ✅ | ❌ | ❌ |
-| **Offboarding** | Full deprovisioning & account closing | ✅ | ✅ | ❌ | ❌ |
-| **Full & Final (F&F)**| Final settlement computation & clearance | ✅ | ✅ | ❌ | ❌ |
-| **Roles & RBAC** | System security permissions & role definitions | ✅ | ❌ | ❌ | ❌ |
-| **Admin Settings** | General system configurations & security flags | ✅ | ❌ | ❌ | ❌ |
+| Menu Feature           | What is it for?                                     |     👑 Admin     |        💼 HR        |        👔 Manager         |      👤 Employee      |
+| :--------------------- | :-------------------------------------------------- | :--------------: | :-----------------: | :-----------------------: | :-------------------: |
+| **Dashboard**          | Main homepage with real-time stats                  | ✅ (Admin Stats) | ✅ (Admin/HR Stats) | ✅ **(Manager Overview)** |   ✅ (My Work Hub)    |
+| **Manager Cockpit**    | Supervisor command center for direct reports        |        ✅        |         ✅          |            ✅             |          ❌           |
+| **Team Management**    | View team members, profiles & supervisor logs       |        ✅        |         ✅          |       ✅ (Own Team)       |          ❌           |
+| **Approvals Center**   | Approve or reject pending team requests             |        ✅        |         ✅          |       ✅ (Own Team)       |          ❌           |
+| **Performance**        | Quarterly appraisal reviews & performance scores    |        ✅        |         ✅          |     ✅ (Review team)      | ✅ (Self-review only) |
+| **HR Operations**      | Manage contracts, employee states & audits          |        ✅        |         ✅          |            ❌             |          ❌           |
+| **Probation Pipeline** | Review new hires completing probation period        |        ✅        |         ✅          |       ✅ (Own Team)       |          ❌           |
+| **HR Analytics**       | Charts on attendance trends & headcount             |        ✅        |         ✅          |            ❌             |          ❌           |
+| **Attendance**         | Daily punch clock (Clock In / Clock Out) & logs     |        ✅        |         ✅          |            ✅             |          ✅           |
+| **Leaves**             | View holiday calendar, leave balances, apply leave  | ✅ (Manage all)  |   ✅ (Manage all)   |     ✅ (Self + Team)      |    ✅ (Self only)     |
+| **Work Tasks**         | Assign, track, and complete daily tasks             |        ✅        |         ✅          |            ✅             |          ✅           |
+| **Expenses**           | Submit travel or food bills for reimbursement       |   ✅ (Approve)   |    ✅ (Approve)     |     ✅ (Approve team)     |   ✅ (Submit bills)   |
+| **Training & Skills**  | Skill courses, training programs & certifications   |        ✅        |         ✅          |            ✅             |          ✅           |
+| **Engagement**         | Company polls, surveys, and announcements           |        ✅        |         ✅          |            ✅             |          ✅           |
+| **Organizations**      | Company profile & branches                          |        ✅        |         ❌          |            ❌             |          ❌           |
+| **Onboarding**         | Candidate onboarding progress & checklist           |        ✅        |         ✅          |            ❌             |          ❌           |
+| **Employees**          | Master company employee directory                   |        ✅        |         ✅          |            ❌             |          ❌           |
+| **Document Vault**     | Upload ID, passport, contracts (stored in database) | ✅ (All company) |  ✅ (All company)   |       ❌ (Own docs)       |  ✅ (Own docs only)   |
+| **Helpdesk**           | Support tickets for IT or HR assistance             |   ✅ (Resolve)   |    ✅ (Resolve)     |            ✅             |   ✅ (Raise ticket)   |
+| **Requests**           | Internal requests (equipment, certificates)         |        ✅        |         ✅          |            ✅             |          ✅           |
+| **Departments**        | Department creation & department heads              |        ✅        |         ✅          |            ❌             |          ❌           |
+| **User Accounts**      | Create or edit user logins & passwords              |        ✅        |         ❌          |            ❌             |          ❌           |
+| **Resignation**        | Submit resignation & initiate exit                  |        ✅        |         ✅          |            ✅             |          ✅           |
+| **Exit Checklist**     | Department clearances (IT, Finance, Admin)          |        ✅        |         ✅          |            ❌             |          ❌           |
+| **Offboarding**        | Full deprovisioning & account closing               |        ✅        |         ✅          |            ❌             |          ❌           |
+| **Full & Final (F&F)** | Final settlement computation & clearance            |        ✅        |         ✅          |            ❌             |          ❌           |
+| **Roles & RBAC**       | System security permissions & role definitions      |        ✅        |         ❌          |            ❌             |          ❌           |
+| **Admin Settings**     | General system configurations & security flags      |        ✅        |         ❌          |            ❌             |          ❌           |
 
 ---
 
@@ -82,12 +82,12 @@ Here is a simple checklist of every menu item in the portal and which roles have
 
 Use these accounts to test each role right away. No setup needed:
 
-| Role | Test Email Account | Password | What You Will Experience |
-| :--- | :--- | :--- | :--- |
-| **👑 Admin** | `shubham@tasknera.com` | `Shubham@264` | Full company-wide controls, all menus unlocked, user management, system settings. |
-| **💼 HR** | `abhijeet@gmail.com` *(or `ajay1725@gmail.com`)* | `12345678` | Onboarding, employee directory, document verification, HR operations, leave approvals. |
-| **👔 Manager** | `ajay@tasknera.com` | `ajay@123` | **New Manager Dashboard**, team roster status, Manager Cockpit, team leave approvals. |
-| **👤 Employee** | `shreya@tasknera.com` | `12345678` | Clean personal self-service portal: Clock In/Out, apply for leave, upload personal docs. |
+| Role            | Test Email Account                               | Password              | What You Will Experience                                                                 |
+| :-------------- | :----------------------------------------------- | :-------------------- | :--------------------------------------------------------------------------------------- |
+| **👑 Admin**    | `shubham@tasknera.com`                           | `[Admin Password]`    | Full company-wide controls, all menus unlocked, user management, system settings.        |
+| **💼 HR**       | `abhijeet@gmail.com` _(or `ajay1725@gmail.com`)_ | `[HR Password]`       | Onboarding, employee directory, document verification, HR operations, leave approvals.   |
+| **👔 Manager**  | `ajay@tasknera.com`                              | `[Manager Password]`  | **New Manager Dashboard**, team roster status, Manager Cockpit, team leave approvals.    |
+| **👤 Employee** | `shreya@tasknera.com`                            | `[Employee Password]` | Clean personal self-service portal: Clock In/Out, apply for leave, upload personal docs. |
 
 ---
 
@@ -98,12 +98,13 @@ Follow these 4 simple walkthroughs to verify all functionalities work correctly:
 ---
 
 ### 🧪 Test 1: Testing as an Employee (Team Member)
+
 **Goal:** Verify employee self-service works smoothly and other people's private data is hidden.
 
-1. **Log in**: Use `shreya@tasknera.com` with password `12345678`.
+1. **Log in**: Use `shreya@tasknera.com` with your configured employee password.
 2. **Dashboard**:
-   - Notice the greeting: *"Welcome back, Shreya!"*
-   - Check the 4 personal cards: *My Attendance, My Leaves, My Performance, Helpdesk*.
+   - Notice the greeting: _"Welcome back, Shreya!"_
+   - Check the 4 personal cards: _My Attendance, My Leaves, My Performance, Helpdesk_.
 3. **Attendance**:
    - Click **Attendance** on the left menu.
    - Click **Clock In** button. Notice status becomes active.
@@ -121,18 +122,19 @@ Follow these 4 simple walkthroughs to verify all functionalities work correctly:
 ---
 
 ### 🧪 Test 2: Testing as a Manager (Supervisor / Team Lead)
+
 **Goal:** Verify the **Manager Dashboard** and **Manager Cockpit** are two distinct, powerful tools.
 
-1. **Log in**: Use `ajay@tasknera.com` with password `ajay@123`.
+1. **Log in**: Use `ajay@tasknera.com` with your configured manager password.
 2. **Dashboard (The New Manager Dashboard)**:
    - Click **Dashboard** on the left menu (`/dashboard`).
    - Notice the **Executive Welcome Banner**: Displays how many team members are on duty today.
    - Check the 5 KPI cards:
-     - *Direct Reports count*
-     - *Today Presence %*
-     - *On Leave Today*
-     - *Pending Actions*
-     - *My Attendance (with quick Clock In / Clock Out button)*
+     - _Direct Reports count_
+     - _Today Presence %_
+     - _On Leave Today_
+     - _Pending Actions_
+     - _My Attendance (with quick Clock In / Clock Out button)_
    - Look at **Today's Team Attendance & Roster**: Shows each direct report with green (Present), yellow (Late), or gray (Not Checked In).
    - Look at **Upcoming Team Availability (7-Day Forecast)**: Shows who has upcoming approved or pending leaves.
    - Look at **Priority Supervisory Approvals**: If an employee applied for leave, you can click **Approve** directly from the dashboard!
@@ -148,9 +150,10 @@ Follow these 4 simple walkthroughs to verify all functionalities work correctly:
 ---
 
 ### 🧪 Test 3: Testing as HR (People Operations)
+
 **Goal:** Verify employee hiring, company document vault, and onboarding approvals.
 
-1. **Log in**: Use `abhijeet@gmail.com` with password `12345678`.
+1. **Log in**: Use `abhijeet@gmail.com` with your configured HR password.
 2. **Dashboard**:
    - You see company-wide metrics: Total Employees, Active Departments, Recent Hires.
 3. **Employees**:
@@ -172,9 +175,10 @@ Follow these 4 simple walkthroughs to verify all functionalities work correctly:
 ---
 
 ### 🧪 Test 4: Testing as Admin (The Super Boss)
+
 **Goal:** Verify governance, system settings, and RBAC controls.
 
-1. **Log in**: Use `shubham@tasknera.com` with password `Shubham@264`.
+1. **Log in**: Use `shubham@tasknera.com` with your configured admin password.
 2. **Dashboard**:
    - Master executive command console.
 3. **User Accounts & Roles**:
@@ -189,11 +193,11 @@ Follow these 4 simple walkthroughs to verify all functionalities work correctly:
 
 ## 🎯 Quick Summary of Differences
 
-| Aspect | 👑 Admin | 💼 HR | 👔 Manager | 👤 Employee |
-| :--- | :--- | :--- | :--- | :--- |
-| **Scope of View** | Entire System & Server | Entire Company Workforce | Own Team / Direct Reports | Only Themselves |
-| **Main Focus** | System Governance & Setup | Hiring, Records & Compliance | Team Productivity & Approvals | Personal Work & Requests |
-| **Dashboard Type** | System Master Console | Workforce Overview Console | **Executive Team & Self Hub** | Personal Work Hub |
-| **Can Edit Logins?** | ✅ Yes | ❌ No | ❌ No | ❌ No |
-| **Can Approve Leaves?**| ✅ Yes | ✅ Yes | ✅ (For their team) | ❌ (Can only apply) |
-| **Document Vault** | Views/Downloads All Docs | Views/Downloads/Approves All Docs | Personal Docs Only | Personal Docs Only |
+| Aspect                  | 👑 Admin                  | 💼 HR                             | 👔 Manager                    | 👤 Employee              |
+| :---------------------- | :------------------------ | :-------------------------------- | :---------------------------- | :----------------------- |
+| **Scope of View**       | Entire System & Server    | Entire Company Workforce          | Own Team / Direct Reports     | Only Themselves          |
+| **Main Focus**          | System Governance & Setup | Hiring, Records & Compliance      | Team Productivity & Approvals | Personal Work & Requests |
+| **Dashboard Type**      | System Master Console     | Workforce Overview Console        | **Executive Team & Self Hub** | Personal Work Hub        |
+| **Can Edit Logins?**    | ✅ Yes                    | ❌ No                             | ❌ No                         | ❌ No                    |
+| **Can Approve Leaves?** | ✅ Yes                    | ✅ Yes                            | ✅ (For their team)           | ❌ (Can only apply)      |
+| **Document Vault**      | Views/Downloads All Docs  | Views/Downloads/Approves All Docs | Personal Docs Only            | Personal Docs Only       |

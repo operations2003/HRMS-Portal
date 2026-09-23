@@ -1,3 +1,4 @@
+
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -29,8 +30,8 @@ export const config = {
     directUrl: process.env.DIRECT_URL || '',
   },
   cloudinary: {
-    cloudName: process.env.CLOUDINARY_CLOUD_NAME || 'oroewjgz',
-    apiKey: process.env.CLOUDINARY_API_KEY || '851245953754347',
-    apiSecret: process.env.CLOUDINARY_API_SECRET || 'WQ8Hd7P0Uk-3NLDxUJ-Ut2r5Ysw',
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME || '',
+    apiKey: process.env.CLOUDINARY_API_KEY || '',
+    apiSecret: process.env.CLOUDINARY_API_SECRET || '',
   },
 };

@@ -3,23 +3,28 @@ node_modules/
 .pnp
 .pnp.js
 
-# Testing
+# Testing & Coverage
 coverage/
 backend/test_*.js
 test_*.js
+*.test.js
+*.spec.js
 
 # Production & Build outputs
 dist/
 build/
+.vite/
+.cache/
 
-# Environment files
+# Environment files (never commit secrets)
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+!.env.example
+*.env
+*.env.local
 
 # Logs
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -29,6 +34,7 @@ lerna-debug.log*
 # Editor & OS files
 .DS_Store
 Thumbs.db
+desktop.ini
 .vscode/
 .idea/
 *.suo
@@ -37,7 +43,7 @@ Thumbs.db
 *.sln
 *.sw?
 
-# Uploads
-uploads/
+# Uploads & Temporary file storage
+/uploads/
 backend/uploads/*
 !backend/uploads/.gitkeep
