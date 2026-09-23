@@ -27,7 +27,6 @@ import {
   Clock,
   BarChart3,
   BookOpen,
-  User,
   ChevronDown,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -44,12 +43,6 @@ export const Sidebar = ({ isOpen, onClose }) => {
       path: '/dashboard',
       icon: LayoutDashboard,
       permission: 'dashboard:read',
-    },
-    {
-      name: 'My Profile',
-      path: '/profile',
-      icon: User,
-      permission: ['employee:read'],
     },
   ];
 
