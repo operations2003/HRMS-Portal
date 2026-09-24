@@ -78,6 +78,12 @@ export const Sidebar = ({ isOpen, onClose }) => {
           permission: ['performance:read', 'employee:read'],
         },
         {
+          name: 'Performance Reports',
+          path: '/reports',
+          icon: FileText,
+          permission: ['employee:read'],
+        },
+        {
           name: 'Tasks & Goals',
           path: '/tasks',
           icon: CheckSquare,
@@ -114,6 +120,20 @@ export const Sidebar = ({ isOpen, onClose }) => {
           name: 'Manager Cockpit',
           path: '/manager',
           icon: Briefcase,
+          roles: ['Manager', 'HR', 'HRManager'],
+          excludeRoles: ['Admin', 'SuperAdmin', 'OrgAdmin'],
+        },
+        {
+          name: 'Team Appraisals',
+          path: '/performance',
+          icon: Award,
+          roles: ['Manager', 'HR', 'HRManager'],
+          excludeRoles: ['Admin', 'SuperAdmin', 'OrgAdmin'],
+        },
+        {
+          name: 'Performance Reports',
+          path: '/reports',
+          icon: FileText,
           roles: ['Manager', 'HR', 'HRManager'],
           excludeRoles: ['Admin', 'SuperAdmin', 'OrgAdmin'],
         },
@@ -218,6 +238,18 @@ export const Sidebar = ({ isOpen, onClose }) => {
           icon: ShieldCheck,
           roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
         },
+        {
+          name: 'Performance Reviews',
+          path: '/performance',
+          icon: Award,
+          roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
+        },
+        {
+          name: 'Performance Reports',
+          path: '/reports',
+          icon: FileText,
+          roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
+        },
       ],
     },
     {
@@ -267,6 +299,18 @@ export const Sidebar = ({ isOpen, onClose }) => {
           name: 'Roles & RBAC',
           path: '/roles',
           icon: KeyRound,
+          roles: ['Admin', 'SuperAdmin', 'OrgAdmin'],
+        },
+        {
+          name: 'Performance Reviews',
+          path: '/performance',
+          icon: Award,
+          roles: ['Admin', 'SuperAdmin', 'OrgAdmin'],
+        },
+        {
+          name: 'Performance Reports',
+          path: '/reports',
+          icon: FileText,
           roles: ['Admin', 'SuperAdmin', 'OrgAdmin'],
         },
         {

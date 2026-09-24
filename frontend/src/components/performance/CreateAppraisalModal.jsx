@@ -12,7 +12,10 @@ import { useToast } from '../../context/ToastContext.jsx';
 export const CreateAppraisalModal = ({ isOpen, onClose, onSuccess }) => {
   const toast = useToast();
   const { user, hasRole } = useAuth();
-  const isManagerOnly = hasRole('Manager') && !hasRole('Admin') && !hasRole('SuperAdmin') && !hasRole('OrgAdmin') && !hasRole('HR') && !hasRole('HRManager');
+  const userRoleStr = (user?.roleName || user?.role?.name || user?.role || '').toLowerCase().trim();
+  const isAdmin = ['admin', 'superadmin', 'orgadmin'].some((r) => userRoleStr.includes(r));
+  const isHR = !isAdmin && ['hr', 'hrmanager'].some((r) => userRoleStr.includes(r));
+  const isManagerOnly = !isAdmin && !isHR && (['manager', 'lead', 'supervisor'].some((r) => userRoleStr.includes(r)) || hasRole('Manager'));
 
   const [periods, setPeriods] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -74,17 +77,43 @@ export const CreateAppraisalModal = ({ isOpen, onClose, onSuccess }) => {
   const loadEmployees = async () => {
     try {
       setIsLoadingEmployees(true);
-      const res = await employeeService.listEmployees({ limit: 200 });
+      const res = await employeeService.listEmployees({ limit: 300 });
       const all = res.employees || res.data || (Array.isArray(res) ? res : []);
-      // Exclude self (employees cannot evaluate themselves)
-      const nonSelf = all.filter((e) => e.id !== user?.employeeId);
 
-      if (isManagerOnly && user?.employeeId) {
-        // Manager can only evaluate reportees
-        const reportees = nonSelf.filter((e) => e.managerId === user.employeeId || e.manager?.id === user.employeeId);
-        setEmployees(reportees.length > 0 ? reportees : nonSelf);
+      // Filter out Admin accounts because Admins do NOT have their own performance review
+      const nonAdminCandidates = all.filter((e) => {
+        const rName = (e.user?.roleName || e.roleName || e.role?.name || (typeof e.role === 'string' ? e.role : '') || '').toLowerCase();
+        const dName = (e.designation?.title || e.designationName || e.designation?.name || '').toLowerCase();
+        const email = (e.email || '').toLowerCase();
+        const name = `${e.firstName || ''} ${e.lastName || ''}`.trim().toLowerCase();
+
+        const isAdm =
+          ['admin', 'superadmin', 'orgadmin'].some((r) => rName.includes(r)) ||
+          email.startsWith('admin@') ||
+          email.includes('superadmin') ||
+          name === 'admin' ||
+          name === 'administrator' ||
+          dName.includes('administrator') ||
+          dName.includes('system admin');
+
+        return !isAdm;
+      });
+
+      // Exclude self (employees cannot evaluate themselves)
+      const nonSelf = nonAdminCandidates.filter(
+        (e) => e.id !== user?.employeeId && e.userId !== user?.id
+      );
+
+      if (isManagerOnly && (user?.employeeId || user?.id)) {
+        // Manager can only evaluate their direct reporting employees
+        const reportees = nonSelf.filter((e) => {
+          const mgrId = e.managerId || e.manager?.id || e.reportingManagerId;
+          const userEmpId = user.employeeId || user.id;
+          return mgrId === userEmpId || mgrId === user.employeeId;
+        });
+        setEmployees(reportees);
       } else {
-        // HR and Admin can evaluate any employee
+        // HR and Admin can evaluate other employees
         setEmployees(nonSelf);
       }
     } catch (err) {
@@ -234,7 +263,13 @@ export const CreateAppraisalModal = ({ isOpen, onClose, onSuccess }) => {
               disabled={isLoadingEmployees}
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 font-medium text-xs"
             >
-              <option value="">Choose employee to evaluate...</option>
+              <option value="">
+                {isLoadingEmployees
+                  ? 'Loading employees...'
+                  : isManagerOnly && employees.length === 0
+                  ? 'No direct reporting employees assigned'
+                  : 'Choose employee to evaluate...'}
+              </option>
               {employees.map((e) => (
                 <option key={e.id} value={e.id}>
                   {e.firstName} {e.lastName} ({e.employeeCode}) — {e.department?.name || 'General'}

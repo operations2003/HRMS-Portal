@@ -11,7 +11,15 @@ export const performanceService = {
    */
   isHrOrAdmin(currentUser) {
     const role = (currentUser.roleName || '').toLowerCase();
-    return ['admin', 'superadmin', 'hr', 'hrmanager'].includes(role);
+    return ['admin', 'superadmin', 'orgadmin', 'hr', 'hrmanager'].includes(role);
+  },
+
+  /**
+   * Helper to check if user is an Administrator (Admin does not have own performance review)
+   */
+  isAdmin(currentUser) {
+    const role = (currentUser.roleName || '').toLowerCase();
+    return ['admin', 'superadmin', 'orgadmin'].includes(role);
   },
 
   /**
@@ -114,6 +122,14 @@ export const performanceService = {
     if (!targetEmp || targetEmp.orgId !== currentUser.orgId) {
       const err = new Error('Target employee not found in your organization.');
       err.statusCode = 404;
+      throw err;
+    }
+
+    // Admin does not have their own performance review -> target employee cannot be an admin account
+    const targetRole = (targetEmp.user?.roleName || targetEmp.roleName || targetEmp.role?.name || (typeof targetEmp.role === 'string' ? targetEmp.role : '') || '').toLowerCase();
+    if (['admin', 'superadmin', 'orgadmin'].some((r) => targetRole.includes(r))) {
+      const err = new Error('Forbidden: Administrators do not participate in employee performance reviews.');
+      err.statusCode = 400;
       throw err;
     }
 
@@ -225,6 +241,9 @@ export const performanceService = {
   },
 
   async getMyRecords(currentUser) {
+    if (this.isAdmin(currentUser)) {
+      return [];
+    }
     const emp = await this.resolveEmployee(currentUser);
     if (!emp) return [];
     return performanceRepository.findRecords(currentUser.orgId, { employeeId: emp.id });

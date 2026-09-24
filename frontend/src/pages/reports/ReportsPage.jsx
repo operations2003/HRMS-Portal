@@ -35,11 +35,34 @@ import { PrintableReportDossier } from '../../components/performance/PrintableRe
 
 
 export const ReportsPage = () => {
-  const { user } = useAuth();
+  const { user, hasRole } = useAuth();
   const userRoleStr = (user?.roleName || user?.role?.name || user?.role || '').toLowerCase().trim();
-  const isAdminOrHr = ['admin', 'superadmin', 'orgadmin', 'hr', 'hrmanager'].some((r) =>
-    userRoleStr.includes(r)
-  );
+  const isAdmin = ['admin', 'superadmin', 'orgadmin'].some((r) => userRoleStr.includes(r));
+  const isHR = !isAdmin && ['hr', 'hrmanager'].some((r) => userRoleStr.includes(r));
+  const isManager = !isAdmin && !isHR && (['manager', 'lead', 'supervisor'].some((r) => userRoleStr.includes(r)) || hasRole('Manager'));
+  const isEmployeeOnly = !isAdmin && !isHR && !isManager;
+
+  // Role permissions per prompt requirements:
+  // Admin: can review other employees, does NOT have own performance review
+  // HR: can review other employees AND has own performance review
+  // Manager: can review direct reportees AND has own performance review
+  // Employee: only has own performance review and cannot review others
+  const canReviewOthers = isAdmin || isHR || isManager;
+  const hasOwnReview = !isAdmin;
+
+  // View mode: 'reviews' (give/review evaluations) | 'my' (view own report dossier)
+  // Admin: always 'reviews' (never 'my')
+  // Employee: always 'my' (never 'reviews')
+  // HR & Manager: defaults to 'reviews', can switch to 'my'
+  const [viewMode, setViewMode] = useState(() => (canReviewOthers ? 'reviews' : 'my'));
+
+  useEffect(() => {
+    if (isAdmin && viewMode !== 'reviews') {
+      setViewMode('reviews');
+    } else if (isEmployeeOnly && viewMode !== 'my') {
+      setViewMode('my');
+    }
+  }, [isAdmin, isEmployeeOnly, viewMode]);
 
   // Helper to match logged in employee with their specific performance dossier
   const resolveUserDepartment = () => {
@@ -83,10 +106,10 @@ export const ReportsPage = () => {
   const [department, setDepartment] = useState(() => resolveUserDepartment());
 
   useEffect(() => {
-    if (!isAdminOrHr) {
+    if (viewMode === 'my') {
       setDepartment(resolveUserDepartment());
     }
-  }, [user, isAdminOrHr]);
+  }, [user, viewMode]);
 
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
@@ -308,7 +331,7 @@ export const ReportsPage = () => {
   const departmentEmployees = useMemo(() => {
     if (!employees || employees.length === 0) return [];
 
-    const nonAdmins = employees.filter((emp) => {
+    let candidates = employees.filter((emp) => {
       const role = (
         emp.user?.roleName ||
         emp.roleName ||
@@ -337,6 +360,15 @@ export const ReportsPage = () => {
       );
     });
 
+    // If logged in as Manager: ONLY direct reporting employees can be reviewed
+    if (isManager && !isAdmin && !isHR) {
+      const userEmpId = user?.employeeId || user?.id;
+      candidates = candidates.filter((emp) => {
+        const mgrId = emp.managerId || emp.manager?.id || emp.reportingManagerId;
+        return mgrId && (mgrId === userEmpId || mgrId === user?.employeeId);
+      });
+    }
+
     const deptKeyword =
       department === 'operations'
         ? 'operat|ops|logist|supply|fulfillment'
@@ -345,7 +377,7 @@ export const ReportsPage = () => {
         : 'talent|ta|recruit|hr|human|people';
     const regex = new RegExp(deptKeyword, 'i');
 
-    const matched = nonAdmins.filter((emp) => {
+    const matched = candidates.filter((emp) => {
       const dName =
         emp.departmentName ||
         emp.department?.name ||
@@ -360,8 +392,8 @@ export const ReportsPage = () => {
       return regex.test(dName) || regex.test(desig) || regex.test(email);
     });
 
-    return matched.length > 0 ? matched : nonAdmins;
-  }, [employees, department]);
+    return matched.length > 0 ? matched : candidates;
+  }, [employees, department, isManager, isAdmin, isHR, user]);
 
   // Handle employee selection from dropdown in Section 01
   const handleSelectEmployee = (empId) => {
@@ -457,10 +489,10 @@ export const ReportsPage = () => {
     }
   };
 
-  // For standard employees, personalize the form with their own identity
+  // For standard employees or when viewing personal review, personalize the form with their own identity
   useEffect(() => {
-    if (!isAdminOrHr && user) {
-      const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
+    if ((!canReviewOthers || viewMode === 'my') && user) {
+      const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.fullName || user.name;
       const empCode = user.employeeCode || user.employeeId;
       const dept = user.departmentName || user.department?.name || user.department;
       const desig = user.designation || user.designationName || user.designation?.name;
@@ -475,7 +507,7 @@ export const ReportsPage = () => {
         }));
       }
     }
-  }, [user, isAdminOrHr, department]);
+  }, [user, canReviewOthers, viewMode, department]);
 
   // Average score calculation
   const calculateAverage = (competencies) => {
@@ -747,23 +779,62 @@ export const ReportsPage = () => {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
-                {isAdminOrHr ? 'Reports & Performance Dossiers' : 'My Performance Review Dossier'}
+                {canReviewOthers && viewMode === 'reviews'
+                  ? 'Reports & Performance Dossiers'
+                  : 'My Performance Review Dossier'}
               </h1>
-              <Badge variant="brand">{isAdminOrHr ? 'Executive Review' : currentData.employeeName}</Badge>
+              <Badge variant="brand">
+                {canReviewOthers && viewMode === 'reviews'
+                  ? isManager
+                    ? 'Manager Review'
+                    : 'Executive Review'
+                  : currentData.employeeName}
+              </Badge>
             </div>
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-              {isAdminOrHr
-                ? 'Department performance evaluation dossiers, competency scoring calibrations, and official PDF/Excel reports.'
+              {canReviewOthers && viewMode === 'reviews'
+                ? isManager
+                  ? 'Evaluate direct reporting employees, calibrate scores, and generate official appraisal reports.'
+                  : 'Department performance evaluation dossiers, competency scoring calibrations, and official PDF/Excel reports.'
                 : 'Official performance assessment record, skill calibration ratings, and career progression dossier.'}
             </p>
           </div>
         </div>
-
-
       </div>
 
-      {/* Modern Department Switcher Tabs (Visible ONLY to HR & Admin) */}
-      {isAdminOrHr && (
+      {/* Role Navigation: Review Dossiers vs My Review (Visible to HR & Manager who have both capabilities) */}
+      {canReviewOthers && hasOwnReview && (
+        <div className="flex border-b border-slate-200 dark:border-slate-800 gap-6 text-sm font-semibold">
+          <button
+            type="button"
+            onClick={() => setViewMode('reviews')}
+            className={`pb-3 transition-colors flex items-center gap-2 cursor-pointer ${
+              viewMode === 'reviews'
+                ? 'text-brand-600 border-b-2 border-brand-600'
+                : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+            }`}
+          >
+            <FileText className="w-4 h-4" />
+            {isManager ? 'Evaluate Direct Reports' : 'Department Review Dossiers'}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setViewMode('my')}
+            className={`pb-3 transition-colors flex items-center gap-2 cursor-pointer ${
+              viewMode === 'my'
+                ? 'text-brand-600 border-b-2 border-brand-600'
+                : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+            }`}
+          >
+            <Award className="w-4 h-4" />
+            My Performance Review
+          </button>
+        </div>
+      )}
+
+      {/* Modern Department Switcher Tabs (Visible when reviewing others) */}
+      {canReviewOthers && viewMode === 'reviews' && (
         <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-3 overflow-x-auto">
           <button
             type="button"
@@ -806,8 +877,8 @@ export const ReportsPage = () => {
         </div>
       )}
 
-      {/* DEDICATED EMPLOYEE ROW VIEW (Visible to non-Admin / non-HR Employees) */}
-      {!isAdminOrHr && (
+      {/* DEDICATED EMPLOYEE ROW VIEW (Visible when viewing own review: HR, Manager, Employee) */}
+      {hasOwnReview && viewMode === 'my' && (
         <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800">
             <h3 className="text-base font-bold text-slate-900 dark:text-white">
@@ -880,8 +951,8 @@ export const ReportsPage = () => {
         </div>
       )}
 
-      {/* MAIN DOCUMENT CARD (Visible only to Admin/HR) */}
-      {isAdminOrHr && (
+      {/* MAIN DOCUMENT CARD (Visible when reviewing others: Admin, HR, Manager) */}
+      {canReviewOthers && viewMode === 'reviews' && (
         <section
           ref={documentRef}
           className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-sm overflow-hidden print:border-none print:shadow-none"
@@ -942,6 +1013,8 @@ export const ReportsPage = () => {
                     <option value="">
                       {loadingEmployees
                         ? 'Loading team members...'
+                        : isManager && departmentEmployees.length === 0
+                        ? 'No direct reporting employees assigned'
                         : departmentEmployees.length === 0
                         ? `No employees registered under ${department === 'operations' ? 'Operations Team' : department === 'ta' ? 'TA Team' : 'IT Team'}`
                         : `Select employee from ${department === 'operations' ? 'Operations Team' : department === 'ta' ? 'TA Team' : 'IT Team'}...`}
@@ -957,6 +1030,7 @@ export const ReportsPage = () => {
                       );
                     })}
                     {currentData.employeeName &&
+                      !isManager &&
                       !departmentEmployees.some(
                         (emp) =>
                           `${emp.firstName || ''} ${emp.lastName || ''}`.trim() === currentData.employeeName

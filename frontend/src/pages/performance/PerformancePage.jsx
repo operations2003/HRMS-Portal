@@ -33,12 +33,23 @@ export const PerformancePage = () => {
   const { user, hasRole } = useAuth();
   const toast = useToast();
 
-  const isManager = hasRole('Manager') || hasRole('Admin') || hasRole('SuperAdmin') || hasRole('OrgAdmin');
-  const isHrOrAdmin = hasRole('HR') || hasRole('HRManager') || hasRole('Admin') || hasRole('SuperAdmin') || hasRole('OrgAdmin');
-  const canGiveAppraisal = isManager || isHrOrAdmin;
+  const userRoleStr = (user?.roleName || user?.role?.name || user?.role || '').toLowerCase().trim();
+  const isAdmin = ['admin', 'superadmin', 'orgadmin'].some((r) => userRoleStr.includes(r));
+  const isHR = !isAdmin && ['hr', 'hrmanager'].some((r) => userRoleStr.includes(r));
+  const isManager = !isAdmin && !isHR && (['manager', 'lead', 'supervisor'].some((r) => userRoleStr.includes(r)) || hasRole('Manager'));
+  const isEmployeeOnly = !isAdmin && !isHR && !isManager;
+
+  // Admin can give/review other employees, but Admin does NOT have their own performance review
+  // HR can give/review other employees AND has their own review
+  // Manager can give/review direct reportees AND has their own review
+  // Employee only has their own review and cannot give/review others
+  const canGiveAppraisal = isAdmin || isHR || isManager;
+  const isHrOrAdmin = isAdmin || isHR;
+  const canReviewTeam = isAdmin || isHR || isManager;
+  const hasOwnReview = !isAdmin;
 
   // Active Tab: 'my' | 'team' | 'cycles'
-  const [activeTab, setActiveTab] = useState('my');
+  const [activeTab, setActiveTab] = useState(() => (isAdmin ? 'team' : 'my'));
   const [myRecords, setMyRecords] = useState([]);
   const [teamRecords, setTeamRecords] = useState([]);
   const [periods, setPeriods] = useState([]);
@@ -64,10 +75,14 @@ export const PerformancePage = () => {
   const [isActing, setIsActing] = useState(false);
 
   useEffect(() => {
-    if (!isManager && !isHrOrAdmin && activeTab !== 'my') {
+    if (isAdmin && activeTab === 'my') {
+      setActiveTab('team');
+    } else if (isEmployeeOnly && activeTab !== 'my') {
       setActiveTab('my');
+    } else if (isManager && activeTab === 'cycles') {
+      setActiveTab('team');
     }
-  }, [isManager, isHrOrAdmin, activeTab]);
+  }, [isAdmin, isHR, isManager, isEmployeeOnly, activeTab]);
 
   useEffect(() => {
     loadData();
@@ -487,20 +502,22 @@ export const PerformancePage = () => {
 
       {/* Tabs */}
       <div className="flex border-b border-slate-200 gap-6 text-sm font-semibold">
-        <button
-          type="button"
-          onClick={() => setActiveTab('my')}
-          className={`pb-3 transition-colors flex items-center gap-2 ${
-            activeTab === 'my'
-              ? 'text-brand-600 border-b-2 border-brand-600'
-              : 'text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          <Award className="w-4 h-4" />
-          My Appraisals ({myRecords.length})
-        </button>
+        {hasOwnReview && (
+          <button
+            type="button"
+            onClick={() => setActiveTab('my')}
+            className={`pb-3 transition-colors flex items-center gap-2 ${
+              activeTab === 'my'
+                ? 'text-brand-600 border-b-2 border-brand-600'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <Award className="w-4 h-4" />
+            My Appraisals ({myRecords.length})
+          </button>
+        )}
 
-        {isManager && (
+        {canReviewTeam && (
           <button
             type="button"
             onClick={() => setActiveTab('team')}
@@ -511,7 +528,7 @@ export const PerformancePage = () => {
             }`}
           >
             <Star className="w-4 h-4" />
-            Team Evaluations ({teamRecords.filter((r) => r.status === 'SUBMITTED').length} Pending)
+            {isManager ? 'Direct Reports Reviews' : 'Team / Department Reviews'} ({teamRecords.filter((r) => r.status === 'SUBMITTED').length} Pending)
           </button>
         )}
 
