@@ -102,14 +102,14 @@ export const notificationService = {
       });
     }
 
-    // Notification to assigned agent if designated
+    // Notification to assigned Manager / HR / Admin
     if (assigneeUserId && assigneeUserId !== requesterUserId) {
       notifications.push({
         orgId,
         userId: assigneeUserId,
         eventType: 'TICKET_CREATED',
-        title: `Ticket Assigned: ${ticketNumber}`,
-        message: `You have been assigned ticket "${subject}".`,
+        title: `Ticket Action Required: ${ticketNumber}`,
+        message: `Ticket "${subject}" has been assigned to you for resolution/checking.`,
         entityType: 'HELPDESK_TICKET',
         entityId: ticketId,
         actionUrl: `/helpdesk/${ticketId}`,
@@ -117,6 +117,28 @@ export const notificationService = {
     }
 
     return notificationRepository.createBatch(notifications);
+  },
+
+  /**
+   * 2. Event: Helpdesk Ticket Assigned / Re-assigned
+   */
+  async notifyTicketAssigned({ orgId, ticketId, ticketNumber, subject, assigneeUserId, assignedByName = '' }) {
+    if (!assigneeUserId) return null;
+
+    logger.info('NotificationService', `Dispatching ticket assignment for ${ticketNumber} to user ${assigneeUserId}`);
+
+    return notificationRepository.create({
+      orgId,
+      userId: assigneeUserId,
+      eventType: 'TICKET_STATUS_CHANGED',
+      title: `Ticket Action Required: ${ticketNumber}`,
+      message: assignedByName
+        ? `Ticket "${subject}" has been assigned to you by ${assignedByName} for resolution/checking.`
+        : `Ticket "${subject}" has been assigned to you for resolution/checking.`,
+      entityType: 'HELPDESK_TICKET',
+      entityId: ticketId,
+      actionUrl: `/helpdesk/${ticketId}`,
+    });
   },
 
   /**

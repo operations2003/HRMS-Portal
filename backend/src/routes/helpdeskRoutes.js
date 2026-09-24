@@ -57,13 +57,13 @@ router.post(
 );
 router.patch(
   '/tickets/:id/status',
-  authorize('helpdesk:manage'),
+  authorize(['helpdesk:manage', 'helpdesk:write']),
   validate(validateUpdateStatus),
   helpdeskController.updateStatus
 );
 router.post(
   '/tickets/:id/resolve',
-  authorize('helpdesk:manage'),
+  authorize(['helpdesk:manage', 'helpdesk:write']),
   validate(validateResolveTicket),
   helpdeskController.resolveTicket
 );

@@ -118,6 +118,11 @@ export const TicketDetailModal = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  const isAssignee =
+    (ticket?.assignedTo && ticket.assignedTo === user?.id) ||
+    (ticket?.assignee && ticket.assignee.id === user?.id);
+  const canTakeAction = canManage || isAssignee;
+
   // New Comment State
   const [newComment, setNewComment] = useState('');
   const [isInternal, setIsInternal] = useState(false);
@@ -419,46 +424,48 @@ export const TicketDetailModal = ({
             )}
           </div>
 
-          {/* HR / Admin Management Controls Card */}
-          {canManage && (
+          {/* Management / Assigned Resolution Controls Card */}
+          {canTakeAction && (
             <div className="bg-brand-50/40 dark:bg-brand-950/20 rounded-2xl p-4 border border-brand-200/60 dark:border-brand-900/40 space-y-3">
               <div className="flex items-center gap-2 text-xs font-bold text-brand-900 dark:text-brand-300">
                 <ShieldCheck className="w-4 h-4 text-brand-600" />
-                Staff Ticket Operations
+                {isAssignee && !canManage ? 'Assigned Ticket Resolution' : 'Staff Ticket Operations'}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
-                {/* Assignment Dropdown */}
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
-                    Assign To
-                  </label>
-                  <div className="flex gap-2">
-                    <select
-                      value={selectedAssignee}
-                      onChange={(e) => setSelectedAssignee(e.target.value)}
-                      className="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 py-1.5 px-2.5 text-slate-900 dark:text-white"
-                    >
-                      <option value="">Unassigned</option>
-                      {usersList.map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.firstName} {u.lastName} ({u.role?.name || 'Staff'})
-                        </option>
-                      ))}
-                    </select>
-                    <Button
-                      size="xs"
-                      variant="outline"
-                      loading={actionLoading}
-                      onClick={handleAssignTicket}
-                    >
-                      Assign
-                    </Button>
+                {/* Assignment Dropdown (Staff only) */}
+                {canManage && (
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                      Assign To
+                    </label>
+                    <div className="flex gap-2">
+                      <select
+                        value={selectedAssignee}
+                        onChange={(e) => setSelectedAssignee(e.target.value)}
+                        className="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 py-1.5 px-2.5 text-slate-900 dark:text-white"
+                      >
+                        <option value="">Unassigned</option>
+                        {usersList.map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.firstName} {u.lastName} ({u.role?.name || 'Staff'})
+                          </option>
+                        ))}
+                      </select>
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        loading={actionLoading}
+                        onClick={handleAssignTicket}
+                      >
+                        Assign
+                      </Button>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Status Switcher */}
-                <div className="space-y-1">
+                <div className={`space-y-1 ${!canManage ? 'sm:col-span-2' : ''}`}>
                   <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
                     Change Status
                   </label>
@@ -472,7 +479,7 @@ export const TicketDetailModal = ({
                       <option value="OPEN">OPEN</option>
                       <option value="IN_PROGRESS">IN PROGRESS</option>
                       <option value="RESOLVED">RESOLVED</option>
-                      <option value="CLOSED">CLOSED</option>
+                      {canManage && <option value="CLOSED">CLOSED</option>}
                       <option value="CANCELLED">CANCELLED</option>
                     </select>
                   </div>

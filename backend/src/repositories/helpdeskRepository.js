@@ -158,16 +158,16 @@ export const helpdeskRepository = {
     return mapTicketRow(res.rows[0]);
   },
 
-  async createTicket({ orgId, employeeId, category, subject, description, priority = 'MEDIUM', attachmentUrl = '' }) {
+  async createTicket({ orgId, employeeId, category, subject, description, priority = 'MEDIUM', attachmentUrl = '', assignedTo = null, assignedTeam = '' }) {
     const id = `tick-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
     const ticketNumber = `HD-${Date.now().toString().slice(-6)}-${Math.floor(1000 + Math.random() * 9000)}`;
 
     const sql = `
       INSERT INTO helpdesk_tickets (
         id, ticket_number, org_id, employee_id, category, subject, description,
-        priority, status, attachment_url, created_at, updated_at
+        priority, status, attachment_url, assigned_to, assigned_team, created_at, updated_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'OPEN', $9, NOW(), NOW())
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'OPEN', $9, $10, $11, NOW(), NOW())
       RETURNING *;
     `;
     const res = await pool.query(sql, [
@@ -180,6 +180,8 @@ export const helpdeskRepository = {
       description.trim(),
       priority.toUpperCase(),
       attachmentUrl.trim(),
+      assignedTo || null,
+      assignedTeam || '',
     ]);
 
     return this.findTicketById(res.rows[0].id, orgId);

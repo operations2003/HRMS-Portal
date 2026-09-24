@@ -24,9 +24,16 @@ const PRIORITY_OPTIONS = [
   { value: 'URGENT', label: 'Urgent - Critical blocker' },
 ];
 
+const ASSIGN_TO_OPTIONS = [
+  { value: 'HR', label: 'HR Operations / Policies' },
+  { value: 'MANAGER', label: 'Reporting Manager' },
+  { value: 'ADMIN', label: 'Admin / IT Support' },
+];
+
 export const CreateTicketModal = ({ isOpen, onClose, onTicketCreated }) => {
   const toast = useToast();
   const [category, setCategory] = useState('HR');
+  const [assignedToRole, setAssignedToRole] = useState('HR');
   const [subject, setSubject] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState('MEDIUM');
@@ -35,10 +42,22 @@ export const CreateTicketModal = ({ isOpen, onClose, onTicketCreated }) => {
 
   const resetForm = () => {
     setCategory('HR');
+    setAssignedToRole('HR');
     setSubject('');
     setDescription('');
     setPriority('MEDIUM');
     setError(null);
+  };
+
+  const handleCategoryChange = (newCat) => {
+    setCategory(newCat);
+    if (newCat === 'IT_SUPPORT') {
+      setAssignedToRole('ADMIN');
+    } else if (newCat === 'LEAVE_ATTENDANCE') {
+      setAssignedToRole('MANAGER');
+    } else {
+      setAssignedToRole('HR');
+    }
   };
 
   const handleClose = () => {
@@ -74,10 +93,17 @@ export const CreateTicketModal = ({ isOpen, onClose, onTicketCreated }) => {
         subject: subject.trim(),
         description: description.trim(),
         priority,
+        assignedToRole,
       });
 
       toast.showSuccess(
-        `Ticket #${created.ticketNumber || 'created'} opened successfully. Our team will review it shortly.`
+        `Ticket #${created.ticketNumber || 'created'} opened successfully. Assigned to ${
+          assignedToRole === 'MANAGER'
+            ? 'Reporting Manager'
+            : assignedToRole === 'ADMIN'
+            ? 'Admin / IT'
+            : 'HR Department'
+        }.`
       );
       handleClose();
       if (onTicketCreated) onTicketCreated(created);
@@ -94,7 +120,7 @@ export const CreateTicketModal = ({ isOpen, onClose, onTicketCreated }) => {
       isOpen={isOpen}
       onClose={handleClose}
       title="Open Support Ticket"
-      subtitle="Submit an issue or inquiry to the HR and IT operations team."
+      subtitle="Submit an issue or inquiry to your Manager, HR, or IT Admin."
       maxWidth="max-w-xl"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -105,12 +131,20 @@ export const CreateTicketModal = ({ isOpen, onClose, onTicketCreated }) => {
           </div>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <Select
             label="Category"
             value={category}
-            onChange={(e) => setCategory(e.target.value)}
+            onChange={(e) => handleCategoryChange(e.target.value)}
             options={CATEGORY_OPTIONS}
+            required
+          />
+
+          <Select
+            label="Assign To"
+            value={assignedToRole}
+            onChange={(e) => setAssignedToRole(e.target.value)}
+            options={ASSIGN_TO_OPTIONS}
             required
           />
 

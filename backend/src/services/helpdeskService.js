@@ -76,6 +76,112 @@ export const helpdeskService = {
     return await helpdeskRepository.findTickets(orgId, filters);
   },
 
+  /**
+   * Helper: Resolve assigned user ID based on specified role or user ID
+   * Supports: 'MANAGER' (reporting manager), 'HR' (HR department), 'ADMIN' (IT/System admin)
+   */
+  async resolveAssignee(orgId, requesterEmployee, targetRoleOrUserId, category = '') {
+    let target = (targetRoleOrUserId || '').toString().trim();
+    if (!target) {
+      if (category === 'IT_SUPPORT') target = 'ADMIN';
+      else if (category === 'LEAVE_ATTENDANCE' && requesterEmployee?.managerId) target = 'MANAGER';
+      else target = 'HR';
+    }
+
+    let upperTarget = target.toUpperCase();
+
+    // 1. Assign to Reporting Manager
+    if (upperTarget === 'MANAGER') {
+      if (requesterEmployee?.managerId) {
+        try {
+          const mgrEmp = await employeeRepository.findById(requesterEmployee.managerId, orgId);
+          if (mgrEmp?.userId) {
+            return { assigneeUserId: mgrEmp.userId, assignedTeam: 'MANAGEMENT' };
+          }
+          if (mgrEmp?.email) {
+            const mgrUser = await userRepository.findByEmail(mgrEmp.email);
+            if (mgrUser?.id) {
+              return { assigneeUserId: mgrUser.id, assignedTeam: 'MANAGEMENT' };
+            }
+          }
+        } catch (e) {
+          console.warn('[Helpdesk] Could not resolve manager employee:', e.message);
+        }
+      }
+      // If employee has no manager assigned, fallback to HR
+      upperTarget = 'HR';
+    }
+
+    // 2. Assign to HR
+    if (upperTarget === 'HR') {
+      if (requesterEmployee?.hrId) {
+        try {
+          const hrEmp = await employeeRepository.findById(requesterEmployee.hrId, orgId);
+          if (hrEmp?.userId) {
+            return { assigneeUserId: hrEmp.userId, assignedTeam: 'HR' };
+          }
+          if (hrEmp?.email) {
+            const hrUser = await userRepository.findByEmail(hrEmp.email);
+            if (hrUser?.id) {
+              return { assigneeUserId: hrUser.id, assignedTeam: 'HR' };
+            }
+          }
+        } catch (e) {
+          console.warn('[Helpdesk] Could not resolve hr employee:', e.message);
+        }
+      }
+
+      // Find an active HR user in the organization
+      try {
+        const allUsers = await userRepository.findAll();
+        const hrUser = allUsers.find(
+          (u) =>
+            (u.orgId === orgId || u.orgId === 'org-1') &&
+            (u.roleName?.toLowerCase().includes('hr') || u.roleId?.toLowerCase().includes('hr')) &&
+            u.status === 'Active'
+        );
+        if (hrUser?.id) {
+          return { assigneeUserId: hrUser.id, assignedTeam: 'HR' };
+        }
+      } catch (e) {
+        console.warn('[Helpdesk] Could not find HR user:', e.message);
+      }
+      // Fallback to Admin
+      upperTarget = 'ADMIN';
+    }
+
+    // 3. Assign to Admin / IT Support
+    if (upperTarget === 'ADMIN' || upperTarget === 'IT_SUPPORT') {
+      try {
+        const allUsers = await userRepository.findAll();
+        const adminUser = allUsers.find(
+          (u) =>
+            (u.orgId === orgId || u.orgId === 'org-1') &&
+            (u.roleName?.toLowerCase().includes('admin') || u.roleId?.toLowerCase().includes('admin')) &&
+            u.status === 'Active'
+        );
+        if (adminUser?.id) {
+          return { assigneeUserId: adminUser.id, assignedTeam: 'IT_SUPPORT' };
+        }
+      } catch (e) {
+        console.warn('[Helpdesk] Could not find Admin user:', e.message);
+      }
+      return { assigneeUserId: 'user-superadmin-shubham', assignedTeam: 'IT_SUPPORT' };
+    }
+
+    // 4. Specific User ID provided
+    try {
+      const userRecord = await userRepository.findById(target);
+      if (userRecord && (userRecord.orgId === orgId || userRecord.orgId === 'org-1')) {
+        return { assigneeUserId: userRecord.id, assignedTeam: 'SUPPORT' };
+      }
+    } catch (e) {
+      console.warn('[Helpdesk] Could not find user by ID:', e.message);
+    }
+
+    return { assigneeUserId: null, assignedTeam: '' };
+  },
+
   async getTicketById(user, id) {
     const orgId = user.orgId || 'org-1';
     if (!id || typeof id !== 'string' || !id.trim()) {
@@ -86,6 +192,8 @@ export const helpdeskService = {
     if (!ticket) {
       throw createError('Helpdesk ticket not found.', 404);
     }
+
+    const isStaff = this.isSupportStaff(user);
 
     // IDOR Protection: verify ticket access (staff, requester, or assignee)
     if (!isStaff) {
@@ -120,6 +228,7 @@ export const helpdeskService = {
   async createTicket(user, data) {
     const orgId = user.orgId || 'org-1';
     let employeeId = null;
+    let requesterEmp = null;
 
     if (this.isSupportStaff(user) && data.employeeId) {
       const targetEmp = await employeeRepository.findById(data.employeeId, orgId);
@@ -127,10 +236,20 @@ export const helpdeskService = {
         throw createError('Valid employee is required. Specified employee does not exist in your organization.', 400);
       }
       employeeId = targetEmp.id;
+      requesterEmp = targetEmp;
     } else {
-      const emp = await this.resolveEmployee(user);
-      employeeId = emp.id;
+      requesterEmp = await this.resolveEmployee(user);
+      employeeId = requesterEmp.id;
     }
+
+    // Resolve assignee (Manager, HR, or Admin)
+    const targetAssignee = data.assignedToRole || data.assigneeRole || data.assignTo || data.assignedTo;
+    const { assigneeUserId, assignedTeam } = await this.resolveAssignee(
+      orgId,
+      requesterEmp,
+      targetAssignee,
+      data.category
+    );
 
     const ticket = await helpdeskRepository.createTicket({
       orgId,
@@ -140,9 +259,11 @@ export const helpdeskService = {
       description: data.description,
       priority: data.priority || 'MEDIUM',
       attachmentUrl: data.attachmentUrl || '',
+      assignedTo: assigneeUserId,
+      assignedTeam,
     });
 
-    // Notify ticket creation
+    // Notify ticket creation and assignment
     try {
       await notificationService.notifyTicketCreated({
         orgId,
@@ -169,6 +290,8 @@ export const helpdeskService = {
     if (!ticket) {
       throw createError('Helpdesk ticket not found.', 404);
     }
+
+    const isStaff = this.isSupportStaff(user);
 
     // IDOR Protection: verify ticket access (staff, requester, or assignee)
     if (!isStaff) {
@@ -309,13 +432,13 @@ export const helpdeskService = {
 
     try {
       if (data.assignedTo) {
-        await notificationService.notifyTicketCreated({
+        await notificationService.notifyTicketAssigned({
           orgId,
           ticketId: ticket.id,
           ticketNumber: ticket.ticketNumber,
           subject: ticket.subject,
-          requesterUserId: null,
           assigneeUserId: data.assignedTo,
+          assignedByName: `${user.firstName || ''} ${user.lastName || ''}`.trim(),
         });
       }
     } catch (e) {
@@ -334,6 +457,15 @@ export const helpdeskService = {
     const ticket = await helpdeskRepository.findTicketById(id.trim(), orgId);
     if (!ticket) {
       throw createError('Helpdesk ticket not found.', 404);
+    }
+
+    const isStaff = this.isSupportStaff(user);
+    const isAssignee =
+      (ticket.assignedTo && ticket.assignedTo === user.id) ||
+      (ticket.assignee && ticket.assignee.id === user.id);
+
+    if (!isStaff && !isAssignee) {
+      throw createError('Access denied: You are not authorized to update this ticket.', 403);
     }
 
     if (ticket.status === 'CLOSED') {
@@ -387,6 +519,15 @@ export const helpdeskService = {
     const ticket = await helpdeskRepository.findTicketById(id.trim(), orgId);
     if (!ticket) {
       throw createError('Helpdesk ticket not found.', 404);
+    }
+
+    const isStaff = this.isSupportStaff(user);
+    const isAssignee =
+      (ticket.assignedTo && ticket.assignedTo === user.id) ||
+      (ticket.assignee && ticket.assignee.id === user.id);
+
+    if (!isStaff && !isAssignee) {
+      throw createError('Access denied: You are not authorized to resolve this ticket.', 403);
     }
 
     if (['CLOSED', 'CANCELLED'].includes(ticket.status)) {
