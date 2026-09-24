@@ -622,6 +622,14 @@ export const ReportsPage = () => {
     showToast(`Rendering official ${deptTitle.replace('_', ' ')} executive review PDF...`, 'loading', 0);
 
     try {
+      // 1. Ensure all fonts and typographic assets are fully loaded and rendered
+      if (document.fonts && document.fonts.ready) {
+        await document.fonts.ready;
+      }
+
+      // Allow DOM layout and subpixel rasterization to stabilize
+      await new Promise((resolve) => setTimeout(resolve, 150));
+
       const pageElements = printDossierRef.current.querySelectorAll('.pdf-dossier-page');
       if (!pageElements || pageElements.length === 0) {
         throw new Error('Dossier printable pages not found');
@@ -641,7 +649,10 @@ export const ReportsPage = () => {
           useCORS: true,
           logging: false,
           backgroundColor: '#ffffff',
+          scrollX: 0,
+          scrollY: 0,
           windowWidth: 794,
+          windowHeight: 4500,
         });
 
         const imgData = canvas.toDataURL('image/jpeg', 0.98);
@@ -1666,8 +1677,8 @@ export const ReportsPage = () => {
 
       {/* Dedicated Offscreen Executive PDF Dossier Container */}
       <div
-        className="fixed -left-[99999px] top-0 pointer-events-none z-[-1] opacity-100 overflow-hidden"
-        style={{ width: '794px' }}
+        className="absolute top-0 left-0 pointer-events-none -z-50 overflow-visible"
+        style={{ width: '794px', opacity: 0.999 }}
         aria-hidden="true"
       >
         <PrintableReportDossier

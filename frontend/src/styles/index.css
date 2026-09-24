@@ -122,3 +122,27 @@ h1, h2, h3, .font-heading {
     display: none !important;
   }
 }
+
+/* Fix scattered words & clipped text in PDF export */
+.pdf-export-container {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+  letter-spacing: normal !important;
+  word-spacing: normal !important;
+  font-kerning: normal !important;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.pdf-export-container * {
+  letter-spacing: normal !important;
+  word-spacing: normal !important;
+  box-sizing: border-box;
+}
+
+.pdf-export-container span,
+.pdf-export-container p,
+.pdf-export-container div {
+  overflow: visible;
+}
+
