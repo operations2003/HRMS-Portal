@@ -515,67 +515,69 @@ export const ProfilePage = () => {
         </div>
       </div>
 
-      {/* Verified Banking Details (Protected) */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-6 shadow-xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-emerald-600" />
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">
-              Banking &amp; Account Details
-            </h3>
+      {/* Verified Banking Details (Protected) - Hidden for Admin */}
+      {!isAdmin && (
+        <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-6 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-600" />
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+                Banking &amp; Account Details
+              </h3>
+            </div>
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">
+              <Lock className="w-3 h-3 text-slate-400" />
+              Protected
+            </span>
           </div>
-          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">
-            <Lock className="w-3 h-3 text-slate-400" />
-            Protected
-          </span>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 space-y-1">
+              <span className="text-slate-400 block">Salary Bank</span>
+              <span className="font-semibold text-slate-900 dark:text-white text-sm">
+                {profile?.bankName || 'HDFC Bank'}
+              </span>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 space-y-1">
+              <span className="text-slate-400 block">Account Number</span>
+              <span className="font-mono font-semibold text-slate-900 dark:text-white text-sm tracking-wider">
+                {profile?.bankAccountMasked}
+              </span>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 space-y-1">
+              <span className="text-slate-400 block">IFSC Code</span>
+              <span className="font-mono font-semibold text-slate-900 dark:text-white text-sm">
+                {profile?.bankIfsc || 'HDFC0001234'}
+              </span>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 space-y-1">
+              <span className="text-slate-400 block">PF / UAN Number</span>
+              <span className="font-mono font-bold text-brand-600 dark:text-brand-400 text-sm">
+                {profile?.uanNumber || '101294820194'}
+              </span>
+            </div>
+          </div>
+
+          {/* Change Request Callout */}
+          <div className="p-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+            <p className="text-slate-600 dark:text-slate-300">
+              Need to update your bank details or UAN? Please submit a request to HR via the Help Desk.
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              icon={ExternalLink}
+              onClick={() => navigate('/helpdesk?tab=requests')}
+              className="shrink-0"
+            >
+              Submit Request
+            </Button>
+          </div>
         </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
-          <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 space-y-1">
-            <span className="text-slate-400 block">Salary Bank</span>
-            <span className="font-semibold text-slate-900 dark:text-white text-sm">
-              {profile?.bankName || 'HDFC Bank'}
-            </span>
-          </div>
-
-          <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 space-y-1">
-            <span className="text-slate-400 block">Account Number</span>
-            <span className="font-mono font-semibold text-slate-900 dark:text-white text-sm tracking-wider">
-              {profile?.bankAccountMasked}
-            </span>
-          </div>
-
-          <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 space-y-1">
-            <span className="text-slate-400 block">IFSC Code</span>
-            <span className="font-mono font-semibold text-slate-900 dark:text-white text-sm">
-              {profile?.bankIfsc || 'HDFC0001234'}
-            </span>
-          </div>
-
-          <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 space-y-1">
-            <span className="text-slate-400 block">PF / UAN Number</span>
-            <span className="font-mono font-bold text-brand-600 dark:text-brand-400 text-sm">
-              {profile?.uanNumber || '101294820194'}
-            </span>
-          </div>
-        </div>
-
-        {/* Change Request Callout */}
-        <div className="p-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-          <p className="text-slate-600 dark:text-slate-300">
-            Need to update your bank details or UAN? Please submit a request to HR via the Help Desk.
-          </p>
-          <Button
-            size="sm"
-            variant="outline"
-            icon={ExternalLink}
-            onClick={() => navigate('/helpdesk?tab=requests')}
-            className="shrink-0"
-          >
-            Submit Request
-          </Button>
-        </div>
-      </div>
+      )}
 
       {/* Employee Documents Upload & Verification Section (Hidden for Admin) */}
       {!isAdmin && (
