@@ -280,12 +280,17 @@ export const helpdeskService = {
 
     // Notify ticket creation and assignment
     try {
+      const requesterName =
+        `${user.firstName || ''} ${user.lastName || ''}`.trim() ||
+        requesterEmp?.fullName ||
+        'Employee';
       await notificationService.notifyTicketCreated({
         orgId,
         ticketId: ticket.id,
         ticketNumber: ticket.ticketNumber,
         subject: ticket.subject,
         requesterUserId: user.id,
+        requesterName,
         assigneeUserId: ticket.assignedTo,
       });
     } catch (e) {

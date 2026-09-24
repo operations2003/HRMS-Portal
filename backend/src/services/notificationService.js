@@ -1,4 +1,5 @@
 import { notificationRepository } from '../repositories/notificationRepository.js';
+import { userRepository } from '../repositories/userRepository.js';
 import { logger } from '../utils/logger.js';
 
 export const notificationService = {
@@ -85,7 +86,7 @@ export const notificationService = {
   /**
    * 1. Event: Helpdesk Ticket Created
    */
-  async notifyTicketCreated({ orgId, ticketId, ticketNumber, subject, requesterUserId, assigneeUserId = null }) {
+  async notifyTicketCreated({ orgId, ticketId, ticketNumber, subject, requesterUserId, requesterName = '', assigneeUserId = null }) {
     const notifications = [];
 
     // Notification to requester (acknowledgement)
@@ -108,12 +109,55 @@ export const notificationService = {
         orgId,
         userId: assigneeUserId,
         eventType: 'TICKET_CREATED',
-        title: `Ticket Action Required: ${ticketNumber}`,
-        message: `Ticket "${subject}" has been assigned to you for resolution/checking.`,
+        title: `New Help Desk Ticket: ${ticketNumber}`,
+        message: requesterName
+          ? `New ticket "${subject}" submitted by ${requesterName} is assigned to you.`
+          : `Ticket "${subject}" has been assigned to you for resolution/checking.`,
         entityType: 'HELPDESK_TICKET',
         entityId: ticketId,
         actionUrl: `/helpdesk/${ticketId}`,
       });
+    }
+
+    // Notification to relevant authorized Help Desk staff
+    try {
+      const allUsers = await userRepository.findAll();
+      const notifiedUserIds = new Set([requesterUserId, assigneeUserId].filter(Boolean));
+
+      for (const u of allUsers) {
+        if (!u || !u.id || notifiedUserIds.has(u.id)) continue;
+        if (u.status !== 'Active') continue;
+        if (u.orgId && u.orgId !== orgId && u.orgId !== 'org-1' && orgId !== 'org-1') continue;
+
+        const roleStr =
+          u.roleName ||
+          (typeof u.role === 'string' ? u.role : u.role?.name) ||
+          u.roleId ||
+          '';
+        const normRole = roleStr.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const isStaffRole = ['admin', 'superadmin', 'hr', 'hrmanager', 'orgadmin'].includes(normRole);
+        const hasManagePerm =
+          Array.isArray(u.permissions) &&
+          (u.permissions.includes('helpdesk:manage') || u.permissions.includes('request:manage'));
+
+        if (isStaffRole || hasManagePerm) {
+          notifications.push({
+            orgId: u.orgId || orgId,
+            userId: u.id,
+            eventType: 'TICKET_CREATED',
+            title: `New Help Desk Ticket: ${ticketNumber}`,
+            message: requesterName
+              ? `New ticket "${subject}" submitted by ${requesterName}.`
+              : `New ticket "${subject}" has been submitted for review.`,
+            entityType: 'HELPDESK_TICKET',
+            entityId: ticketId,
+            actionUrl: `/helpdesk/${ticketId}`,
+          });
+          notifiedUserIds.add(u.id);
+        }
+      }
+    } catch (e) {
+      logger.warn('NotificationService', `Could not dispatch staff notifications for ticket ${ticketNumber}: ${e.message}`);
     }
 
     return notificationRepository.createBatch(notifications);
