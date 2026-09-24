@@ -117,13 +117,16 @@ export const PrintableReportDossier = forwardRef(({ department, data, averageSco
       >
         <div className="space-y-3.5">
           {/* Executive Header Banner - Matches HRMS Portal Form Hero 1-to-1 */}
-          <div className="rounded-2xl bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 text-white p-5 shadow-sm border border-slate-700 relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
-            
+          <div
+            className="rounded-2xl text-white p-5 shadow-sm border border-slate-700 relative overflow-hidden"
+            style={{
+              background: 'radial-gradient(circle at 85% 20%, rgba(99, 102, 241, 0.22) 0%, transparent 60%), linear-gradient(135deg, #090d16 0%, #1e1b4b 60%, #0f172a 100%)',
+            }}
+          >
             <div className="flex items-center justify-between relative z-10">
               <div className="space-y-1.5 max-w-[490px]">
                 <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-white/10 backdrop-blur-md border border-white/20 text-slate-100 shadow-xs">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-white/15 border border-white/20 text-slate-100 shadow-xs">
                     <Icon className="w-3.5 h-3.5 text-indigo-300" />
                     {deptTag}
                   </span>
@@ -138,7 +141,7 @@ export const PrintableReportDossier = forwardRef(({ department, data, averageSco
               </div>
 
               {/* Header Right Status Determination Card */}
-              <div className="text-right space-y-1 shrink-0 bg-white/10 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-white/20 shadow-xs min-w-[170px]">
+              <div className="text-right space-y-1 shrink-0 bg-white/15 px-4 py-2.5 rounded-2xl border border-white/20 shadow-xs min-w-[170px]">
                 <div className="text-[9.5px] font-bold text-indigo-300 uppercase tracking-wider">
                   Review Determination
                 </div>

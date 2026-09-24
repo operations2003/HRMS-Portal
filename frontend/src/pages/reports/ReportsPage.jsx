@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import {
   FileText,
   Download,
@@ -621,11 +622,17 @@ export const ReportsPage = () => {
 
     showToast(`Rendering official ${deptTitle.replace('_', ' ')} executive review PDF...`, 'loading', 0);
 
+    const originalScrollX = window.scrollX || window.pageXOffset || 0;
+    const originalScrollY = window.scrollY || window.pageYOffset || 0;
+
     try {
       // 1. Ensure all fonts and typographic assets are fully loaded and rendered
       if (document.fonts && document.fonts.ready) {
         await document.fonts.ready;
       }
+
+      // Temporarily reset window scroll so canvas origin maps exactly to (0,0)
+      window.scrollTo(0, 0);
 
       // Allow DOM layout and subpixel rasterization to stabilize
       await new Promise((resolve) => setTimeout(resolve, 150));
@@ -649,10 +656,8 @@ export const ReportsPage = () => {
           useCORS: true,
           logging: false,
           backgroundColor: '#ffffff',
-          scrollX: 0,
-          scrollY: 0,
-          windowWidth: 794,
-          windowHeight: 4500,
+          width: 794,
+          height: 1123,
         });
 
         const imgData = canvas.toDataURL('image/jpeg', 0.98);
@@ -669,6 +674,7 @@ export const ReportsPage = () => {
       console.error('PDF export error:', err);
       showToast('Error exporting PDF. Please try again.', 'error');
     } finally {
+      window.scrollTo(originalScrollX, originalScrollY);
       setIsGeneratingPdf(false);
     }
   };
@@ -1675,19 +1681,37 @@ export const ReportsPage = () => {
         </section>
       )}
 
-      {/* Dedicated Offscreen Executive PDF Dossier Container */}
-      <div
-        className="absolute top-0 left-0 pointer-events-none -z-50 overflow-visible"
-        style={{ width: '794px', opacity: 0.999 }}
-        aria-hidden="true"
-      >
-        <PrintableReportDossier
-          ref={printDossierRef}
-          department={department}
-          data={currentData}
-          averageScore={currentAverageScore}
-        />
-      </div>
+      {/* Dedicated Clean Offscreen PDF Dossier Container Portaled to document.body */}
+      {typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            id="pdf-dossier-export-root"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '794px',
+              minWidth: '794px',
+              maxWidth: '794px',
+              margin: 0,
+              padding: 0,
+              zIndex: -99999,
+              pointerEvents: 'none',
+              opacity: 0.999,
+              transform: 'none',
+              backgroundColor: '#ffffff',
+            }}
+            aria-hidden="true"
+          >
+            <PrintableReportDossier
+              ref={printDossierRef}
+              department={department}
+              data={currentData}
+              averageScore={currentAverageScore}
+            />
+          </div>,
+          document.body
+        )}
 
         {/* Floating Toast Notification */}
       {toastMessage && (
