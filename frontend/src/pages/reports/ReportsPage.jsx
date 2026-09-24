@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { createPortal } from 'react-dom';
 import {
   FileText,
   Download,
@@ -656,8 +655,10 @@ export const ReportsPage = () => {
           useCORS: true,
           logging: false,
           backgroundColor: '#ffffff',
-          width: 794,
-          height: 1123,
+          scrollX: 0,
+          scrollY: 0,
+          windowWidth: 1400,
+          windowHeight: 4500,
         });
 
         const imgData = canvas.toDataURL('image/jpeg', 0.98);
@@ -1681,37 +1682,30 @@ export const ReportsPage = () => {
         </section>
       )}
 
-      {/* Dedicated Clean Offscreen PDF Dossier Container Portaled to document.body */}
-      {typeof document !== 'undefined' &&
-        createPortal(
-          <div
-            id="pdf-dossier-export-root"
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: '794px',
-              minWidth: '794px',
-              maxWidth: '794px',
-              margin: 0,
-              padding: 0,
-              zIndex: -99999,
-              pointerEvents: 'none',
-              opacity: 0.999,
-              transform: 'none',
-              backgroundColor: '#ffffff',
-            }}
-            aria-hidden="true"
-          >
-            <PrintableReportDossier
-              ref={printDossierRef}
-              department={department}
-              data={currentData}
-              averageScore={currentAverageScore}
-            />
-          </div>,
-          document.body
-        )}
+      {/* Dedicated Clean Offscreen PDF Dossier Container */}
+      <div
+        id="pdf-dossier-export-root"
+        className="pointer-events-none overflow-visible print:hidden"
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '794px',
+          minWidth: '794px',
+          maxWidth: '794px',
+          zIndex: -50,
+          opacity: 0.999,
+          backgroundColor: '#ffffff',
+        }}
+        aria-hidden="true"
+      >
+        <PrintableReportDossier
+          ref={printDossierRef}
+          department={department}
+          data={currentData}
+          averageScore={currentAverageScore}
+        />
+      </div>
 
         {/* Floating Toast Notification */}
       {toastMessage && (

@@ -113,6 +113,7 @@ export const PrintableReportDossier = forwardRef(({ department, data, averageSco
           boxSizing: 'border-box',
           overflow: 'hidden',
           backgroundColor: '#ffffff',
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
         }}
       >
         <div className="space-y-3.5">
@@ -364,6 +365,7 @@ export const PrintableReportDossier = forwardRef(({ department, data, averageSco
           boxSizing: 'border-box',
           overflow: 'hidden',
           backgroundColor: '#ffffff',
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
         }}
       >
         <div className="space-y-2.5">
