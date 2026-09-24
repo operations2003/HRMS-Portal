@@ -25,7 +25,22 @@ export const employeeRequestService = {
   },
 
   isStaff(user) {
-    return HR_ADMIN_ROLES.includes(user.roleName) || (user.permissions && user.permissions.includes('request:manage'));
+    if (!user) return false;
+    const roleStr =
+      user.roleName ||
+      (typeof user.role === 'string' ? user.role : user.role?.name) ||
+      user.roleId ||
+      '';
+    const normRole = roleStr.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const isStaffRole = ['admin', 'superadmin', 'hr', 'hrmanager', 'orgadmin'].includes(normRole);
+    const hasManagePerm =
+      Array.isArray(user.permissions) &&
+      (user.permissions.includes('request:manage') || user.permissions.includes('helpdesk:manage'));
+    return Boolean(isStaffRole || hasManagePerm);
+  },
+
+  isSupportStaff(user) {
+    return this.isStaff(user);
   },
 
   // ==========================================

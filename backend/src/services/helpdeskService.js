@@ -29,10 +29,25 @@ export const helpdeskService = {
    * Helper: Normalized check whether user has HR / Admin / Support privileges
    */
   isSupportStaff(user) {
-    const normRole = (user?.roleName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!user) return false;
+    const roleStr =
+      user.roleName ||
+      (typeof user.role === 'string' ? user.role : user.role?.name) ||
+      user.roleId ||
+      '';
+    const normRole = roleStr.toLowerCase().replace(/[^a-z0-9]/g, '');
     const isStaffRole = ['admin', 'superadmin', 'hr', 'hrmanager', 'orgadmin'].includes(normRole);
-    const hasManagePerm = Array.isArray(user?.permissions) && user.permissions.includes('helpdesk:manage');
-    return isStaffRole || hasManagePerm;
+    const hasManagePerm =
+      Array.isArray(user.permissions) &&
+      (user.permissions.includes('helpdesk:manage') || user.permissions.includes('request:manage'));
+    return Boolean(isStaffRole || hasManagePerm);
+  },
+
+  /**
+   * Alias for backward compatibility and uniform API
+   */
+  isStaff(user) {
+    return this.isSupportStaff(user);
   },
 
   // ==========================================
@@ -412,6 +427,11 @@ export const helpdeskService = {
       throw createError('Helpdesk ticket not found.', 404);
     }
 
+    const isStaff = this.isSupportStaff(user);
+    if (!isStaff) {
+      throw createError('Access denied: You are not authorized to assign this ticket.', 403);
+    }
+
     if (['CLOSED', 'CANCELLED'].includes(ticket.status)) {
       throw createError(`Cannot assign a ${ticket.status} ticket.`, 400);
     }
@@ -567,6 +587,11 @@ export const helpdeskService = {
     const ticket = await helpdeskRepository.findTicketById(id.trim(), orgId);
     if (!ticket) {
       throw createError('Helpdesk ticket not found.', 404);
+    }
+
+    const isStaff = this.isSupportStaff(user);
+    if (!isStaff) {
+      throw createError('Access denied: You are not authorized to close this ticket.', 403);
     }
 
     if (ticket.status === 'CLOSED') {
