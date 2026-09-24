@@ -289,7 +289,9 @@ export const DashboardPage = () => {
                             <div className="text-xs text-slate-400">{emp.email}</div>
                           </td>
                           <td className="px-6 py-3.5 text-slate-600">
-                            {emp.department?.name || 'General'}
+                            {(emp.user?.roleName === 'Admin' || emp.roleName === 'Admin' || emp.designation?.title === 'CEO' || emp.email === 'sheetalbedi@tasknera.com')
+                              ? (emp.department?.name || 'Main')
+                              : (emp.department?.name || 'General')}
                           </td>
                           <td className="px-6 py-3.5 text-slate-600">{emp.employmentType}</td>
                           <td className="px-6 py-3.5">

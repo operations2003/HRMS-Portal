@@ -2,6 +2,7 @@ import { employeeRepository } from '../repositories/employeeRepository.js';
 import { orgRepository } from '../repositories/orgRepository.js';
 import { userRepository } from '../repositories/userRepository.js';
 import { roleRepository } from '../repositories/roleRepository.js';
+import { designationRepository } from '../repositories/designationRepository.js';
 import { leaveRepository } from '../repositories/leaveRepository.js';
 import { hashPassword } from '../utils/passwordUtils.js';
 import { pool } from '../config/db.js';
@@ -165,6 +166,26 @@ export const employeeService = {
       }
     }
 
+    // Enforce: Admin role has department 'Main' and is designated as CEO
+    let assignedRole = null;
+    if (data.roleId) {
+      assignedRole = (await roleRepository.findRoleById(data.roleId)) || (await roleRepository.findRoleByName(data.roleId));
+    }
+    const isAdminRole =
+      (assignedRole && (assignedRole.name.toLowerCase() === 'admin' || assignedRole.name.toLowerCase() === 'superadmin')) ||
+      data.email === 'sheetalbedi@tasknera.com';
+    if (isAdminRole) {
+      const mainDeptRes = await pool.query(
+        "SELECT id FROM departments WHERE (LOWER(name) = 'main' OR code = 'MAIN') AND org_id = $1 LIMIT 1;",
+        [data.orgId || 'org-1']
+      );
+      data.deptId = mainDeptRes.rows[0]?.id || 'dept-main';
+      const ceoDesig =
+        (await designationRepository.findByCode('CEO', data.orgId)) ||
+        (await designationRepository.findById('desig-ceo', data.orgId));
+      if (ceoDesig) data.desigId = ceoDesig.id;
+    }
+
     try {
       const newEmployee = await employeeRepository.create({
         ...data,
@@ -272,6 +293,30 @@ export const employeeService = {
         ...(data.status ? { status: data.status } : {}),
         ...(data.roleId ? { roleId: data.roleId } : {}),
       });
+    }
+
+    // Enforce: Admin role has department 'Main' and is designated as CEO
+    let checkRole = null;
+    if (data.roleId) {
+      checkRole = (await roleRepository.findRoleById(data.roleId)) || (await roleRepository.findRoleByName(data.roleId));
+    } else if (existing.user?.roleId) {
+      checkRole = await roleRepository.findRoleById(existing.user.roleId);
+    }
+    const isEmpAdmin =
+      (checkRole && (checkRole.name.toLowerCase() === 'admin' || checkRole.name.toLowerCase() === 'superadmin')) ||
+      (existing.user?.roleName || '').toLowerCase() === 'admin' ||
+      existing.email === 'sheetalbedi@tasknera.com' ||
+      data.email === 'sheetalbedi@tasknera.com';
+    if (isEmpAdmin) {
+      const mainDeptRes = await pool.query(
+        "SELECT id FROM departments WHERE (LOWER(name) = 'main' OR code = 'MAIN') AND org_id = $1 LIMIT 1;",
+        [orgId || 'org-1']
+      );
+      data.deptId = mainDeptRes.rows[0]?.id || 'dept-main';
+      const ceoDesig =
+        (await designationRepository.findByCode('CEO', orgId)) ||
+        (await designationRepository.findById('desig-ceo', orgId));
+      if (ceoDesig) data.desigId = ceoDesig.id;
     }
 
     try {

@@ -385,11 +385,11 @@ export const ProfilePage = () => {
             <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-5 gap-y-1.5 text-xs text-slate-500 dark:text-slate-400">
               <span className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300 font-medium">
                 <Briefcase className="w-3.5 h-3.5 text-slate-400" />
-                {profile?.designation}
+                {isAdmin ? 'CEO' : (profile?.designation || 'Staff')}
               </span>
               <span className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300 font-medium">
                 <Building2 className="w-3.5 h-3.5 text-slate-400" />
-                {profile?.department}
+                {isAdmin ? 'Main' : (profile?.department || 'General')}
               </span>
               <span className="flex items-center gap-1.5">
                 <Users className="w-3.5 h-3.5 text-slate-400" />

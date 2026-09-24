@@ -296,16 +296,25 @@ export const TeamManagementPage = () => {
     },
     {
       header: 'Department / Role',
-      render: (row) => (
-        <div>
-          <p className="text-xs font-medium text-slate-800">
-            {(typeof row.designation === 'object' ? row.designation?.name : row.designation) || row.designationTitle || row.jobTitle || 'Staff'}
-          </p>
-          <p className="text-[11px] text-slate-400">
-            {(typeof row.department === 'object' ? row.department?.name : row.department) || row.departmentName || 'Department'}
-          </p>
-        </div>
-      ),
+      render: (row) => {
+        const isAdminOrCeo =
+          row.roleName === 'Admin' ||
+          row.user?.roleName === 'Admin' ||
+          row.designation?.title === 'CEO' ||
+          row.email === 'sheetalbedi@tasknera.com';
+        const desig = isAdminOrCeo
+          ? 'CEO'
+          : (typeof row.designation === 'object' ? (row.designation?.title || row.designation?.name) : row.designation) || row.designationTitle || row.jobTitle || 'Staff';
+        const dept = isAdminOrCeo
+          ? 'Main'
+          : (typeof row.department === 'object' ? row.department?.name : row.department) || row.departmentName || 'Department';
+        return (
+          <div>
+            <p className="text-xs font-medium text-slate-800">{desig}</p>
+            <p className="text-[11px] text-slate-400">{dept}</p>
+          </div>
+        );
+      },
     },
     {
       header: 'Status',

@@ -97,6 +97,7 @@ export const departments = [
   { id: 'dept-ld', orgId: 'org-1', name: 'Learning & Development', code: 'L&D', status: 'Active' },
   { id: 'dept-it', orgId: 'org-1', name: 'IT', code: 'IT', status: 'Active' },
   { id: 'dept-bd', orgId: 'org-1', name: 'Business Development', code: 'BD', status: 'Active' },
+  { id: 'dept-main', orgId: 'org-1', name: 'Main', code: 'MAIN', status: 'Active' },
 ];
 
 export const designations = [
@@ -114,6 +115,7 @@ export const designations = [
   { id: 'desig-ops-head', orgId: 'org-1', title: 'Operations Head', code: 'OPS-HEAD', status: 'Active' },
   { id: 'desig-acct-exec', orgId: 'org-1', title: 'Account Executive', code: 'ACCT-EXEC', status: 'Active' },
   { id: 'desig-ta-tl', orgId: 'org-1', title: 'Talent Acquisition Team Leader', code: 'TA-TL', status: 'Active' },
+  { id: 'desig-ceo', orgId: 'org-1', title: 'CEO', code: 'CEO', status: 'Active' },
 ];
 
 export let users = [
@@ -134,8 +136,8 @@ export let employees = [
   {
     id: 'emp-shubham-admin',
     orgId: 'org-1',
-    deptId: 'dept-ops',
-    desigId: 'desig-ops-head',
+    deptId: 'dept-main',
+    desigId: 'desig-ceo',
     userId: 'user-superadmin-shubham',
     employeeCode: 'EMP-001',
     firstName: 'Sheetal',

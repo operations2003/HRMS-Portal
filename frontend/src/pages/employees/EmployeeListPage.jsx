@@ -834,7 +834,7 @@ export const EmployeeListPage = () => {
               {row.user?.roleName && (
                 <span className="text-[10px] font-semibold text-brand-700 bg-brand-50 px-1.5 py-0.5 rounded border border-brand-100 flex items-center gap-1">
                   <KeyRound className="w-2.5 h-2.5" />
-                  {row.user.roleName}
+                  {row.user.roleName === 'Admin' ? 'CEO' : row.user.roleName}
                 </span>
               )}
             </div>
@@ -854,13 +854,29 @@ export const EmployeeListPage = () => {
     },
     {
       header: 'Department',
-      accessor: (row) => row.department?.name || 'Unassigned',
-      render: (row) => (
-        <div>
-          <div className="font-medium text-slate-800">{row.department?.name || 'Unassigned'}</div>
-          <div className="text-xs text-slate-400">{row.designation?.title || 'Staff'}</div>
-        </div>
-      ),
+      accessor: (row) =>
+        (row.user?.roleName === 'Admin' || row.roleName === 'Admin' || row.designation?.title === 'CEO' || row.email === 'sheetalbedi@tasknera.com')
+          ? (row.department?.name || 'Main')
+          : (row.department?.name || 'Unassigned'),
+      render: (row) => {
+        const isAdminOrCeo =
+          row.user?.roleName === 'Admin' ||
+          row.roleName === 'Admin' ||
+          row.designation?.title === 'CEO' ||
+          row.email === 'sheetalbedi@tasknera.com';
+        const deptTitle = isAdminOrCeo
+          ? (row.department?.name && row.department?.name !== 'Unassigned' ? row.department.name : 'Main')
+          : (row.department?.name || 'Unassigned');
+        const desigTitle = isAdminOrCeo
+          ? (row.designation?.title || 'CEO')
+          : (row.designation?.title || 'Staff');
+        return (
+          <div>
+            <div className="font-medium text-slate-800">{deptTitle}</div>
+            <div className="text-xs text-slate-400">{desigTitle}</div>
+          </div>
+        );
+      },
     },
     {
       header: 'Employment',
@@ -2375,7 +2391,9 @@ export const EmployeeListPage = () => {
                   {viewingEmployee.firstName} {viewingEmployee.lastName}
                 </h3>
                 <p className="text-xs text-brand-600 font-semibold">
-                  {viewingEmployee.designation?.title || 'Staff Member'}
+                  {(viewingEmployee.user?.roleName === 'Admin' || viewingEmployee.roleName === 'Admin' || viewingEmployee.email === 'sheetalbedi@tasknera.com')
+                    ? 'CEO'
+                    : (viewingEmployee.designation?.title || 'Staff Member')}
                 </p>
                 <div className="mt-1 flex items-center gap-2">
                   <Badge>{viewingEmployee.status}</Badge>
@@ -2422,7 +2440,9 @@ export const EmployeeListPage = () => {
                   Department
                 </div>
                 <div className="font-medium text-slate-800">
-                  {viewingEmployee.department?.name || 'General'}
+                  {(viewingEmployee.user?.roleName === 'Admin' || viewingEmployee.roleName === 'Admin' || viewingEmployee.email === 'sheetalbedi@tasknera.com')
+                    ? (viewingEmployee.department?.name || 'Main')
+                    : (viewingEmployee.department?.name || 'General')}
                 </div>
               </div>
 

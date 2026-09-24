@@ -202,6 +202,12 @@ export const employeeController = {
       const rawAcc = (emp.bank_account_number || '').trim();
       const maskedBank = rawAcc.length >= 4 ? '•••• •••• •••• ' + rawAcc.slice(-4) : '•••• •••• •••• 5678';
 
+      const isEmpAdmin =
+        (user.roleName || '').toLowerCase().includes('admin') ||
+        emp.email === 'sheetalbedi@tasknera.com' ||
+        emp.id === 'emp-shubham-admin' ||
+        emp.desig_id === 'desig-ceo';
+
       const profile = {
         id: emp.id,
         employeeCode: emp.employee_code,
@@ -214,8 +220,8 @@ export const employeeController = {
         dateOfJoining: emp.date_of_joining,
         employmentType: emp.employment_type,
         status: emp.status,
-        department: emp.department_name || 'General',
-        designation: emp.designation_title || 'Employee',
+        department: isEmpAdmin ? (emp.department_name || 'Main') : (emp.department_name || 'General'),
+        designation: isEmpAdmin ? (emp.designation_title || 'CEO') : (emp.designation_title || 'Employee'),
         manager: emp.manager_first_name ? `${emp.manager_first_name} ${emp.manager_last_name || ''}`.trim() : 'Executive Leadership',
         gender: emp.gender || 'Not Specified',
         fatherName: emp.father_name || '',
@@ -315,6 +321,12 @@ export const employeeController = {
       const rawAcc = (emp.bank_account_number || '').trim();
       const maskedBank = rawAcc.length >= 4 ? '•••• •••• •••• ' + rawAcc.slice(-4) : '•••• •••• •••• 5678';
 
+      const isEmpAdmin =
+        (emp.role_name || '').toLowerCase().includes('admin') ||
+        emp.email === 'sheetalbedi@tasknera.com' ||
+        emp.id === 'emp-shubham-admin' ||
+        emp.desig_id === 'desig-ceo';
+
       const profile = {
         id: emp.id,
         employeeCode: emp.employee_code,
@@ -327,8 +339,8 @@ export const employeeController = {
         dateOfJoining: emp.date_of_joining,
         employmentType: emp.employment_type,
         status: emp.status,
-        department: emp.department_name || 'General',
-        designation: emp.designation_title || 'Employee',
+        department: isEmpAdmin ? (emp.department_name || 'Main') : (emp.department_name || 'General'),
+        designation: isEmpAdmin ? (emp.designation_title || 'CEO') : (emp.designation_title || 'Employee'),
         manager: emp.manager_first_name ? `${emp.manager_first_name} ${emp.manager_last_name || ''}`.trim() : 'Executive Leadership',
         gender: emp.gender || 'Not Specified',
         fatherName: emp.father_name || '',
