@@ -6,17 +6,13 @@ import {
   ShieldCheck,
   CheckCircle2,
   Check,
-  Award,
-  Sparkles,
-  Star,
-  FileText,
 } from 'lucide-react';
 
 export const PrintableReportDossier = forwardRef(({ department, data, averageScore }, ref) => {
   const isOps = department === 'operations';
   const isIt = department === 'it';
 
-  // Dynamic Department Theme Tokens matching ReportsPage.jsx 1-to-1
+  // Dynamic Department Theme Tokens matching ReportsPage.jsx
   const deptTitle = isOps
     ? 'Operations Team Performance Review'
     : isIt
@@ -33,16 +29,16 @@ export const PrintableReportDossier = forwardRef(({ department, data, averageSco
   const Icon = isOps ? Building2 : isIt ? Laptop : Target;
 
   const numBgClass = isOps
-    ? 'bg-teal-50 text-teal-700 border-teal-200'
+    ? 'bg-teal-50 text-teal-800 border-teal-300'
     : isIt
-    ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
-    : 'bg-purple-50 text-purple-700 border-purple-200';
+    ? 'bg-indigo-50 text-indigo-800 border-indigo-300'
+    : 'bg-purple-50 text-purple-800 border-purple-300';
 
   const scoreBadgeClass = isOps
-    ? 'bg-teal-50 text-teal-800 border-teal-200'
+    ? 'bg-teal-50 text-teal-800 border-teal-300'
     : isIt
-    ? 'bg-indigo-50 text-indigo-800 border-indigo-200'
-    : 'bg-purple-50 text-purple-800 border-purple-200';
+    ? 'bg-indigo-50 text-indigo-800 border-indigo-300'
+    : 'bg-purple-50 text-purple-800 border-purple-300';
 
   const actionLabels = [
     { id: 'action1', text: 'Continue in Current Role' },
@@ -58,49 +54,103 @@ export const PrintableReportDossier = forwardRef(({ department, data, averageSco
       val: 5,
       title: 'Exceptional',
       desc: 'Consistently surpasses highest standards',
-      cardBg: 'bg-emerald-50/80 border-emerald-300 text-emerald-900',
+      cardBg: 'bg-emerald-50 border-emerald-300 text-emerald-950 font-bold',
       numColor: 'bg-emerald-600 text-white',
     },
     {
       val: 4,
       title: 'Exceeds Expectations',
       desc: 'Frequently goes beyond role demands',
-      cardBg: 'bg-sky-50/80 border-sky-300 text-sky-900',
+      cardBg: 'bg-sky-50 border-sky-300 text-sky-950 font-bold',
       numColor: 'bg-sky-600 text-white',
     },
     {
       val: 3,
       title: 'Meets Expectations',
       desc: 'Consistently achieves core deliverables',
-      cardBg: 'bg-indigo-50/80 border-indigo-300 text-indigo-900',
+      cardBg: 'bg-indigo-50 border-indigo-300 text-indigo-950 font-bold',
       numColor: 'bg-indigo-600 text-white',
     },
     {
       val: 2,
       title: 'Needs Improvement',
       desc: 'Fails to meet expected benchmarks',
-      cardBg: 'bg-amber-50/80 border-amber-300 text-amber-900',
+      cardBg: 'bg-amber-50 border-amber-300 text-amber-950 font-bold',
       numColor: 'bg-amber-600 text-white',
     },
     {
       val: 1,
       title: 'Unsatisfactory',
       desc: 'Critical performance deficiency',
-      cardBg: 'bg-rose-50/80 border-rose-300 text-rose-900',
+      cardBg: 'bg-rose-50 border-rose-300 text-rose-950 font-bold',
       numColor: 'bg-rose-600 text-white',
     },
   ];
 
   const overallRatingOptions = [
-    { label: 'Exceptional', icon: '⭐', color: 'border-emerald-500 bg-emerald-50/90 text-emerald-950 font-bold' },
-    { label: 'Exceeds Expectations', icon: '✨', color: 'border-sky-500 bg-sky-50/90 text-sky-950 font-bold' },
-    { label: 'Meets Expectations', icon: '👍', color: 'border-indigo-500 bg-indigo-50/90 text-indigo-950 font-bold' },
-    { label: 'Needs Improvement', icon: '⚠️', color: 'border-amber-500 bg-amber-50/90 text-amber-950 font-bold' },
-    { label: 'Unsatisfactory', icon: '❌', color: 'border-rose-500 bg-rose-50/90 text-rose-950 font-bold' },
+    { label: 'Exceptional', icon: '⭐', color: 'border-emerald-500 bg-emerald-50 text-emerald-950 font-bold' },
+    { label: 'Exceeds Expectations', icon: '✨', color: 'border-sky-500 bg-sky-50 text-sky-950 font-bold' },
+    { label: 'Meets Expectations', icon: '👍', color: 'border-indigo-500 bg-indigo-50 text-indigo-950 font-bold' },
+    { label: 'Needs Improvement', icon: '⚠️', color: 'border-amber-500 bg-amber-50 text-amber-950 font-bold' },
+    { label: 'Unsatisfactory', icon: '❌', color: 'border-rose-500 bg-rose-50 text-rose-950 font-bold' },
   ];
 
+  const renderSectionHeader = (num, title, rightElement = null) => (
+    <div
+      style={{
+        borderBottom: '1px solid #e2e8f0',
+        paddingBottom: '3px',
+        marginBottom: '6px',
+        lineHeight: '24px',
+        display: 'block',
+        position: 'relative',
+      }}
+    >
+      <span
+        className={`rounded font-black text-[11px] border shrink-0 ${numBgClass}`}
+        style={{
+          display: 'inline-block',
+          width: '22px',
+          height: '22px',
+          lineHeight: '20px',
+          textAlign: 'center',
+          boxSizing: 'border-box',
+          verticalAlign: 'middle',
+          marginRight: '6px',
+        }}
+      >
+        {num}
+      </span>
+      <span
+        style={{
+          fontSize: '11px',
+          fontWeight: 700,
+          color: '#0f172a',
+          verticalAlign: 'middle',
+        }}
+      >
+        {title}
+      </span>
+      {rightElement && (
+        <span style={{ float: 'right', verticalAlign: 'middle', lineHeight: '22px' }}>
+          {rightElement}
+        </span>
+      )}
+      <div style={{ clear: 'both' }} />
+    </div>
+  );
+
   return (
-    <div ref={ref} className="pdf-export-container font-sans text-slate-800 bg-white">
+    <div
+      ref={ref}
+      className="pdf-export-container font-sans text-slate-800 bg-white"
+      style={{
+        width: '794px',
+        backgroundColor: '#ffffff',
+        WebkitFontSmoothing: 'antialiased',
+        MozOsxFontSmoothing: 'grayscale',
+      }}
+    >
       {/* ============================================================ */}
       {/* PAGE 1: Identity, Reference Rubric & Competency Table        */}
       {/* ============================================================ */}
@@ -109,45 +159,52 @@ export const PrintableReportDossier = forwardRef(({ department, data, averageSco
         style={{
           width: '794px',
           height: '1123px',
-          padding: '24px 30px',
+          padding: '24px 28px 20px 28px',
           boxSizing: 'border-box',
           overflow: 'hidden',
           backgroundColor: '#ffffff',
           fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
         }}
       >
-        <div className="space-y-3.5">
-          {/* Executive Header Banner - Matches HRMS Portal Form Hero 1-to-1 */}
+        <div className="space-y-3">
+          {/* Executive Header Banner */}
           <div
-            className="rounded-2xl text-white p-5 shadow-sm border border-slate-700 relative overflow-hidden"
+            className="rounded-xl text-white p-3.5 px-4 border border-slate-700 relative overflow-hidden"
             style={{
-              background: 'radial-gradient(circle at 85% 20%, rgba(99, 102, 241, 0.22) 0%, transparent 60%), linear-gradient(135deg, #090d16 0%, #1e1b4b 60%, #0f172a 100%)',
+              background:
+                'radial-gradient(circle at 85% 20%, rgba(99, 102, 241, 0.25) 0%, transparent 60%), linear-gradient(135deg, #090d16 0%, #1e1b4b 60%, #0f172a 100%)',
             }}
           >
             <div className="flex items-center justify-between relative z-10">
-              <div className="space-y-1.5 max-w-[490px]">
+              <div className="space-y-1 max-w-[500px]">
                 <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-white/15 border border-white/20 text-slate-100 shadow-xs">
-                    <Icon className="w-3.5 h-3.5 text-indigo-300" />
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-white/15 border border-white/20 text-slate-100">
+                    <Icon className="w-3 h-3 text-indigo-300" />
                     {deptTag}
                   </span>
-                  <span className="text-[10px] font-bold text-slate-300 tracking-wider uppercase">
+                  <span className="text-[9px] font-bold text-slate-300 tracking-wider uppercase">
                     TaskNera HRMS
                   </span>
                 </div>
-                <h1 className="text-xl font-black tracking-tight text-white leading-tight font-heading">
+                <h1 className="text-lg font-black tracking-tight text-white leading-tight">
                   {deptTitle}
                 </h1>
-                <p className="text-[11px] text-slate-300 leading-snug font-normal">{deptSubtitle}</p>
+                <p className="text-[10px] text-slate-300 leading-tight font-normal">
+                  {deptSubtitle}
+                </p>
               </div>
 
               {/* Header Right Status Determination Card */}
-              <div className="text-right space-y-1 shrink-0 bg-white/15 px-4 py-2.5 rounded-2xl border border-white/20 shadow-xs min-w-[170px]">
-                <div className="text-[9.5px] font-bold text-indigo-300 uppercase tracking-wider">
+              <div className="text-right space-y-0.5 shrink-0 bg-white/15 px-3.5 py-2 rounded-xl border border-white/20 min-w-[165px]">
+                <div className="text-[8.5px] font-bold text-indigo-300 uppercase tracking-wider">
                   Review Determination
                 </div>
-                <div className="text-sm font-black text-white">{data.overallRating || 'Meets Expectations'}</div>
-                <div className="text-[10px] text-slate-300 font-mono">Cycle: {data.reviewCycle || 'Quarterly Review'}</div>
+                <div className="text-sm font-black text-white leading-snug">
+                  {data.overallRating || 'Meets Expectations'}
+                </div>
+                <div className="text-[9.5px] text-slate-300">
+                  Cycle: {data.reviewCycle || 'Quarterly Review'}
+                </div>
               </div>
             </div>
 
@@ -156,120 +213,152 @@ export const PrintableReportDossier = forwardRef(({ department, data, averageSco
           </div>
 
           {/* 01: Employee & Review Information Grid */}
-          <section className="space-y-2">
-            <div className="flex items-center gap-2.5 pb-1.5 border-b border-slate-200">
-              <span className={`w-7 h-7 rounded-xl flex items-center justify-center text-xs font-black shadow-2xs border ${numBgClass}`}>
-                01
-              </span>
-              <div>
-                <h3 className="text-xs font-bold text-slate-900 leading-none">
-                  Employee &amp; Review Information
-                </h3>
-                <p className="text-[10px] text-slate-500">Basic details of the team member under review</p>
-              </div>
-            </div>
+          <section className="space-y-1.5">
+            {renderSectionHeader('01', 'Employee & Review Information')}
 
-            <div className="grid grid-cols-4 gap-2.5">
-              <div className="bg-slate-50/80 border border-slate-200 rounded-xl p-2.5">
-                <div className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Employee Name</div>
-                <div className="font-bold text-slate-900 mt-0.5 text-xs leading-tight">
+            <div className="grid grid-cols-4 gap-2">
+              <div
+                className="bg-slate-50 border border-slate-200 rounded-lg"
+                style={{ height: '48px', padding: '6px 10px', boxSizing: 'border-box' }}
+              >
+                <div style={{ fontSize: '8px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', lineHeight: '12px', marginBottom: '3px' }}>
+                  Employee Name
+                </div>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: '#0f172a', lineHeight: '16px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {data.employeeName || '—'}
                 </div>
               </div>
 
-              <div className="bg-slate-50/80 border border-slate-200 rounded-xl p-2.5">
-                <div className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Employee ID</div>
-                <div className="font-mono font-bold text-slate-800 mt-0.5 text-xs leading-tight">
+              <div
+                className="bg-slate-50 border border-slate-200 rounded-lg"
+                style={{ height: '48px', padding: '6px 10px', boxSizing: 'border-box' }}
+              >
+                <div style={{ fontSize: '8px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', lineHeight: '12px', marginBottom: '3px' }}>
+                  Employee ID
+                </div>
+                <div style={{ fontSize: '11px', fontWeight: 700, fontFamily: 'monospace', color: '#1e293b', lineHeight: '16px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {data.employeeId || '—'}
                 </div>
               </div>
 
-              <div className="bg-slate-50/80 border border-slate-200 rounded-xl p-2.5">
-                <div className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Department</div>
-                <div className="font-semibold text-slate-800 mt-0.5 text-xs leading-tight">
+              <div
+                className="bg-slate-50 border border-slate-200 rounded-lg"
+                style={{ height: '48px', padding: '6px 10px', boxSizing: 'border-box' }}
+              >
+                <div style={{ fontSize: '8px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', lineHeight: '12px', marginBottom: '3px' }}>
+                  Department
+                </div>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: '#0f172a', lineHeight: '16px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {data.department || (isOps ? 'Operations Team' : isIt ? 'IT Team' : 'TA Team')}
                 </div>
               </div>
 
-              <div className="bg-slate-50/80 border border-slate-200 rounded-xl p-2.5">
-                <div className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Designation</div>
-                <div className="font-semibold text-slate-800 mt-0.5 text-xs leading-tight">
+              <div
+                className="bg-slate-50 border border-slate-200 rounded-lg"
+                style={{ height: '48px', padding: '6px 10px', boxSizing: 'border-box' }}
+              >
+                <div style={{ fontSize: '8px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', lineHeight: '12px', marginBottom: '3px' }}>
+                  Designation
+                </div>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: '#0f172a', lineHeight: '16px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {data.designation || 'Team Member'}
                 </div>
               </div>
 
-              <div className="bg-slate-50/80 border border-slate-200 rounded-xl p-2.5">
-                <div className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Reporting Manager</div>
-                <div className="font-semibold text-slate-800 mt-0.5 text-xs leading-tight">
+              <div
+                className="bg-slate-50 border border-slate-200 rounded-lg"
+                style={{ height: '48px', padding: '6px 10px', boxSizing: 'border-box' }}
+              >
+                <div style={{ fontSize: '8px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', lineHeight: '12px', marginBottom: '3px' }}>
+                  Reporting Manager
+                </div>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: '#0f172a', lineHeight: '16px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {data.manager || '—'}
                 </div>
               </div>
 
-              <div className="bg-slate-50/80 border border-slate-200 rounded-xl p-2.5">
-                <div className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Review Date</div>
-                <div className="font-mono font-medium text-slate-800 mt-0.5 text-xs leading-tight">
+              <div
+                className="bg-slate-50 border border-slate-200 rounded-lg"
+                style={{ height: '48px', padding: '6px 10px', boxSizing: 'border-box' }}
+              >
+                <div style={{ fontSize: '8px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', lineHeight: '12px', marginBottom: '3px' }}>
+                  Review Date
+                </div>
+                <div style={{ fontSize: '10.5px', fontWeight: 700, fontFamily: 'monospace', color: '#1e293b', lineHeight: '16px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {data.reviewDate || '—'}
                 </div>
               </div>
 
-              <div className="bg-slate-50/80 border border-slate-200 rounded-xl p-2.5">
-                <div className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Review Period</div>
-                <div className="font-mono font-medium text-slate-800 mt-0.5 text-xs leading-tight">
+              <div
+                className="bg-slate-50 border border-slate-200 rounded-lg"
+                style={{ height: '48px', padding: '6px 10px', boxSizing: 'border-box' }}
+              >
+                <div style={{ fontSize: '8px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', lineHeight: '12px', marginBottom: '3px' }}>
+                  Review Period
+                </div>
+                <div style={{ fontSize: '10px', fontWeight: 700, color: '#0f172a', lineHeight: '16px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {data.reviewPeriod || '—'}
                 </div>
               </div>
 
-              <div className="bg-slate-50/80 border border-slate-200 rounded-xl p-2.5">
-                <div className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">L&amp;D Executive</div>
-                <div className="font-semibold text-slate-800 mt-0.5 text-xs leading-tight">
+              <div
+                className="bg-slate-50 border border-slate-200 rounded-lg"
+                style={{ height: '48px', padding: '6px 10px', boxSizing: 'border-box' }}
+              >
+                <div style={{ fontSize: '8px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', lineHeight: '12px', marginBottom: '3px' }}>
+                  L&amp;D Executive
+                </div>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: '#0f172a', lineHeight: '16px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {data.ldExecutive || 'Swati Batabyal'}
                 </div>
               </div>
             </div>
           </section>
 
-          {/* 02: Rating Scale Reference - Matches HRMS Portal Form Rubric 1-to-1 */}
-          <section className="space-y-2">
-            <div className="flex items-center justify-between pb-1.5 border-b border-slate-200">
-              <div className="flex items-center gap-2.5">
-                <span className={`w-7 h-7 rounded-xl flex items-center justify-center text-xs font-black shadow-2xs border ${numBgClass}`}>
-                  02
-                </span>
-                <div>
-                  <h3 className="text-xs font-bold text-slate-900 leading-none">
-                    Rating Scale Reference
-                  </h3>
-                  <p className="text-[10px] text-slate-500">Universal evaluation rubric standard applied across competencies</p>
-                </div>
-              </div>
+          {/* 02: Rating Scale Reference */}
+          <section className="space-y-1.5">
+            {renderSectionHeader(
+              '02',
+              'Rating Scale Reference',
+              <span
+                className={`px-3 py-0.5 rounded-full border text-[10px] font-bold inline-block ${scoreBadgeClass}`}
+                style={{ height: '22px', lineHeight: '20px', boxSizing: 'border-box' }}
+              >
+                Average Score: <span className="font-black font-mono text-[11px]">{averageScore} / 5.0</span>
+              </span>
+            )}
 
-              <div className={`px-3.5 py-1 rounded-full border text-xs font-bold inline-flex items-center gap-2 shadow-2xs ${scoreBadgeClass}`}>
-                <span>Average Score:</span>
-                <span className="font-black text-xs font-mono">{averageScore} / 5.0</span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-5 gap-2.5">
+            <div className="grid grid-cols-5 gap-2">
               {ratingRubric.map((item) => {
                 const isSelected = data.overallRating?.toLowerCase().includes(item.title.toLowerCase());
                 return (
                   <div
                     key={item.val}
-                    className={`border rounded-xl p-2.5 text-center shadow-2xs transition-all ${
+                    className={`border rounded-lg text-center ${
                       isSelected
-                        ? `${item.cardBg} ring-2 ring-indigo-400 font-bold`
+                        ? `${item.cardBg} border-indigo-400 border-2`
                         : 'bg-white border-slate-200 text-slate-700'
                     }`}
+                    style={{ height: '70px', padding: '6px 4px', boxSizing: 'border-box' }}
                   >
-                    <div
-                      className={`w-6 h-6 rounded-lg font-black text-xs flex items-center justify-center mx-auto mb-1.5 shadow-2xs ${item.numColor}`}
+                    <span
+                      className={`rounded font-black text-[11px] text-white ${item.numColor}`}
+                      style={{
+                        display: 'block',
+                        width: '22px',
+                        height: '22px',
+                        lineHeight: '22px',
+                        textAlign: 'center',
+                        margin: '0 auto 4px auto',
+                        boxSizing: 'border-box',
+                      }}
                     >
                       {item.val}
-                    </div>
-                    <div className="text-[10px] font-bold leading-tight mb-1 whitespace-nowrap overflow-visible">
+                    </span>
+                    <div style={{ fontSize: '9.5px', fontWeight: 700, lineHeight: '13px', marginBottom: '2px' }}>
                       {item.title}
                     </div>
-                    <div className="text-[8.5px] opacity-80 leading-tight">{item.desc}</div>
+                    <div style={{ fontSize: '8px', opacity: 0.8, lineHeight: '11px' }}>{item.desc}</div>
                   </div>
                 );
               })}
@@ -277,66 +366,76 @@ export const PrintableReportDossier = forwardRef(({ department, data, averageSco
           </section>
 
           {/* 03: Performance Competency Evaluation Table */}
-          <section className="space-y-2">
-            <div className="flex items-center justify-between pb-1.5 border-b border-slate-200">
-              <div className="flex items-center gap-2.5">
-                <span className={`w-7 h-7 rounded-xl flex items-center justify-center text-xs font-black shadow-2xs border ${numBgClass}`}>
-                  03
-                </span>
-                <div>
-                  <h3 className="text-xs font-bold text-slate-900 leading-none">
-                    {isOps ? 'Operations Performance Evaluation' : isIt ? 'Technical Competency Evaluation' : 'Functional Competency Evaluation'}
-                  </h3>
-                  <p className="text-[10px] text-slate-500">Rate individual competencies on scale of 1.0 to 5.0</p>
-                </div>
-              </div>
-
-              <span className={`text-[9.5px] font-bold px-3 py-0.5 rounded-full border ${scoreBadgeClass}`}>
-                10-Point Calibrated Evaluation
+          <section className="space-y-1.5">
+            {renderSectionHeader(
+              '03',
+              isOps
+                ? 'Operations Performance Evaluation'
+                : isIt
+                ? 'Technical Competency Evaluation'
+                : 'Functional Competency Evaluation',
+              <span className={`text-[9px] font-bold px-2.5 py-0.5 rounded-full border inline-block ${scoreBadgeClass}`}>
+                Calibrated Competency Assessment
               </span>
-            </div>
+            )}
 
-            <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs bg-white">
-              <table className="w-full text-left border-collapse">
+            <div className="border border-slate-200 rounded-lg overflow-hidden bg-white">
+              <table className="w-full text-left border-collapse" style={{ tableLayout: 'fixed' }}>
                 <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200 text-[9px] font-bold text-slate-500 uppercase tracking-wider">
-                    <th className="py-1.5 px-3 w-8 text-center">#</th>
-                    <th className="py-1.5 px-3 w-[220px]">Performance Area / Metric</th>
-                    <th className="py-1.5 px-3 w-[110px] text-center">Rating (1-5)</th>
-                    <th className="py-1.5 px-3">Evaluator Comments &amp; Observations</th>
+                  <tr className="bg-slate-100 border-b border-slate-200 text-[8.5px] font-bold text-slate-600 uppercase tracking-wider" style={{ height: '26px' }}>
+                    <th className="py-1 px-2.5 text-center" style={{ width: '34px', verticalAlign: 'middle' }}>#</th>
+                    <th className="py-1 px-2.5" style={{ width: '220px', verticalAlign: 'middle' }}>Performance Area / Metric</th>
+                    <th className="py-1 px-2.5 text-center" style={{ width: '110px', verticalAlign: 'middle' }}>Rating (1-5)</th>
+                    <th className="py-1 px-3" style={{ verticalAlign: 'middle' }}>Evaluator Comments &amp; Observations</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {data.competencies && data.competencies.map((comp, idx) => {
-                    const numScore = parseFloat(comp.score) || 0;
-                    const scoreBadge =
-                      numScore >= 4.5
-                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                        : numScore >= 3.5
-                        ? 'bg-sky-50 text-sky-800 border-sky-200'
-                        : numScore >= 2.5
-                        ? 'bg-indigo-50 text-indigo-800 border-indigo-200'
-                        : 'bg-amber-50 text-amber-800 border-amber-200';
+                  {data.competencies &&
+                    data.competencies.map((comp, idx) => {
+                      const numScore = parseFloat(comp.score) || 0;
+                      const scoreBadge =
+                        numScore >= 4.5
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                          : numScore >= 3.5
+                          ? 'bg-sky-50 text-sky-800 border-sky-300'
+                          : numScore >= 2.5
+                          ? 'bg-indigo-50 text-indigo-800 border-indigo-300'
+                          : 'bg-amber-50 text-amber-800 border-amber-300';
 
-                    return (
-                      <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
-                        <td className="py-1.5 px-3 text-center font-bold text-slate-400 text-[10px]">
-                          {idx + 1}
-                        </td>
-                        <td className="py-1.5 px-3 font-bold text-slate-900 text-[10.5px]">
-                          {comp.area}
-                        </td>
-                        <td className="py-1.5 px-3 text-center">
-                          <span className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-md text-[10px] font-bold border font-mono whitespace-nowrap shadow-2xs ${scoreBadge}`}>
-                            {numScore.toFixed(1)} / 5.0
-                          </span>
-                        </td>
-                        <td className="py-1.5 px-3 text-slate-700 text-[10.5px] leading-tight">
-                          {comp.comment || 'Performance aligned with established benchmark.'}
-                        </td>
-                      </tr>
-                    );
-                  })}
+                      return (
+                        <tr
+                          key={idx}
+                          className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'}
+                          style={{ height: '34px' }}
+                        >
+                          <td className="text-center font-bold text-slate-400 text-[10px]" style={{ verticalAlign: 'middle' }}>
+                            {idx + 1}
+                          </td>
+                          <td className="px-2.5 font-bold text-slate-900 text-[10.5px] leading-tight truncate" style={{ verticalAlign: 'middle' }}>
+                            {comp.area}
+                          </td>
+                          <td className="text-center" style={{ verticalAlign: 'middle' }}>
+                            <span
+                              className={`rounded font-bold font-mono text-center border ${scoreBadge}`}
+                              style={{
+                                display: 'inline-block',
+                                minWidth: '76px',
+                                height: '24px',
+                                lineHeight: '22px',
+                                boxSizing: 'border-box',
+                                verticalAlign: 'middle',
+                                fontSize: '10px',
+                              }}
+                            >
+                              {numScore.toFixed(1)} / 5.0
+                            </span>
+                          </td>
+                          <td className="px-3 text-slate-700 text-[10px] leading-tight truncate" style={{ verticalAlign: 'middle' }}>
+                            {comp.comment || 'Performance aligned with established benchmark.'}
+                          </td>
+                        </tr>
+                      );
+                    })}
                 </tbody>
               </table>
             </div>
@@ -344,12 +443,12 @@ export const PrintableReportDossier = forwardRef(({ department, data, averageSco
         </div>
 
         {/* Page 1 Footer */}
-        <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-[10px] text-slate-500 font-medium">
+        <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-[9.5px] text-slate-500 font-medium">
           <div className="flex items-center gap-1.5">
             <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
             <span>TaskNera HRMS • Performance Appraisal Record • Confidential</span>
           </div>
-          <div className="font-mono font-bold text-slate-700">Page 1 of 2</div>
+          <div className="font-mono font-bold text-slate-700 text-[10px]">Page 1 of 2</div>
         </div>
       </div>
 
@@ -361,198 +460,163 @@ export const PrintableReportDossier = forwardRef(({ department, data, averageSco
         style={{
           width: '794px',
           height: '1123px',
-          padding: '22px 30px',
+          padding: '22px 28px 18px 28px',
           boxSizing: 'border-box',
           overflow: 'hidden',
           backgroundColor: '#ffffff',
           fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
         }}
       >
-        <div className="space-y-2.5">
+        <div className="space-y-2">
           {/* Top Page 2 Header Running Strip */}
-          <div className="pb-2 border-b border-slate-200 flex items-center justify-between">
+          <div className="pb-1.5 border-b border-slate-200 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className={`text-[9.5px] font-black uppercase tracking-wider px-3 py-0.5 rounded-full border ${scoreBadgeClass}`}>
+              <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded border ${scoreBadgeClass}`}>
                 {deptTag}
               </span>
               <span className="text-xs font-bold text-slate-900">
-                {deptTitle} — {data.employeeName}
+                {deptTitle}
               </span>
+              {data.employeeName && (
+                <span className="text-xs font-semibold text-slate-600">
+                  • {data.employeeName}
+                </span>
+              )}
             </div>
-            <div className="text-[10px] font-mono text-slate-500">
-              ID: {data.employeeId} • Review Date: {data.reviewDate}
+            <div className="text-[9.5px] font-mono text-slate-600">
+              {data.employeeId ? `ID: ${data.employeeId} • ` : ''}Review Date: {data.reviewDate || '—'}
             </div>
           </div>
 
-          {/* 04 & 05: Accomplishments & Development Areas (Side-by-Side) */}
+          {/* 04 & 05: Accomplishments & Development Areas */}
           <div className="grid grid-cols-2 gap-3 text-xs">
             {/* 04: Key Accomplishments */}
-            <section className="space-y-1.5">
-              <div className="flex items-center gap-2 pb-1 border-b border-slate-200">
-                <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black shadow-2xs border ${numBgClass}`}>
-                  04
-                </span>
-                <div>
-                  <h4 className="text-[11px] font-bold text-slate-900 leading-none">Key Accomplishments</h4>
-                  <p className="text-[8.5px] text-slate-500">Major operational deliverables</p>
-                </div>
-              </div>
-              <div className="bg-slate-50/80 p-2.5 rounded-xl border border-slate-200 min-h-[56px] text-[10px] text-slate-800 leading-relaxed whitespace-pre-line">
+            <section className="space-y-1">
+              {renderSectionHeader('04', 'Key Accomplishments')}
+              <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 min-h-[56px] text-[9.5px] text-slate-800 leading-relaxed whitespace-pre-line">
                 {data.achievements || 'No specific accomplishments recorded for this cycle.'}
               </div>
             </section>
 
             {/* 05: Areas for Improvement */}
-            <section className="space-y-1.5">
-              <div className="flex items-center gap-2 pb-1 border-b border-slate-200">
-                <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black shadow-2xs border ${numBgClass}`}>
-                  05
-                </span>
-                <div>
-                  <h4 className="text-[11px] font-bold text-slate-900 leading-none">Areas for Development</h4>
-                  <p className="text-[8.5px] text-slate-500">Constructive growth focal points</p>
-                </div>
-              </div>
-              <div className="bg-slate-50/80 p-2.5 rounded-xl border border-slate-200 min-h-[56px] text-[10px] text-slate-800 leading-relaxed whitespace-pre-line">
+            <section className="space-y-1">
+              {renderSectionHeader('05', 'Areas for Development')}
+              <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 min-h-[56px] text-[9.5px] text-slate-800 leading-relaxed whitespace-pre-line">
                 {data.improvements || 'Continue scaling performance according to quarterly deliverables.'}
               </div>
             </section>
           </div>
 
           {/* 06: Goals & Key Performance Objectives Table */}
-          <section className="space-y-1.5">
-            <div className="flex items-center justify-between pb-1 border-b border-slate-200">
-              <div className="flex items-center gap-2">
-                <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black shadow-2xs border ${numBgClass}`}>
-                  06
-                </span>
-                <div>
-                  <h4 className="text-[11px] font-bold text-slate-900 leading-none">Goals &amp; Performance Objectives</h4>
-                  <p className="text-[8.5px] text-slate-500">Key performance deliverables agreed upon for upcoming cycle</p>
-                </div>
-              </div>
-              <span className="text-[9px] text-slate-500 font-semibold">Agreed Target Deliverables</span>
-            </div>
+          <section className="space-y-1">
+            {renderSectionHeader(
+              '06',
+              'Goals & Performance Objectives',
+              <span className="text-[8.5px] text-slate-500 font-semibold">Agreed Target Deliverables</span>
+            )}
 
-            <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs bg-white">
-              <table className="w-full text-left border-collapse text-xs">
+            <div className="border border-slate-200 rounded-lg overflow-hidden bg-white">
+              <table className="w-full text-left border-collapse text-xs" style={{ tableLayout: 'fixed' }}>
                 <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200 text-[8.5px] font-bold text-slate-500 uppercase tracking-wider">
-                    <th className="py-1 px-3 w-[220px]">Goal Objective</th>
-                    <th className="py-1 px-3">Target / Key Result</th>
-                    <th className="py-1 px-3 w-[90px]">Deadline</th>
-                    <th className="py-1 px-3 w-[85px] text-center">Status</th>
+                  <tr className="bg-slate-100 border-b border-slate-200 text-[8.5px] font-bold text-slate-600 uppercase tracking-wider">
+                    <th className="py-1 px-2.5" style={{ width: '190px' }}>Goal Objective</th>
+                    <th className="py-1 px-2.5">Target / Key Result</th>
+                    <th className="py-1 px-2 text-center" style={{ width: '85px' }}>Deadline</th>
+                    <th className="py-1 px-2 text-center" style={{ width: '80px' }}>Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {data.goals && data.goals.map((g, idx) => (
-                    <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/40'}>
-                      <td className="py-1.5 px-3 font-bold text-slate-900 text-[10px] leading-tight">{g.goal || '—'}</td>
-                      <td className="py-1.5 px-3 text-slate-700 text-[10px] leading-tight">{g.target || '—'}</td>
-                      <td className="py-1.5 px-3 font-mono text-slate-600 text-[9.5px] leading-tight">{g.deadline || '—'}</td>
-                      <td className="py-1.5 px-3 text-center">
-                        <span className="inline-block px-2 py-0.5 rounded-full text-[9px] font-bold bg-blue-50 text-blue-700 border border-blue-200 whitespace-nowrap shadow-2xs">
-                          {g.status || 'Planned'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                  {data.goals &&
+                    data.goals.map((g, idx) => (
+                      <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'} style={{ height: '26px' }}>
+                        <td className="py-1 px-2.5 font-bold text-slate-900 text-[9.5px] leading-tight truncate">
+                          {g.goal || '—'}
+                        </td>
+                        <td className="py-1 px-2.5 text-slate-700 text-[9.5px] leading-tight truncate">
+                          {g.target || '—'}
+                        </td>
+                        <td className="py-1 px-2 text-center font-mono text-slate-600 text-[9px] leading-tight">
+                          {g.deadline || '—'}
+                        </td>
+                        <td className="py-1 px-2 text-center">
+                          <span className="inline-block px-2 py-0.5 rounded text-[8.5px] font-bold bg-blue-50 text-blue-700 border border-blue-200 whitespace-nowrap">
+                            {g.status || 'Planned'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>
           </section>
 
           {/* 07: Training & Skill Development Needs Table */}
-          <section className="space-y-1.5">
-            <div className="flex items-center justify-between pb-1 border-b border-slate-200">
-              <div className="flex items-center gap-2">
-                <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black shadow-2xs border ${numBgClass}`}>
-                  07
-                </span>
-                <div>
-                  <h4 className="text-[11px] font-bold text-slate-900 leading-none">Training &amp; Skill Development Plan</h4>
-                  <p className="text-[8.5px] text-slate-500">Identified certifications, workshops, or training</p>
-                </div>
-              </div>
-              <span className="text-[9px] text-slate-500 font-semibold">Development Roadmaps</span>
-            </div>
+          <section className="space-y-1">
+            {renderSectionHeader(
+              '07',
+              'Training & Skill Development Plan',
+              <span className="text-[8.5px] text-slate-500 font-semibold">Development Roadmaps</span>
+            )}
 
-            <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs bg-white">
-              <table className="w-full text-left border-collapse text-xs">
+            <div className="border border-slate-200 rounded-lg overflow-hidden bg-white">
+              <table className="w-full text-left border-collapse text-xs" style={{ tableLayout: 'fixed' }}>
                 <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200 text-[8.5px] font-bold text-slate-500 uppercase tracking-wider">
-                    <th className="py-1 px-3 w-[220px]">Skill / Operational Area</th>
-                    <th className="py-1 px-3">Training Required / Workshop</th>
-                    <th className="py-1 px-3 w-[85px] text-center">Priority</th>
+                  <tr className="bg-slate-100 border-b border-slate-200 text-[8.5px] font-bold text-slate-600 uppercase tracking-wider">
+                    <th className="py-1 px-2.5" style={{ width: '220px' }}>Skill / Operational Area</th>
+                    <th className="py-1 px-2.5">Training Required / Workshop</th>
+                    <th className="py-1 px-2 text-center" style={{ width: '80px' }}>Priority</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {data.training && data.training.map((t, idx) => (
-                    <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/40'}>
-                      <td className="py-1.5 px-3 font-bold text-slate-900 text-[10px] leading-tight">{t.skill || '—'}</td>
-                      <td className="py-1.5 px-3 text-slate-700 text-[10px] leading-tight">{t.training || '—'}</td>
-                      <td className="py-1.5 px-3 text-center">
-                        <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-bold border whitespace-nowrap shadow-2xs ${
-                          t.priority === 'High'
-                            ? 'bg-rose-50 text-rose-700 border-rose-200'
-                            : 'bg-indigo-50 text-indigo-700 border-indigo-200'
-                        }`}>
-                          {t.priority || 'Medium'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                  {data.training &&
+                    data.training.map((t, idx) => (
+                      <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'} style={{ height: '26px' }}>
+                        <td className="py-1 px-2.5 font-bold text-slate-900 text-[9.5px] leading-tight truncate">
+                          {t.skill || '—'}
+                        </td>
+                        <td className="py-1 px-2.5 text-slate-700 text-[9.5px] leading-tight truncate">
+                          {t.training || '—'}
+                        </td>
+                        <td className="py-1 px-2 text-center">
+                          <span
+                            className={`inline-block px-2 py-0.5 rounded text-[8.5px] font-bold border whitespace-nowrap ${
+                              t.priority === 'High'
+                                ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                : 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                            }`}
+                          >
+                            {t.priority || 'Medium'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>
           </section>
 
-          {/* 08 & 09: Feedback Comments (Side-by-Side) */}
+          {/* 08 & 09: Feedback Comments */}
           <div className="grid grid-cols-2 gap-3 text-xs">
             {/* 08: Employee Comments */}
-            <section className="space-y-1.5">
-              <div className="flex items-center gap-2 pb-1 border-b border-slate-200">
-                <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black shadow-2xs border ${numBgClass}`}>
-                  08
-                </span>
-                <div>
-                  <h4 className="text-[11px] font-bold text-slate-900 leading-none">Employee Comments</h4>
-                  <p className="text-[8.5px] text-slate-500">Feedback and self-reflection</p>
-                </div>
-              </div>
-              <div className="bg-slate-50/80 p-2.5 rounded-xl border border-slate-200 min-h-[50px] text-[10px] text-slate-800 leading-relaxed whitespace-pre-line">
+            <section className="space-y-1">
+              {renderSectionHeader('08', 'Employee Comments')}
+              <div className="bg-slate-50 p-2 rounded-lg border border-slate-200 min-h-[46px] text-[9.5px] text-slate-800 leading-relaxed whitespace-pre-line">
                 {data.employeeComments || 'Employee self-reflection confirmed and submitted.'}
               </div>
             </section>
 
             {/* 09: Manager Comments */}
-            <section className="space-y-1.5">
-              <div className="flex items-center gap-2 pb-1 border-b border-slate-200">
-                <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black shadow-2xs border ${numBgClass}`}>
-                  09
-                </span>
-                <div>
-                  <h4 className="text-[11px] font-bold text-slate-900 leading-none">Manager Comments</h4>
-                  <p className="text-[8.5px] text-slate-500">Overall performance summary</p>
-                </div>
-              </div>
-              <div className="bg-slate-50/80 p-2.5 rounded-xl border border-slate-200 min-h-[50px] text-[10px] text-slate-800 leading-relaxed whitespace-pre-line">
+            <section className="space-y-1">
+              {renderSectionHeader('09', 'Manager Comments')}
+              <div className="bg-slate-50 p-2 rounded-lg border border-slate-200 min-h-[46px] text-[9.5px] text-slate-800 leading-relaxed whitespace-pre-line">
                 {data.managerComments || 'Performance evaluation completed in accordance with quarterly standards.'}
               </div>
             </section>
           </div>
 
-          {/* 10: Overall Performance Rating - Matches Portal Form 5-card Selector 1-to-1 */}
-          <section className="space-y-1.5">
-            <div className="flex items-center gap-2 pb-1 border-b border-slate-200">
-              <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black shadow-2xs border ${numBgClass}`}>
-                10
-              </span>
-              <div>
-                <h4 className="text-[11px] font-bold text-slate-900 leading-none">Overall Performance Rating</h4>
-                <p className="text-[8.5px] text-slate-500">Consolidated review outcome score</p>
-              </div>
-            </div>
+          {/* 10: Overall Performance Rating */}
+          <section className="space-y-1">
+            {renderSectionHeader('10', 'Overall Performance Rating')}
 
             <div className="grid grid-cols-5 gap-2">
               {overallRatingOptions.map((rating) => {
@@ -560,14 +624,15 @@ export const PrintableReportDossier = forwardRef(({ department, data, averageSco
                 return (
                   <div
                     key={rating.label}
-                    className={`rounded-2xl border p-2 text-center transition-all flex flex-col items-center justify-center gap-1 ${
+                    className={`rounded-lg border px-2 text-center ${
                       isSelected
-                        ? `${rating.color} shadow-sm border-2 ring-1 ring-offset-1 ring-slate-300`
-                        : 'border-slate-200 bg-slate-50/50 text-slate-500 opacity-60'
+                        ? `${rating.color} border-2`
+                        : 'border-slate-200 bg-slate-50 text-slate-600'
                     }`}
+                    style={{ height: '36px', lineHeight: '34px', boxSizing: 'border-box', textAlign: 'center' }}
                   >
-                    <span className="text-base leading-none">{rating.icon}</span>
-                    <span className="text-[9.5px] font-bold leading-tight">{rating.label}</span>
+                    <span style={{ fontSize: '13px', verticalAlign: 'middle', marginRight: '5px' }}>{rating.icon}</span>
+                    <span style={{ fontSize: '9.5px', fontWeight: 700, verticalAlign: 'middle' }}>{rating.label}</span>
                   </div>
                 );
               })}
@@ -575,86 +640,97 @@ export const PrintableReportDossier = forwardRef(({ department, data, averageSco
           </section>
 
           {/* 11: Final Recommendations / Administrative Actions */}
-          <section className="space-y-1.5">
-            <div className="flex items-center gap-2 pb-1 border-b border-slate-200">
-              <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black shadow-2xs border ${numBgClass}`}>
-                11
-              </span>
-              <div>
-                <h4 className="text-[11px] font-bold text-slate-900 leading-none">Final Actions &amp; Recommendations</h4>
-                <p className="text-[8.5px] text-slate-500">Administrative and HR decisions ratified for this review cycle</p>
-              </div>
-            </div>
+          <section className="space-y-1">
+            {renderSectionHeader('11', 'Final Actions & Recommendations')}
 
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {actionLabels.map((act) => {
                 const isChecked = Boolean(data.actions && data.actions[act.id]);
                 return (
                   <div
                     key={act.id}
-                    className={`flex items-start gap-2 p-2 px-2.5 rounded-xl border text-[9.5px] leading-tight min-h-[34px] ${
+                    className={`rounded-lg border ${
                       isChecked
-                        ? 'bg-indigo-50/80 border-indigo-300 text-indigo-950 font-bold shadow-2xs'
-                        : 'bg-slate-50/60 border-slate-200 text-slate-600'
+                        ? 'bg-indigo-50 border-indigo-300 text-indigo-950 font-bold'
+                        : 'bg-slate-50 border-slate-200 text-slate-700'
                     }`}
+                    style={{
+                      height: '36px',
+                      padding: '0 10px',
+                      boxSizing: 'border-box',
+                      display: 'table',
+                      width: '100%',
+                    }}
                   >
-                    <div
-                      className={`w-3.5 h-3.5 rounded shrink-0 flex items-center justify-center border mt-0.5 shadow-2xs ${
-                        isChecked
-                          ? 'bg-indigo-600 border-indigo-600 text-white'
-                          : 'border-slate-300 bg-white'
-                      }`}
-                    >
-                      {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                    <div style={{ display: 'table-row' }}>
+                      <div style={{ display: 'table-cell', verticalAlign: 'middle', width: '20px' }}>
+                        <div
+                          className={`border ${isChecked ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-300 bg-white'}`}
+                          style={{
+                            width: '14px',
+                            height: '14px',
+                            lineHeight: '12px',
+                            textAlign: 'center',
+                            borderRadius: '3px',
+                            boxSizing: 'border-box',
+                          }}
+                        >
+                          {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" style={{ display: 'inline-block', verticalAlign: 'middle' }} />}
+                        </div>
+                      </div>
+                      <div
+                        style={{
+                          display: 'table-cell',
+                          verticalAlign: 'middle',
+                          paddingLeft: '8px',
+                          fontSize: '9.5px',
+                          lineHeight: '14px',
+                          fontWeight: 600,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {act.text}
+                      </div>
                     </div>
-                    <span className="text-[9.5px] leading-tight font-semibold break-words whitespace-normal block flex-1">
-                      {act.text}
-                    </span>
                   </div>
                 );
               })}
             </div>
           </section>
 
-          {/* 12: CEO Signature & Final Authorization - Matches Portal Form Signature Card */}
-          <section className="space-y-1.5">
-            <div className="flex items-center gap-2 pb-1 border-b border-slate-200">
-              <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black shadow-2xs border ${numBgClass}`}>
-                12
-              </span>
-              <div>
-                <h4 className="text-[11px] font-bold text-slate-900 leading-none">CEO Approval &amp; Final Authorization</h4>
-                <p className="text-[8.5px] text-slate-500">Executive authorization, signature verification, and approval date</p>
-              </div>
-            </div>
+          {/* 12: CEO Signature & Final Authorization */}
+          <section className="space-y-1">
+            {renderSectionHeader('12', 'CEO Approval & Final Authorization')}
 
-            <div className="rounded-2xl border-2 border-indigo-200 bg-gradient-to-r from-slate-50 via-white to-indigo-50/30 p-3 px-4 flex items-center justify-between shadow-xs">
-              <div className="space-y-1">
+            <div className="rounded-xl border border-indigo-200 bg-gradient-to-r from-slate-50 via-white to-indigo-50/50 p-2.5 px-3.5 flex items-center justify-between">
+              <div className="space-y-0.5">
                 <div className="flex items-center gap-2">
-                  <span className="text-[8.5px] font-bold uppercase tracking-wider text-slate-500">
+                  <span className="text-[8px] font-bold uppercase tracking-wider text-slate-500">
                     CEO Authorization
                   </span>
-                  <span className="text-[8.5px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                  <span className="text-[8px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200">
                     Chief Executive Officer
                   </span>
                 </div>
-                <div className="text-base font-black text-slate-900 leading-tight font-heading">
+                <div className="text-sm font-black text-slate-900 leading-tight">
                   {data.ceoName || "Sheetal Ma'am"}
                 </div>
-                <div className="text-[9.5px] text-slate-600 font-semibold leading-tight">
+                <div className="text-[9px] text-slate-600 font-semibold leading-tight">
                   Chief Executive Officer • Executive Leadership Approval
                 </div>
               </div>
 
-              <div className="text-right space-y-1">
-                <div className="text-[8.5px] font-bold text-slate-500 uppercase tracking-wider">
+              <div className="text-right space-y-0.5">
+                <div className="text-[8px] font-bold text-slate-500 uppercase tracking-wider">
                   Authorization Date
                 </div>
-                <div className="font-mono font-bold text-sm text-slate-800 leading-tight">
+                <div className="font-mono font-bold text-xs text-slate-800 leading-tight">
                   {data.ceoDate || '2026-09-16'}
                 </div>
-                <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
+                <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[8.5px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-700" />
                   Officially Authorized
                 </div>
               </div>
@@ -663,12 +739,12 @@ export const PrintableReportDossier = forwardRef(({ department, data, averageSco
         </div>
 
         {/* Page 2 Footer */}
-        <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-[10px] text-slate-500 font-medium">
+        <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-[9.5px] text-slate-500 font-medium">
           <div className="flex items-center gap-1.5">
             <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
             <span>TaskNera HRMS • Performance Appraisal Record • Confidential</span>
           </div>
-          <div className="font-mono font-bold text-slate-700">Page 2 of 2</div>
+          <div className="font-mono font-bold text-slate-700 text-[10px]">Page 2 of 2</div>
         </div>
       </div>
     </div>

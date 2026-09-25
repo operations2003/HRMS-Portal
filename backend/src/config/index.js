@@ -18,7 +18,7 @@ if (!jwtSecret && nodeEnv === 'production') {
 }
 
 export const config = {
-  port: parseInt(process.env.PORT, 10) || 5000,
+  port: parseInt(process.env.PORT, 10) || 3000,
   nodeEnv,
   jwt: {
     secret: jwtSecret || 'dev_hrms_secure_instance_key_98472910481239847',

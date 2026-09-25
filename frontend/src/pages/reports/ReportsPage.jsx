@@ -816,8 +816,8 @@ export const ReportsPage = () => {
           backgroundColor: '#ffffff',
           scrollX: 0,
           scrollY: 0,
-          windowWidth: 1400,
-          windowHeight: 4500,
+          windowWidth: 1000,
+          windowHeight: 3000,
         });
 
         const imgData = canvas.toDataURL('image/jpeg', 0.98);
@@ -1019,25 +1019,16 @@ export const ReportsPage = () => {
             <FileText className="w-5 h-5" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
-                {canReviewOthers && viewMode === 'reviews'
-                  ? 'Performance Reports'
-                  : 'My Performance'}
-              </h1>
-              <Badge variant="brand">
-                {canReviewOthers && viewMode === 'reviews'
-                  ? isManager
-                    ? 'Manager Review'
-                    : 'Executive Review'
-                  : currentData.employeeName}
-              </Badge>
-            </div>
+            <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
+              {canReviewOthers && viewMode === 'reviews'
+                ? 'Performance Reports'
+                : 'My Performance'}
+            </h1>
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
               {canReviewOthers && viewMode === 'reviews'
                 ? isManager
                   ? 'Evaluate direct reporting employees, calibrate scores, and generate official appraisal reports.'
-                  : 'Department performance evaluations, competency scoring calibrations, and official PDF/Excel reports.'
+                  : 'Department performance evaluations, competency scoring calibrations, and official PDF reports.'
                 : 'Official performance assessment record, skill calibration ratings, and career progression overview.'}
             </p>
           </div>
@@ -2178,10 +2169,10 @@ export const ReportsPage = () => {
                   {!isViewingMyReport && (
                     <Button
                       variant="ghost"
-                      size="sm"
+                      size="md"
                       icon={RotateCcw}
                       onClick={handleResetForm}
-                      className="text-xs text-slate-500 hover:text-slate-800"
+                      className="text-xs font-black bg-amber-400 hover:bg-amber-500 active:bg-amber-600 text-slate-950 border border-amber-500 shadow-sm shadow-amber-400/25 transition-all"
                     >
                       Reset Form
                     </Button>
@@ -2189,16 +2180,6 @@ export const ReportsPage = () => {
                 </div>
 
                 <div className="flex items-center gap-3">
-                  <Button
-                    variant="outline"
-                    size="md"
-                    icon={Download}
-                    onClick={handleDownloadExcel}
-                    className="text-xs font-semibold"
-                  >
-                    Export Excel
-                  </Button>
-
                   <Button
                     variant="outline"
                     size="md"
