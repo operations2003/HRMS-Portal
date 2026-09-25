@@ -122,7 +122,7 @@ export const ProbationDashboardPage = () => {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
           <p className="text-xs font-semibold uppercase text-slate-500">Active in Probation</p>
           <h3 className="text-2xl font-bold text-slate-800 mt-1">{stats.totalInProbation || 0}</h3>
@@ -141,6 +141,11 @@ export const ProbationDashboardPage = () => {
         <div className="bg-white p-4 rounded-xl border border-emerald-200 bg-emerald-50/20 shadow-sm">
           <p className="text-xs font-semibold uppercase text-emerald-600">Confirmed Staff</p>
           <h3 className="text-2xl font-bold text-emerald-600 mt-1">{stats.confirmedCount || 0}</h3>
+        </div>
+
+        <div className="bg-white p-4 rounded-xl border border-slate-200 bg-slate-50/40 shadow-sm">
+          <p className="text-xs font-semibold uppercase text-slate-500">Not Eligible</p>
+          <h3 className="text-2xl font-bold text-slate-700 mt-1">{stats.notEligibleCount || 0}</h3>
         </div>
       </div>
 
@@ -176,6 +181,7 @@ export const ProbationDashboardPage = () => {
             <option value="">All Statuses</option>
             <option value="IN_PROBATION">In Probation</option>
             <option value="CONFIRMED">Confirmed</option>
+            <option value="NOT_ELIGIBLE">Not Eligible</option>
             <option value="EXTENDED">Extended</option>
             <option value="REJECTED">Rejected</option>
           </select>
@@ -244,6 +250,8 @@ export const ProbationDashboardPage = () => {
                       variant={
                         r.probation_status === 'CONFIRMED'
                           ? 'success'
+                          : r.probation_status === 'NOT_ELIGIBLE'
+                          ? 'neutral'
                           : r.probation_status === 'EXTENDED'
                           ? 'warning'
                           : r.probation_status === 'REJECTED'
@@ -251,7 +259,7 @@ export const ProbationDashboardPage = () => {
                           : 'info'
                       }
                     >
-                      {r.probation_status}
+                      {r.probation_status === 'NOT_ELIGIBLE' ? 'Not Eligible' : r.probation_status}
                     </Badge>
                   </td>
                   <td className="p-3.5">
@@ -278,7 +286,7 @@ export const ProbationDashboardPage = () => {
                     )}
 
                     {/* HR Final Decision */}
-                    {isHrOrAdmin && r.probation_status !== 'CONFIRMED' && r.employee_id !== user.employeeId && (
+                    {isHrOrAdmin && !['CONFIRMED', 'NOT_ELIGIBLE'].includes(r.probation_status) && r.employee_id !== user.employeeId && (
                       <button
                         onClick={() => {
                           setReviewingEmployee(r);
@@ -337,6 +345,7 @@ export const ProbationDashboardPage = () => {
                   className="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none"
                 >
                   <option value="CONFIRM">Confirm Employment (Passed Probation)</option>
+                  <option value="NOT_ELIGIBLE">Not Eligible (Exempt / Not Applicable)</option>
                   <option value="EXTEND">Extend Probation Period</option>
                   <option value="REJECT">Reject / Discontinue Employment</option>
                 </select>
@@ -404,6 +413,7 @@ export const ProbationDashboardPage = () => {
                   className="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none"
                 >
                   <option value="CONFIRMED">CONFIRMED (Issue Confirmation Letter)</option>
+                  <option value="NOT_ELIGIBLE">NOT ELIGIBLE (Exempt / Not Applicable)</option>
                   <option value="EXTENDED">EXTENDED (Extend Probation Period)</option>
                   <option value="REJECTED">REJECTED (Probation Discontinuation)</option>
                 </select>

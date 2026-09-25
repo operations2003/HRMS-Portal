@@ -310,12 +310,14 @@ export const employeeRepository = {
     const probationStatus = data.probationStatus || 'IN_PROBATION';
     const probationStartDate = data.probationStartDate || dateOfJoining;
     let probationEndDate = data.probationEndDate;
-    if (!probationEndDate && probationStartDate) {
+    if (probationStatus === 'NOT_ELIGIBLE' || probationStatus === 'CONFIRMED') {
+      probationEndDate = null;
+    } else if (!probationEndDate && probationStartDate) {
       const pDate = new Date(probationStartDate);
       pDate.setMonth(pDate.getMonth() + 6);
       probationEndDate = pDate.toISOString().split('T')[0];
     }
-    const probationNotes = data.probationNotes ? data.probationNotes.trim() : 'Standard 6-month probation period.';
+    const probationNotes = data.probationNotes ? data.probationNotes.trim() : (probationStatus === 'NOT_ELIGIBLE' ? 'Not eligible for probation.' : 'Standard 6-month probation period.');
 
     const sql = `
       INSERT INTO employees (

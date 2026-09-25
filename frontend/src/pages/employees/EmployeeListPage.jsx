@@ -731,8 +731,8 @@ export const EmployeeListPage = () => {
         leaveAllocations,
         probationStatus: formData.probationStatus || 'IN_PROBATION',
         probationStartDate: formData.probationStartDate || formData.dateOfJoining,
-        probationEndDate: formData.probationStatus === 'CONFIRMED' ? null : (formData.probationEndDate || getProbationEndDate(formData.dateOfJoining)),
-        probationNotes: formData.probationNotes || 'Standard 6-month probation period.',
+        probationEndDate: ['CONFIRMED', 'NOT_ELIGIBLE'].includes(formData.probationStatus) ? null : (formData.probationEndDate || getProbationEndDate(formData.dateOfJoining)),
+        probationNotes: formData.probationNotes || (formData.probationStatus === 'NOT_ELIGIBLE' ? 'Not eligible for probation.' : 'Standard 6-month probation period.'),
       };
 
       if (editingEmployee && !canViewSalary(editingEmployee)) {
@@ -908,13 +908,19 @@ export const EmployeeListPage = () => {
               <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ${
                 row.probationStatus === 'CONFIRMED'
                   ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  : row.probationStatus === 'NOT_ELIGIBLE'
+                  ? 'bg-slate-100 text-slate-700 border border-slate-300'
                   : row.probationStatus === 'EXTENDED'
                   ? 'bg-purple-50 text-purple-700 border border-purple-200'
                   : row.probationStatus === 'REJECTED'
                   ? 'bg-rose-50 text-rose-700 border border-rose-200'
                   : 'bg-amber-50 text-amber-700 border border-amber-200'
               }`}>
-                {row.probationStatus === 'IN_PROBATION' ? '6M Probation' : row.probationStatus}
+                {row.probationStatus === 'IN_PROBATION'
+                  ? '6M Probation'
+                  : row.probationStatus === 'NOT_ELIGIBLE'
+                  ? 'Not Eligible'
+                  : row.probationStatus}
               </span>
             </div>
           )}
@@ -1719,14 +1725,17 @@ export const EmployeeListPage = () => {
                   setFormData((prev) => ({
                     ...prev,
                     probationStatus: newStatus,
-                    probationEndDate: newStatus === 'IN_PROBATION'
-                      ? (prev.probationEndDate || getProbationEndDate(prev.dateOfJoining || prev.probationStartDate))
-                      : prev.probationEndDate,
+                    probationEndDate: ['CONFIRMED', 'NOT_ELIGIBLE'].includes(newStatus)
+                      ? ''
+                      : (newStatus === 'IN_PROBATION'
+                        ? (prev.probationEndDate || getProbationEndDate(prev.dateOfJoining || prev.probationStartDate))
+                        : prev.probationEndDate),
                   }));
                 }}
                 options={[
                   { value: 'IN_PROBATION', label: 'Yes — In Probation (6 Months Standard)' },
-                  { value: 'CONFIRMED', label: 'No — Confirmed (Exempt from / Passed Probation)' },
+                  { value: 'CONFIRMED', label: 'No — Confirmed (Passed Probation)' },
+                  { value: 'NOT_ELIGIBLE', label: 'Not Eligible (Exempt / Not Applicable)' },
                   { value: 'EXTENDED', label: 'Extended Probation' },
                   { value: 'REJECTED', label: 'Discontinued / Rejected' },
                 ]}
@@ -1735,9 +1744,9 @@ export const EmployeeListPage = () => {
               <Input
                 label="Probation End Date"
                 type="date"
-                value={formData.probationStatus === 'CONFIRMED' ? '' : (formData.probationEndDate || getProbationEndDate(formData.dateOfJoining) || '')}
+                value={['CONFIRMED', 'NOT_ELIGIBLE'].includes(formData.probationStatus) ? '' : (formData.probationEndDate || getProbationEndDate(formData.dateOfJoining) || '')}
                 onChange={(e) => setFormData({ ...formData, probationEndDate: e.target.value })}
-                disabled={formData.probationStatus === 'CONFIRMED'}
+                disabled={['CONFIRMED', 'NOT_ELIGIBLE'].includes(formData.probationStatus)}
                 placeholder="YYYY-MM-DD"
               />
             </div>
@@ -2574,13 +2583,15 @@ export const EmployeeListPage = () => {
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
                     viewingEmployee.probationStatus === 'CONFIRMED'
                       ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                      : viewingEmployee.probationStatus === 'NOT_ELIGIBLE'
+                      ? 'bg-slate-100 text-slate-800 border-slate-300'
                       : viewingEmployee.probationStatus === 'EXTENDED'
                       ? 'bg-purple-100 text-purple-800 border-purple-300'
                       : viewingEmployee.probationStatus === 'REJECTED'
                       ? 'bg-rose-100 text-rose-800 border-rose-300'
                       : 'bg-amber-100 text-amber-800 border-amber-300'
                   }`}>
-                    {viewingEmployee.probationStatus || 'IN_PROBATION'}
+                    {viewingEmployee.probationStatus === 'NOT_ELIGIBLE' ? 'NOT ELIGIBLE' : (viewingEmployee.probationStatus || 'IN_PROBATION')}
                   </span>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">

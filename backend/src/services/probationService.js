@@ -64,6 +64,7 @@ export const probationService = {
       overdueCount: res.rows.filter((r) => r.is_overdue).length,
       approachingExpiryCount: res.rows.filter((r) => r.is_approaching_expiry).length,
       confirmedCount: res.rows.filter((r) => r.probation_status === 'CONFIRMED').length,
+      notEligibleCount: res.rows.filter((r) => r.probation_status === 'NOT_ELIGIBLE').length,
       extendedCount: res.rows.filter((r) => r.probation_status === 'EXTENDED').length,
       rejectedCount: res.rows.filter((r) => r.probation_status === 'REJECTED').length,
     };
@@ -101,7 +102,7 @@ export const probationService = {
 
     const evalId = `prbeval-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const rating = parseInt(payload.rating, 10);
-    const recommendation = payload.recommendation; // CONFIRM, EXTEND, REJECT
+    const recommendation = payload.recommendation; // CONFIRM, EXTEND, REJECT, NOT_ELIGIBLE
     const comments = payload.comments || '';
     const extensionMonths = payload.extensionMonths ? parseInt(payload.extensionMonths, 10) : 0;
     
@@ -166,9 +167,9 @@ export const probationService = {
     }
     const emp = empRes.rows[0];
 
-    const decision = payload.decision; // CONFIRMED, EXTENDED, REJECTED
-    if (!['CONFIRMED', 'EXTENDED', 'REJECTED'].includes(decision)) {
-      const err = new Error('Invalid decision. Must be CONFIRMED, EXTENDED, or REJECTED.');
+    const decision = payload.decision; // CONFIRMED, EXTENDED, REJECTED, NOT_ELIGIBLE
+    if (!['CONFIRMED', 'EXTENDED', 'REJECTED', 'NOT_ELIGIBLE'].includes(decision)) {
+      const err = new Error('Invalid decision. Must be CONFIRMED, EXTENDED, REJECTED, or NOT_ELIGIBLE.');
       err.statusCode = 400;
       throw err;
     }
@@ -181,6 +182,8 @@ export const probationService = {
       const curEndDate = emp.probation_end_date ? new Date(emp.probation_end_date) : new Date();
       curEndDate.setMonth(curEndDate.getMonth() + extensionMonths);
       newEndDate = curEndDate.toISOString().split('T')[0];
+    } else if (decision === 'CONFIRMED' || decision === 'NOT_ELIGIBLE') {
+      newEndDate = null;
     }
 
     // Update Employee record
