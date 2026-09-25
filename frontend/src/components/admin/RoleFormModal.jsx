@@ -8,9 +8,10 @@ import { Alert } from '../common/Alert.jsx';
 import { adminService } from '../../services/adminService.js';
 import { useToast } from '../../context/ToastContext.jsx';
 
-export const RoleFormModal = ({ isOpen, onClose, onSuccess, initialRole = null }) => {
+export const RoleFormModal = ({ isOpen, onClose, onSuccess, initialRole = null, role = null }) => {
   const toast = useToast();
-  const isEdit = !!initialRole?.id;
+  const activeRole = role || initialRole;
+  const isEdit = !!activeRole?.id;
 
   const [formData, setFormData] = useState({
     name: '',
@@ -21,11 +22,11 @@ export const RoleFormModal = ({ isOpen, onClose, onSuccess, initialRole = null }
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    if (initialRole) {
+    if (activeRole) {
       setFormData({
-        name: initialRole.name || '',
-        description: initialRole.description || '',
-        status: initialRole.status || 'Active',
+        name: activeRole.name || '',
+        description: activeRole.description || '',
+        status: activeRole.status || 'Active',
       });
     } else {
       setFormData({
@@ -35,7 +36,7 @@ export const RoleFormModal = ({ isOpen, onClose, onSuccess, initialRole = null }
       });
     }
     setError(null);
-  }, [initialRole, isOpen]);
+  }, [activeRole, isOpen]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -50,7 +51,7 @@ export const RoleFormModal = ({ isOpen, onClose, onSuccess, initialRole = null }
 
       let res;
       if (isEdit) {
-        res = await adminService.updateRole(initialRole.id, {
+        res = await adminService.updateRole(activeRole.id, {
           name: formData.name.trim(),
           description: formData.description.trim(),
           status: formData.status,
@@ -78,7 +79,7 @@ export const RoleFormModal = ({ isOpen, onClose, onSuccess, initialRole = null }
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={isEdit ? `Edit Role — ${initialRole?.name}` : 'Create New System Role'}
+      title={isEdit ? `Edit Role — ${activeRole?.name}` : 'Create New System Role'}
       subtitle="Define organizational access role and responsibilities"
       maxWidth="max-w-md"
     >

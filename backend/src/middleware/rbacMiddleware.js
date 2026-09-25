@@ -17,8 +17,8 @@ export const authorize = (requiredPermissions) => {
     }
 
     const normRole = normalizeRole(req.user.roleName);
-    // SuperAdmin or Admin has full system access bypass
-    if (normRole === 'superadmin' || normRole === 'admin') {
+    // SuperAdmin, Admin, or OrgAdmin has full system access bypass
+    if (normRole === 'superadmin' || normRole === 'admin' || normRole === 'orgadmin') {
       return next();
     }
 
@@ -55,7 +55,7 @@ export const requireRoles = (allowedRoles) => {
     }
 
     const normUserRole = normalizeRole(req.user.roleName);
-    if (normUserRole === 'superadmin' || normUserRole === 'admin') {
+    if (normUserRole === 'superadmin' || normUserRole === 'admin' || normUserRole === 'orgadmin') {
       return next();
     }
 

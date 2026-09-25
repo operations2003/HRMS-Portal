@@ -31,6 +31,7 @@ import { teamService } from '../../services/teamService.js';
 import { managerService } from '../../services/managerService.js';
 import { departmentService } from '../../services/departmentService.js';
 import { documentService } from '../../services/documentService.js';
+import { getDocumentLabel } from '../../constants/documentTypes.js';
 import { Button } from '../../components/common/Button.jsx';
 import { Badge } from '../../components/common/Badge.jsx';
 import { DataTable } from '../../components/common/DataTable.jsx';
@@ -630,16 +631,7 @@ export const TeamManagementPage = () => {
     {
       header: 'Document Name & Category',
       render: (row) => {
-        const catMap = {
-          IDENTITY: 'ID Proof',
-          OFFER: 'Offer Letter',
-          EDUCATION: 'Education',
-          EXPERIENCE: 'Experience',
-          TAX: 'Tax Document',
-          MEDICAL: 'Medical',
-          OTHER: 'Other',
-        };
-        const catLabel = catMap[row.category] || row.category || 'General';
+        const catLabel = getDocumentLabel(row.documentType || row.category);
         return (
           <div>
             <p className="text-xs font-semibold text-slate-900 flex items-center gap-1.5">

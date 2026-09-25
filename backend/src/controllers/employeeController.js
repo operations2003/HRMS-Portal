@@ -216,6 +216,7 @@ export const employeeController = {
         lastName: emp.last_name,
         fullName: `${emp.first_name || ''} ${emp.last_name || ''}`.trim(),
         email: emp.email,
+        personalEmail: emp.personal_email || '',
         phone: emp.phone || '',
         avatarUrl: emp.avatar_url || '',
         dateOfJoining: emp.date_of_joining,
@@ -249,7 +250,16 @@ export const employeeController = {
   async updateMyProfile(req, res, next) {
     try {
       const user = req.user;
-      const { phone, emergencyContact, address, fatherName, motherName, avatarUrl } = req.body;
+      const { phone, emergencyContact, address, fatherName, motherName, avatarUrl, personalEmail } = req.body;
+
+      if (personalEmail !== undefined && personalEmail !== null && personalEmail.trim() !== '') {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(personalEmail.trim())) {
+          return sendError(res, 'Please provide a valid personal email address.', 400);
+        }
+      }
+
+      const pEmail = personalEmail !== undefined ? (personalEmail ? personalEmail.trim().toLowerCase() : '') : null;
 
       const updateRes = await pool.query(
         `UPDATE employees
@@ -260,10 +270,11 @@ export const employeeController = {
            father_name = COALESCE($4, father_name),
            mother_name = COALESCE($5, mother_name),
            avatar_url = COALESCE($6, avatar_url),
+           personal_email = COALESCE($7, personal_email),
            updated_at = NOW()
-         WHERE user_id = $7 OR email = $8
+         WHERE user_id = $8 OR email = $9
          RETURNING *;`,
-        [phone, emergencyContact, address, fatherName, motherName, avatarUrl, user.id, user.email]
+        [phone, emergencyContact, address, fatherName, motherName, avatarUrl, pEmail, user.id, user.email]
       );
 
       if (updateRes.rows.length === 0) {
@@ -335,6 +346,7 @@ export const employeeController = {
         lastName: emp.last_name,
         fullName: `${emp.first_name || ''} ${emp.last_name || ''}`.trim(),
         email: emp.email,
+        personalEmail: emp.personal_email || '',
         phone: emp.phone || '',
         avatarUrl: emp.avatar_url || '',
         dateOfJoining: emp.date_of_joining,

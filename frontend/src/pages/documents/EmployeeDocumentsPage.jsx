@@ -532,10 +532,11 @@ export const EmployeeDocumentsPage = () => {
                   className="px-3.5 py-2 text-xs font-medium rounded-xl border border-slate-200 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 shadow-2xs cursor-pointer"
                 >
                   <option value="ALL">All Categories</option>
-                  <option value="IDENTITY">Identity (Passport, PAN, Aadhaar)</option>
+                  <option value="IDENTITY">Identity (Aadhaar, PAN, Passport)</option>
+                  <option value="EDUCATION">Education (10th, 12th, Graduation)</option>
+                  <option value="ADDRESS">Address (Rent Agreement, Electricity Bill)</option>
                   <option value="OFFER">Offer & Contracts</option>
-                  <option value="EDUCATION">Educational Certificates</option>
-                  <option value="EXPERIENCE">Experience Letters</option>
+                  <option value="EXPERIENCE">Experience & Relieving</option>
                   <option value="TAX">Tax Forms</option>
                   <option value="MEDICAL">Medical & Fitness</option>
                   <option value="OTHER">Other Documents</option>

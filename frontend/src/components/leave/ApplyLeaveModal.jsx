@@ -38,16 +38,13 @@ const DEFAULT_LEAVE_CATEGORIES = [
 ];
 
 /**
- * Returns the next upcoming business day (Mon - Fri) formatted as YYYY-MM-DD.
- * If today is Saturday (6), advances to Monday (+2 days).
+ * Returns the next upcoming business day (Mon - Sat, 6 working days) formatted as YYYY-MM-DD.
  * If today is Sunday (0), advances to Monday (+1 day).
  */
 const getNextWorkingDay = (baseDate = new Date()) => {
   const d = new Date(baseDate);
   const day = d.getDay(); // 0 = Sun, 6 = Sat
-  if (day === 6) {
-    d.setDate(d.getDate() + 2);
-  } else if (day === 0) {
+  if (day === 0) {
     d.setDate(d.getDate() + 1);
   }
   const year = d.getFullYear();
@@ -261,7 +258,7 @@ export const ApplyLeaveModal = ({
     }
 
     if (durationPreview && (durationPreview.isNonWorkingPeriod || durationPreview.totalDays === 0)) {
-      errs.startDate = durationPreview.warning || 'Selected dates contain no working business days (Mon–Fri).';
+      errs.startDate = durationPreview.warning || 'Selected dates contain no working business days (Mon–Sat).';
     }
 
     if (formData.isHalfDay && !formData.halfDayPeriod) {
@@ -512,7 +509,7 @@ export const ApplyLeaveModal = ({
               <div>
                 <div className="font-bold text-amber-900">Non-Working Day Selected</div>
                 <div className="text-amber-800 mt-0.5 leading-relaxed">
-                  {durationPreview.warning || 'Selected dates fall on a weekend or public holiday. Standard leaves only deduct working business days (Monday to Friday). Please select a working day.'}
+                  {durationPreview.warning || 'Selected dates fall on a Sunday or public holiday. Standard leaves only deduct working business days (Monday to Saturday). Please select a working day.'}
                 </div>
               </div>
             </div>
@@ -528,7 +525,7 @@ export const ApplyLeaveModal = ({
                 </span>
               </div>
               <div className="text-slate-500">
-                {durationPreview.weekendDays > 0 && `(Excludes ${durationPreview.weekendDays} weekend days)`}
+                {durationPreview.weekendDays > 0 && `(Excludes ${durationPreview.weekendDays} Sunday${durationPreview.weekendDays > 1 ? 's' : ''})`}
                 {durationPreview.holidayDays > 0 && `(Excludes ${durationPreview.holidayDays} holiday days)`}
               </div>
             </div>

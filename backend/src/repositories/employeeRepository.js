@@ -15,6 +15,7 @@ const mapEmployeeRow = (row) => {
     firstName: row.firstName,
     lastName: row.lastName,
     email: row.email,
+    personalEmail: row.personalEmail || row.personal_email || '',
     phone: row.phone || '',
     dateOfJoining: row.dateOfJoining || '',
     employmentType: row.employmentType || 'Full-Time',
@@ -79,6 +80,7 @@ const BASE_EMPLOYEE_SELECT = `
     e.first_name AS "firstName",
     e.last_name AS "lastName",
     e.email,
+    e.personal_email AS "personalEmail",
     e.phone,
     e.gender,
     TO_CHAR(e.date_of_joining, 'YYYY-MM-DD') AS "dateOfJoining",
@@ -285,6 +287,7 @@ export const employeeRepository = {
     const firstName = data.firstName.trim();
     const lastName = data.lastName.trim();
     const email = data.email.trim().toLowerCase();
+    const personalEmail = data.personalEmail ? data.personalEmail.trim().toLowerCase() : (data.personal_email ? data.personal_email.trim().toLowerCase() : null);
     const phone = data.phone ? data.phone.trim() : '';
     const dateOfJoining = data.dateOfJoining || new Date().toISOString().split('T')[0];
     const employmentType = data.employmentType || 'Full-Time';
@@ -317,13 +320,13 @@ export const employeeRepository = {
     const sql = `
       INSERT INTO employees (
         id, org_id, dept_id, desig_id, user_id, employee_code,
-        first_name, last_name, email, phone, date_of_joining,
+        first_name, last_name, email, personal_email, phone, date_of_joining,
         employment_type, status, salary, shift_timing, gender, manager_id, hr_id,
         father_name, mother_name, emergency_contact, address,
         bank_name, bank_account_number, bank_ifsc, bank_branch, uan_number,
         probation_status, probation_start_date, probation_end_date, probation_notes,
         salary_structure
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33)
       RETURNING id;
     `;
 
@@ -337,6 +340,7 @@ export const employeeRepository = {
       firstName,
       lastName,
       email,
+      personalEmail,
       phone,
       dateOfJoining,
       employmentType,
@@ -388,6 +392,12 @@ export const employeeRepository = {
     if (data.email !== undefined) {
       setClauses.push(`email = $${paramIndex++}`);
       values.push(data.email.trim().toLowerCase());
+    }
+
+    if (data.personalEmail !== undefined || data.personal_email !== undefined) {
+      const pEmail = data.personalEmail !== undefined ? data.personalEmail : data.personal_email;
+      setClauses.push(`personal_email = $${paramIndex++}`);
+      values.push(pEmail ? pEmail.trim().toLowerCase() : null);
     }
 
     if (data.phone !== undefined) {

@@ -30,6 +30,7 @@ import { Button } from '../common/Button.jsx';
 import { Modal } from '../common/Modal.jsx';
 import { Input } from '../common/Input.jsx';
 import { Select } from '../common/Select.jsx';
+import { DOCUMENT_TYPE_OPTIONS, getDocumentLabel } from '../../constants/documentTypes.js';
 
 const CATEGORY_OPTIONS = [
   { value: 'IDENTITY', label: 'ID Proof (Aadhaar, PAN, Passport)' },
@@ -137,9 +138,10 @@ export const DocumentVaultUploader = ({
 
   // Upload Form State
   const [selectedFile, setSelectedFile] = useState(null);
+  const [docType, setDocType] = useState('AADHAAR_CARD');
   const [category, setCategory] = useState('IDENTITY');
-  const [title, setTitle] = useState('');
-  const [documentType, setDocumentType] = useState('PASSPORT');
+  const [title, setTitle] = useState('Aadhaar Card');
+  const [documentType, setDocumentType] = useState('AADHAAR_CARD');
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
 
@@ -202,8 +204,23 @@ export const DocumentVaultUploader = ({
   const handleFileSelected = (file) => {
     setSelectedFile(file);
     if (!title) {
-      const nameWithoutExt = file.name.replace(/\.[^/.]+$/, '');
-      setTitle(nameWithoutExt);
+      const selected = DOCUMENT_TYPE_OPTIONS.find((opt) => opt.value === docType);
+      setTitle(selected?.defaultTitle || file.name.replace(/\.[^/.]+$/, ''));
+    }
+  };
+
+  const handleDocTypeChange = (e) => {
+    const val = e.target.value;
+    setDocType(val);
+    setDocumentType(val);
+    const selected = DOCUMENT_TYPE_OPTIONS.find((opt) => opt.value === val);
+    if (selected) {
+      setCategory(selected.category);
+      if (val === 'OTHER') {
+        setTitle('');
+      } else {
+        setTitle(selected.defaultTitle);
+      }
     }
   };
 
@@ -211,13 +228,20 @@ export const DocumentVaultUploader = ({
     e.preventDefault();
     if (!selectedFile) return;
 
+    const selected = DOCUMENT_TYPE_OPTIONS.find((opt) => opt.value === docType) || {
+      category: category || 'OTHER',
+      value: docType || 'OTHER',
+      defaultTitle: 'Document',
+    };
+    const finalTitle = title.trim() || selected.defaultTitle || selectedFile.name;
+
     try {
       setUploading(true);
       const formData = new FormData();
       formData.append('file', selectedFile);
-      formData.append('category', category);
-      formData.append('title', title || selectedFile.name);
-      formData.append('documentType', documentType);
+      formData.append('category', selected.category);
+      formData.append('title', finalTitle);
+      formData.append('documentType', selected.value);
 
       if (onUpload) {
         await onUpload(formData);
@@ -226,11 +250,11 @@ export const DocumentVaultUploader = ({
       } else {
         await documentService.uploadMyDocument(formData);
       }
-      showSuccess(`Document '${title || selectedFile.name}' uploaded successfully.`);
+      showSuccess(`Document '${finalTitle}' uploaded successfully.`);
 
       // Reset form
       setSelectedFile(null);
-      setTitle('');
+      setTitle(selected.defaultTitle || '');
       if (fileInputRef.current) fileInputRef.current.value = '';
 
       if (onDocumentsUpdated) {
@@ -414,18 +438,19 @@ export const DocumentVaultUploader = ({
             {/* Metadata Fields (Shown when file is selected) */}
             {selectedFile && (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 bg-slate-50/80 p-4 rounded-2xl border border-slate-200/80 animate-fade-in">
-                <Input
-                  label="Document Title"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g. Passport Copy"
+                <Select
+                  label="Document Type"
+                  value={docType}
+                  onChange={handleDocTypeChange}
+                  options={DOCUMENT_TYPE_OPTIONS}
                   required
                 />
-                <Select
-                  label="Category"
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  options={CATEGORY_OPTIONS}
+                <Input
+                  label={`Document Title ${docType === 'OTHER' ? '*' : '(Optional)'}`}
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder={docType === 'OTHER' ? 'Enter document name (e.g. Relieving Letter)' : 'e.g. Document Title'}
+                  required={docType === 'OTHER'}
                 />
                 <div className="flex items-end">
                   <Button
@@ -517,7 +542,7 @@ export const DocumentVaultUploader = ({
                       {/* File Metadata Line */}
                       <div className="flex items-center gap-2.5 text-xs text-slate-500 mt-1.5 flex-wrap">
                         <span className="font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded text-[11px]">
-                          {doc.category || 'GENERAL'}
+                          {getDocumentLabel(doc.documentType || doc.category)}
                         </span>
                         <span>•</span>
                         <span>{formatBytes(doc.fileSize)}</span>

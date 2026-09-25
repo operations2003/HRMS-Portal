@@ -57,7 +57,7 @@ const formatLocalDate = (date) => {
 
 /**
  * Core calculation engine for Leave Duration
- * Excludes weekends (Sat/Sun) and active mandatory company/national holidays.
+ * Excludes weekends (Sunday) and active mandatory company/national holidays (6 working days: Mon-Sat).
  */
 const calculateLeaveDuration = async (orgId, startDateStr, endDateStr, isHalfDay = false, halfDayPeriod = null, allowZeroWorkingDays = false) => {
   const sDate = parseLocalDate(startDateStr);
@@ -108,7 +108,8 @@ const calculateLeaveDuration = async (orgId, startDateStr, endDateStr, isHalfDay
     const curStr = formatLocalDate(cur);
     const dayOfWeek = cur.getDay(); // 0 = Sun, 6 = Sat
 
-    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+    // 6 working days policy (Monday to Saturday): only Sunday (0) is a non-working weekend day
+    const isWeekend = dayOfWeek === 0;
     const isHoliday = holidayMap.has(curStr);
 
     if (isWeekend) {
@@ -151,10 +152,10 @@ const calculateLeaveDuration = async (orgId, startDateStr, endDateStr, isHalfDay
           totalDays: 0,
           holidays: [],
           isNonWorkingPeriod: true,
-          warning: 'Cannot apply for half-day leave on a weekend (Saturday or Sunday). Weekends are non-working days.',
+          warning: 'Cannot apply for half-day leave on a weekend (Sunday). Sundays are non-working days.',
         };
       }
-      const error = new Error('Cannot apply for half-day leave on a weekend (Saturday or Sunday).');
+      const error = new Error('Cannot apply for half-day leave on a weekend (Sunday).');
       error.statusCode = 400;
       throw error;
     }
@@ -207,10 +208,10 @@ const calculateLeaveDuration = async (orgId, startDateStr, endDateStr, isHalfDay
         totalDays: 0,
         holidays: holidaysEncountered,
         isNonWorkingPeriod: true,
-        warning: 'The requested leave period contains no working days (all selected days are weekends or official public holidays). Standard leave only applies to working business days (Monday to Friday).',
+        warning: 'The requested leave period contains no working days (all selected days are Sundays or official public holidays). Standard leave applies to working business days (Monday to Saturday).',
       };
     }
-    const error = new Error('The requested leave period contains no working days (all days are weekends or official public holidays). Please select a working business day (Monday to Friday).');
+    const error = new Error('The requested leave period contains no working days (all days are Sundays or official public holidays). Please select a working business day (Monday to Saturday).');
     error.statusCode = 400;
     throw error;
   }

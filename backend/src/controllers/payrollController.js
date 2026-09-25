@@ -131,18 +131,8 @@ export const payrollController = {
       ? '•••• •••• •••• ' + rawAcc.slice(-4) 
       : '•••• •••• •••• 5678';
 
-    // Past 6 Months Pay History
-    const months = ['August 2026', 'July 2026', 'June 2026', 'May 2026', 'April 2026', 'March 2026'];
-    const payHistory = months.map((m, idx) => ({
-      id: `pay-${idx + 1}`,
-      period: m,
-      grossEarnings: monthlyGross,
-      totalDeductions,
-      netPay: netTakeHome,
-      status: 'PAID',
-      paymentDate: `2026-0${8 - idx}-30`,
-      paymentMethod: 'Direct Bank Transfer',
-    }));
+    // Past Months Pay History: Empty by default; recorded as disbursements are processed from September onwards
+    const payHistory = (custom && Array.isArray(custom.disbursements)) ? custom.disbursements : [];
 
     const earningsList = [
       { component: 'Basic Salary', monthly: basic, annual: basic * 12, description: 'Base Pay Component' },
@@ -457,7 +447,7 @@ export const payrollController = {
 
       // Guard: Admin does not have salary and cannot be assigned compensation
       const checkTarget = await pool.query(
-        `SELECT e.id, e.email, r.name as role_name
+        `SELECT e.id, e.email, e.salary_structure, r.name as role_name
          FROM employees e
          LEFT JOIN users u ON e.user_id = u.id OR e.email = u.email
          LEFT JOIN roles r ON u.role_id = r.id
@@ -562,6 +552,13 @@ export const payrollController = {
         },
       };
 
+      const existingStructure = typeof checkTarget.rows[0].salary_structure === 'object' && checkTarget.rows[0].salary_structure !== null
+        ? checkTarget.rows[0].salary_structure
+        : (checkTarget.rows[0].salary_structure ? JSON.parse(checkTarget.rows[0].salary_structure) : {});
+      if (Array.isArray(existingStructure.disbursements)) {
+        salaryStructureObj.disbursements = existingStructure.disbursements;
+      }
+
       const finalSalary = annualCtc !== null ? annualCtc : (monthlyGross ? monthlyGross * 12 : 0);
 
       const updateRes = await pool.query(
@@ -657,6 +654,32 @@ export const payrollController = {
       const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
       const now = new Date();
       const currentPeriod = `${monthNames[now.getMonth()]} ${now.getFullYear()}`;
+      const txnId = `TXN-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
+      const disbursementRecord = {
+        id: `pay-${Date.now()}`,
+        period: currentPeriod,
+        grossEarnings: breakdown.ctcBreakdown.monthlyGross,
+        totalDeductions: breakdown.ctcBreakdown.totalDeductions,
+        netPay,
+        status: 'PAID',
+        paymentDate: now.toISOString().split('T')[0],
+        paymentMethod: 'Direct Bank Transfer',
+        transactionId: txnId,
+      };
+
+      const existingStructure = typeof emp.salary_structure === 'object' && emp.salary_structure !== null
+        ? emp.salary_structure
+        : (emp.salary_structure ? JSON.parse(emp.salary_structure) : {});
+      const disbursements = Array.isArray(existingStructure.disbursements) ? existingStructure.disbursements : [];
+      const filtered = disbursements.filter((d) => d.period !== currentPeriod);
+      filtered.unshift(disbursementRecord);
+      existingStructure.disbursements = filtered;
+
+      await pool.query(
+        `UPDATE employees SET salary_structure = $1, updated_at = NOW() WHERE id = $2;`,
+        [JSON.stringify(existingStructure), emp.id]
+      );
 
       return sendSuccess(res, `Salary disbursement of ₹${netPay.toLocaleString('en-IN')} to ${empName} has been processed via Direct Bank Transfer.`, {
         disbursed: true,
@@ -665,7 +688,7 @@ export const payrollController = {
         period: currentPeriod,
         amount: netPay,
         paymentMethod: 'Direct Bank Transfer',
-        transactionId: `TXN-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        transactionId: txnId,
         disbursedAt: now.toISOString(),
         disbursedBy: `${caller.firstName || ''} ${caller.lastName || ''}`.trim() || caller.email,
       });
@@ -701,16 +724,40 @@ export const payrollController = {
         [orgId]
       );
 
-      const employees = empRes.rows;
-      let totalAmount = 0;
-      employees.forEach((emp) => {
-        const breakdown = payrollController.calculateSalaryBreakdown(emp);
-        totalAmount += breakdown.ctcBreakdown.netTakeHome;
-      });
-
       const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
       const now = new Date();
       const currentPeriod = `${monthNames[now.getMonth()]} ${now.getFullYear()}`;
+
+      for (const emp of employees) {
+        const breakdown = payrollController.calculateSalaryBreakdown(emp);
+        const netPay = breakdown.ctcBreakdown.netTakeHome;
+        totalAmount += netPay;
+
+        const disbursementRecord = {
+          id: `pay-${Date.now()}-${emp.id}`,
+          period: currentPeriod,
+          grossEarnings: breakdown.ctcBreakdown.monthlyGross,
+          totalDeductions: breakdown.ctcBreakdown.totalDeductions,
+          netPay,
+          status: 'PAID',
+          paymentDate: now.toISOString().split('T')[0],
+          paymentMethod: 'Direct Bank Transfer',
+          transactionId: `TXN-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        };
+
+        const existingStructure = typeof emp.salary_structure === 'object' && emp.salary_structure !== null
+          ? emp.salary_structure
+          : (emp.salary_structure ? JSON.parse(emp.salary_structure) : {});
+        const disbursements = Array.isArray(existingStructure.disbursements) ? existingStructure.disbursements : [];
+        const filtered = disbursements.filter((d) => d.period !== currentPeriod);
+        filtered.unshift(disbursementRecord);
+        existingStructure.disbursements = filtered;
+
+        await pool.query(
+          `UPDATE employees SET salary_structure = $1, updated_at = NOW() WHERE id = $2;`,
+          [JSON.stringify(existingStructure), emp.id]
+        );
+      }
 
       return sendSuccess(res, `Organization payroll of ₹${totalAmount.toLocaleString('en-IN')} for ${employees.length} employees successfully disbursed.`, {
         disbursed: true,
