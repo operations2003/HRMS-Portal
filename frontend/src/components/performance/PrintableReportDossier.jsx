@@ -8,7 +8,8 @@ import {
   Check,
 } from 'lucide-react';
 
-export const PrintableReportDossier = forwardRef(({ department, data, averageScore }, ref) => {
+export const PrintableReportDossier = forwardRef(({ department, data: rawData, averageScore }, ref) => {
+  const data = rawData && typeof rawData === 'object' ? rawData : {};
   const isOps = department === 'operations';
   const isIt = department === 'it';
 

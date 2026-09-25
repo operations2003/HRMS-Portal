@@ -72,3 +72,51 @@ export const requireRoles = (allowedRoles) => {
     );
   };
 };
+
+/**
+ * Checks whether user can manage training programs:
+ * ADMIN (Admin, SuperAdmin, OrgAdmin) OR (Role = HR AND Department = Learning & Development)
+ */
+export const canManageTraining = (user) => {
+  if (!user) return false;
+  const normRole = normalizeRole(user.roleName);
+  if (normRole === 'superadmin' || normRole === 'admin' || normRole === 'orgadmin') {
+    return true;
+  }
+
+  const isHr = normRole === 'hr' || normRole === 'hrmanager';
+  if (!isHr) return false;
+
+  const deptName = (user.departmentName || user.department?.name || user.deptName || '').toLowerCase().trim();
+  const deptCode = (user.departmentCode || user.department?.code || user.deptCode || '').toLowerCase().trim();
+  const deptId = (user.deptId || '').toLowerCase().trim();
+
+  return (
+    deptName === 'learning & development' ||
+    deptName === 'learning and development' ||
+    deptName.includes('learning') ||
+    deptCode === 'l&d' ||
+    deptCode === 'ld' ||
+    deptId === 'dept-ld'
+  );
+};
+
+/**
+ * Middleware ensuring user is ADMIN or (HR AND Learning & Development Department)
+ */
+export const authorizeTrainingManager = (req, res, next) => {
+  if (!req.user) {
+    return sendError(res, 'Unauthorized. Please authenticate first.', 401);
+  }
+
+  if (canManageTraining(req.user)) {
+    return next();
+  }
+
+  return sendError(
+    res,
+    'Access Forbidden: Only Administrators and HR personnel in the Learning & Development department can manage training programs.',
+    403
+  );
+};
+

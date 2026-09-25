@@ -14,11 +14,25 @@ const mapRow = (row) => {
     employeeCode: row.employee_code,
     designation: row.designation,
     reviewPeriod: row.review_period,
-    reviewDate: row.review_date ? row.review_date.toISOString().split('T')[0] : null,
+    reviewDate: row.review_date
+      ? (row.review_date instanceof Date
+          ? row.review_date.toISOString().split('T')[0]
+          : String(row.review_date).split('T')[0])
+      : null,
     reviewCycle: row.review_cycle,
     averageScore: row.average_score ? Number(row.average_score) : 0,
     overallRating: row.overall_rating,
-    reportData: row.report_data,
+    reportData: (() => {
+      if (!row.report_data) return {};
+      if (typeof row.report_data === 'string') {
+        try {
+          return JSON.parse(row.report_data);
+        } catch {
+          return {};
+        }
+      }
+      return row.report_data;
+    })(),
     sentCount: row.sent_count || 1,
     status: row.status,
     deletedByUserAt: row.deleted_by_user_at ? new Date(row.deleted_by_user_at).toISOString() : null,

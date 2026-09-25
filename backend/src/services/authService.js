@@ -78,6 +78,10 @@ export const authService = {
         organization: user.organization,
         employeeId: emp ? emp.id : null,
         employeeCode: emp ? emp.employeeCode : null,
+        deptId: emp ? emp.deptId : null,
+        department: emp?.department || null,
+        departmentName: emp?.department?.name || null,
+        departmentCode: emp?.department?.code || null,
         avatarUrl: user.avatarUrl || emp?.avatarUrl || null,
       },
     };
@@ -123,6 +127,10 @@ export const authService = {
       organization: user.organization,
       employeeId: emp ? emp.id : null,
       employeeCode: emp ? emp.employeeCode : null,
+      deptId: emp ? emp.deptId : null,
+      department: emp?.department || null,
+      departmentName: emp?.department?.name || null,
+      departmentCode: emp?.department?.code || null,
       avatarUrl: user.avatarUrl || emp?.avatarUrl || null,
     };
   },

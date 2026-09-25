@@ -639,25 +639,64 @@ export const ReportsPage = () => {
 
   // Computed active dossier data (for recipient employee vs reviewer)
   const isViewingMyReport = viewMode === 'my';
-  const activeMyReport = isViewingMyReport && myReports.length > 0 ? myReports[activeMyReportIdx] : null;
-  const effectiveDepartment = isViewingMyReport && activeMyReport ? (activeMyReport.department || department) : department;
-  const effectiveData = isViewingMyReport && activeMyReport ? (activeMyReport.reportData || currentData) : currentData;
-  const effectiveAverageScore = isViewingMyReport && activeMyReport
-    ? (activeMyReport.averageScore ? Number(activeMyReport.averageScore).toFixed(2) : calculateAverage(effectiveData?.competencies))
-    : currentAverageScore;
+  const activeMyReport = isViewingMyReport && Array.isArray(myReports) && myReports.length > 0
+    ? (myReports[activeMyReportIdx] || myReports[0] || null)
+    : null;
+
+  const parsedActiveReportData = useMemo(() => {
+    if (!activeMyReport) return null;
+    let data = activeMyReport.reportData;
+    if (typeof data === 'string') {
+      try {
+        data = JSON.parse(data);
+      } catch {
+        data = null;
+      }
+    }
+    return data && typeof data === 'object' ? data : null;
+  }, [activeMyReport]);
+
+  const effectiveDepartment = isViewingMyReport && activeMyReport
+    ? (activeMyReport.department || department || 'operations')
+    : (department || 'operations');
+
+  const baseFallbackData = currentData || opsData || {};
+
+  const effectiveData = useMemo(() => {
+    const raw = isViewingMyReport && activeMyReport && parsedActiveReportData
+      ? parsedActiveReportData
+      : baseFallbackData;
+
+    return {
+      ...baseFallbackData,
+      ...(raw || {}),
+      competencies: Array.isArray(raw?.competencies) ? raw.competencies : (baseFallbackData.competencies || []),
+      goals: Array.isArray(raw?.goals) ? raw.goals : (baseFallbackData.goals || []),
+      training: Array.isArray(raw?.training) ? raw.training : (baseFallbackData.training || []),
+      actions: raw?.actions && typeof raw.actions === 'object' ? raw.actions : (baseFallbackData.actions || {}),
+      overallRating: raw?.overallRating || baseFallbackData.overallRating || 'Meets Expectations',
+    };
+  }, [isViewingMyReport, activeMyReport, parsedActiveReportData, baseFallbackData]);
+
+  const effectiveAverageScore = useMemo(() => {
+    if (isViewingMyReport && activeMyReport?.averageScore) {
+      return Number(activeMyReport.averageScore).toFixed(2);
+    }
+    return calculateAverage(effectiveData.competencies) || currentAverageScore || '0.00';
+  }, [isViewingMyReport, activeMyReport, effectiveData, currentAverageScore]);
 
   // Add / remove rows for goals
   const addGoalRow = () => {
     setCurrentData((prev) => ({
       ...prev,
-      goals: [...prev.goals, { goal: '', target: '', deadline: '', status: 'Planned' }],
+      goals: [...(prev.goals || []), { goal: '', target: '', deadline: '', status: 'Planned' }],
     }));
   };
 
   const removeGoalRow = (idx) => {
     setCurrentData((prev) => ({
       ...prev,
-      goals: prev.goals.filter((_, i) => i !== idx),
+      goals: (prev.goals || []).filter((_, i) => i !== idx),
     }));
   };
 
@@ -665,14 +704,14 @@ export const ReportsPage = () => {
   const addTrainingRow = () => {
     setCurrentData((prev) => ({
       ...prev,
-      training: [...prev.training, { skill: '', training: '', priority: 'Medium' }],
+      training: [...(prev.training || []), { skill: '', training: '', priority: 'Medium' }],
     }));
   };
 
   const removeTrainingRow = (idx) => {
     setCurrentData((prev) => ({
       ...prev,
-      training: prev.training.filter((_, i) => i !== idx),
+      training: (prev.training || []).filter((_, i) => i !== idx),
     }));
   };
 
@@ -846,10 +885,10 @@ export const ReportsPage = () => {
       render: (row) => (
         <div>
           <span className="font-semibold text-xs text-slate-900 dark:text-white block">
-            {row.employeeName}
+            {row?.employeeName || 'Employee'}
           </span>
           <span className="text-[11px] text-slate-400 font-mono">
-            {row.employeeCode || row.employeeId} {row.empEmail ? `• ${row.empEmail}` : ''}
+            {row?.employeeCode || row?.employeeId || ''} {row?.empEmail ? `• ${row.empEmail}` : ''}
           </span>
         </div>
       ),
@@ -858,7 +897,7 @@ export const ReportsPage = () => {
       header: 'Department',
       render: (row) => (
         <span className="text-xs uppercase font-mono px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold">
-          {row.department}
+          {row?.department || 'operations'}
         </span>
       ),
     },
@@ -867,10 +906,10 @@ export const ReportsPage = () => {
       render: (row) => (
         <div>
           <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 block">
-            {row.reviewPeriod || 'Current Period'}
+            {row?.reviewPeriod || 'Current Period'}
           </span>
           <span className="text-[11px] text-slate-400">
-            {row.reviewCycle || 'Quarterly Review'}
+            {row?.reviewCycle || 'Quarterly Review'}
           </span>
         </div>
       ),
@@ -880,10 +919,10 @@ export const ReportsPage = () => {
       render: (row) => (
         <div className="flex items-center gap-1.5">
           <span className="text-xs font-bold text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-950/40 px-2 py-0.5 rounded border border-brand-200 dark:border-brand-800">
-            {row.averageScore ? Number(row.averageScore).toFixed(1) : '--'}/5.0
+            {row?.averageScore ? Number(row.averageScore).toFixed(1) : '--'}/5.0
           </span>
           <span className="text-[11px] text-slate-500 font-medium truncate max-w-[130px]">
-            {row.overallRating}
+            {row?.overallRating || 'Meets Expectations'}
           </span>
         </div>
       ),
@@ -891,7 +930,7 @@ export const ReportsPage = () => {
     {
       header: 'Delivery Status',
       render: (row) => {
-        if (row.status === 'DELETED_BY_USER') {
+        if (row?.status === 'DELETED_BY_USER') {
           return (
             <div>
               <Badge variant="warning" size="sm">
@@ -909,7 +948,7 @@ export const ReportsPage = () => {
               Delivered
             </Badge>
             <span className="text-[10px] text-slate-400 block mt-0.5">
-              Sent {row.sentCount || 1} time{row.sentCount > 1 ? 's' : ''}
+              Sent {row?.sentCount || 1} time{(row?.sentCount || 1) > 1 ? 's' : ''}
             </span>
           </div>
         );
@@ -919,7 +958,7 @@ export const ReportsPage = () => {
       header: 'Last Sent',
       render: (row) => (
         <span className="text-xs text-slate-500">
-          {row.lastSentAt ? new Date(row.lastSentAt).toLocaleDateString() : 'N/A'}
+          {row?.lastSentAt ? new Date(row.lastSentAt).toLocaleDateString() : 'N/A'}
         </span>
       ),
     },
@@ -930,7 +969,7 @@ export const ReportsPage = () => {
         <div className="flex items-center justify-end gap-2">
           <Button
             size="sm"
-            variant={row.status === 'DELETED_BY_USER' ? 'primary' : 'outline'}
+            variant={row?.status === 'DELETED_BY_USER' ? 'primary' : 'outline'}
             icon={RotateCw}
             onClick={() => handleSendAgainFromHistory(row)}
           >
@@ -1824,7 +1863,7 @@ export const ReportsPage = () => {
                           </td>
                           {!isViewingMyReport && (
                             <td className="py-2 px-3 text-center">
-                              {effectiveData.goals.length > 1 && (
+                              {(effectiveData.goals?.length || 0) > 1 && (
                                 <button
                                   type="button"
                                   onClick={() => removeGoalRow(idx)}
@@ -1942,7 +1981,7 @@ export const ReportsPage = () => {
                           </td>
                           {!isViewingMyReport && (
                             <td className="py-2 px-3 text-center">
-                              {effectiveData.training.length > 1 && (
+                              {(effectiveData.training?.length || 0) > 1 && (
                                 <button
                                   type="button"
                                   onClick={() => removeTrainingRow(idx)}

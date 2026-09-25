@@ -90,6 +90,33 @@ export const AuthProvider = ({ children }) => {
     return targetRoles.includes(userRoleStr);
   };
 
+  const canManageTraining = () => {
+    if (!user) return false;
+    const userRoleStr = (user.roleName || user.role?.name || user.role || '').toLowerCase().trim();
+    if (['admin', 'superadmin', 'orgadmin'].includes(userRoleStr)) return true;
+
+    // Role must be HR
+    const isHr = ['hr', 'hrmanager', 'hr_manager'].includes(userRoleStr);
+    if (!isHr) return false;
+
+    // Department must be Learning & Development
+    const deptStr = (
+      user.departmentName ||
+      user.department?.name ||
+      user.department ||
+      user.departmentCode ||
+      user.deptId ||
+      ''
+    ).toLowerCase().trim();
+
+    return (
+      deptStr === 'learning & development' ||
+      deptStr === 'learning and development' ||
+      deptStr === 'l&d' ||
+      deptStr === 'dept-ld'
+    );
+  };
+
   const updateUser = (updatedFields) => {
     setUser((prev) => {
       if (!prev) return prev;
@@ -110,6 +137,7 @@ export const AuthProvider = ({ children }) => {
         logout,
         hasPermission,
         hasRole,
+        canManageTraining,
         updateUser,
       }}
     >

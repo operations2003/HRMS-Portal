@@ -5,8 +5,10 @@ import { notificationService } from './notificationService.js';
 export const trainingService = {
   /**
    * Course catalogue
+   * - Training managers see all courses (published, unpublished, draft, active, inactive)
+   * - Standard staff only see PUBLISHED or ACTIVE courses
    */
-  async listCourses(orgId, filters = {}) {
+  async listCourses(orgId, filters = {}, isTrainingManager = false) {
     let sql = `SELECT * FROM courses WHERE org_id = $1`;
     const params = [orgId];
 
@@ -17,8 +19,9 @@ export const trainingService = {
     if (filters.status) {
       params.push(filters.status);
       sql += ` AND status = $${params.length}`;
-    } else {
-      sql += ` AND status = 'ACTIVE'`;
+    } else if (!isTrainingManager) {
+      // Non-managers only see published/active courses
+      sql += ` AND status IN ('ACTIVE', 'PUBLISHED')`;
     }
     if (filters.search) {
       params.push(`%${filters.search.toLowerCase()}%`);
@@ -31,22 +34,45 @@ export const trainingService = {
   },
 
   /**
-   * Create course (HR / Admin)
+   * Get course by ID
+   */
+  async getCourseById(courseId, orgId) {
+    const res = await query('SELECT * FROM courses WHERE id = $1 AND org_id = $2;', [courseId, orgId]);
+    if (res.rows.length === 0) {
+      const err = new Error('Course not found.');
+      err.statusCode = 404;
+      throw err;
+    }
+    return res.rows[0];
+  },
+
+  /**
+   * Create course (Admin OR HR in Learning & Development)
    */
   async createCourse(orgId, currentUser, payload) {
     const id = `crs-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const status = payload.status || 'PUBLISHED';
+    const trainingLink = (payload.trainingLink || payload.training_link || '').trim();
+    const postedBy = `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim() || currentUser.email;
+
     const res = await query(
-      `INSERT INTO courses (id, org_id, title, description, category, duration_hours, is_mandatory, status, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'ACTIVE', NOW(), NOW())
-       RETURNING *;`,
+      `INSERT INTO courses (
+        id, org_id, title, description, category, duration_hours, is_mandatory,
+        status, training_link, posted_by, created_by_user_id, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
+      RETURNING *;`,
       [
         id,
         orgId,
         payload.title,
         payload.description || '',
         payload.category || 'TECHNICAL',
-        parseFloat(payload.durationHours) || 1.0,
+        parseFloat(payload.durationHours || payload.duration_hours) || 1.0,
         payload.isMandatory === true || payload.isMandatory === 'true',
+        status,
+        trainingLink,
+        postedBy,
+        currentUser.id,
       ]
     );
 
@@ -57,10 +83,173 @@ export const trainingService = {
       targetType: 'COURSE',
       targetId: id,
       action: 'CREATE_COURSE',
-      details: { title: payload.title, category: payload.category },
+      details: { title: payload.title, category: payload.category, status, trainingLink },
     }).catch(() => {});
 
     return res.rows[0];
+  },
+
+  /**
+   * Update existing course
+   */
+  async updateCourse(courseId, orgId, currentUser, payload) {
+    const existing = await query('SELECT * FROM courses WHERE id = $1 AND org_id = $2;', [courseId, orgId]);
+    if (existing.rows.length === 0) {
+      const err = new Error('Course not found.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const title = payload.title !== undefined ? payload.title : existing.rows[0].title;
+    const description = payload.description !== undefined ? payload.description : existing.rows[0].description;
+    const category = payload.category !== undefined ? payload.category : existing.rows[0].category;
+    const durationHours = payload.durationHours !== undefined 
+      ? parseFloat(payload.durationHours) 
+      : (payload.duration_hours !== undefined ? parseFloat(payload.duration_hours) : existing.rows[0].duration_hours);
+    const isMandatory = payload.isMandatory !== undefined 
+      ? (payload.isMandatory === true || payload.isMandatory === 'true') 
+      : existing.rows[0].is_mandatory;
+    const status = payload.status !== undefined ? payload.status : existing.rows[0].status;
+    const trainingLink = payload.trainingLink !== undefined 
+      ? payload.trainingLink 
+      : (payload.training_link !== undefined ? payload.training_link : existing.rows[0].training_link);
+
+    const res = await query(
+      `UPDATE courses 
+       SET title = $1, description = $2, category = $3, duration_hours = $4,
+           is_mandatory = $5, status = $6, training_link = $7, updated_at = NOW()
+       WHERE id = $8 AND org_id = $9
+       RETURNING *;`,
+      [title, description, category, durationHours, isMandatory, status, trainingLink, courseId, orgId]
+    );
+
+    await adminService.logAction({
+      orgId,
+      actorUserId: currentUser.id,
+      actorRole: currentUser.roleName,
+      targetType: 'COURSE',
+      targetId: courseId,
+      action: 'UPDATE_COURSE',
+      details: { title, status, trainingLink },
+    }).catch(() => {});
+
+    return res.rows[0];
+  },
+
+  /**
+   * Publish course
+   */
+  async publishCourse(courseId, orgId, currentUser) {
+    return this.updateCourse(courseId, orgId, currentUser, { status: 'PUBLISHED' });
+  },
+
+  /**
+   * Unpublish / Deactivate course
+   */
+  async unpublishCourse(courseId, orgId, currentUser) {
+    return this.updateCourse(courseId, orgId, currentUser, { status: 'UNPUBLISHED' });
+  },
+
+  /**
+   * Delete course if permitted
+   */
+  async deleteCourse(courseId, orgId, currentUser) {
+    const existing = await query('SELECT * FROM courses WHERE id = $1 AND org_id = $2;', [courseId, orgId]);
+    if (existing.rows.length === 0) {
+      const err = new Error('Course not found.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    // Delete associated enrollments
+    await query('DELETE FROM course_enrollments WHERE course_id = $1 AND org_id = $2;', [courseId, orgId]);
+    // Delete course
+    await query('DELETE FROM courses WHERE id = $1 AND org_id = $2;', [courseId, orgId]);
+
+    await adminService.logAction({
+      orgId,
+      actorUserId: currentUser.id,
+      actorRole: currentUser.roleName,
+      targetType: 'COURSE',
+      targetId: courseId,
+      action: 'DELETE_COURSE',
+      details: { title: existing.rows[0].title },
+    }).catch(() => {});
+
+    return { message: 'Course deleted successfully.', id: courseId };
+  },
+
+  /**
+   * View all training completion and progress data for a specific course across all active staff
+   */
+  async getCourseCompletionMatrix(orgId, courseId) {
+    const courseRes = await query('SELECT * FROM courses WHERE id = $1 AND org_id = $2;', [courseId, orgId]);
+    if (courseRes.rows.length === 0) {
+      const err = new Error('Course not found.');
+      err.statusCode = 404;
+      throw err;
+    }
+    const course = courseRes.rows[0];
+
+    const sql = `
+      SELECT 
+        e.id AS employee_id,
+        e.employee_code,
+        e.first_name,
+        e.last_name,
+        e.email,
+        d.name AS department_name,
+        des.title AS designation_name,
+        ce.id AS enrollment_id,
+        ce.status AS enrollment_status,
+        ce.progress_percentage,
+        ce.completion_date,
+        ce.enrollment_type,
+        ce.certificate_url,
+        ce.feedback_rating,
+        ce.feedback_comments,
+        CASE
+          WHEN ce.status = 'COMPLETED' OR ce.progress_percentage = 100 THEN 'COMPLETED'
+          WHEN ce.status = 'IN_PROGRESS' OR (ce.progress_percentage > 0 AND ce.progress_percentage < 100) THEN 'IN_PROGRESS'
+          WHEN ce.id IS NOT NULL THEN 'ENROLLED'
+          ELSE 'NOT_ENROLLED'
+        END AS progress_status
+      FROM employees e
+      LEFT JOIN departments d ON e.dept_id = d.id
+      LEFT JOIN designations des ON e.desig_id = des.id
+      LEFT JOIN course_enrollments ce ON ce.employee_id = e.id AND ce.course_id = $1
+      WHERE e.org_id = $2 AND e.status = 'Active'
+      ORDER BY 
+        CASE 
+          WHEN ce.status = 'COMPLETED' OR ce.progress_percentage = 100 THEN 1
+          WHEN ce.status = 'IN_PROGRESS' THEN 2
+          WHEN ce.id IS NOT NULL THEN 3
+          ELSE 4
+        END,
+        e.first_name ASC;
+    `;
+    const res = await query(sql, [courseId, orgId]);
+
+    const totalEmployees = res.rows.length;
+    const completedCount = res.rows.filter(r => r.progress_status === 'COMPLETED').length;
+    const inProgressCount = res.rows.filter(r => r.progress_status === 'IN_PROGRESS').length;
+    const enrolledNotStartedCount = res.rows.filter(r => r.progress_status === 'ENROLLED').length;
+    const notEnrolledCount = res.rows.filter(r => r.progress_status === 'NOT_ENROLLED').length;
+    const notCompletedCount = totalEmployees - completedCount;
+
+    return {
+      course,
+      stats: {
+        totalEmployees,
+        completedCount,
+        inProgressCount,
+        enrolledNotStartedCount,
+        notEnrolledCount,
+        notCompletedCount,
+        completionRate: totalEmployees > 0 ? Math.round((completedCount / totalEmployees) * 100) : 0,
+      },
+      employees: res.rows,
+    };
   },
 
   /**
@@ -170,6 +359,7 @@ export const trainingService = {
     let sql = `
       SELECT ce.*, c.title AS course_title, c.description AS course_description,
              c.category AS course_category, c.duration_hours, c.is_mandatory,
+             c.training_link, c.status AS course_status,
              e.first_name, e.last_name, e.employee_code, e.email,
              d.name AS department_name
       FROM course_enrollments ce
@@ -180,6 +370,10 @@ export const trainingService = {
     `;
     const params = [orgId];
 
+    if (filters.courseId) {
+      params.push(filters.courseId);
+      sql += ` AND ce.course_id = $${params.length}`;
+    }
     if (filters.employeeId) {
       params.push(filters.employeeId);
       sql += ` AND ce.employee_id = $${params.length}`;
@@ -241,4 +435,3 @@ export const trainingService = {
     return res.rows[0];
   },
 };
-

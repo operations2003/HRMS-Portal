@@ -90,7 +90,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
           permission: ['task:read', 'employee:read'],
         },
         {
-          name: 'Training & Skills',
+          name: 'Learning & Development',
           path: '/training',
           icon: GraduationCap,
           permission: ['training:read', 'employee:read'],

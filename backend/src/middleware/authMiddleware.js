@@ -65,6 +65,9 @@ export const authenticate = async (req, res, next) => {
       employeeId: emp ? emp.id : null,
       employeeCode: emp ? emp.employeeCode : null,
       deptId: emp ? emp.deptId : null,
+      department: emp?.department || null,
+      departmentName: emp?.department?.name || null,
+      departmentCode: emp?.department?.code || null,
       managerId: emp ? emp.managerId : null,
     };
 
