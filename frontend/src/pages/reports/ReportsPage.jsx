@@ -780,8 +780,8 @@ export const ReportsPage = () => {
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
                 {canReviewOthers && viewMode === 'reviews'
-                  ? 'Reports & Performance Dossiers'
-                  : 'My Performance Review Dossier'}
+                  ? 'Performance Reports'
+                  : 'My Performance'}
               </h1>
               <Badge variant="brand">
                 {canReviewOthers && viewMode === 'reviews'
@@ -795,8 +795,8 @@ export const ReportsPage = () => {
               {canReviewOthers && viewMode === 'reviews'
                 ? isManager
                   ? 'Evaluate direct reporting employees, calibrate scores, and generate official appraisal reports.'
-                  : 'Department performance evaluation dossiers, competency scoring calibrations, and official PDF/Excel reports.'
-                : 'Official performance assessment record, skill calibration ratings, and career progression dossier.'}
+                  : 'Department performance evaluations, competency scoring calibrations, and official PDF/Excel reports.'
+                : 'Official performance assessment record, skill calibration ratings, and career progression overview.'}
             </p>
           </div>
         </div>
@@ -815,7 +815,7 @@ export const ReportsPage = () => {
             }`}
           >
             <FileText className="w-4 h-4" />
-            {isManager ? 'Evaluate Direct Reports' : 'Department Review Dossiers'}
+            {isManager ? 'Evaluate Direct Reports' : 'Department Performance Reports'}
           </button>
 
           <button
@@ -828,7 +828,7 @@ export const ReportsPage = () => {
             }`}
           >
             <Award className="w-4 h-4" />
-            My Performance Review
+            My Performance
           </button>
         </div>
       )}
@@ -877,86 +877,11 @@ export const ReportsPage = () => {
         </div>
       )}
 
-      {/* DEDICATED EMPLOYEE ROW VIEW (Visible when viewing own review: HR, Manager, Employee) */}
-      {hasOwnReview && viewMode === 'my' && (
-        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800">
-            <h3 className="text-base font-bold text-slate-900 dark:text-white">
-              Official Performance Review Records
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Your official appraisal reports and performance review dossiers published by leadership
-            </p>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50/70 dark:bg-slate-800/50 text-xs font-bold text-slate-500 uppercase tracking-wider">
-                <tr>
-                  <th className="px-6 py-3.5">Report Dossier</th>
-                  <th className="px-6 py-3.5">Department</th>
-                  <th className="px-6 py-3.5">Review Period</th>
-                  <th className="px-6 py-3.5">Overall Rating</th>
-                  <th className="px-6 py-3.5">Status</th>
-                  <th className="px-6 py-3.5 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-brand-50 text-brand-600 dark:bg-brand-950 dark:text-brand-400 flex items-center justify-center">
-                        <FileText className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <div className="font-bold text-slate-900 dark:text-white">
-                          {theme.title}
-                        </div>
-                        <div className="text-xs text-slate-400">
-                          ID: {currentData.employeeId} • Reviewer: {currentData.manager}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-slate-600 dark:text-slate-300 font-medium">
-                    {department === 'operations' ? 'Operations Team' : department === 'ta' ? 'TA Team' : 'IT Team'}
-                  </td>
-                  <td className="px-6 py-4 text-slate-600 dark:text-slate-300 font-mono text-xs">
-                    {currentData.reviewPeriod || 'Quarterly Review'}
-                  </td>
-                  <td className="px-6 py-4">
-                    <Badge variant="brand">{currentData.overallRating || 'Exceeds Expectations'}</Badge>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
-                      <CheckCircle2 className="w-3.5 h-3.5" /> Published
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <Button
-                      size="sm"
-                      variant="primary"
-                      icon={Download}
-                      loading={isGeneratingPdf}
-                      onClick={handleDownloadPdf}
-                      className="shadow-sm shadow-brand-500/20 text-xs font-semibold"
-                    >
-                      {isGeneratingPdf ? 'Preparing PDF...' : 'Download Report'}
-                    </Button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* MAIN DOCUMENT CARD (Visible when reviewing others: Admin, HR, Manager) */}
-      {canReviewOthers && viewMode === 'reviews' && (
-        <section
-          ref={documentRef}
-          className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-sm overflow-hidden print:border-none print:shadow-none"
-        >
+      {/* MAIN PERFORMANCE REVIEW REPORT */}
+      <section
+        ref={documentRef}
+        className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-sm overflow-hidden print:border-none print:shadow-none"
+      >
         {/* Document Header Banner */}
         <div className="bg-gradient-to-r from-slate-900 via-brand-950 to-slate-900 text-white p-6 sm:p-8 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-96 h-96 bg-brand-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
@@ -1741,20 +1666,21 @@ export const ReportsPage = () => {
                 {isGeneratingPdf ? 'Generating PDF...' : 'Download PDF'}
               </Button>
 
-              <Button
-                variant="primary"
-                size="md"
-                icon={Send}
-                loading={isSending}
-                onClick={handleSendReport}
-                className="text-sm font-semibold shadow-lg shadow-brand-500/20"
-              >
-                Send
-              </Button>
+              {canReviewOthers && viewMode === 'reviews' && (
+                <Button
+                  variant="primary"
+                  size="md"
+                  icon={Send}
+                  loading={isSending}
+                  onClick={handleSendReport}
+                  className="text-sm font-semibold shadow-lg shadow-brand-500/20"
+                >
+                  Send
+                </Button>
+              )}
             </div>
           </div>
         </section>
-      )}
 
       {/* Dedicated Clean Offscreen PDF Dossier Container */}
       <div

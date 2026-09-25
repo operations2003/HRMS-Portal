@@ -3,6 +3,7 @@ import { Users, Mail, Building2, Briefcase, CheckCircle2, ShieldAlert, RefreshCw
 import { Modal } from '../common/Modal.jsx';
 import { Button } from '../common/Button.jsx';
 import { Badge } from '../common/Badge.jsx';
+import { Avatar } from '../common/Avatar.jsx';
 import { DataTable } from '../common/DataTable.jsx';
 import { hrOperationsService } from '../../services/hrOperationsService.js';
 import { useToast } from '../../context/ToastContext.jsx';
@@ -43,9 +44,12 @@ export const TeamRosterModal = ({ isOpen, onClose, managerId, managerName }) => 
       header: 'Direct Report',
       render: (row) => (
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-brand-50 text-brand-700 font-bold flex items-center justify-center text-xs">
-            {(row.name || row.fullName || 'E').charAt(0)}
-          </div>
+          <Avatar
+            src={row.avatarUrl || row.avatar_url}
+            alt={row.name || row.fullName || 'E'}
+            name={row.name || row.fullName || 'E'}
+            size="sm"
+          />
           <div>
             <p className="font-semibold text-slate-800 text-xs">{row.name || row.fullName}</p>
             <p className="text-[11px] text-slate-400 font-mono">{row.employeeCode || row.id?.slice(0, 8)}</p>
@@ -97,9 +101,13 @@ export const TeamRosterModal = ({ isOpen, onClose, managerId, managerName }) => 
         {/* Manager Banner */}
         <div className="p-4 rounded-2xl bg-gradient-to-r from-brand-50/70 via-white to-slate-50 border border-brand-100 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-brand-600 text-white font-bold flex items-center justify-center shadow-sm">
-              {(manager.name || managerName || 'M').charAt(0)}
-            </div>
+            <Avatar
+              src={manager.avatarUrl || manager.avatar_url}
+              alt={manager.name || managerName || 'Manager'}
+              name={manager.name || managerName || 'Manager'}
+              size="md"
+              className="rounded-xl shadow-sm"
+            />
             <div>
               <h4 className="font-bold text-slate-900 text-sm">{manager.name || managerName || 'Manager'}</h4>
               <p className="text-xs text-slate-500">

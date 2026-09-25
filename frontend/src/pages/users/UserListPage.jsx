@@ -23,6 +23,7 @@ import { Modal } from '../../components/common/Modal.jsx';
 import { Alert } from '../../components/common/Alert.jsx';
 import { Can } from '../../components/rbac/Can.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
+import { Avatar } from '../../components/common/Avatar.jsx';
 import { UserStatusModal } from '../../components/admin/UserStatusModal.jsx';
 import { UserRoleAssignModal } from '../../components/admin/UserRoleAssignModal.jsx';
 
@@ -160,10 +161,15 @@ export const UserListPage = () => {
       accessor: 'firstName',
       render: (row) => (
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-slate-800 text-white flex items-center justify-center font-bold text-xs shadow-sm ring-1 ring-slate-700">
-            {row.firstName?.[0]}
-            {row.lastName?.[0]}
-          </div>
+          <Avatar
+            src={row.avatarUrl}
+            firstName={row.firstName}
+            lastName={row.lastName}
+            size="md"
+            shape="rounded"
+            fallbackGradient="bg-slate-800 text-white"
+            className="shadow-xs ring-1 ring-slate-700"
+          />
           <div>
             <div className="font-semibold text-slate-900">
               {row.firstName} {row.lastName}

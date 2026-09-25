@@ -28,6 +28,7 @@ import { ApplyLeaveModal } from '../../components/leave/ApplyLeaveModal.jsx';
 import { LeaveBalanceCards } from '../../components/leave/LeaveBalanceCards.jsx';
 import { ApproveLeaveModal } from '../../components/leave/ApproveLeaveModal.jsx';
 import { RejectLeaveModal } from '../../components/leave/RejectLeaveModal.jsx';
+import { Avatar } from '../../components/common/Avatar.jsx';
 import { LeaveDetailModal } from '../../components/leave/LeaveDetailModal.jsx';
 import { Button } from '../../components/common/Button.jsx';
 import { Badge } from '../../components/common/Badge.jsx';
@@ -324,9 +325,14 @@ export const LeaveManagementPage = () => {
 
         return (
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-brand-600 to-indigo-600 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-xs">
-              {initials}
-            </div>
+            <Avatar
+              src={row.employee?.avatarUrl || row.avatarUrl}
+              firstName={row.employee?.firstName}
+              lastName={row.employee?.lastName}
+              name={row.employeeName}
+              size="md"
+              className="ring-1 ring-slate-200"
+            />
             <div>
               <div className="font-bold text-slate-900 flex items-center gap-1.5">
                 <span>

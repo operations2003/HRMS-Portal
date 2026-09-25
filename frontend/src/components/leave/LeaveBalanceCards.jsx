@@ -13,7 +13,7 @@ import { Badge } from '../common/Badge.jsx';
 import { Button } from '../common/Button.jsx';
 import { LoadingSpinner } from '../common/LoadingSpinner.jsx';
 
-const RESTRICTED_LEAVE_CODES = ['SBL', 'ML', 'PTL', 'AWOL', 'LOP', 'LWP'];
+const RESTRICTED_LEAVE_CODES = ['SBL', 'ML', 'PTL', 'AWOL', 'LOP', 'LWP', 'UPL'];
 
 export const isRestrictedLeave = (bal) => {
   if (!bal) return false;
@@ -22,6 +22,8 @@ export const isRestrictedLeave = (bal) => {
   const name = String(bal.leaveTypeName || bal.name || '').trim().toLowerCase();
   if (RESTRICTED_LEAVE_CODES.includes(code)) return true;
   return (
+    code === 'UPL' ||
+    name.includes('unplanned') ||
     name.includes('sabbatical') ||
     name.includes('maternity') ||
     name.includes('paternity') ||

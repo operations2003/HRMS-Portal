@@ -35,6 +35,7 @@ import { leaveService } from '../../services/leaveService.js';
 import { notificationService } from '../../services/notificationService.js';
 import { Button } from '../../components/common/Button.jsx';
 import { Badge } from '../../components/common/Badge.jsx';
+import { Avatar } from '../../components/common/Avatar.jsx';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
 
 export const ManagerDashboardView = () => {
@@ -480,9 +481,13 @@ export const ManagerDashboardView = () => {
                       className="p-4 flex items-center justify-between gap-4 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors"
                     >
                       <div className="flex items-center gap-3.5 min-w-0">
-                        <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-400 font-bold flex items-center justify-center text-sm shrink-0">
-                          {name.charAt(0)}
-                        </div>
+                        <Avatar
+                          src={member.avatarUrl || member.avatar_url}
+                          alt={name}
+                          name={name}
+                          size="md"
+                          className="rounded-xl shrink-0"
+                        />
                         <div className="min-w-0">
                           <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">
                             {name}

@@ -1,5 +1,5 @@
 -- Migration 028: Standardize Leave Types across the System
--- Categories: Planned Leave, Unplanned Leave, Casual Leave, Sick Leave, Holiday, Half Day,
+-- Categories: Planned Leave, Casual Leave, Sick Leave, Holiday, Half Day,
 -- Absent Without Leave(AWOL), Leave without pay (LOP), Maternity Leave, Sabbatical Leave, Paternity Leave
 
 -- 1. Insert/Update Standard 11 Leave Types for org-1
@@ -9,11 +9,7 @@ VALUES
 ON CONFLICT (org_id, code) DO UPDATE 
 SET name = 'Planned Leave', description = 'Pre-planned annual leave and scheduled vacations', days_per_year = 15.0, is_paid = TRUE, requires_approval = TRUE, status = 'Active', updated_at = NOW();
 
-INSERT INTO leave_types (id, org_id, name, code, description, days_per_year, is_paid, requires_approval, carry_forward_days, status, created_at, updated_at)
-VALUES
-  ('lt-upl', 'org-1', 'Unplanned Leave', 'UPL', 'Sudden urgent or emergency unplanned absence', 5.0, TRUE, TRUE, 0.0, 'Active', NOW(), NOW())
-ON CONFLICT (org_id, code) DO UPDATE 
-SET name = 'Unplanned Leave', description = 'Sudden urgent or emergency unplanned absence', days_per_year = 5.0, is_paid = TRUE, requires_approval = TRUE, status = 'Active', updated_at = NOW();
+
 
 INSERT INTO leave_types (id, org_id, name, code, description, days_per_year, is_paid, requires_approval, carry_forward_days, status, created_at, updated_at)
 VALUES
@@ -70,7 +66,7 @@ ON CONFLICT (org_id, code) DO UPDATE
 SET name = 'Paternity Leave', description = 'Paternity leave for new fathers upon birth or adoption', days_per_year = 15.0, is_paid = TRUE, requires_approval = TRUE, status = 'Active', updated_at = NOW();
 
 -- Also ensure legacy PATL, LWP, or EL are marked Inactive if not needed
-UPDATE leave_types SET status = 'Inactive' WHERE org_id = 'org-1' AND code NOT IN ('PL', 'UPL', 'CL', 'SL', 'HL', 'HDL', 'AWOL', 'LOP', 'ML', 'SBL', 'PTL');
+UPDATE leave_types SET status = 'Inactive' WHERE org_id = 'org-1' AND code NOT IN ('PL', 'CL', 'SL', 'HL', 'HDL', 'AWOL', 'LOP', 'ML', 'SBL', 'PTL');
 
 -- 2. Seed for any other registered organizations
 INSERT INTO leave_types (id, org_id, name, code, description, days_per_year, is_paid, requires_approval, carry_forward_days, status, created_at, updated_at)

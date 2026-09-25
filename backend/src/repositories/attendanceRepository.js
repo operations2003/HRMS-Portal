@@ -43,6 +43,7 @@ const mapAttendanceRow = (row) => {
           departmentName: row.dept_name || '',
           designationTitle: row.desig_title || '',
           shiftTiming: row.emp_shift_timing || '11:00 AM - 07:00 PM',
+          avatarUrl: row.emp_avatar_url || null,
         }
       : null,
     // Regularizer information if available
@@ -51,6 +52,7 @@ const mapAttendanceRow = (row) => {
           id: row.reg_user_id,
           name: `${row.reg_first_name || ''} ${row.reg_last_name || ''}`.trim(),
           email: row.reg_email || '',
+          avatarUrl: row.reg_avatar_url || null,
         }
       : null,
   };
@@ -90,12 +92,14 @@ const BASE_ATTENDANCE_SELECT = `
     e.email AS emp_email,
     e.dept_id AS emp_dept_id,
     e.shift_timing AS emp_shift_timing,
+    e.avatar_url AS emp_avatar_url,
     d.name AS dept_name,
     ds.title AS desig_title,
     u.id AS reg_user_id,
     u.first_name AS reg_first_name,
     u.last_name AS reg_last_name,
-    u.email AS reg_email
+    u.email AS reg_email,
+    u.avatar_url AS reg_avatar_url
   FROM attendance_records a
   JOIN employees e ON e.id = a.employee_id
   LEFT JOIN departments d ON d.id = e.dept_id

@@ -1,4 +1,5 @@
 import fs from 'fs';
+import path from 'path';
 import { employeeService } from '../services/employeeService.js';
 import { employeeLifecycleService } from '../services/employeeLifecycleService.js';
 import { cloudinaryService } from '../services/cloudinaryService.js';
@@ -380,10 +381,22 @@ export const employeeController = {
         });
         avatarUrl = cloudRes.secureUrl;
       } catch (cloudErr) {
-        // Fallback to base64 Data URI if Cloudinary upload encounters an issue
-        const fileBuffer = fs.readFileSync(req.file.path);
-        const mimeType = req.file.mimetype || 'image/jpeg';
-        avatarUrl = `data:${mimeType};base64,${fileBuffer.toString('base64')}`;
+        try {
+          const avatarsDir = path.join(process.cwd(), 'uploads', 'avatars');
+          if (!fs.existsSync(avatarsDir)) {
+            fs.mkdirSync(avatarsDir, { recursive: true });
+          }
+          const ext = path.extname(req.file.originalname || '').toLowerCase() || '.jpg';
+          const localFileName = `avatar_${user.id}_${Date.now()}${ext}`;
+          const localDest = path.join(avatarsDir, localFileName);
+          fs.copyFileSync(req.file.path, localDest);
+          avatarUrl = `/uploads/avatars/${localFileName}`;
+        } catch {
+          // Fallback to base64 Data URI if file copy fails
+          const fileBuffer = fs.readFileSync(req.file.path);
+          const mimeType = req.file.mimetype || 'image/jpeg';
+          avatarUrl = `data:${mimeType};base64,${fileBuffer.toString('base64')}`;
+        }
       } finally {
         // Clean up temporary local file if created
         try {
@@ -399,7 +412,7 @@ export const employeeController = {
       const empRes = await pool.query(
         `UPDATE employees
          SET avatar_url = $1, updated_at = NOW()
-         WHERE user_id = $2 OR email = $3
+         WHERE user_id = $2 OR LOWER(email) = LOWER($3)
          RETURNING id, employee_code, first_name, last_name, email, avatar_url;`,
         [avatarUrl, user.id, user.email]
       );
@@ -407,8 +420,8 @@ export const employeeController = {
       await pool.query(
         `UPDATE users
          SET avatar_url = $1, updated_at = NOW()
-         WHERE id = $2;`,
-        [avatarUrl, user.id]
+         WHERE id = $2 OR LOWER(email) = LOWER($3);`,
+        [avatarUrl, user.id, user.email]
       );
 
       return sendSuccess(res, 'Profile photo updated successfully.', {
@@ -430,18 +443,124 @@ export const employeeController = {
       await pool.query(
         `UPDATE employees
          SET avatar_url = NULL, updated_at = NOW()
-         WHERE user_id = $1 OR email = $2;`,
+         WHERE user_id = $1 OR LOWER(email) = LOWER($2);`,
         [user.id, user.email]
       );
 
       await pool.query(
         `UPDATE users
          SET avatar_url = NULL, updated_at = NOW()
-         WHERE id = $1;`,
-        [user.id]
+         WHERE id = $1 OR LOWER(email) = LOWER($2);`,
+        [user.id, user.email]
       );
 
       return sendSuccess(res, 'Profile photo removed successfully.', { avatarUrl: null });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  /**
+   * POST /api/v1/employees/:id/avatar
+   * Upload profile picture for an employee (Admin/HR)
+   */
+  async uploadAvatarForEmployee(req, res, next) {
+    try {
+      const { id } = req.params;
+      const targetEmp = await employeeService.getEmployeeById(id);
+      if (!targetEmp) {
+        return sendError(res, 'Employee not found.', 404);
+      }
+
+      if (!req.file) {
+        return sendError(res, 'No image file uploaded. Please select an image.', 400);
+      }
+
+      let avatarUrl = '';
+      try {
+        const cloudRes = await cloudinaryService.upload(req.file.path, {
+          folder: 'hrms-portal/avatars',
+          filename: `avatar_${targetEmp.id}_${Date.now()}`,
+          resourceType: 'image',
+        });
+        avatarUrl = cloudRes.secureUrl;
+      } catch (cloudErr) {
+        try {
+          const avatarsDir = path.join(process.cwd(), 'uploads', 'avatars');
+          if (!fs.existsSync(avatarsDir)) {
+            fs.mkdirSync(avatarsDir, { recursive: true });
+          }
+          const ext = path.extname(req.file.originalname || '').toLowerCase() || '.jpg';
+          const localFileName = `avatar_${targetEmp.id}_${Date.now()}${ext}`;
+          const localDest = path.join(avatarsDir, localFileName);
+          fs.copyFileSync(req.file.path, localDest);
+          avatarUrl = `/uploads/avatars/${localFileName}`;
+        } catch {
+          const fileBuffer = fs.readFileSync(req.file.path);
+          const mimeType = req.file.mimetype || 'image/jpeg';
+          avatarUrl = `data:${mimeType};base64,${fileBuffer.toString('base64')}`;
+        }
+      } finally {
+        try {
+          if (req.file.path && fs.existsSync(req.file.path)) {
+            fs.unlinkSync(req.file.path);
+          }
+        } catch {
+          // Ignore
+        }
+      }
+
+      const empRes = await pool.query(
+        `UPDATE employees
+         SET avatar_url = $1, updated_at = NOW()
+         WHERE id = $2 OR LOWER(email) = LOWER($3)
+         RETURNING id, employee_code, first_name, last_name, email, avatar_url;`,
+        [avatarUrl, targetEmp.id, targetEmp.email]
+      );
+
+      await pool.query(
+        `UPDATE users
+         SET avatar_url = $1, updated_at = NOW()
+         WHERE id = $2 OR LOWER(email) = LOWER($3);`,
+        [avatarUrl, targetEmp.userId || '', targetEmp.email]
+      );
+
+      return sendSuccess(res, 'Employee profile photo updated successfully.', {
+        avatarUrl,
+        employee: empRes.rows[0] || null,
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  /**
+   * DELETE /api/v1/employees/:id/avatar
+   * Remove profile picture for an employee (Admin/HR)
+   */
+  async removeAvatarForEmployee(req, res, next) {
+    try {
+      const { id } = req.params;
+      const targetEmp = await employeeService.getEmployeeById(id);
+      if (!targetEmp) {
+        return sendError(res, 'Employee not found.', 404);
+      }
+
+      await pool.query(
+        `UPDATE employees
+         SET avatar_url = NULL, updated_at = NOW()
+         WHERE id = $1 OR LOWER(email) = LOWER($2);`,
+        [targetEmp.id, targetEmp.email]
+      );
+
+      await pool.query(
+        `UPDATE users
+         SET avatar_url = NULL, updated_at = NOW()
+         WHERE id = $1 OR LOWER(email) = LOWER($2);`,
+        [targetEmp.userId || '', targetEmp.email]
+      );
+
+      return sendSuccess(res, 'Employee profile photo removed successfully.', { avatarUrl: null });
     } catch (error) {
       next(error);
     }

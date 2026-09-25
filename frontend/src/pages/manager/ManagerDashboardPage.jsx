@@ -26,6 +26,7 @@ import { managerService } from '../../services/managerService.js';
 import { notificationService } from '../../services/notificationService.js';
 import { Button } from '../../components/common/Button.jsx';
 import { Badge } from '../../components/common/Badge.jsx';
+import { Avatar } from '../../components/common/Avatar.jsx';
 import { DataTable } from '../../components/common/DataTable.jsx';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
 import { EmptyState } from '../../components/common/EmptyState.jsx';
@@ -188,19 +189,25 @@ export const ManagerDashboardPage = () => {
   const reportColumns = [
     {
       header: 'Direct Report',
-      render: (row) => (
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-brand-100 text-brand-700 font-bold flex items-center justify-center text-xs">
-            {(row.fullName || row.firstName || 'E').charAt(0)}
+      render: (row) => {
+        const name = row.fullName || `${row.firstName || ''} ${row.lastName || ''}`.trim() || 'Team Member';
+        return (
+          <div className="flex items-center gap-3">
+            <Avatar
+              src={row.avatarUrl || row.avatar_url}
+              alt={name}
+              name={name}
+              size="sm"
+            />
+            <div>
+              <p className="font-semibold text-slate-800 text-xs">
+                {name}
+              </p>
+              <p className="text-[11px] text-slate-400">{row.email || 'No email'}</p>
+            </div>
           </div>
-          <div>
-            <p className="font-semibold text-slate-800 text-xs">
-              {row.fullName || `${row.firstName || ''} ${row.lastName || ''}`.trim() || 'Team Member'}
-            </p>
-            <p className="text-[11px] text-slate-400">{row.email || 'No email'}</p>
-          </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       header: 'Designation / Department',

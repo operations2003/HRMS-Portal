@@ -31,6 +31,7 @@ import { Button } from '../../components/common/Button.jsx';
 import { Alert } from '../../components/common/Alert.jsx';
 import { Badge } from '../../components/common/Badge.jsx';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
+import { Avatar } from '../../components/common/Avatar.jsx';
 
 export const EmployeeDocumentsPage = () => {
   const { user, hasRole, hasPermission, isAuthenticated } = useAuth();
@@ -641,10 +642,13 @@ export const EmployeeDocumentsPage = () => {
             {selectedEmpObj && (
               <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between flex-wrap gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-brand-100 text-brand-700 font-bold text-xs flex items-center justify-center">
-                    {selectedEmpObj.firstName?.[0] || 'E'}
-                    {selectedEmpObj.lastName?.[0] || ''}
-                  </div>
+                  <Avatar
+                    src={selectedEmpObj.avatarUrl}
+                    firstName={selectedEmpObj.firstName}
+                    lastName={selectedEmpObj.lastName}
+                    size="sm"
+                    className="ring-1 ring-brand-200"
+                  />
                   <div>
                     <span className="text-xs font-bold text-slate-900">
                       {selectedEmpObj.firstName} {selectedEmpObj.lastName}

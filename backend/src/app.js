@@ -6,12 +6,18 @@ import { config } from './config/index.js';
 import apiRouter from './routes/index.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 
+import path from 'path';
+import fs from 'fs';
 import { apiRateLimiter } from './middleware/rateLimiter.js';
 
 const app = express();
 
-// Security Headers
-app.use(helmet());
+// Security Headers - allow images to be loaded across origins (e.g. avatars)
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  })
+);
 
 // CORS Configuration - Restrict to configured origins
 const configuredOrigins = config.clientUrl
@@ -66,8 +72,18 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 
-// SECURITY: Static /uploads route is REMOVED to protect HR documents.
-// All documents must be retrieved via authenticated endpoint GET /api/v1/documents/:id/download.
+// SECURITY: Static /uploads route is REMOVED to protect confidential HR documents.
+// All confidential documents must be retrieved via authenticated endpoint GET /api/v1/documents/:id/download.
+// Profile photos (avatars) in /uploads/avatars are public company directory photos and served statically.
+const avatarsDir = path.join(process.cwd(), 'uploads', 'avatars');
+if (!fs.existsSync(avatarsDir)) {
+  try {
+    fs.mkdirSync(avatarsDir, { recursive: true });
+  } catch {
+    // Ignore error
+  }
+}
+app.use('/uploads/avatars', express.static(avatarsDir, { maxAge: '7d' }));
 
 // Request Logging
 if (config.nodeEnv !== 'test') {

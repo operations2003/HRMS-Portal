@@ -22,6 +22,7 @@ import { workflowService } from '../../services/workflowService.js';
 import { hrOperationsService } from '../../services/hrOperationsService.js';
 import { Button } from '../../components/common/Button.jsx';
 import { Badge } from '../../components/common/Badge.jsx';
+import { Avatar } from '../../components/common/Avatar.jsx';
 import { DataTable } from '../../components/common/DataTable.jsx';
 import { ApprovalActionModal } from '../../components/approvals/ApprovalActionModal.jsx';
 
@@ -99,11 +100,16 @@ export const ApprovalsPage = () => {
           (user?.employeeId && (row.employeeId === user.employeeId || row.employee_id === user.employeeId)) ||
           (user?.id && (row.requesterUserId === user.id || row.employee?.userId === user.id));
 
+        const avatarUrl = row.avatarUrl || row.employeeAvatar || row.employee?.avatarUrl || row.employee?.avatar_url;
+
         return (
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-700 font-bold flex items-center justify-center text-xs">
-              {name.charAt(0)}
-            </div>
+            <Avatar
+              src={avatarUrl}
+              alt={name}
+              name={name}
+              size="sm"
+            />
             <div>
               <div className="flex items-center gap-1.5">
                 <p className="font-semibold text-slate-800 text-xs">{name}</p>

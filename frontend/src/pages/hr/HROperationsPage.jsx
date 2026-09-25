@@ -36,6 +36,7 @@ import { leaveService } from '../../services/leaveService.js';
 import { performanceService } from '../../services/performanceService.js';
 import { Button } from '../../components/common/Button.jsx';
 import { Badge } from '../../components/common/Badge.jsx';
+import { Avatar } from '../../components/common/Avatar.jsx';
 import { DataTable } from '../../components/common/DataTable.jsx';
 import { HROperationsOverviewCards } from '../../components/hr/HROperationsOverviewCards.jsx';
 import { EmployeeDossierModal } from '../../components/hr/EmployeeDossierModal.jsx';
@@ -338,11 +339,15 @@ export const HROperationsPage = () => {
       header: 'Employee',
       render: (row) => {
         const name = row.fullName || `${row.firstName || ''} ${row.lastName || ''}`.trim() || 'Staff';
+        const avatarUrl = row.avatarUrl || row.avatar_url;
         return (
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-700 font-bold flex items-center justify-center text-xs">
-              {name.charAt(0)}
-            </div>
+            <Avatar
+              src={avatarUrl}
+              alt={name}
+              name={name}
+              size="sm"
+            />
             <div>
               <p className="font-semibold text-slate-800 text-xs">{name}</p>
               <p className="text-[11px] text-slate-400 font-mono">{row.employeeCode || row.id?.slice(0, 8)}</p>
@@ -421,17 +426,24 @@ export const HROperationsPage = () => {
   const teamColumns = [
     {
       header: 'Manager / Lead',
-      render: (row) => (
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-brand-100 text-brand-700 font-bold flex items-center justify-center text-xs">
-            {(row.managerName || row.name || 'M').charAt(0)}
+      render: (row) => {
+        const mgrName = row.managerName || row.name || 'Manager';
+        const avatarUrl = row.managerAvatarUrl || row.managerAvatar || row.avatarUrl || row.avatar_url;
+        return (
+          <div className="flex items-center gap-2.5">
+            <Avatar
+              src={avatarUrl}
+              alt={mgrName}
+              name={mgrName}
+              size="sm"
+            />
+            <div>
+              <p className="font-semibold text-slate-800 text-xs">{mgrName}</p>
+              <p className="text-[11px] text-slate-400 font-mono">{row.managerCode || row.managerId?.slice(0, 8)}</p>
+            </div>
           </div>
-          <div>
-            <p className="font-semibold text-slate-800 text-xs">{row.managerName || row.name || 'Manager'}</p>
-            <p className="text-[11px] text-slate-400 font-mono">{row.managerCode || row.managerId?.slice(0, 8)}</p>
-          </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       header: 'Department',
@@ -485,17 +497,24 @@ export const HROperationsPage = () => {
   const managerColumns = [
     {
       header: 'Manager Name',
-      render: (row) => (
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-700 font-bold flex items-center justify-center text-xs">
-            {(row.managerName || 'M').charAt(0)}
+      render: (row) => {
+        const mgrName = row.managerName || 'Manager';
+        const avatarUrl = row.avatarUrl || row.avatar_url || row.managerAvatarUrl;
+        return (
+          <div className="flex items-center gap-2.5">
+            <Avatar
+              src={avatarUrl}
+              alt={mgrName}
+              name={mgrName}
+              size="sm"
+            />
+            <div>
+              <p className="font-semibold text-slate-800 text-xs">{mgrName}</p>
+              <p className="text-[11px] text-slate-400 font-mono">{row.managerCode || row.managerId}</p>
+            </div>
           </div>
-          <div>
-            <p className="font-semibold text-slate-800 text-xs">{row.managerName}</p>
-            <p className="text-[11px] text-slate-400 font-mono">{row.managerCode || row.managerId}</p>
-          </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       header: 'Department',
@@ -541,19 +560,26 @@ export const HROperationsPage = () => {
   const attendanceColumns = [
     {
       header: 'Employee',
-      render: (row) => (
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-full bg-slate-100 text-slate-700 text-xs font-bold flex items-center justify-center">
-            {(row.employeeName || row.employee?.fullName || 'E').charAt(0)}
+      render: (row) => {
+        const empName = row.employeeName || row.employee?.fullName || `${row.firstName || ''} ${row.lastName || ''}`.trim() || 'Employee';
+        const avatarUrl = row.avatarUrl || row.avatar_url || row.employeeAvatar || row.employee?.avatarUrl;
+        return (
+          <div className="flex items-center gap-2">
+            <Avatar
+              src={avatarUrl}
+              alt={empName}
+              name={empName}
+              size="xs"
+            />
+            <div>
+              <p className="text-xs font-semibold text-slate-800">
+                {empName}
+              </p>
+              <p className="text-[10px] text-slate-400">{row.employeeCode || row.employee?.employeeCode}</p>
+            </div>
           </div>
-          <div>
-            <p className="text-xs font-semibold text-slate-800">
-              {row.employeeName || row.employee?.fullName || `${row.firstName || ''} ${row.lastName || ''}`.trim() || 'Employee'}
-            </p>
-            <p className="text-[10px] text-slate-400">{row.employeeCode || row.employee?.employeeCode}</p>
-          </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       header: 'Date',
@@ -678,11 +704,15 @@ export const HROperationsPage = () => {
         const isSelf =
           (user?.employeeId && (row.employeeId === user.employeeId || row.employee_id === user.employeeId)) ||
           (user?.id && (row.requesterUserId === user.id || row.employee?.userId === user.id));
+        const avatarUrl = row.avatarUrl || row.avatar_url || row.employeeAvatar || row.employee?.avatarUrl;
         return (
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-700 font-bold flex items-center justify-center text-xs">
-              {(row.requester || 'E').charAt(0)}
-            </div>
+            <Avatar
+              src={avatarUrl}
+              alt={row.requester || 'Requester'}
+              name={row.requester || 'Requester'}
+              size="sm"
+            />
             <div>
               <div className="flex items-center gap-1.5">
                 <p className="font-semibold text-slate-800 text-xs">{row.requester}</p>

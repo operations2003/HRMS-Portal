@@ -24,6 +24,7 @@ import { Button } from '../../components/common/Button.jsx';
 import { Badge } from '../../components/common/Badge.jsx';
 import { DataTable } from '../../components/common/DataTable.jsx';
 import { ConfirmDialog } from '../../components/common/ConfirmDialog.jsx';
+import { Avatar } from '../../components/common/Avatar.jsx';
 import { CreateAppraisalModal } from '../../components/performance/CreateAppraisalModal.jsx';
 import { ManagerReviewModal } from '../../components/performance/ManagerReviewModal.jsx';
 import { CreatePeriodModal } from '../../components/performance/CreatePeriodModal.jsx';
@@ -262,9 +263,12 @@ export const PerformancePage = () => {
         const empName = row.employee?.fullName || row.employeeName || 'Team Member';
         return (
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-brand-100 text-brand-700 font-bold flex items-center justify-center text-xs">
-              {empName.charAt(0)}
-            </div>
+            <Avatar
+              src={row.employee?.avatarUrl || row.avatarUrl}
+              name={empName}
+              size="sm"
+              className="ring-1 ring-brand-200"
+            />
             <div>
               <p className="font-semibold text-slate-800 text-xs">{empName}</p>
               <p className="text-[11px] text-slate-400">
@@ -391,9 +395,12 @@ export const PerformancePage = () => {
         const empName = row.employee?.fullName || row.employeeName || 'Staff Member';
         return (
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-700 font-bold flex items-center justify-center text-xs">
-              {empName.charAt(0)}
-            </div>
+            <Avatar
+              src={row.employee?.avatarUrl || row.avatarUrl}
+              name={empName}
+              size="sm"
+              className="ring-1 ring-slate-200"
+            />
             <div>
               <p className="font-semibold text-slate-800 text-xs">{empName}</p>
               <p className="text-[11px] text-slate-400">

@@ -19,6 +19,7 @@ import { Button } from '../common/Button.jsx';
 import { Badge } from '../common/Badge.jsx';
 import { Alert } from '../common/Alert.jsx';
 import { ConfirmDialog } from '../common/ConfirmDialog.jsx';
+import { Avatar } from '../common/Avatar.jsx';
 import { WorkflowAuditTimeline } from './WorkflowAuditTimeline.jsx';
 import { performanceService } from '../../services/performanceService.js';
 import { useToast } from '../../context/ToastContext.jsx';
@@ -140,9 +141,12 @@ export const AppraisalDetailModal = ({
           {/* Header Summary Card */}
           <div className="bg-gradient-to-r from-slate-50 to-brand-50/30 border border-slate-200/80 rounded-2xl p-4 flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-brand-100 border border-brand-200 flex items-center justify-center font-bold text-brand-700">
-                {empName.charAt(0)}
-              </div>
+              <Avatar
+                src={record.employee?.avatarUrl}
+                name={empName}
+                size="md"
+                className="border border-brand-200"
+              />
               <div>
                 <h4 className="font-semibold text-slate-900">{empName}</h4>
                 <p className="text-xs text-slate-500">

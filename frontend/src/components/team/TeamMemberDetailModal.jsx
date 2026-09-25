@@ -3,6 +3,7 @@ import { User, Mail, Phone, Calendar, Briefcase, Award, CheckCircle2, Clock, Fil
 import { Modal } from '../common/Modal.jsx';
 import { Button } from '../common/Button.jsx';
 import { Badge } from '../common/Badge.jsx';
+import { Avatar } from '../common/Avatar.jsx';
 import { teamService } from '../../services/teamService.js';
 import { useToast } from '../../context/ToastContext.jsx';
 
@@ -78,9 +79,13 @@ export const TeamMemberDetailModal = ({ isOpen, onClose, member }) => {
       <div className="space-y-5 text-sm">
         {/* Profile Card */}
         <div className="flex items-center gap-4 p-4 rounded-2xl bg-gradient-to-r from-slate-50 to-brand-50/40 border border-slate-200/80">
-          <div className="w-14 h-14 rounded-2xl bg-brand-600 text-white font-bold text-xl flex items-center justify-center shadow-md shadow-brand-500/20">
-            {fullName.charAt(0)}
-          </div>
+          <Avatar
+            src={m.avatarUrl}
+            name={fullName}
+            size="xl"
+            shape="rounded-2xl"
+            className="shadow-md shadow-brand-500/20 ring-2 ring-brand-100"
+          />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h4 className="font-bold text-slate-900 text-base">{fullName}</h4>

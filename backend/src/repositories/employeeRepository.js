@@ -32,6 +32,7 @@ const mapEmployeeRow = (row) => {
     bankIfsc: row.bankIfsc || '',
     bankBranch: row.bankBranch || '',
     uanNumber: row.uanNumber || '',
+    avatarUrl: row.avatarUrl || null,
     createdAt: row.createdAt ? new Date(row.createdAt).toISOString() : new Date().toISOString(),
     updatedAt: row.updatedAt ? new Date(row.updatedAt).toISOString() : new Date().toISOString(),
     organization: row.o_id ? { id: row.o_id, name: row.o_name, code: row.o_code } : null,
@@ -45,6 +46,7 @@ const mapEmployeeRow = (row) => {
           employeeCode: row.m_code,
           fullName: `${row.m_first_name || ''} ${row.m_last_name || ''}`.trim(),
           email: row.m_email,
+          avatarUrl: row.m_avatar_url || null,
         }
       : null,
     hrId: row.hrId || null,
@@ -54,6 +56,7 @@ const mapEmployeeRow = (row) => {
           employeeCode: row.h_code,
           fullName: `${row.h_first_name || ''} ${row.h_last_name || ''}`.trim(),
           email: row.h_email,
+          avatarUrl: row.h_avatar_url || null,
         }
       : null,
     probationStatus: row.probationStatus || 'IN_PROBATION',
@@ -97,6 +100,7 @@ const BASE_EMPLOYEE_SELECT = `
     TO_CHAR(e.probation_start_date, 'YYYY-MM-DD') AS "probationStartDate",
     TO_CHAR(e.probation_end_date, 'YYYY-MM-DD') AS "probationEndDate",
     e.probation_notes AS "probationNotes",
+    COALESCE(e.avatar_url, u.avatar_url) AS "avatarUrl",
     e.created_at AS "createdAt",
     e.updated_at AS "updatedAt",
     o.id AS "o_id", o.name AS "o_name", o.code AS "o_code",
@@ -104,8 +108,8 @@ const BASE_EMPLOYEE_SELECT = `
     ds.id AS "ds_id", ds.title AS "ds_title", ds.code AS "ds_code",
     u.id AS "u_id", u.status AS "u_status",
     r.id AS "r_id", r.name AS "r_name",
-    m.id AS "m_id", m.employee_code AS "m_code", m.first_name AS "m_first_name", m.last_name AS "m_last_name", m.email AS "m_email",
-    h.id AS "h_id", h.employee_code AS "h_code", h.first_name AS "h_first_name", h.last_name AS "h_last_name", h.email AS "h_email"
+    m.id AS "m_id", m.employee_code AS "m_code", m.first_name AS "m_first_name", m.last_name AS "m_last_name", m.email AS "m_email", m.avatar_url AS "m_avatar_url",
+    h.id AS "h_id", h.employee_code AS "h_code", h.first_name AS "h_first_name", h.last_name AS "h_last_name", h.email AS "h_email", h.avatar_url AS "h_avatar_url"
   FROM employees e
   LEFT JOIN organizations o ON o.id = e.org_id
   LEFT JOIN departments d ON d.id = e.dept_id
@@ -466,6 +470,11 @@ export const employeeRepository = {
       values.push(data.fatherName ? data.fatherName.trim() : '');
     }
 
+    if (data.avatarUrl !== undefined || data.avatar_url !== undefined) {
+      setClauses.push(`avatar_url = $${paramIndex++}`);
+      values.push(data.avatarUrl ?? data.avatar_url ?? null);
+    }
+
     if (data.motherName !== undefined) {
       setClauses.push(`mother_name = $${paramIndex++}`);
       values.push(data.motherName ? data.motherName.trim() : '');
@@ -659,6 +668,7 @@ export const employeeRepository = {
           e.last_name AS "lastName",
           TRIM(CONCAT(e.first_name, ' ', e.last_name)) AS "fullName",
           e.email,
+          COALESCE(e.avatar_url, u.avatar_url) AS "avatarUrl",
           d.name AS "departmentName",
           ds.title AS "designationTitle",
           r.name AS "roleName"

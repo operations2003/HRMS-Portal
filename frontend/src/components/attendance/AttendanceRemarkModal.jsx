@@ -15,6 +15,7 @@ import {
 import { Modal } from '../common/Modal.jsx';
 import { Button } from '../common/Button.jsx';
 import { Badge } from '../common/Badge.jsx';
+import { Avatar } from '../common/Avatar.jsx';
 import { attendanceService } from '../../services/attendanceService.js';
 import { useToast } from '../../context/ToastContext.jsx';
 
@@ -154,9 +155,12 @@ export const AttendanceRemarkModal = ({
         <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/70 space-y-3">
           <div className="flex items-center justify-between flex-wrap gap-2 text-xs">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-brand-100 text-brand-700 font-bold flex items-center justify-center text-xs">
-                {employeeName.charAt(0)}
-              </div>
+              <Avatar
+                src={record.employee?.avatarUrl}
+                alt={employeeName}
+                name={employeeName}
+                size="sm"
+              />
               <div>
                 <span className="font-bold text-slate-900 block text-sm">
                   {employeeName}

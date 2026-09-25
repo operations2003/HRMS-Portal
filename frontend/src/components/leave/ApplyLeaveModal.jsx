@@ -26,7 +26,6 @@ import { useAuth } from '../../context/AuthContext.jsx';
 
 const DEFAULT_LEAVE_CATEGORIES = [
   { id: 'lt-pl', name: 'Planned Leave', code: 'PL', description: 'Pre-planned annual leave and scheduled vacations', genderEligibility: 'ALL' },
-  { id: 'lt-upl', name: 'Unplanned Leave', code: 'UPL', description: 'Sudden urgent or emergency unplanned absence', genderEligibility: 'ALL' },
   { id: 'lt-cl', name: 'Casual Leave', code: 'CL', description: 'Casual leave for personal affairs and short breaks', genderEligibility: 'ALL' },
   { id: 'lt-sl', name: 'Sick Leave', code: 'SL', description: 'Medical leave for illness or health recovery', genderEligibility: 'ALL' },
   { id: 'lt-hl', name: 'Holiday', code: 'HL', description: 'Official public holiday or declared company day-off', genderEligibility: 'ALL' },
@@ -58,13 +57,15 @@ const getNextWorkingDay = (baseDate = new Date()) => {
 };
 
 
-const RESTRICTED_LEAVE_CODES = ['SBL', 'ML', 'PTL', 'AWOL', 'LOP', 'LWP'];
+const RESTRICTED_LEAVE_CODES = ['SBL', 'ML', 'PTL', 'AWOL', 'LOP', 'LWP', 'UPL'];
 const isRestrictedType = (lt) => {
   if (!lt) return false;
   const code = String(lt.code || '').trim().toUpperCase();
   const name = String(lt.name || '').trim().toLowerCase();
   if (RESTRICTED_LEAVE_CODES.includes(code)) return true;
   return (
+    code === 'UPL' ||
+    name.includes('unplanned') ||
     name.includes('sabbatical') ||
     name.includes('maternity') ||
     name.includes('paternity') ||
@@ -118,13 +119,18 @@ export const ApplyLeaveModal = ({
 
   const allAvailableTypes = leaveTypes && leaveTypes.length > 0 ? leaveTypes : DEFAULT_LEAVE_CATEGORIES;
   const effectiveLeaveTypes = allAvailableTypes.filter((lt) => {
+    const code = String(lt.code || '').toUpperCase();
+    const name = String(lt.name || '').toLowerCase();
+    if (code === 'UPL' || name.includes('unplanned')) {
+      return false;
+    }
+
     // When applying for SELF: restricted leaves (Sabbatical, Maternity, Paternity, AWOL, LOP) MUST NOT appear!
     if (targetEmployeeId === 'SELF' && isRestrictedType(lt)) {
       return false;
     }
 
     const ge = String(lt.genderEligibility || lt.gender_eligibility || 'ALL').toUpperCase();
-    const code = String(lt.code || '').toUpperCase();
     if (ge === 'FEMALE' || code === 'ML') {
       return targetGender !== 'MALE';
     }

@@ -1220,6 +1220,7 @@ export const teamService = {
       const res = await pool.query(sql, values);
       return res.rows.map((row) => ({
         ...row,
+        avatarUrl: row.employeeAvatar || null,
         employeeName: `${row.employeeFirstName || ''} ${row.employeeLastName || ''}`.trim() || 'Team Member',
       }));
     } catch (err) {

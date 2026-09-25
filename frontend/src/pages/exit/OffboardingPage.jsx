@@ -28,6 +28,7 @@ import { exitService } from '../../services/exitService.js';
 import { Button } from '../../components/common/Button.jsx';
 import { Badge } from '../../components/common/Badge.jsx';
 import { Alert } from '../../components/common/Alert.jsx';
+import { Avatar } from '../../components/common/Avatar.jsx';
 import { DataTable } from '../../components/common/DataTable.jsx';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
 import { EmptyState } from '../../components/common/EmptyState.jsx';
@@ -172,11 +173,15 @@ export const OffboardingPage = () => {
         const emp = row.employee;
         const name =
           emp?.fullName || `${emp?.firstName || ''} ${emp?.lastName || ''}`.trim() || row.employeeName || 'Staff';
+        const avatarUrl = emp?.avatarUrl || emp?.avatar_url || row.avatarUrl || row.employeeAvatar;
         return (
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-700 font-bold flex items-center justify-center text-xs">
-              {name.charAt(0)}
-            </div>
+            <Avatar
+              src={avatarUrl}
+              alt={name}
+              name={name}
+              size="sm"
+            />
             <div>
               <p className="font-semibold text-xs text-slate-900">{name}</p>
               <p className="text-[10px] text-slate-400 font-mono">

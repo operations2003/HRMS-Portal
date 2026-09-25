@@ -42,6 +42,7 @@ import { AssignManagerModal } from '../../components/team/AssignManagerModal.jsx
 import { ApprovalActionModal } from '../../components/approvals/ApprovalActionModal.jsx';
 import { AttendanceDetailModal } from '../../components/attendance/AttendanceDetailModal.jsx';
 import { attendanceService } from '../../services/attendanceService.js';
+import { Avatar } from '../../components/common/Avatar.jsx';
 
 export const TeamManagementPage = () => {
   const { user, hasRole } = useAuth();
@@ -283,9 +284,14 @@ export const TeamManagementPage = () => {
         const code = row.employeeCode || row.employee_code || row.id?.slice(0, 8);
         return (
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-brand-100 text-brand-700 font-bold flex items-center justify-center text-xs">
-              {name.charAt(0)}
-            </div>
+            <Avatar
+              src={row.avatarUrl}
+              name={name}
+              firstName={row.firstName}
+              lastName={row.lastName}
+              size="md"
+              className="ring-1 ring-slate-200"
+            />
             <div>
               <p className="font-semibold text-slate-800 text-xs">{name}</p>
               <p className="text-[11px] text-slate-400 font-mono">ID: {code}</p>
@@ -420,9 +426,12 @@ export const TeamManagementPage = () => {
         const code = row.employeeCode || row.employee_code || row.employeeId?.slice(0, 8);
         return (
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-700 font-bold flex items-center justify-center text-xs">
-              {name.charAt(0)}
-            </div>
+            <Avatar
+              src={row.avatarUrl || row.employee?.avatarUrl}
+              name={name}
+              size="sm"
+              className="ring-1 ring-slate-200"
+            />
             <div>
               <p className="font-semibold text-slate-800 text-xs">{name}</p>
               <p className="text-[11px] text-slate-400 font-mono">ID: {code}</p>
@@ -602,9 +611,12 @@ export const TeamManagementPage = () => {
         const dept = row.departmentName || 'Team';
         return (
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-brand-50 text-brand-700 flex items-center justify-center font-bold text-xs shrink-0 ring-1 ring-brand-200">
-              {row.employeeFirstName?.[0] || name?.[0] || 'U'}
-            </div>
+            <Avatar
+              src={row.avatarUrl || row.employeeAvatar}
+              name={name}
+              size="sm"
+              className="ring-1 ring-brand-200"
+            />
             <div>
               <p className="font-semibold text-slate-800 text-xs">{name}</p>
               <p className="text-[11px] text-slate-400">

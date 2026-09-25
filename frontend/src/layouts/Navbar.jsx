@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { LogOut, Menu, User, Shield, ChevronDown } from 'lucide-react';
 import { Badge } from '../components/common/Badge.jsx';
+import { Avatar } from '../components/common/Avatar.jsx';
 import { ConfirmDialog } from '../components/common/ConfirmDialog.jsx';
 import { NotificationBell } from '../components/notifications/NotificationBell.jsx';
 
@@ -47,13 +48,13 @@ export const Navbar = ({ onToggleSidebar }) => {
                 onClick={() => setDropdownOpen(!dropdownOpen)}
                 className="flex items-center gap-3 p-1.5 rounded-xl hover:bg-slate-100 transition-colors text-left focus:outline-none"
               >
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 text-white flex items-center justify-center font-bold text-sm shadow-sm ring-2 ring-brand-100 overflow-hidden shrink-0">
-                  {user.avatarUrl ? (
-                    <img src={user.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
-                  ) : (
-                    user.firstName?.[0] || 'U'
-                  )}
-                </div>
+                <Avatar
+                  src={user.avatarUrl || user.avatar_url}
+                  alt={`${user.firstName || ''} ${user.lastName || ''}`.trim() || 'User'}
+                  name={`${user.firstName || ''} ${user.lastName || ''}`.trim() || 'User'}
+                  size="md"
+                  className="rounded-xl ring-2 ring-brand-100 shrink-0"
+                />
                 <div className="hidden md:block">
                   <div className="text-sm font-semibold text-slate-800 leading-tight">
                     {user.firstName} {user.lastName}

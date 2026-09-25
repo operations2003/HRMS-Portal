@@ -29,6 +29,7 @@ import { Input } from '../../components/common/Input.jsx';
 import { DataTable } from '../../components/common/DataTable.jsx';
 import { Alert } from '../../components/common/Alert.jsx';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
+import { Avatar } from '../../components/common/Avatar.jsx';
 import { RoleFormModal } from '../../components/admin/RoleFormModal.jsx';
 import { RolePermissionsMatrixModal } from '../../components/admin/RolePermissionsMatrixModal.jsx';
 import { UserRoleAssignModal } from '../../components/admin/UserRoleAssignModal.jsx';
@@ -537,9 +538,14 @@ export const RolesPermissionsPage = () => {
                   header: 'User Account',
                   render: (row) => (
                     <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-slate-800 text-white flex items-center justify-center font-bold text-xs">
-                        {row.firstName?.[0]}{row.lastName?.[0]}
-                      </div>
+                      <Avatar
+                        src={row.avatarUrl}
+                        firstName={row.firstName}
+                        lastName={row.lastName}
+                        size="md"
+                        shape="rounded"
+                        fallbackGradient="bg-slate-800 text-white"
+                      />
                       <div>
                         <div className="font-semibold text-slate-900 text-xs">
                           {row.firstName} {row.lastName}

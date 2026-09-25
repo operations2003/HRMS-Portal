@@ -45,6 +45,7 @@ import { ConfirmDialog } from '../../components/common/ConfirmDialog.jsx';
 import { Alert } from '../../components/common/Alert.jsx';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
 import { Can } from '../../components/rbac/Can.jsx';
+import { Avatar } from '../../components/common/Avatar.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { EmployeeTimelineModal } from '../../components/employees/EmployeeTimelineModal.jsx';
@@ -83,7 +84,6 @@ export const EmployeeListPage = () => {
   // Leave Quotas & Entitlements State (Decided by Admin) - 11 Standard Company Categories
   const [leaveTypes, setLeaveTypes] = useState([
     { id: 'lt-pl', name: 'Planned Leave', code: 'PL', daysPerYear: 0, description: 'Pre-planned annual leave and scheduled vacations', genderEligibility: 'ALL' },
-    { id: 'lt-upl', name: 'Unplanned Leave', code: 'UPL', daysPerYear: 0, description: 'Sudden urgent or emergency unplanned absence', genderEligibility: 'ALL' },
     { id: 'lt-cl', name: 'Casual Leave', code: 'CL', daysPerYear: 0, description: 'Casual leave for personal affairs and short breaks', genderEligibility: 'ALL' },
     { id: 'lt-sl', name: 'Sick Leave', code: 'SL', daysPerYear: 0, description: 'Medical leave for illness or health recovery', genderEligibility: 'ALL' },
     { id: 'lt-hl', name: 'Holiday', code: 'HL', daysPerYear: 0, description: 'Official public holiday or declared company day-off', genderEligibility: 'ALL' },
@@ -96,7 +96,6 @@ export const EmployeeListPage = () => {
   ]);
   const [leaveAllocations, setLeaveAllocations] = useState({
     'lt-pl': 0,
-    'lt-upl': 0,
     'lt-cl': 0,
     'lt-sl': 0,
     'lt-hl': 0,
@@ -812,10 +811,13 @@ export const EmployeeListPage = () => {
       accessor: 'firstName',
       render: (row) => (
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-brand-600 to-brand-400 text-white font-semibold text-xs flex items-center justify-center shrink-0 shadow-sm">
-            {row.firstName?.[0]}
-            {row.lastName?.[0]}
-          </div>
+          <Avatar
+            src={row.avatarUrl}
+            firstName={row.firstName}
+            lastName={row.lastName}
+            size="md"
+            className="ring-1 ring-slate-200"
+          />
           <div>
             <div className="font-semibold text-slate-900 flex items-center gap-2">
               <span>
@@ -2382,10 +2384,14 @@ export const EmployeeListPage = () => {
         ) : viewingEmployee ? (
           <div className="space-y-6">
             <div className="flex items-center gap-4 p-4 rounded-2xl bg-brand-50/50 border border-brand-100">
-              <div className="w-14 h-14 rounded-2xl bg-brand-500 text-white flex items-center justify-center font-bold text-lg shadow-sm">
-                {viewingEmployee.firstName?.[0]}
-                {viewingEmployee.lastName?.[0]}
-              </div>
+              <Avatar
+                src={viewingEmployee.avatarUrl}
+                firstName={viewingEmployee.firstName}
+                lastName={viewingEmployee.lastName}
+                size="xl"
+                shape="rounded-2xl"
+                className="shadow-sm ring-2 ring-brand-200"
+              />
               <div>
                 <h3 className="text-lg font-bold text-slate-900">
                   {viewingEmployee.firstName} {viewingEmployee.lastName}

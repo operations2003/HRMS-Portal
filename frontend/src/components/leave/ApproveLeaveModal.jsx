@@ -3,6 +3,7 @@ import { CheckCircle2, User, Calendar, Clock, AlertTriangle, MessageSquare } fro
 import { Modal } from '../common/Modal.jsx';
 import { Button } from '../common/Button.jsx';
 import { Alert } from '../common/Alert.jsx';
+import { Avatar } from '../common/Avatar.jsx';
 import { leaveService } from '../../services/leaveService.js';
 import { useToast } from '../../context/ToastContext.jsx';
 
@@ -100,10 +101,13 @@ export const ApproveLeaveModal = ({
 
         {/* Employee Card */}
         <div className="flex items-center gap-3.5 p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
-          <div className="w-11 h-11 rounded-full bg-gradient-to-tr from-brand-600 to-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-sm shrink-0">
-            {leaveRecord.employee?.firstName?.[0] || 'E'}
-            {leaveRecord.employee?.lastName?.[0] || ''}
-          </div>
+          <Avatar
+            src={leaveRecord.employee?.avatarUrl}
+            firstName={leaveRecord.employee?.firstName}
+            lastName={leaveRecord.employee?.lastName}
+            size="lg"
+            className="ring-1 ring-brand-200 shrink-0"
+          />
           <div className="flex-1 min-w-0">
             <h4 className="text-sm font-bold text-slate-900 truncate">
               {leaveRecord.employee?.firstName} {leaveRecord.employee?.lastName}

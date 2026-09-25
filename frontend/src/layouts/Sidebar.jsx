@@ -218,12 +218,6 @@ export const Sidebar = ({ isOpen, onClose }) => {
           icon: Megaphone,
           roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
         },
-        {
-          name: 'Reports',
-          path: '/reports',
-          icon: FileText,
-          permission: ['employee:read'],
-        },
       ],
     },
     {

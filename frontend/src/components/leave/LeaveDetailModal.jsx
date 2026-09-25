@@ -15,6 +15,7 @@ import {
 import { Modal } from '../common/Modal.jsx';
 import { Button } from '../common/Button.jsx';
 import { Badge } from '../common/Badge.jsx';
+import { Avatar } from '../common/Avatar.jsx';
 
 export const LeaveDetailModal = ({
   isOpen,
@@ -75,10 +76,14 @@ export const LeaveDetailModal = ({
         {/* Top Header Card */}
         <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100/70 border border-slate-200/80 flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-600 flex items-center justify-center text-white font-bold text-base shadow-sm shrink-0">
-              {leaveRecord.employee?.firstName?.[0] || 'E'}
-              {leaveRecord.employee?.lastName?.[0] || ''}
-            </div>
+            <Avatar
+              src={leaveRecord.employee?.avatarUrl}
+              firstName={leaveRecord.employee?.firstName}
+              lastName={leaveRecord.employee?.lastName}
+              size="lg"
+              shape="rounded"
+              className="shadow-sm ring-1 ring-brand-200 shrink-0"
+            />
             <div>
               <h4 className="text-sm font-bold text-slate-900">
                 {leaveRecord.employee?.firstName} {leaveRecord.employee?.lastName}

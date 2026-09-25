@@ -3,6 +3,7 @@ import { ShieldCheck, User, Mail, Key } from 'lucide-react';
 import { Modal } from '../common/Modal.jsx';
 import { Badge } from '../common/Badge.jsx';
 import { Button } from '../common/Button.jsx';
+import { Avatar } from '../common/Avatar.jsx';
 
 export const UserPermissionsViewModal = ({ isOpen, onClose, user }) => {
   if (!user) return null;
@@ -22,9 +23,14 @@ export const UserPermissionsViewModal = ({ isOpen, onClose, user }) => {
         {/* User Summary Card */}
         <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-slate-800 text-white flex items-center justify-center font-bold text-xs">
-              {user.firstName?.[0]}{user.lastName?.[0]}
-            </div>
+            <Avatar
+              src={user.avatarUrl}
+              firstName={user.firstName}
+              lastName={user.lastName}
+              size="md"
+              shape="rounded"
+              fallbackGradient="bg-slate-800 text-white"
+            />
             <div>
               <p className="text-xs font-semibold text-slate-900">{user.firstName} {user.lastName}</p>
               <p className="text-[11px] text-slate-500 font-mono">{user.email}</p>

@@ -389,12 +389,12 @@ export const hrOperationsService = {
     // 1. Fetch employee core details
     const empRes = await pool.query(
       `SELECT 
-        e.id, e.employee_code, e.first_name, e.last_name, e.email, e.phone,
+        e.id, e.employee_code, e.first_name, e.last_name, e.email, e.phone, e.avatar_url,
         e.date_of_joining, e.employment_type, e.status, e.manager_id, e.hr_id, e.org_id,
         d.id AS dept_id, d.name AS dept_name,
         ds.id AS desig_id, ds.title AS desig_title,
-        m.first_name AS mgr_first_name, m.last_name AS mgr_last_name, m.employee_code AS mgr_code,
-        h.first_name AS hr_first_name, h.last_name AS hr_last_name, h.employee_code AS hr_code, h.email AS hr_email
+        m.first_name AS mgr_first_name, m.last_name AS mgr_last_name, m.employee_code AS mgr_code, m.avatar_url AS mgr_avatar_url,
+        h.first_name AS hr_first_name, h.last_name AS hr_last_name, h.employee_code AS hr_code, h.email AS hr_email, h.avatar_url AS hr_avatar_url
       FROM employees e
       LEFT JOIN departments d ON e.dept_id = d.id
       LEFT JOIN designations ds ON e.desig_id = ds.id
@@ -484,6 +484,7 @@ export const hrOperationsService = {
         fullName: `${emp.first_name || ''} ${emp.last_name || ''}`.trim(),
         email: emp.email,
         phone: emp.phone,
+        avatarUrl: emp.avatar_url || null,
         dateOfJoining: emp.date_of_joining,
         employmentType: emp.employment_type,
         status: emp.status,
@@ -494,6 +495,7 @@ export const hrOperationsService = {
               id: emp.manager_id,
               name: `${emp.mgr_first_name || ''} ${emp.mgr_last_name || ''}`.trim(),
               code: emp.mgr_code,
+              avatarUrl: emp.mgr_avatar_url || null,
             }
           : null,
         assignedHr: emp.hr_id
@@ -502,6 +504,7 @@ export const hrOperationsService = {
               name: `${emp.hr_first_name || ''} ${emp.hr_last_name || ''}`.trim(),
               code: emp.hr_code,
               email: emp.hr_email,
+              avatarUrl: emp.hr_avatar_url || null,
             }
           : null,
       },
@@ -572,7 +575,7 @@ export const hrOperationsService = {
     }
 
     const mgrRes = await pool.query(
-      `SELECT id, first_name, last_name, employee_code, org_id FROM employees WHERE id = $1;`,
+      `SELECT id, first_name, last_name, employee_code, org_id, avatar_url FROM employees WHERE id = $1;`,
       [managerId]
     );
 
@@ -590,7 +593,7 @@ export const hrOperationsService = {
 
     const { rows } = await pool.query(
       `SELECT 
-        e.id, e.employee_code, e.first_name, e.last_name, e.email, e.status,
+        e.id, e.employee_code, e.first_name, e.last_name, e.email, e.status, e.avatar_url,
         d.name AS department_name, ds.title AS designation_title
       FROM employees e
       LEFT JOIN departments d ON e.dept_id = d.id
@@ -606,6 +609,7 @@ export const hrOperationsService = {
         id: mgr.id,
         name: `${mgr.first_name || ''} ${mgr.last_name || ''}`.trim(),
         employeeCode: mgr.employee_code,
+        avatarUrl: mgr.avatar_url || null,
       },
       teamMembers: rows.map((r) => ({
         id: r.id,
@@ -613,6 +617,7 @@ export const hrOperationsService = {
         name: `${r.first_name || ''} ${r.last_name || ''}`.trim(),
         email: r.email,
         status: r.status,
+        avatarUrl: r.avatar_url || null,
         department: r.department_name,
         designation: r.designation_title,
       })),

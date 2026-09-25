@@ -30,6 +30,7 @@ import { Badge } from '../../components/common/Badge.jsx';
 import { DataTable } from '../../components/common/DataTable.jsx';
 import { Alert } from '../../components/common/Alert.jsx';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
+import { Avatar } from '../../components/common/Avatar.jsx';
 import { SystemOverviewCards } from '../../components/admin/SystemOverviewCards.jsx';
 import { ConfigEditorModal } from '../../components/admin/ConfigEditorModal.jsx';
 import { AuditLogsTable } from '../../components/admin/AuditLogsTable.jsx';
@@ -447,9 +448,14 @@ export const AdminSettingsPage = () => {
                   header: 'User Account',
                   render: (row) => (
                     <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-slate-800 text-white flex items-center justify-center font-bold text-xs">
-                        {row.firstName?.[0]}{row.lastName?.[0]}
-                      </div>
+                      <Avatar
+                        src={row.avatarUrl}
+                        firstName={row.firstName}
+                        lastName={row.lastName}
+                        size="md"
+                        shape="rounded"
+                        fallbackGradient="bg-slate-800 text-white"
+                      />
                       <div>
                         <div className="font-semibold text-slate-900 text-xs">
                           {row.firstName} {row.lastName}

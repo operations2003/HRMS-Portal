@@ -17,6 +17,8 @@ router.put('/me/profile', employeeController.updateMyProfile);
 router.post('/me/avatar', uploadSingleDocument('avatar'), employeeController.uploadAvatar);
 router.delete('/me/avatar', employeeController.removeAvatar);
 router.get('/:id/profile', employeeController.getProfileById);
+router.post('/:id/avatar', authorize('employee:write'), uploadSingleDocument('avatar'), employeeController.uploadAvatarForEmployee);
+router.delete('/:id/avatar', authorize('employee:write'), employeeController.removeAvatarForEmployee);
 router.get('/', authorize('employee:read'), employeeController.list);
 router.get('/:id', authorize('employee:read'), employeeController.getById);
 router.get('/:id/timeline', authorize('employee:read'), employeeController.getTimeline);

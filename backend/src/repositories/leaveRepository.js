@@ -96,6 +96,7 @@ const mapLeaveRequestRow = (row) => {
           managerId: row.emp_manager_id || null,
           departmentName: row.dept_name || '',
           designationTitle: row.desig_title || '',
+          avatarUrl: row.emp_avatar_url || null,
         }
       : null,
     // Joined Approver
@@ -105,6 +106,7 @@ const mapLeaveRequestRow = (row) => {
           firstName: row.appr_first_name,
           lastName: row.appr_last_name,
           email: row.appr_email,
+          avatarUrl: row.appr_avatar_url || null,
         }
       : null,
   };
@@ -143,12 +145,14 @@ const BASE_LEAVE_REQUEST_SELECT = `
     e.email AS emp_email,
     e.dept_id AS emp_dept_id,
     e.manager_id AS emp_manager_id,
+    e.avatar_url AS emp_avatar_url,
     d.name AS dept_name,
     ds.title AS desig_title,
     ae.id AS appr_id,
     ae.first_name AS appr_first_name,
     ae.last_name AS appr_last_name,
-    ae.email AS appr_email
+    ae.email AS appr_email,
+    ae.avatar_url AS appr_avatar_url
   FROM leave_requests lr
   JOIN leave_types lt ON lt.id = lr.leave_type_id
   JOIN employees e ON e.id = lr.employee_id
@@ -180,17 +184,16 @@ export const leaveRepository = {
       ORDER BY 
         CASE 
           WHEN UPPER(code) = 'PL' THEN 1
-          WHEN UPPER(code) = 'UPL' THEN 2
-          WHEN UPPER(code) = 'CL' THEN 3
-          WHEN UPPER(code) = 'SL' THEN 4
-          WHEN UPPER(code) = 'HL' THEN 5
-          WHEN UPPER(code) = 'HDL' THEN 6
-          WHEN UPPER(code) = 'AWOL' THEN 7
-          WHEN UPPER(code) = 'LOP' THEN 8
-          WHEN UPPER(code) = 'ML' THEN 9
-          WHEN UPPER(code) = 'SBL' THEN 10
-          WHEN UPPER(code) = 'PTL' THEN 11
-          ELSE 12
+          WHEN UPPER(code) = 'CL' THEN 2
+          WHEN UPPER(code) = 'SL' THEN 3
+          WHEN UPPER(code) = 'HL' THEN 4
+          WHEN UPPER(code) = 'HDL' THEN 5
+          WHEN UPPER(code) = 'AWOL' THEN 6
+          WHEN UPPER(code) = 'LOP' THEN 7
+          WHEN UPPER(code) = 'ML' THEN 8
+          WHEN UPPER(code) = 'SBL' THEN 9
+          WHEN UPPER(code) = 'PTL' THEN 10
+          ELSE 11
         END,
         name ASC;
     `;
@@ -712,17 +715,16 @@ export const leaveRepository = {
       ORDER BY 
         CASE 
           WHEN UPPER(lt.code) = 'PL' THEN 1
-          WHEN UPPER(lt.code) = 'UPL' THEN 2
-          WHEN UPPER(lt.code) = 'CL' THEN 3
-          WHEN UPPER(lt.code) = 'SL' THEN 4
-          WHEN UPPER(lt.code) = 'HL' THEN 5
-          WHEN UPPER(lt.code) = 'HDL' THEN 6
-          WHEN UPPER(lt.code) = 'AWOL' THEN 7
-          WHEN UPPER(lt.code) = 'LOP' THEN 8
-          WHEN UPPER(lt.code) = 'ML' THEN 9
-          WHEN UPPER(lt.code) = 'SBL' THEN 10
-          WHEN UPPER(lt.code) = 'PTL' THEN 11
-          ELSE 12
+          WHEN UPPER(lt.code) = 'CL' THEN 2
+          WHEN UPPER(lt.code) = 'SL' THEN 3
+          WHEN UPPER(lt.code) = 'HL' THEN 4
+          WHEN UPPER(lt.code) = 'HDL' THEN 5
+          WHEN UPPER(lt.code) = 'AWOL' THEN 6
+          WHEN UPPER(lt.code) = 'LOP' THEN 7
+          WHEN UPPER(lt.code) = 'ML' THEN 8
+          WHEN UPPER(lt.code) = 'SBL' THEN 9
+          WHEN UPPER(lt.code) = 'PTL' THEN 10
+          ELSE 11
         END,
         lt.name ASC;
     `;
