@@ -40,7 +40,12 @@ export const ApprovalActionModal = ({
     setError(null);
 
     // Authority Check: Only Admin, HR, and Manager roles are permitted
-    const userRole = (currentUser?.roleName || currentUser?.role || '').toLowerCase();
+    const userRole = (
+      currentUser?.roleName ||
+      currentUser?.role?.name ||
+      (typeof currentUser?.role === 'string' ? currentUser.role : '') ||
+      ''
+    ).toLowerCase();
     const rolesList = Array.isArray(currentUser?.roles)
       ? currentUser.roles.map((r) => (typeof r === 'string' ? r.toLowerCase() : ''))
       : [userRole];

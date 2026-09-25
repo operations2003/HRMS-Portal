@@ -78,7 +78,13 @@ export const ReportsPage = () => {
     const email = (user.email || '').toLowerCase();
     const name = `${user.firstName || ''} ${user.lastName || ''}`.toLowerCase();
     const empCode = (user.employeeCode || user.employeeId || '').toLowerCase();
-    const dept = (user.department || user.departmentName || user.department?.name || '').toLowerCase();
+    const dept = (
+      user.departmentName ||
+      user.department?.name ||
+      (typeof user.department === 'string' ? user.department : '') ||
+      user.departmentCode ||
+      ''
+    ).toLowerCase();
 
     if (
       email.includes('ajay') ||
