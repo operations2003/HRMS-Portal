@@ -130,13 +130,6 @@ export const Sidebar = ({ isOpen, onClose }) => {
           roles: ['Manager', 'HR', 'HRManager'],
           excludeRoles: ['Admin', 'SuperAdmin', 'OrgAdmin'],
         },
-        {
-          name: 'Performance Reports',
-          path: '/reports',
-          icon: FileText,
-          roles: ['Manager', 'HR', 'HRManager'],
-          excludeRoles: ['Admin', 'SuperAdmin', 'OrgAdmin'],
-        },
       ],
     },
     {
