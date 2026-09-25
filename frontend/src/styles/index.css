@@ -7,6 +7,10 @@
     font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     @apply bg-slate-50;
   }
+
+  select::-ms-expand {
+    display: none;
+  }
 }
 
 /* Custom modern scrollbars - Executive theme */

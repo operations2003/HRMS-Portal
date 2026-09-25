@@ -13,6 +13,7 @@ import {
   Check,
   Calendar,
   User,
+  Users,
   ShieldCheck,
   Award,
   AlertCircle,
@@ -21,14 +22,23 @@ import {
   Info,
   Send,
   CheckCircle2,
+  RotateCw,
+  History,
+  Eye,
+  RefreshCw,
+  ChevronDown,
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import * as XLSX from 'xlsx';
 import { Button } from '../../components/common/Button.jsx';
 import { Badge } from '../../components/common/Badge.jsx';
+import { ConfirmDialog } from '../../components/common/ConfirmDialog.jsx';
+import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
+import { DataTable } from '../../components/common/DataTable.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { employeeService } from '../../services/employeeService.js';
+import { performanceReportService } from '../../services/performanceReportService.js';
 import { notificationService } from '../../services/notificationService.js';
 import { PrintableReportDossier } from '../../components/performance/PrintableReportDossier.jsx';
 
@@ -116,6 +126,20 @@ export const ReportsPage = () => {
   const [isSending, setIsSending] = useState(false);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
 
+  // Reviewer Sub-Tab: 'form' | 'tracker'
+  const [reviewerSubTab, setReviewerSubTab] = useState('form');
+  const [sentReports, setSentReports] = useState([]);
+  const [loadingSentReports, setLoadingSentReports] = useState(false);
+  const [empReportStatus, setEmpReportStatus] = useState(null);
+  const [loadingStatus, setLoadingStatus] = useState(false);
+
+  // Recipient ("My Performance") States
+  const [myReports, setMyReports] = useState([]);
+  const [loadingMyReports, setLoadingMyReports] = useState(true);
+  const [activeMyReportIdx, setActiveMyReportIdx] = useState(0);
+  const [reportToDelete, setReportToDelete] = useState(null);
+  const [isDeletingReport, setIsDeletingReport] = useState(false);
+
   // Dynamic employee roster per department
   const [employees, setEmployees] = useState([]);
   const [loadingEmployees, setLoadingEmployees] = useState(false);
@@ -128,10 +152,10 @@ export const ReportsPage = () => {
         const list = Array.isArray(res?.employees)
           ? res.employees
           : Array.isArray(res?.data)
-          ? res.data
-          : Array.isArray(res)
-          ? res
-          : [];
+            ? res.data
+            : Array.isArray(res)
+              ? res
+              : [];
 
         // Exclude Admin / SuperAdmin / OrgAdmin accounts from the employee review list
         const reviewCandidates = list.filter((emp) => {
@@ -373,8 +397,8 @@ export const ReportsPage = () => {
       department === 'operations'
         ? 'operat|ops|logist|supply|fulfillment'
         : department === 'it'
-        ? 'it|tech|eng|soft|dev|comput|infra|qa|product'
-        : 'talent|ta|recruit|hr|human|people';
+          ? 'it|tech|eng|soft|dev|comput|infra|qa|product'
+          : 'talent|ta|recruit|hr|human|people';
     const regex = new RegExp(deptKeyword, 'i');
 
     const matched = candidates.filter((emp) => {
@@ -395,8 +419,54 @@ export const ReportsPage = () => {
     return matched.length > 0 ? matched : candidates;
   }, [employees, department, isManager, isAdmin, isHR, user]);
 
-  // Handle employee selection from dropdown in Section 01
-  const handleSelectEmployee = (empId) => {
+  // Helper to load reports for logged in user (My Performance view)
+  const loadMyReports = async () => {
+    try {
+      setLoadingMyReports(true);
+      const res = await performanceReportService.getMyReports();
+      const items = res?.items || res?.data?.items || (Array.isArray(res) ? res : []);
+      setMyReports(items);
+      if (items.length > 0) {
+        setActiveMyReportIdx(0);
+      }
+    } catch (err) {
+      console.error('Failed to load my performance reports:', err);
+    } finally {
+      setLoadingMyReports(false);
+    }
+  };
+
+  useEffect(() => {
+    if (viewMode === 'my' || !canReviewOthers) {
+      loadMyReports();
+    }
+  }, [viewMode, canReviewOthers]);
+
+  // Fetch all sent reports across organization for reviewer
+  const fetchSentReports = async () => {
+    if (!canReviewOthers) return;
+    try {
+      setLoadingSentReports(true);
+      const res = await performanceReportService.getSentReports({
+        department: department !== 'all' ? department : undefined,
+      });
+      const items = res?.items || res?.data?.items || (Array.isArray(res) ? res : []);
+      setSentReports(items);
+    } catch (err) {
+      console.error('Failed to load sent reports:', err);
+    } finally {
+      setLoadingSentReports(false);
+    }
+  };
+
+  useEffect(() => {
+    if (canReviewOthers && viewMode === 'reviews') {
+      fetchSentReports();
+    }
+  }, [department, viewMode, canReviewOthers]);
+
+  // Handle employee selection from combobox in Section 01
+  const handleSelectEmployee = async (empId) => {
     setSelectedEmployeeId(empId);
     const selectedEmp = employees.find(
       (e) => String(e.id || e._id) === String(empId)
@@ -404,16 +474,35 @@ export const ReportsPage = () => {
     if (selectedEmp) {
       const fullName = `${selectedEmp.firstName || ''} ${selectedEmp.lastName || ''}`.trim() || selectedEmp.name || selectedEmp.email;
       const code = selectedEmp.employeeCode || selectedEmp.employeeId || '';
+
+      // Auto-detect and align department tab if needed
+      const rawDept = (
+        selectedEmp.departmentName ||
+        selectedEmp.department?.name ||
+        (typeof selectedEmp.department === 'string' ? selectedEmp.department : '')
+      ).toLowerCase();
+      let activeD = department;
+      if (rawDept.includes('it') || rawDept.includes('eng') || rawDept.includes('tech') || rawDept.includes('soft')) {
+        activeD = 'it';
+      } else if (rawDept.includes('talent') || rawDept.includes('ta') || rawDept.includes('recruit')) {
+        activeD = 'ta';
+      } else if (rawDept.includes('operat') || rawDept.includes('ops') || rawDept.includes('logist')) {
+        activeD = 'operations';
+      }
+      if (activeD !== department) {
+        setDepartment(activeD);
+      }
+
       const dept =
         selectedEmp.departmentName ||
         selectedEmp.department?.name ||
         (typeof selectedEmp.department === 'string'
           ? selectedEmp.department
-          : department === 'operations'
-          ? 'Operations Team'
-          : department === 'it'
-          ? 'IT Team'
-          : 'TA Team');
+          : activeD === 'operations'
+            ? 'Operations Team'
+            : activeD === 'it'
+              ? 'IT Team'
+              : 'TA Team');
       const desig =
         selectedEmp.designation?.title ||
         selectedEmp.designationName ||
@@ -426,6 +515,31 @@ export const ReportsPage = () => {
           ? `${selectedEmp.manager.firstName || ''} ${selectedEmp.manager.lastName || ''}`.trim()
           : '') ||
         '';
+
+      // Check delivery status for this employee
+      try {
+        setLoadingStatus(true);
+        const stRes = await performanceReportService.getEmployeeStatus(empId, activeD);
+        const st = stRes?.data || stRes;
+        setEmpReportStatus(st || null);
+
+        if (st && st.reportData) {
+          setCurrentData({
+            ...st.reportData,
+            employeeName: fullName,
+            employeeId: code,
+            department: dept,
+            designation: desig,
+            ...(mgr ? { manager: mgr } : {}),
+          });
+          showToast(`Selected ${fullName}. Loaded previous evaluation (Sent: ${st.sentCount || 1}x).`, 'info');
+          return;
+        }
+      } catch (err) {
+        setEmpReportStatus(null);
+      } finally {
+        setLoadingStatus(false);
+      }
 
       setCurrentData((prev) => ({
         ...prev,
@@ -440,74 +554,79 @@ export const ReportsPage = () => {
     }
   };
 
-  // Handle Send Report action
-  const handleSendReport = async () => {
-    if (!currentData.employeeName) {
-      showToast('Please specify an Employee Name before sending the report.', 'error');
+  // Handle Send / Re-send Report action specifically to the selected employee
+  const handleSendReport = async (overrideEmpId = null, overrideData = null) => {
+    const empId = overrideEmpId || selectedEmployeeId;
+    const sendData = overrideData || currentData;
+    const empName = sendData.employeeName;
+
+    if (!empId || !empName) {
+      showToast('Please select an Employee Name from the dropdown before sending the report.', 'error');
       return;
     }
     setIsSending(true);
-    showToast(`Sending performance appraisal report to ${currentData.employeeName}...`, 'loading', 0);
+    showToast(`Dispatching performance appraisal report to ${empName}...`, 'loading', 0);
 
     try {
-      const targetEmp = employees.find((e) => {
-        const full = `${e.firstName || ''} ${e.lastName || ''}`.trim().toLowerCase();
-        return (
-          full === currentData.employeeName.trim().toLowerCase() ||
-          String(e.id || e._id) === String(selectedEmployeeId)
-        );
+      const avgScore = calculateAverage(sendData.competencies);
+      const res = await performanceReportService.sendReport({
+        employeeId: empId,
+        department,
+        reportData: sendData,
+        averageScore: avgScore,
+        overallRating: sendData.overallRating,
       });
 
-      const recipientId = targetEmp?.id || targetEmp?._id || selectedEmployeeId;
+      const count = res?.data?.sentCount || res?.sentCount || 1;
+      showToast(`Performance report successfully sent to ${empName}! (Sent count: ${count})`, 'success');
 
-      if (recipientId && String(recipientId).length > 5) {
-        try {
-          await notificationService.createNotification({
-            userId: recipientId,
-            title: 'Official Performance Appraisal Report Published',
-            message: `Your performance appraisal review has been completed and authorized by Sheetal Ma'am. Average Rating: ${currentAverageScore}/5.0 (${currentData.overallRating}). You can view and download your report from the Reports section.`,
-            type: 'PERFORMANCE_REPORT',
-            data: {
-              department,
-              reviewDate: currentData.reviewDate,
-              score: currentAverageScore,
-              rating: currentData.overallRating,
-            },
-          });
-        } catch (notifErr) {
-          console.warn('Notification send failed, simulated gracefully:', notifErr);
-        }
-      }
-
-      await new Promise((r) => setTimeout(r, 900));
-      showToast(`Performance report successfully dispatched to ${currentData.employeeName}!`, 'success');
+      setEmpReportStatus(res?.data || res);
+      fetchSentReports();
     } catch (err) {
       console.error('Error sending report:', err);
-      showToast('Failed to dispatch report. Please try again.', 'error');
+      showToast(err.message || 'Failed to dispatch report. Please try again.', 'error');
     } finally {
       setIsSending(false);
     }
   };
 
-  // For standard employees or when viewing personal review, personalize the form with their own identity
-  useEffect(() => {
-    if ((!canReviewOthers || viewMode === 'my') && user) {
-      const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.fullName || user.name;
-      const empCode = user.employeeCode || user.employeeId;
-      const dept = user.departmentName || user.department?.name || user.department;
-      const desig = user.designation || user.designationName || user.designation?.name;
-
-      if (fullName) {
-        setCurrentData((p) => ({
-          ...p,
-          employeeName: fullName,
-          ...(empCode ? { employeeId: empCode } : {}),
-          ...(dept ? { department: dept } : {}),
-          ...(desig ? { designation: desig } : {}),
-        }));
+  // Re-send directly from tracker history
+  const handleSendAgainFromHistory = async (row) => {
+    try {
+      showToast(`Re-sending performance report to ${row.employeeName}...`, 'loading', 0);
+      const res = await performanceReportService.sendReport({
+        employeeId: row.employeeId,
+        department: row.department,
+        reportData: row.reportData,
+        averageScore: row.averageScore,
+        overallRating: row.overallRating,
+      });
+      const count = res?.data?.sentCount || res?.sentCount || (row.sentCount + 1);
+      showToast(`Performance report successfully re-sent to ${row.employeeName}! (Sent count: ${count})`, 'success');
+      fetchSentReports();
+      if (selectedEmployeeId === row.employeeId) {
+        setEmpReportStatus(res?.data || res);
       }
+    } catch (err) {
+      showToast(err.message || 'Failed to re-send report.', 'error');
     }
-  }, [user, canReviewOthers, viewMode, department]);
+  };
+
+  // Handle report deletion by recipient user
+  const handleDeleteMyReport = async () => {
+    if (!reportToDelete) return;
+    try {
+      setIsDeletingReport(true);
+      await performanceReportService.deleteMyReport(reportToDelete.id);
+      showToast('Performance report removed from your view. Your manager or HR can send it to you again at any time.', 'success');
+      setReportToDelete(null);
+      await loadMyReports();
+    } catch (err) {
+      showToast(err.message || 'Failed to remove report.', 'error');
+    } finally {
+      setIsDeletingReport(false);
+    }
+  };
 
   // Average score calculation
   const calculateAverage = (competencies) => {
@@ -518,7 +637,14 @@ export const ReportsPage = () => {
 
   const currentAverageScore = calculateAverage(currentData.competencies);
 
-
+  // Computed active dossier data (for recipient employee vs reviewer)
+  const isViewingMyReport = viewMode === 'my';
+  const activeMyReport = isViewingMyReport && myReports.length > 0 ? myReports[activeMyReportIdx] : null;
+  const effectiveDepartment = isViewingMyReport && activeMyReport ? (activeMyReport.department || department) : department;
+  const effectiveData = isViewingMyReport && activeMyReport ? (activeMyReport.reportData || currentData) : currentData;
+  const effectiveAverageScore = isViewingMyReport && activeMyReport
+    ? (activeMyReport.averageScore ? Number(activeMyReport.averageScore).toFixed(2) : calculateAverage(effectiveData?.competencies))
+    : currentAverageScore;
 
   // Add / remove rows for goals
   const addGoalRow = () => {
@@ -579,44 +705,45 @@ export const ReportsPage = () => {
           action6: false,
         },
       }));
+      setEmpReportStatus(null);
       showToast('Form reset to blank.', 'info');
     }
   };
 
   // Export to Excel
   const handleDownloadExcel = () => {
-    const deptTitle = department === 'operations' ? 'Operations' : department === 'it' ? 'IT' : 'Talent Acquisition';
-    const empName = currentData.employeeName || 'Employee';
+    const deptTitle = effectiveDepartment === 'operations' ? 'Operations' : effectiveDepartment === 'it' ? 'IT' : 'Talent Acquisition';
+    const empName = effectiveData.employeeName || 'Employee';
 
     showToast(`Generating ${deptTitle} Excel review...`, 'loading', 1500);
 
     const summaryData = [
       { Property: 'Department', Value: deptTitle },
       { Property: 'Employee Name', Value: empName },
-      { Property: 'Employee ID', Value: currentData.employeeId },
-      { Property: 'Designation', Value: currentData.designation },
-      { Property: 'Reporting Manager', Value: currentData.manager },
-      { Property: 'Review Date', Value: currentData.reviewDate },
-      { Property: 'Review Period', Value: currentData.reviewPeriod },
-      { Property: 'L&D Executive', Value: currentData.ldExecutive },
-      { Property: 'Average Score', Value: `${currentAverageScore} / 5.0` },
-      { Property: 'Overall Determination', Value: currentData.overallRating },
-      { Property: 'Major Accomplishments', Value: currentData.achievements },
-      { Property: 'Areas for Development', Value: currentData.improvements },
-      { Property: 'Employee Comments', Value: currentData.employeeComments },
-      { Property: 'Manager Comments', Value: currentData.managerComments },
-      { Property: 'Authorized Signatory', Value: currentData.ceoName },
-      { Property: 'Authorization Date', Value: currentData.ceoDate },
+      { Property: 'Employee ID', Value: effectiveData.employeeId },
+      { Property: 'Designation', Value: effectiveData.designation },
+      { Property: 'Reporting Manager', Value: effectiveData.manager },
+      { Property: 'Review Date', Value: effectiveData.reviewDate },
+      { Property: 'Review Period', Value: effectiveData.reviewPeriod },
+      { Property: 'L&D Executive', Value: effectiveData.ldExecutive },
+      { Property: 'Average Score', Value: `${effectiveAverageScore} / 5.0` },
+      { Property: 'Overall Determination', Value: effectiveData.overallRating },
+      { Property: 'Major Accomplishments', Value: effectiveData.achievements },
+      { Property: 'Areas for Development', Value: effectiveData.improvements },
+      { Property: 'Employee Comments', Value: effectiveData.employeeComments },
+      { Property: 'Manager Comments', Value: effectiveData.managerComments },
+      { Property: 'Authorized Signatory', Value: effectiveData.ceoName },
+      { Property: 'Authorization Date', Value: effectiveData.ceoDate },
     ];
 
-    const competencyData = currentData.competencies.map((c, i) => ({
+    const competencyData = (effectiveData.competencies || []).map((c, i) => ({
       '#': i + 1,
       'Performance Competency Area': c.area,
       'Rating (1-5)': c.score,
       'Comments / Observations': c.comment,
     }));
 
-    const goalsData = currentData.goals.map((g, i) => ({
+    const goalsData = (effectiveData.goals || []).map((g, i) => ({
       '#': i + 1,
       'Goal Objective': g.goal,
       'Target / Key Result': g.target,
@@ -624,7 +751,7 @@ export const ReportsPage = () => {
       Status: g.status,
     }));
 
-    const trainingData = currentData.training.map((t, i) => ({
+    const trainingData = (effectiveData.training || []).map((t, i) => ({
       '#': i + 1,
       'Skill Area': t.skill,
       'Recommended Training': t.training,
@@ -647,9 +774,9 @@ export const ReportsPage = () => {
     if (!printDossierRef.current) return;
     setIsGeneratingPdf(true);
 
-    const deptTitle = department === 'operations' ? 'Operations' : department === 'it' ? 'IT' : 'Talent_Acquisition';
-    const empName = (currentData.employeeName || 'Employee').trim().replace(/[^a-zA-Z0-9_-]/g, '_');
-    const fileName = `${empName}_${deptTitle}_Performance_Appraisal_${currentData.reviewDate || '2026'}.pdf`;
+    const deptTitle = effectiveDepartment === 'operations' ? 'Operations' : effectiveDepartment === 'it' ? 'IT' : 'Talent_Acquisition';
+    const empName = (effectiveData.employeeName || 'Employee').trim().replace(/[^a-zA-Z0-9_-]/g, '_');
+    const fileName = `${empName}_${deptTitle}_Performance_Appraisal_${effectiveData.reviewDate || '2026'}.pdf`;
 
     showToast(`Rendering official ${deptTitle.replace('_', ' ')} executive review PDF...`, 'loading', 0);
 
@@ -712,9 +839,124 @@ export const ReportsPage = () => {
     }
   };
 
+  // Sent Reports Tracker Columns for Reviewers
+  const sentTrackerColumns = [
+    {
+      header: 'Recipient Employee',
+      render: (row) => (
+        <div>
+          <span className="font-semibold text-xs text-slate-900 dark:text-white block">
+            {row.employeeName}
+          </span>
+          <span className="text-[11px] text-slate-400 font-mono">
+            {row.employeeCode || row.employeeId} {row.empEmail ? `• ${row.empEmail}` : ''}
+          </span>
+        </div>
+      ),
+    },
+    {
+      header: 'Department',
+      render: (row) => (
+        <span className="text-xs uppercase font-mono px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold">
+          {row.department}
+        </span>
+      ),
+    },
+    {
+      header: 'Review Period & Cycle',
+      render: (row) => (
+        <div>
+          <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 block">
+            {row.reviewPeriod || 'Current Period'}
+          </span>
+          <span className="text-[11px] text-slate-400">
+            {row.reviewCycle || 'Quarterly Review'}
+          </span>
+        </div>
+      ),
+    },
+    {
+      header: 'Score / Rating',
+      render: (row) => (
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs font-bold text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-950/40 px-2 py-0.5 rounded border border-brand-200 dark:border-brand-800">
+            {row.averageScore ? Number(row.averageScore).toFixed(1) : '--'}/5.0
+          </span>
+          <span className="text-[11px] text-slate-500 font-medium truncate max-w-[130px]">
+            {row.overallRating}
+          </span>
+        </div>
+      ),
+    },
+    {
+      header: 'Delivery Status',
+      render: (row) => {
+        if (row.status === 'DELETED_BY_USER') {
+          return (
+            <div>
+              <Badge variant="warning" size="sm">
+                Deleted by Recipient
+              </Badge>
+              <span className="text-[10px] text-amber-600 block mt-0.5 font-medium">
+                Option to Send Again
+              </span>
+            </div>
+          );
+        }
+        return (
+          <div>
+            <Badge variant="success" size="sm">
+              Delivered
+            </Badge>
+            <span className="text-[10px] text-slate-400 block mt-0.5">
+              Sent {row.sentCount || 1} time{row.sentCount > 1 ? 's' : ''}
+            </span>
+          </div>
+        );
+      },
+    },
+    {
+      header: 'Last Sent',
+      render: (row) => (
+        <span className="text-xs text-slate-500">
+          {row.lastSentAt ? new Date(row.lastSentAt).toLocaleDateString() : 'N/A'}
+        </span>
+      ),
+    },
+    {
+      header: 'Action',
+      className: 'text-right',
+      render: (row) => (
+        <div className="flex items-center justify-end gap-2">
+          <Button
+            size="sm"
+            variant={row.status === 'DELETED_BY_USER' ? 'primary' : 'outline'}
+            icon={RotateCw}
+            onClick={() => handleSendAgainFromHistory(row)}
+          >
+            Send Again
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            icon={Eye}
+            onClick={() => {
+              handleSelectEmployee(row.employeeId);
+              setDepartment(row.department || 'operations');
+              setReviewerSubTab('form');
+            }}
+          >
+            Review in Form
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
   // Department theme styles
   const getTheme = () => {
-    if (department === 'operations') {
+    const activeD = effectiveDepartment || department;
+    if (activeD === 'operations') {
       return {
         badgeBg: 'bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-400 border-teal-200 dark:border-teal-800',
         primaryBg: 'bg-brand-600 hover:bg-brand-700 text-white shadow-brand/20',
@@ -730,7 +972,7 @@ export const ReportsPage = () => {
         subtitle: 'Learning & Development | Operations Team Performance Calibration & Progression Review',
         Icon: Building2,
       };
-    } else if (department === 'it') {
+    } else if (activeD === 'it') {
       return {
         badgeBg: 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800',
         primaryBg: 'bg-brand-600 hover:bg-brand-700 text-white shadow-brand/20',
@@ -808,11 +1050,10 @@ export const ReportsPage = () => {
           <button
             type="button"
             onClick={() => setViewMode('reviews')}
-            className={`pb-3 transition-colors flex items-center gap-2 cursor-pointer ${
-              viewMode === 'reviews'
+            className={`pb-3 transition-colors flex items-center gap-2 cursor-pointer ${viewMode === 'reviews'
                 ? 'text-brand-600 border-b-2 border-brand-600'
                 : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
-            }`}
+              }`}
           >
             <FileText className="w-4 h-4" />
             {isManager ? 'Evaluate Direct Reports' : 'Department Performance Reports'}
@@ -821,11 +1062,10 @@ export const ReportsPage = () => {
           <button
             type="button"
             onClick={() => setViewMode('my')}
-            className={`pb-3 transition-colors flex items-center gap-2 cursor-pointer ${
-              viewMode === 'my'
+            className={`pb-3 transition-colors flex items-center gap-2 cursor-pointer ${viewMode === 'my'
                 ? 'text-brand-600 border-b-2 border-brand-600'
                 : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
-            }`}
+              }`}
           >
             <Award className="w-4 h-4" />
             My Performance
@@ -833,854 +1073,1165 @@ export const ReportsPage = () => {
         </div>
       )}
 
-      {/* Modern Department Switcher Tabs (Visible when reviewing others) */}
+      {/* Reviewer Sub-Tabs: Form vs Sent Reports Tracker (Visible when reviewing others) */}
       {canReviewOthers && viewMode === 'reviews' && (
-        <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-3 overflow-x-auto">
-          <button
-            type="button"
-            onClick={() => setDepartment('operations')}
-            className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              department === 'operations'
-                ? 'bg-brand-500 text-white shadow-brand shadow-sm'
-                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
-            }`}
-          >
-            <Building2 className="w-4 h-4" />
-            <span>Operations Team</span>
-          </button>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setReviewerSubTab('form')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${reviewerSubTab === 'form'
+                  ? 'bg-brand-600 text-white shadow-xs'
+                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-50'
+                }`}
+            >
+              Appraisal Evaluation Form
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setReviewerSubTab('tracker');
+                fetchSentReports();
+              }}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${reviewerSubTab === 'tracker'
+                  ? 'bg-brand-600 text-white shadow-xs'
+                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-50'
+                }`}
+            >
+              <History className="w-3.5 h-3.5" />
+              <span>Sent Reports Tracker</span>
+              {sentReports.length > 0 && (
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${reviewerSubTab === 'tracker' ? 'bg-white/20 text-white' : 'bg-brand-100 text-brand-700'
+                  }`}>
+                  {sentReports.length}
+                </span>
+              )}
+            </button>
+          </div>
 
-          <button
-            type="button"
-            onClick={() => setDepartment('ta')}
-            className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              department === 'ta'
-                ? 'bg-brand-500 text-white shadow-brand shadow-sm'
-                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
-            }`}
-          >
-            <Target className="w-4 h-4" />
-            <span>TA Team</span>
-          </button>
+          {reviewerSubTab === 'form' && (
+            <div className="flex items-center gap-2 overflow-x-auto">
+              <button
+                type="button"
+                onClick={() => setDepartment('operations')}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${department === 'operations'
+                    ? 'bg-brand-500 text-white shadow-brand shadow-xs'
+                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 border border-slate-200 dark:border-slate-700'
+                  }`}
+              >
+                <Building2 className="w-3.5 h-3.5" />
+                <span>Operations Team</span>
+              </button>
 
-          <button
-            type="button"
-            onClick={() => setDepartment('it')}
-            className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              department === 'it'
-                ? 'bg-brand-500 text-white shadow-brand shadow-sm'
-                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
-            }`}
-          >
-            <Laptop className="w-4 h-4" />
-            <span>IT Team</span>
-          </button>
+              <button
+                type="button"
+                onClick={() => setDepartment('ta')}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${department === 'ta'
+                    ? 'bg-brand-500 text-white shadow-brand shadow-xs'
+                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 border border-slate-200 dark:border-slate-700'
+                  }`}
+              >
+                <Target className="w-3.5 h-3.5" />
+                <span>TA Team</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDepartment('it')}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${department === 'it'
+                    ? 'bg-brand-500 text-white shadow-brand shadow-xs'
+                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 border border-slate-200 dark:border-slate-700'
+                  }`}
+              >
+                <Laptop className="w-3.5 h-3.5" />
+                <span>IT Team</span>
+              </button>
+            </div>
+          )}
         </div>
       )}
 
-      {/* MAIN PERFORMANCE REVIEW REPORT */}
-      <section
-        ref={documentRef}
-        className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-sm overflow-hidden print:border-none print:shadow-none"
-      >
-        {/* Document Header Banner */}
-        <div className="bg-gradient-to-r from-slate-900 via-brand-950 to-slate-900 text-white p-6 sm:p-8 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-96 h-96 bg-brand-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
-          <div className="relative z-10 max-w-3xl">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-white/10 backdrop-blur-md border border-white/20 text-slate-100 mb-3 shadow-xs">
-              <ThemeIcon className="w-3.5 h-3.5 text-brand-300" />
-              {theme.tagText}
-            </span>
-            <h2 className="font-display text-2xl sm:text-3xl font-black tracking-tight text-white mb-2 leading-tight">
-              {theme.title}
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed font-normal">{theme.subtitle}</p>
+      {/* Tracker View vs Evaluation Form / My Performance View */}
+      {canReviewOthers && viewMode === 'reviews' && reviewerSubTab === 'tracker' ? (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-6 shadow-sm space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <History className="w-5 h-5 text-brand-500" />
+                <span>Sent Performance Reports Tracker</span>
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Audit delivery status of reports sent to specific team members. Monitor sent counts, see if a user dismissed a report, and re-send anytime.
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              icon={RefreshCw}
+              loading={loadingSentReports}
+              onClick={fetchSentReports}
+              className="text-xs font-semibold"
+            >
+              Refresh Tracker
+            </Button>
           </div>
-          {/* Color Accent Bar */}
-          <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-brand-500 via-indigo-400 to-brand-600" />
+
+          <DataTable
+            columns={sentTrackerColumns}
+            data={sentReports}
+            isLoading={loadingSentReports}
+            emptyMessage="No performance reports have been sent yet. Switch back to the Appraisal Evaluation Form to select an employee and dispatch their report."
+          />
         </div>
-
-          {/* Form Body */}
-          <div className="p-6 sm:p-10 space-y-10">
-            {/* 01: Employee Information */}
-            <section className="space-y-5">
-              <div className="flex items-center gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
-                <span className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black ${theme.numBg}`}>
-                  01
-                </span>
-                <div>
-                  <h3 className="font-display text-base font-bold text-slate-900 dark:text-white">
-                    Employee &amp; Review Information
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Basic details of the team member under review</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
-                    Employee Name <span className="text-rose-500">*</span>
-                  </label>
-                  <select
-                    value={currentData.employeeName}
-                    onChange={(e) => {
-                      const selectedName = e.target.value;
-                      const matched = departmentEmployees.find(
-                        (emp) => `${emp.firstName || ''} ${emp.lastName || ''}`.trim() === selectedName
-                      );
-                      if (matched) {
-                        handleSelectEmployee(matched.id || matched._id);
-                      } else {
-                        setCurrentData((p) => ({ ...p, employeeName: selectedName }));
-                      }
-                    }}
-                    className={`w-full px-3.5 py-2.5 text-sm font-medium bg-slate-50/70 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing}`}
-                  >
-                    <option value="">
-                      {loadingEmployees
-                        ? 'Loading team members...'
-                        : isManager && departmentEmployees.length === 0
-                        ? 'No direct reporting employees assigned'
-                        : departmentEmployees.length === 0
-                        ? `No employees registered under ${department === 'operations' ? 'Operations Team' : department === 'ta' ? 'TA Team' : 'IT Team'}`
-                        : `Select employee from ${department === 'operations' ? 'Operations Team' : department === 'ta' ? 'TA Team' : 'IT Team'}...`}
-                    </option>
-                    {departmentEmployees.map((emp) => {
-                      const name = `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || emp.name || emp.email;
-                      const key = emp.id || emp._id || name;
-                      const desig = emp.designation?.title || emp.designation?.name || emp.designation || 'Member';
-                      return (
-                        <option key={key} value={name}>
-                          {name} ({emp.employeeCode ? `${emp.employeeCode} • ` : ''}{desig})
-                        </option>
-                      );
-                    })}
-                    {currentData.employeeName &&
-                      !isManager &&
-                      !departmentEmployees.some(
-                        (emp) =>
-                          `${emp.firstName || ''} ${emp.lastName || ''}`.trim() === currentData.employeeName
-                      ) && (
-                        <option value={currentData.employeeName}>
-                          {currentData.employeeName}
-                        </option>
-                      )}
-                  </select>
+      ) : isViewingMyReport && loadingMyReports ? (
+        <div className="py-24 flex flex-col items-center justify-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+          <LoadingSpinner size="lg" message="Loading your official performance review..." />
+        </div>
+      ) : isViewingMyReport && myReports.length === 0 ? (
+        <div className="py-20 px-6 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-sm max-w-2xl mx-auto space-y-4">
+          <div className="w-16 h-16 rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto border border-amber-200 dark:border-amber-800 shadow-sm">
+            <Award className="w-8 h-8" />
+          </div>
+          <div className="space-y-1.5">
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+              No Performance Report Available Yet
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 leading-relaxed max-w-md mx-auto">
+              Your performance review report has not been published or sent by your manager or HR yet.
+              Performance evaluations are delivered directly and exclusively to the selected individual upon authorization.
+            </p>
+          </div>
+          <div className="pt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              icon={RefreshCw}
+              onClick={loadMyReports}
+            >
+              Check Again
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {/* Top Banner when recipient user is viewing their delivered report */}
+          {isViewingMyReport && activeMyReport && (
+            <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 dark:from-emerald-950/40 dark:via-teal-950/30 dark:to-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
+              <div className="flex items-start gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                  <CheckCircle2 className="w-5 h-5" />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
-                    Employee ID
-                  </label>
-                  <input
-                    type="text"
-                    value={currentData.employeeId}
-                    onChange={(e) => setCurrentData((p) => ({ ...p, employeeId: e.target.value }))}
-                    className={`w-full px-3.5 py-2.5 text-xs font-mono font-medium bg-slate-50/70 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing}`}
-                    placeholder="e.g. OPS-2026-114"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
-                    Department
-                  </label>
-                  <input
-                    type="text"
-                    value={currentData.department}
-                    onChange={(e) => setCurrentData((p) => ({ ...p, department: e.target.value }))}
-                    className={`w-full px-3.5 py-2.5 text-xs font-medium bg-slate-50/70 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing}`}
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
-                    Designation
-                  </label>
-                  <input
-                    type="text"
-                    value={currentData.designation}
-                    onChange={(e) => setCurrentData((p) => ({ ...p, designation: e.target.value }))}
-                    className={`w-full px-3.5 py-2.5 text-xs font-medium bg-slate-50/70 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing}`}
-                    placeholder="e.g. Senior Operations Executive"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
-                    Reporting Manager <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={currentData.manager}
-                    onChange={(e) => setCurrentData((p) => ({ ...p, manager: e.target.value }))}
-                    className={`w-full px-3.5 py-2.5 text-xs font-medium bg-slate-50/70 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing}`}
-                    placeholder="Manager name"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
-                    Review Date
-                  </label>
-                  <input
-                    type="date"
-                    value={currentData.reviewDate}
-                    onChange={(e) => setCurrentData((p) => ({ ...p, reviewDate: e.target.value }))}
-                    className={`w-full px-3.5 py-2.5 text-xs font-medium bg-slate-50/70 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing}`}
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
-                    Review Period
-                  </label>
-                  <input
-                    type="text"
-                    value={currentData.reviewPeriod}
-                    onChange={(e) => setCurrentData((p) => ({ ...p, reviewPeriod: e.target.value }))}
-                    className={`w-full px-3.5 py-2.5 text-xs font-medium bg-slate-50/70 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing}`}
-                    placeholder="e.g. 01/01/2026 – 31/08/2026"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
-                    L&amp;D / HR Executive
-                  </label>
-                  <input
-                    type="text"
-                    value={currentData.ldExecutive}
-                    onChange={(e) => setCurrentData((p) => ({ ...p, ldExecutive: e.target.value }))}
-                    className={`w-full px-3.5 py-2.5 text-xs font-medium bg-slate-50/70 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing}`}
-                    placeholder="L&D Lead name"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
-                    Review Cycle
-                  </label>
-                  <select
-                    value={currentData.reviewCycle}
-                    onChange={(e) => setCurrentData((p) => ({ ...p, reviewCycle: e.target.value }))}
-                    className={`w-full px-3.5 py-2.5 text-xs font-medium bg-slate-50/70 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing}`}
-                  >
-                    <option value="Bi-Weekly Review">Bi-Weekly Review</option>
-                    <option value="Monthly Review">Monthly Review</option>
-                    <option value="Quarterly Review">Quarterly Review</option>
-                    <option value="Mid-Year Review">Mid-Year Review</option>
-                    <option value="Probation / Internship Completion">Probation / Internship Completion</option>
-                    <option value="Annual Appraisal">Annual Appraisal</option>
-                  </select>
-                </div>
-              </div>
-            </section>
-
-            {/* 02: Rating Scale Reference */}
-            <section className="space-y-4">
-              <div className="flex items-center gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
-                <span className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black ${theme.numBg}`}>
-                  02
-                </span>
-                <div>
-                  <h3 className="font-display text-base font-bold text-slate-900 dark:text-white">
-                    Rating Scale Reference
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Universal evaluation rubric standard applied across competencies
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <h4 className="text-sm font-bold text-emerald-950 dark:text-emerald-200">
+                      Official Performance Appraisal Delivered
+                    </h4>
+                    <Badge variant="success">Delivered</Badge>
+                    {activeMyReport.sentCount > 1 && (
+                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-200/60 dark:bg-emerald-800/60 text-emerald-800 dark:text-emerald-200">
+                        Updated ({activeMyReport.sentCount}x)
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-emerald-800/80 dark:text-emerald-300/80">
+                    Cycle: <span className="font-semibold">{activeMyReport.reviewCycle || 'Performance Appraisal'}</span>
+                    {activeMyReport.lastSentAt && (
+                      <> • Delivered on {new Date(activeMyReport.lastSentAt).toLocaleDateString()} at {new Date(activeMyReport.lastSentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</>
+                    )}
                   </p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
-                {[
-                  { val: 5, title: 'Exceptional', desc: 'Consistently surpasses highest standards', color: 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200/80 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300', numColor: 'bg-emerald-600 text-white' },
-                  { val: 4, title: 'Exceeds Expectations', desc: 'Frequently goes beyond role demands', color: 'bg-sky-50 dark:bg-sky-950/40 border-sky-200/80 dark:border-sky-800 text-sky-800 dark:text-sky-300', numColor: 'bg-sky-600 text-white' },
-                  { val: 3, title: 'Meets Expectations', desc: 'Consistently achieves core deliverables', color: 'bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200/80 dark:border-indigo-800 text-indigo-800 dark:text-indigo-300', numColor: 'bg-indigo-600 text-white' },
-                  { val: 2, title: 'Needs Improvement', desc: 'Fails to meet expected benchmarks', color: 'bg-amber-50 dark:bg-amber-950/40 border-amber-200/80 dark:border-amber-800 text-amber-800 dark:text-amber-300', numColor: 'bg-amber-600 text-white' },
-                  { val: 1, title: 'Unsatisfactory', desc: 'Critical performance deficiency', color: 'bg-rose-50 dark:bg-rose-950/40 border-rose-200/80 dark:border-rose-800 text-rose-800 dark:text-rose-300', numColor: 'bg-rose-600 text-white' },
-                ].map((item) => (
-                  <div
-                    key={item.val}
-                    className={`border rounded-2xl p-3.5 text-center hover:-translate-y-0.5 transition shadow-xs ${item.color}`}
-                  >
-                    <div
-                      className={`w-7 h-7 rounded-xl font-extrabold text-xs flex items-center justify-center mx-auto mb-2 shadow-xs ${item.numColor}`}
+              <div className="flex items-center gap-2 self-end sm:self-center">
+                {myReports.length > 1 && (
+                  <div className="relative">
+                    <select
+                      value={activeMyReportIdx}
+                      onChange={(e) => setActiveMyReportIdx(Number(e.target.value))}
+                      className="appearance-none text-xs font-semibold pl-3 pr-8 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-700 text-slate-800 dark:text-white shadow-2xs cursor-pointer focus:outline-none"
                     >
-                      {item.val}
+                      {myReports.map((r, i) => (
+                        <option key={r.id || i} value={i}>
+                          {r.reviewPeriod || `Report #${i + 1}`} ({new Date(r.lastSentAt || r.createdAt).toLocaleDateString()})
+                        </option>
+                      ))}
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2.5 text-emerald-600 dark:text-emerald-400">
+                      <ChevronDown className="w-3.5 h-3.5" />
                     </div>
-                    <div className="text-xs font-bold leading-tight mb-1">{item.title}</div>
-                    <div className="text-[11px] opacity-80 leading-snug">{item.desc}</div>
                   </div>
-                ))}
-              </div>
-            </section>
+                )}
 
-            {/* 03: Competency Evaluation Table */}
-            <section className="space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 gap-2">
-                <div className="flex items-center gap-3">
-                  <span className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black ${theme.numBg}`}>
-                    03
-                  </span>
-                  <div>
-                    <h3 className="font-display text-base font-bold text-slate-900 dark:text-white">
-                      {department === 'operations'
-                        ? 'Operations Performance Evaluation'
-                        : department === 'it'
-                        ? 'Technical Competency Evaluation'
-                        : 'Functional Competency Evaluation'}
-                    </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Rate individual competencies on scale of 1.0 to 5.0</p>
-                  </div>
-                </div>
-
-                <div className={`px-4 py-1.5 rounded-full border text-xs font-bold inline-flex items-center gap-2 self-start sm:self-auto shadow-xs ${theme.scoreBadge}`}>
-                  <span>Average Score:</span>
-                  <span className="text-sm font-black tracking-tight">{currentAverageScore} / 5.0</span>
-                </div>
-              </div>
-
-              <div className="border border-slate-200/90 dark:border-slate-800 rounded-2xl overflow-x-auto shadow-xs bg-white dark:bg-slate-900">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                      <th className="py-3 px-4 w-1/3">Performance Area / Metric</th>
-                      <th className="py-3 px-4 w-36">Rating (1-5)</th>
-                      <th className="py-3 px-4">Evaluator Comments / Observations</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
-                    {currentData.competencies.map((comp, idx) => (
-                      <tr key={comp.area} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
-                        <td className="py-3 px-4 font-semibold text-slate-800 dark:text-slate-200">{comp.area}</td>
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-1.5">
-                            <input
-                              type="number"
-                              min="1"
-                              max="5"
-                              step="0.5"
-                              value={comp.score}
-                              onChange={(e) => {
-                                const val = parseFloat(e.target.value) || 1;
-                                setCurrentData((p) => ({
-                                  ...p,
-                                  competencies: p.competencies.map((c, i) => (i === idx ? { ...c, score: val } : c)),
-                                }));
-                              }}
-                              className={`w-16 text-center font-bold px-2 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing}`}
-                            />
-                            <span className="text-slate-400 font-semibold text-[11px]">/ 5</span>
-                          </div>
-                        </td>
-                        <td className="py-3 px-4">
-                          <input
-                            type="text"
-                            value={comp.comment}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setCurrentData((p) => ({
-                                ...p,
-                                competencies: p.competencies.map((c, i) => (i === idx ? { ...c, comment: val } : c)),
-                              }));
-                            }}
-                            placeholder="Observations or justification..."
-                            className={`w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing}`}
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-
-            {/* 04: Key Achievements */}
-            <section className="space-y-4">
-              <div className="flex items-center gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
-                <span className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black ${theme.numBg}`}>
-                  04
-                </span>
-                <div>
-                  <h3 className="font-display text-base font-bold text-slate-900 dark:text-white">
-                    Key Accomplishments &amp; Milestones
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Major operational deliverables completed in this review cycle</p>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
-                  Major Accomplishments <span className="text-rose-500">*</span>
-                </label>
-                <textarea
-                  rows={3}
-                  value={currentData.achievements}
-                  onChange={(e) => setCurrentData((p) => ({ ...p, achievements: e.target.value }))}
-                  placeholder="Detail key achievements and milestones..."
-                  className={`w-full px-3.5 py-2.5 text-xs font-medium bg-slate-50/70 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing} leading-relaxed`}
-                />
-              </div>
-            </section>
-
-            {/* 05: Areas for Improvement */}
-            <section className="space-y-4">
-              <div className="flex items-center gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
-                <span className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black ${theme.numBg}`}>
-                  05
-                </span>
-                <div>
-                  <h3 className="font-display text-base font-bold text-slate-900 dark:text-white">
-                    Areas for Development &amp; Improvement
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Constructive growth focal points for the upcoming period</p>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
-                  Focus Areas for Growth <span className="text-rose-500">*</span>
-                </label>
-                <textarea
-                  rows={3}
-                  value={currentData.improvements}
-                  onChange={(e) => setCurrentData((p) => ({ ...p, improvements: e.target.value }))}
-                  placeholder="Specify developmental targets and coaching areas..."
-                  className={`w-full px-3.5 py-2.5 text-xs font-medium bg-slate-50/70 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing} leading-relaxed`}
-                />
-              </div>
-            </section>
-
-            {/* 06: Goals for Next Period */}
-            <section className="space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
-                <div className="flex items-center gap-3">
-                  <span className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black ${theme.numBg}`}>
-                    06
-                  </span>
-                  <div>
-                    <h3 className="font-display text-base font-bold text-slate-900 dark:text-white">
-                      Goals &amp; Performance Objectives
-                    </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Key performance deliverables agreed upon for upcoming review cycle</p>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={addGoalRow}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition cursor-pointer shadow-2xs"
+                <Button
+                  variant="outline"
+                  size="sm"
+                  icon={Download}
+                  loading={isGeneratingPdf}
+                  onClick={handleDownloadPdf}
+                  className="text-xs font-semibold bg-white dark:bg-slate-800"
                 >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Add Goal</span>
-                </button>
-              </div>
+                  Download PDF
+                </Button>
 
-              <div className="border border-slate-200/90 dark:border-slate-800 rounded-2xl overflow-x-auto shadow-xs bg-white dark:bg-slate-900">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                      <th className="py-2.5 px-3">Goal Objective</th>
-                      <th className="py-2.5 px-3">Target / Key Result</th>
-                      <th className="py-2.5 px-3 w-36">Deadline</th>
-                      <th className="py-2.5 px-3 w-32">Status</th>
-                      <th className="py-2.5 px-3 w-10 text-center"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {currentData.goals.map((g, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
-                        <td className="py-2 px-3">
-                          <input
-                            type="text"
-                            value={g.goal}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setCurrentData((p) => ({
-                                ...p,
-                                goals: p.goals.map((item, i) => (i === idx ? { ...item, goal: val } : item)),
-                              }));
-                            }}
-                            placeholder="Goal title..."
-                            className={`w-full px-2.5 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing}`}
-                          />
-                        </td>
-                        <td className="py-2 px-3">
-                          <input
-                            type="text"
-                            value={g.target}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setCurrentData((p) => ({
-                                ...p,
-                                goals: p.goals.map((item, i) => (i === idx ? { ...item, target: val } : item)),
-                              }));
-                            }}
-                            placeholder="Target deliverable / metric..."
-                            className={`w-full px-2.5 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing}`}
-                          />
-                        </td>
-                        <td className="py-2 px-3">
-                          <input
-                            type="date"
-                            value={g.deadline}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setCurrentData((p) => ({
-                                ...p,
-                                goals: p.goals.map((item, i) => (i === idx ? { ...item, deadline: val } : item)),
-                              }));
-                            }}
-                            className={`w-full px-2 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing}`}
-                          />
-                        </td>
-                        <td className="py-2 px-3">
-                          <input
-                            type="text"
-                            value={g.status}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setCurrentData((p) => ({
-                                ...p,
-                                goals: p.goals.map((item, i) => (i === idx ? { ...item, status: val } : item)),
-                              }));
-                            }}
-                            placeholder="Status..."
-                            className={`w-full px-2.5 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing}`}
-                          />
-                        </td>
-                        <td className="py-2 px-3 text-center">
-                          {currentData.goals.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => removeGoalRow(idx)}
-                              className="text-slate-400 hover:text-rose-500 transition cursor-pointer p-1"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-
-            {/* 07: Training Needs */}
-            <section className="space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
-                <div className="flex items-center gap-3">
-                  <span className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black ${theme.numBg}`}>
-                    07
-                  </span>
-                  <div>
-                    <h3 className="font-display text-base font-bold text-slate-900 dark:text-white">
-                      Training &amp; Skill Development Needs
-                    </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Identified certifications, workshops, or operational training</p>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={addTrainingRow}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition cursor-pointer shadow-2xs"
+                <Button
+                  variant="outline"
+                  size="sm"
+                  icon={Trash2}
+                  className="text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 border-rose-200 dark:border-rose-800 bg-white dark:bg-slate-800"
+                  onClick={() => setReportToDelete(activeMyReport)}
                 >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Add Training</span>
-                </button>
+                  Delete Report
+                </Button>
               </div>
+            </div>
+          )}
 
-              <div className="border border-slate-200/90 dark:border-slate-800 rounded-2xl overflow-x-auto shadow-xs bg-white dark:bg-slate-900">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                      <th className="py-2.5 px-3">Skill / Operational Area</th>
-                      <th className="py-2.5 px-3">Training Required / Workshop</th>
-                      <th className="py-2.5 px-3 w-36">Priority</th>
-                      <th className="py-2.5 px-3 w-10 text-center"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {currentData.training.map((t, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
-                        <td className="py-2 px-3">
-                          <input
-                            type="text"
-                            value={t.skill}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setCurrentData((p) => ({
-                                ...p,
-                                training: p.training.map((item, i) => (i === idx ? { ...item, skill: val } : item)),
-                              }));
-                            }}
-                            placeholder="Skill domain..."
-                            className={`w-full px-2.5 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing}`}
-                          />
-                        </td>
-                        <td className="py-2 px-3">
-                          <input
-                            type="text"
-                            value={t.training}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setCurrentData((p) => ({
-                                ...p,
-                                training: p.training.map((item, i) => (i === idx ? { ...item, training: val } : item)),
-                              }));
-                            }}
-                            placeholder="Course / program..."
-                            className={`w-full px-2.5 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing}`}
-                          />
-                        </td>
-                        <td className="py-2 px-3">
-                          <select
-                            value={t.priority}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setCurrentData((p) => ({
-                                ...p,
-                                training: p.training.map((item, i) => (i === idx ? { ...item, priority: val } : item)),
-                              }));
-                            }}
-                            className={`w-full px-2.5 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing}`}
-                          >
-                            <option value="High">High</option>
-                            <option value="Medium">Medium</option>
-                            <option value="Low">Low</option>
-                          </select>
-                        </td>
-                        <td className="py-2 px-3 text-center">
-                          {currentData.training.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => removeTrainingRow(idx)}
-                              className="text-slate-400 hover:text-rose-500 transition cursor-pointer p-1"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+          {/* MAIN PERFORMANCE REVIEW REPORT */}
+          <section
+            ref={documentRef}
+            className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-sm overflow-hidden print:border-none print:shadow-none"
+          >
+            {/* Document Header Banner */}
+            <div className="bg-gradient-to-r from-slate-900 via-brand-950 to-slate-900 text-white p-6 sm:p-8 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-96 h-96 bg-brand-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
+              <div className="relative z-10 max-w-3xl">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-white/10 backdrop-blur-md border border-white/20 text-slate-100 mb-3 shadow-xs">
+                  <ThemeIcon className="w-3.5 h-3.5 text-brand-300" />
+                  {theme.tagText}
+                </span>
+                <h2 className="font-display text-2xl sm:text-3xl font-black tracking-tight text-white mb-2 leading-tight">
+                  {theme.title}
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-300 leading-relaxed font-normal">{theme.subtitle}</p>
               </div>
-            </section>
-
-            {/* 08 & 09: Comments */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <section className="space-y-3">
-                <div className="flex items-center gap-3 pb-2 border-b border-slate-200 dark:border-slate-800">
-                  <span className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black ${theme.numBg}`}>
-                    08
-                  </span>
-                  <div>
-                    <h3 className="font-display text-sm font-bold text-slate-900 dark:text-white">Employee Comments</h3>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400">Feedback and self-reflection</p>
-                  </div>
-                </div>
-                <textarea
-                  rows={4}
-                  value={currentData.employeeComments}
-                  onChange={(e) => setCurrentData((p) => ({ ...p, employeeComments: e.target.value }))}
-                  placeholder="Employee feedback and reflection..."
-                  className={`w-full px-3.5 py-2.5 text-xs font-medium bg-slate-50/70 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing} leading-relaxed`}
-                />
-              </section>
-
-              <section className="space-y-3">
-                <div className="flex items-center gap-3 pb-2 border-b border-slate-200 dark:border-slate-800">
-                  <span className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black ${theme.numBg}`}>
-                    09
-                  </span>
-                  <div>
-                    <h3 className="font-display text-sm font-bold text-slate-900 dark:text-white">Manager Comments</h3>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400">Overall performance summary</p>
-                  </div>
-                </div>
-                <textarea
-                  rows={4}
-                  value={currentData.managerComments}
-                  onChange={(e) => setCurrentData((p) => ({ ...p, managerComments: e.target.value }))}
-                  placeholder="Manager review and observations..."
-                  className={`w-full px-3.5 py-2.5 text-xs font-medium bg-slate-50/70 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing} leading-relaxed`}
-                />
-              </section>
+              {/* Color Accent Bar */}
+              <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-brand-500 via-indigo-400 to-brand-600" />
             </div>
 
-            {/* 10: Overall Performance Rating */}
-            <section className="space-y-4">
-              <div className="flex items-center gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
-                <span className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black ${theme.numBg}`}>
-                  10
-                </span>
-                <div>
-                  <h3 className="font-display text-base font-bold text-slate-900 dark:text-white">
-                    Overall Performance Rating
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Consolidated review outcome score</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                {[
-                  { label: 'Exceptional', icon: '⭐', color: 'border-emerald-500 bg-emerald-50/60 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-300' },
-                  { label: 'Exceeds Expectations', icon: '✨', color: 'border-sky-500 bg-sky-50/60 dark:bg-sky-950/40 text-sky-900 dark:text-sky-300' },
-                  { label: 'Meets Expectations', icon: '👍', color: 'border-indigo-500 bg-indigo-50/60 dark:bg-indigo-950/40 text-indigo-900 dark:text-indigo-300' },
-                  { label: 'Needs Improvement', icon: '⚠️', color: 'border-amber-500 bg-amber-50/60 dark:bg-amber-950/40 text-amber-900 dark:text-amber-300' },
-                  { label: 'Unsatisfactory', icon: '❌', color: 'border-rose-500 bg-rose-50/60 dark:bg-rose-950/40 text-rose-900 dark:text-rose-300' },
-                ].map((rating) => {
-                  const isChecked = currentData.overallRating === rating.label;
-                  return (
-                    <label
-                      key={rating.label}
-                      onClick={() => setCurrentData((p) => ({ ...p, overallRating: rating.label }))}
-                      className={`cursor-pointer rounded-2xl border-2 p-3.5 text-center transition flex flex-col items-center justify-center gap-1.5 shadow-2xs ${
-                        isChecked
-                          ? `${rating.color} font-bold shadow-sm`
-                          : 'border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700 hover:bg-slate-100'
-                      }`}
-                    >
-                      <span className="text-xl">{rating.icon}</span>
-                      <span className="text-xs font-bold leading-tight">{rating.label}</span>
-                    </label>
-                  );
-                })}
-              </div>
-            </section>
-
-            {/* 11: Final Recommendations / Administrative Actions */}
-            <section className="space-y-4">
-              <div className="flex items-center gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
-                <span className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black ${theme.numBg}`}>
-                  11
-                </span>
-                <div>
-                  <h3 className="font-display text-base font-bold text-slate-900 dark:text-white">
-                    Final Actions &amp; Recommendations
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Select administrative / HR decisions for this cycle</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {[
-                  { id: 'action1', text: 'Continue in Current Role' },
-                  { id: 'action2', text: 'Salary Revision Recommended' },
-                  { id: 'action3', text: 'Promotion / Role Advancement Recommended' },
-                  { id: 'action4', text: 'Additional / Advanced Training Required' },
-                  { id: 'action5', text: 'Performance Improvement Plan (PIP) Required' },
-                  { id: 'action6', text: 'Role / Responsibility Change Recommended' },
-                ].map((act) => (
-                  <label
-                    key={act.id}
-                    className="flex items-center gap-3 p-3.5 bg-slate-50/70 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/80 rounded-2xl cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition shadow-2xs"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={Boolean(currentData.actions[act.id])}
-                      onChange={(e) => {
-                        const checked = e.target.checked;
-                        setCurrentData((p) => ({
-                          ...p,
-                          actions: { ...p.actions, [act.id]: checked },
-                        }));
-                      }}
-                      className="w-4 h-4 rounded text-brand-600 focus:ring-brand-500 cursor-pointer"
-                    />
-                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">{act.text}</span>
-                  </label>
-                ))}
-              </div>
-            </section>
-
-            {/* 12: CEO Signature & Authorization */}
-            <section className="space-y-4">
-              <div className="flex items-center gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
-                <span className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black ${theme.numBg}`}>
-                  12
-                </span>
-                <div>
-                  <h3 className="font-display text-base font-bold text-slate-900 dark:text-white">
-                    CEO Approval &amp; Final Authorization
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Executive authorization, signature verification, and approval date</p>
-                </div>
-              </div>
-
-              <div className="max-w-xl mx-auto">
-                <div className={`bg-white dark:bg-slate-900 rounded-3xl border-2 p-6 shadow-md ${theme.sigCardBorder}`}>
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                      CEO Authorization
+            {/* Form Body */}
+            <div className="p-6 sm:p-10 space-y-10">
+              {/* 01: Employee Information */}
+              <section className="space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 gap-2">
+                  <div className="flex items-center gap-3">
+                    <span className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black ${theme.numBg}`}>
+                      01
                     </span>
-                    <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                      Chief Executive Officer
-                    </span>
+                    <div>
+                      <h3 className="font-display text-base font-bold text-slate-900 dark:text-white">
+                        Employee &amp; Review Information
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Basic details of the team member under review</p>
+                    </div>
                   </div>
 
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
-                        Authorized Signatory Name
-                      </label>
+                  {/* Recipient Delivery Status Indicator (Reviewer Form Mode) */}
+                  {!isViewingMyReport && selectedEmployeeId && (
+                    <div className="flex items-center gap-2">
+                      {loadingStatus ? (
+                        <span className="inline-flex items-center gap-1.5 text-xs text-slate-400 px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800">
+                          <Clock className="w-3.5 h-3.5 animate-spin" /> Checking delivery status...
+                        </span>
+                      ) : empReportStatus?.status === 'DELETED_BY_USER' ? (
+                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-800 px-3 py-1 rounded-full shadow-2xs">
+                          <RotateCw className="w-3.5 h-3.5 text-amber-600" />
+                          Deleted by recipient • Re-send available (Sent {empReportStatus.sentCount}x)
+                        </span>
+                      ) : empReportStatus?.status === 'DELIVERED' ? (
+                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-300 dark:border-emerald-800 px-3 py-1 rounded-full shadow-2xs">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          Delivered to employee • Sent {empReportStatus.sentCount}x • Last sent: {new Date(empReportStatus.lastSentAt).toLocaleDateString()}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 py-1 rounded-full">
+                          <Clock className="w-3.5 h-3.5 text-slate-400" />
+                          Not sent yet • Click &quot;Send Report&quot; below to deliver specifically to this employee
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+                      Employee Name <span className="text-rose-500">*</span>
+                    </label>
+                    {isViewingMyReport ? (
                       <input
                         type="text"
-                        value={currentData.ceoName}
-                        onChange={(e) => setCurrentData((p) => ({ ...p, ceoName: e.target.value }))}
-                        className={`w-full px-3.5 py-2.5 text-xs font-bold bg-slate-50/70 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing}`}
+                        value={effectiveData.employeeName || ''}
+                        readOnly
+                        className="w-full px-3.5 py-2.5 text-sm font-semibold bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white cursor-default"
                       />
-                    </div>
+                    ) : (
+                      <div className="relative">
+                        <select
+                          value={currentData.employeeName}
+                          onChange={(e) => {
+                            const selectedName = e.target.value;
+                            const matched = departmentEmployees.find(
+                              (emp) => `${emp.firstName || ''} ${emp.lastName || ''}`.trim() === selectedName
+                            );
+                            if (matched) {
+                              handleSelectEmployee(matched.id || matched._id);
+                            } else {
+                              setCurrentData((p) => ({ ...p, employeeName: selectedName }));
+                            }
+                          }}
+                          className={`w-full appearance-none pl-3.5 pr-10 py-2.5 text-sm font-medium bg-slate-50/70 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all cursor-pointer ${theme.focusRing}`}
+                        >
+                          <option value="">
+                            {loadingEmployees
+                              ? 'Loading team members...'
+                              : isManager && departmentEmployees.length === 0
+                              ? 'No direct reporting employees assigned'
+                              : departmentEmployees.length === 0
+                              ? `No employees registered under ${department === 'operations' ? 'Operations Team' : department === 'ta' ? 'TA Team' : 'IT Team'}`
+                              : `Select employee from ${department === 'operations' ? 'Operations Team' : department === 'ta' ? 'TA Team' : 'IT Team'}...`}
+                          </option>
+                          {departmentEmployees.map((emp) => {
+                            const name = `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || emp.name || emp.email;
+                            const key = emp.id || emp._id || name;
+                            const desig = emp.designation?.title || emp.designation?.name || emp.designation || 'Member';
+                            return (
+                              <option key={key} value={name}>
+                                {name} ({emp.employeeCode ? `${emp.employeeCode} • ` : ''}{desig})
+                              </option>
+                            );
+                          })}
+                          {currentData.employeeName &&
+                            !isManager &&
+                            !departmentEmployees.some(
+                              (emp) =>
+                                `${emp.firstName || ''} ${emp.lastName || ''}`.trim() === currentData.employeeName
+                            ) && (
+                              <option value={currentData.employeeName}>
+                                {currentData.employeeName}
+                              </option>
+                            )}
+                        </select>
+                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3.5 text-slate-400">
+                          <ChevronDown className="w-4 h-4" />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
+                      Employee ID
+                    </label>
+                    <input
+                      type="text"
+                      value={isViewingMyReport ? (effectiveData.employeeId || '') : currentData.employeeId}
+                      readOnly={isViewingMyReport}
+                      onChange={(e) => !isViewingMyReport && setCurrentData((p) => ({ ...p, employeeId: e.target.value }))}
+                      className={`w-full px-3.5 py-2.5 text-xs font-mono font-medium ${isViewingMyReport ? 'bg-slate-100 dark:bg-slate-800/80 cursor-default' : 'bg-slate-50/70 dark:bg-slate-800/60'} border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing}`}
+                      placeholder="e.g. OPS-2026-114"
+                    />
+                  </div>
+                </div>
 
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
-                        Authorization Date
-                      </label>
-                      <input
-                        type="date"
-                        value={currentData.ceoDate}
-                        onChange={(e) => setCurrentData((p) => ({ ...p, ceoDate: e.target.value }))}
-                        className={`w-full px-3.5 py-2.5 text-xs font-medium bg-slate-50/70 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing}`}
-                      />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
+                      Department
+                    </label>
+                    <input
+                      type="text"
+                      value={isViewingMyReport ? (effectiveData.department || '') : currentData.department}
+                      readOnly={isViewingMyReport}
+                      onChange={(e) => !isViewingMyReport && setCurrentData((p) => ({ ...p, department: e.target.value }))}
+                      className={`w-full px-3.5 py-2.5 text-xs font-medium ${isViewingMyReport ? 'bg-slate-100 dark:bg-slate-800/80 cursor-default' : 'bg-slate-50/70 dark:bg-slate-800/60'} border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing}`}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
+                      Designation
+                    </label>
+                    <input
+                      type="text"
+                      value={isViewingMyReport ? (effectiveData.designation || '') : currentData.designation}
+                      readOnly={isViewingMyReport}
+                      onChange={(e) => !isViewingMyReport && setCurrentData((p) => ({ ...p, designation: e.target.value }))}
+                      className={`w-full px-3.5 py-2.5 text-xs font-medium ${isViewingMyReport ? 'bg-slate-100 dark:bg-slate-800/80 cursor-default' : 'bg-slate-50/70 dark:bg-slate-800/60'} border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing}`}
+                      placeholder="e.g. Senior Operations Executive"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
+                      Reporting Manager <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={isViewingMyReport ? (effectiveData.manager || '') : currentData.manager}
+                      readOnly={isViewingMyReport}
+                      onChange={(e) => !isViewingMyReport && setCurrentData((p) => ({ ...p, manager: e.target.value }))}
+                      className={`w-full px-3.5 py-2.5 text-xs font-medium ${isViewingMyReport ? 'bg-slate-100 dark:bg-slate-800/80 cursor-default' : 'bg-slate-50/70 dark:bg-slate-800/60'} border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing}`}
+                      placeholder="Manager name"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
+                      Review Date
+                    </label>
+                    <input
+                      type="date"
+                      value={isViewingMyReport ? (effectiveData.reviewDate || '') : currentData.reviewDate}
+                      readOnly={isViewingMyReport}
+                      onChange={(e) => !isViewingMyReport && setCurrentData((p) => ({ ...p, reviewDate: e.target.value }))}
+                      className={`w-full px-3.5 py-2.5 text-xs font-medium ${isViewingMyReport ? 'bg-slate-100 dark:bg-slate-800/80 cursor-default' : 'bg-slate-50/70 dark:bg-slate-800/60'} border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing}`}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
+                      Review Period
+                    </label>
+                    <input
+                      type="text"
+                      value={isViewingMyReport ? (effectiveData.reviewPeriod || '') : currentData.reviewPeriod}
+                      readOnly={isViewingMyReport}
+                      onChange={(e) => !isViewingMyReport && setCurrentData((p) => ({ ...p, reviewPeriod: e.target.value }))}
+                      className={`w-full px-3.5 py-2.5 text-xs font-medium ${isViewingMyReport ? 'bg-slate-100 dark:bg-slate-800/80 cursor-default' : 'bg-slate-50/70 dark:bg-slate-800/60'} border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing}`}
+                      placeholder="e.g. 01/01/2026 – 31/08/2026"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
+                      L&amp;D / HR Executive
+                    </label>
+                    <input
+                      type="text"
+                      value={isViewingMyReport ? (effectiveData.ldExecutive || '') : currentData.ldExecutive}
+                      readOnly={isViewingMyReport}
+                      onChange={(e) => !isViewingMyReport && setCurrentData((p) => ({ ...p, ldExecutive: e.target.value }))}
+                      className={`w-full px-3.5 py-2.5 text-xs font-medium ${isViewingMyReport ? 'bg-slate-100 dark:bg-slate-800/80 cursor-default' : 'bg-slate-50/70 dark:bg-slate-800/60'} border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing}`}
+                      placeholder="L&D Lead name"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
+                      Review Cycle
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={isViewingMyReport ? (effectiveData.reviewCycle || 'Annual Appraisal') : currentData.reviewCycle}
+                        disabled={isViewingMyReport}
+                        onChange={(e) => !isViewingMyReport && setCurrentData((p) => ({ ...p, reviewCycle: e.target.value }))}
+                        className={`w-full appearance-none pl-3.5 pr-10 py-2.5 text-xs font-medium ${isViewingMyReport ? 'bg-slate-100 dark:bg-slate-800/80 cursor-default' : 'bg-slate-50/70 dark:bg-slate-800/60 cursor-pointer'} border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing}`}
+                      >
+                        <option value="Bi-Weekly Review">Bi-Weekly Review</option>
+                        <option value="Monthly Review">Monthly Review</option>
+                        <option value="Quarterly Review">Quarterly Review</option>
+                        <option value="Mid-Year Review">Mid-Year Review</option>
+                        <option value="Probation / Internship Completion">Probation / Internship Completion</option>
+                        <option value="Annual Appraisal">Annual Appraisal</option>
+                      </select>
+                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3.5 text-slate-400">
+                        <ChevronDown className="w-4 h-4" />
+                      </div>
                     </div>
                   </div>
                 </div>
+              </section>
+
+              {/* 02: Rating Scale Reference */}
+              <section className="space-y-4">
+                <div className="flex items-center gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
+                  <span className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black ${theme.numBg}`}>
+                    02
+                  </span>
+                  <div>
+                    <h3 className="font-display text-base font-bold text-slate-900 dark:text-white">
+                      Rating Scale Reference
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Universal evaluation rubric standard applied across competencies
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+                  {[
+                    { val: 5, title: 'Exceptional', desc: 'Consistently surpasses highest standards', color: 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200/80 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300', numColor: 'bg-emerald-600 text-white' },
+                    { val: 4, title: 'Exceeds Expectations', desc: 'Frequently goes beyond role demands', color: 'bg-sky-50 dark:bg-sky-950/40 border-sky-200/80 dark:border-sky-800 text-sky-800 dark:text-sky-300', numColor: 'bg-sky-600 text-white' },
+                    { val: 3, title: 'Meets Expectations', desc: 'Consistently achieves core deliverables', color: 'bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200/80 dark:border-indigo-800 text-indigo-800 dark:text-indigo-300', numColor: 'bg-indigo-600 text-white' },
+                    { val: 2, title: 'Needs Improvement', desc: 'Fails to meet expected benchmarks', color: 'bg-amber-50 dark:bg-amber-950/40 border-amber-200/80 dark:border-amber-800 text-amber-800 dark:text-amber-300', numColor: 'bg-amber-600 text-white' },
+                    { val: 1, title: 'Unsatisfactory', desc: 'Critical performance deficiency', color: 'bg-rose-50 dark:bg-rose-950/40 border-rose-200/80 dark:border-rose-800 text-rose-800 dark:text-rose-300', numColor: 'bg-rose-600 text-white' },
+                  ].map((item) => (
+                    <div
+                      key={item.val}
+                      className={`border rounded-2xl p-3.5 text-center hover:-translate-y-0.5 transition shadow-xs ${item.color}`}
+                    >
+                      <div
+                        className={`w-7 h-7 rounded-xl font-extrabold text-xs flex items-center justify-center mx-auto mb-2 shadow-xs ${item.numColor}`}
+                      >
+                        {item.val}
+                      </div>
+                      <div className="text-xs font-bold leading-tight mb-1">{item.title}</div>
+                      <div className="text-[11px] opacity-80 leading-snug">{item.desc}</div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              {/* 03: Competency Evaluation Table */}
+              <section className="space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 gap-2">
+                  <div className="flex items-center gap-3">
+                    <span className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black ${theme.numBg}`}>
+                      03
+                    </span>
+                    <div>
+                      <h3 className="font-display text-base font-bold text-slate-900 dark:text-white">
+                        {effectiveDepartment === 'operations'
+                          ? 'Operations Performance Evaluation'
+                          : effectiveDepartment === 'it'
+                            ? 'Technical Competency Evaluation'
+                            : 'Functional Competency Evaluation'}
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Rate individual competencies on scale of 1.0 to 5.0</p>
+                    </div>
+                  </div>
+
+                  <div className={`px-4 py-1.5 rounded-full border text-xs font-bold inline-flex items-center gap-2 self-start sm:self-auto shadow-xs ${theme.scoreBadge}`}>
+                    <span>Average Score:</span>
+                    <span className="text-sm font-black tracking-tight">{effectiveAverageScore} / 5.0</span>
+                  </div>
+                </div>
+
+                <div className="border border-slate-200/90 dark:border-slate-800 rounded-2xl overflow-x-auto shadow-xs bg-white dark:bg-slate-900">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                        <th className="py-3 px-4 w-1/3">Performance Area / Metric</th>
+                        <th className="py-3 px-4 w-36">Rating (1-5)</th>
+                        <th className="py-3 px-4">Evaluator Comments / Observations</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+                      {(effectiveData.competencies || []).map((comp, idx) => (
+                        <tr key={comp.area} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
+                          <td className="py-3 px-4 font-semibold text-slate-800 dark:text-slate-200">{comp.area}</td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                type="number"
+                                min="1"
+                                max="5"
+                                step="0.5"
+                                value={comp.score}
+                                readOnly={isViewingMyReport}
+                                onChange={(e) => {
+                                  if (isViewingMyReport) return;
+                                  const val = parseFloat(e.target.value) || 1;
+                                  setCurrentData((p) => ({
+                                    ...p,
+                                    competencies: p.competencies.map((c, i) => (i === idx ? { ...c, score: val } : c)),
+                                  }));
+                                }}
+                                className={`w-16 text-center font-bold px-2 py-1.5 ${isViewingMyReport ? 'bg-slate-100 dark:bg-slate-800 cursor-default' : 'bg-slate-50 dark:bg-slate-800'} border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing}`}
+                              />
+                              <span className="text-slate-400 font-semibold text-[11px]">/ 5</span>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <input
+                              type="text"
+                              value={comp.comment || ''}
+                              readOnly={isViewingMyReport}
+                              onChange={(e) => {
+                                if (isViewingMyReport) return;
+                                const val = e.target.value;
+                                setCurrentData((p) => ({
+                                  ...p,
+                                  competencies: p.competencies.map((c, i) => (i === idx ? { ...c, comment: val } : c)),
+                                }));
+                              }}
+                              placeholder={isViewingMyReport ? '' : 'Observations or justification...'}
+                              className={`w-full px-3 py-1.5 ${isViewingMyReport ? 'bg-slate-100 dark:bg-slate-800 cursor-default' : 'bg-slate-50 dark:bg-slate-800'} border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing}`}
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              {/* 04: Key Achievements */}
+              <section className="space-y-4">
+                <div className="flex items-center gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
+                  <span className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black ${theme.numBg}`}>
+                    04
+                  </span>
+                  <div>
+                    <h3 className="font-display text-base font-bold text-slate-900 dark:text-white">
+                      Key Accomplishments &amp; Milestones
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Major operational deliverables completed in this review cycle</p>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
+                    Major Accomplishments <span className="text-rose-500">*</span>
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={isViewingMyReport ? (effectiveData.achievements || '') : currentData.achievements}
+                    readOnly={isViewingMyReport}
+                    onChange={(e) => !isViewingMyReport && setCurrentData((p) => ({ ...p, achievements: e.target.value }))}
+                    placeholder="Detail key achievements and milestones..."
+                    className={`w-full px-3.5 py-2.5 text-xs font-medium ${isViewingMyReport ? 'bg-slate-100 dark:bg-slate-800/80 cursor-default' : 'bg-slate-50/70 dark:bg-slate-800/60'} border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing} leading-relaxed`}
+                  />
+                </div>
+              </section>
+
+              {/* 05: Areas for Improvement */}
+              <section className="space-y-4">
+                <div className="flex items-center gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
+                  <span className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black ${theme.numBg}`}>
+                    05
+                  </span>
+                  <div>
+                    <h3 className="font-display text-base font-bold text-slate-900 dark:text-white">
+                      Areas for Development &amp; Improvement
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Constructive growth focal points for the upcoming period</p>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
+                    Focus Areas for Growth <span className="text-rose-500">*</span>
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={isViewingMyReport ? (effectiveData.improvements || '') : currentData.improvements}
+                    readOnly={isViewingMyReport}
+                    onChange={(e) => !isViewingMyReport && setCurrentData((p) => ({ ...p, improvements: e.target.value }))}
+                    placeholder="Specify developmental targets and coaching areas..."
+                    className={`w-full px-3.5 py-2.5 text-xs font-medium ${isViewingMyReport ? 'bg-slate-100 dark:bg-slate-800/80 cursor-default' : 'bg-slate-50/70 dark:bg-slate-800/60'} border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing} leading-relaxed`}
+                  />
+                </div>
+              </section>
+
+              {/* 06: Goals for Next Period */}
+              <section className="space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+                  <div className="flex items-center gap-3">
+                    <span className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black ${theme.numBg}`}>
+                      06
+                    </span>
+                    <div>
+                      <h3 className="font-display text-base font-bold text-slate-900 dark:text-white">
+                        Goals &amp; Performance Objectives
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Key performance deliverables agreed upon for upcoming review cycle</p>
+                    </div>
+                  </div>
+
+                  {!isViewingMyReport && (
+                    <button
+                      type="button"
+                      onClick={addGoalRow}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition cursor-pointer shadow-2xs"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Goal</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="border border-slate-200/90 dark:border-slate-800 rounded-2xl overflow-x-auto shadow-xs bg-white dark:bg-slate-900">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                        <th className="py-2.5 px-3">Goal Objective</th>
+                        <th className="py-2.5 px-3">Target / Key Result</th>
+                        <th className="py-2.5 px-3 w-36">Deadline</th>
+                        <th className="py-2.5 px-3 w-32">Status</th>
+                        {!isViewingMyReport && <th className="py-2.5 px-3 w-10 text-center"></th>}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {(effectiveData.goals || []).map((g, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
+                          <td className="py-2 px-3">
+                            <input
+                              type="text"
+                              value={g.goal || ''}
+                              readOnly={isViewingMyReport}
+                              onChange={(e) => {
+                                if (isViewingMyReport) return;
+                                const val = e.target.value;
+                                setCurrentData((p) => ({
+                                  ...p,
+                                  goals: p.goals.map((item, i) => (i === idx ? { ...item, goal: val } : item)),
+                                }));
+                              }}
+                              placeholder="Goal title..."
+                              className={`w-full px-2.5 py-1.5 ${isViewingMyReport ? 'bg-slate-100 dark:bg-slate-800 cursor-default' : 'bg-slate-50 dark:bg-slate-800'} border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing}`}
+                            />
+                          </td>
+                          <td className="py-2 px-3">
+                            <input
+                              type="text"
+                              value={g.target || ''}
+                              readOnly={isViewingMyReport}
+                              onChange={(e) => {
+                                if (isViewingMyReport) return;
+                                const val = e.target.value;
+                                setCurrentData((p) => ({
+                                  ...p,
+                                  goals: p.goals.map((item, i) => (i === idx ? { ...item, target: val } : item)),
+                                }));
+                              }}
+                              placeholder="Target deliverable / metric..."
+                              className={`w-full px-2.5 py-1.5 ${isViewingMyReport ? 'bg-slate-100 dark:bg-slate-800 cursor-default' : 'bg-slate-50 dark:bg-slate-800'} border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing}`}
+                            />
+                          </td>
+                          <td className="py-2 px-3">
+                            <input
+                              type="date"
+                              value={g.deadline || ''}
+                              readOnly={isViewingMyReport}
+                              onChange={(e) => {
+                                if (isViewingMyReport) return;
+                                const val = e.target.value;
+                                setCurrentData((p) => ({
+                                  ...p,
+                                  goals: p.goals.map((item, i) => (i === idx ? { ...item, deadline: val } : item)),
+                                }));
+                              }}
+                              className={`w-full px-2 py-1.5 ${isViewingMyReport ? 'bg-slate-100 dark:bg-slate-800 cursor-default' : 'bg-slate-50 dark:bg-slate-800'} border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing}`}
+                            />
+                          </td>
+                          <td className="py-2 px-3">
+                            <input
+                              type="text"
+                              value={g.status || ''}
+                              readOnly={isViewingMyReport}
+                              onChange={(e) => {
+                                if (isViewingMyReport) return;
+                                const val = e.target.value;
+                                setCurrentData((p) => ({
+                                  ...p,
+                                  goals: p.goals.map((item, i) => (i === idx ? { ...item, status: val } : item)),
+                                }));
+                              }}
+                              placeholder="Status..."
+                              className={`w-full px-2.5 py-1.5 ${isViewingMyReport ? 'bg-slate-100 dark:bg-slate-800 cursor-default' : 'bg-slate-50 dark:bg-slate-800'} border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing}`}
+                            />
+                          </td>
+                          {!isViewingMyReport && (
+                            <td className="py-2 px-3 text-center">
+                              {effectiveData.goals.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => removeGoalRow(idx)}
+                                  className="text-slate-400 hover:text-rose-500 transition cursor-pointer p-1"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              {/* 07: Training Needs */}
+              <section className="space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+                  <div className="flex items-center gap-3">
+                    <span className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black ${theme.numBg}`}>
+                      07
+                    </span>
+                    <div>
+                      <h3 className="font-display text-base font-bold text-slate-900 dark:text-white">
+                        Training &amp; Skill Development Needs
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Identified certifications, workshops, or operational training</p>
+                    </div>
+                  </div>
+
+                  {!isViewingMyReport && (
+                    <button
+                      type="button"
+                      onClick={addTrainingRow}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition cursor-pointer shadow-2xs"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Training</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="border border-slate-200/90 dark:border-slate-800 rounded-2xl overflow-x-auto shadow-xs bg-white dark:bg-slate-900">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                        <th className="py-2.5 px-3">Skill / Operational Area</th>
+                        <th className="py-2.5 px-3">Training Required / Workshop</th>
+                        <th className="py-2.5 px-3 w-36">Priority</th>
+                        {!isViewingMyReport && <th className="py-2.5 px-3 w-10 text-center"></th>}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {(effectiveData.training || []).map((t, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
+                          <td className="py-2 px-3">
+                            <input
+                              type="text"
+                              value={t.skill || ''}
+                              readOnly={isViewingMyReport}
+                              onChange={(e) => {
+                                if (isViewingMyReport) return;
+                                const val = e.target.value;
+                                setCurrentData((p) => ({
+                                  ...p,
+                                  training: p.training.map((item, i) => (i === idx ? { ...item, skill: val } : item)),
+                                }));
+                              }}
+                              placeholder="Skill domain..."
+                              className={`w-full px-2.5 py-1.5 ${isViewingMyReport ? 'bg-slate-100 dark:bg-slate-800 cursor-default' : 'bg-slate-50 dark:bg-slate-800'} border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing}`}
+                            />
+                          </td>
+                          <td className="py-2 px-3">
+                            <input
+                              type="text"
+                              value={t.training || ''}
+                              readOnly={isViewingMyReport}
+                              onChange={(e) => {
+                                if (isViewingMyReport) return;
+                                const val = e.target.value;
+                                setCurrentData((p) => ({
+                                  ...p,
+                                  training: p.training.map((item, i) => (i === idx ? { ...item, training: val } : item)),
+                                }));
+                              }}
+                              placeholder="Course / program..."
+                              className={`w-full px-2.5 py-1.5 ${isViewingMyReport ? 'bg-slate-100 dark:bg-slate-800 cursor-default' : 'bg-slate-50 dark:bg-slate-800'} border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing}`}
+                            />
+                          </td>
+                          <td className="py-2 px-3">
+                            <div className="relative">
+                              <select
+                                value={t.priority || 'Medium'}
+                                disabled={isViewingMyReport}
+                                onChange={(e) => {
+                                  if (isViewingMyReport) return;
+                                  const val = e.target.value;
+                                  setCurrentData((p) => ({
+                                    ...p,
+                                    training: p.training.map((item, i) => (i === idx ? { ...item, priority: val } : item)),
+                                  }));
+                                }}
+                                className={`w-full appearance-none px-2.5 pr-7 py-1.5 ${isViewingMyReport ? 'bg-slate-100 dark:bg-slate-800 cursor-default' : 'bg-slate-50 dark:bg-slate-800 cursor-pointer'} border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing}`}
+                              >
+                                <option value="High">High</option>
+                                <option value="Medium">Medium</option>
+                                <option value="Low">Low</option>
+                              </select>
+                              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2 text-slate-400">
+                                <ChevronDown className="w-3.5 h-3.5" />
+                              </div>
+                            </div>
+                          </td>
+                          {!isViewingMyReport && (
+                            <td className="py-2 px-3 text-center">
+                              {effectiveData.training.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => removeTrainingRow(idx)}
+                                  className="text-slate-400 hover:text-rose-500 transition cursor-pointer p-1"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              {/* 08 & 09: Comments */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <section className="space-y-3">
+                  <div className="flex items-center gap-3 pb-2 border-b border-slate-200 dark:border-slate-800">
+                    <span className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black ${theme.numBg}`}>
+                      08
+                    </span>
+                    <div>
+                      <h3 className="font-display text-sm font-bold text-slate-900 dark:text-white">Employee Comments</h3>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">Feedback and self-reflection</p>
+                    </div>
+                  </div>
+                  <textarea
+                    rows={4}
+                    value={isViewingMyReport ? (effectiveData.employeeComments || '') : currentData.employeeComments}
+                    readOnly={isViewingMyReport}
+                    onChange={(e) => !isViewingMyReport && setCurrentData((p) => ({ ...p, employeeComments: e.target.value }))}
+                    placeholder="Employee feedback and reflection..."
+                    className={`w-full px-3.5 py-2.5 text-xs font-medium ${isViewingMyReport ? 'bg-slate-100 dark:bg-slate-800/80 cursor-default' : 'bg-slate-50/70 dark:bg-slate-800/60'} border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing} leading-relaxed`}
+                  />
+                </section>
+
+                <section className="space-y-3">
+                  <div className="flex items-center gap-3 pb-2 border-b border-slate-200 dark:border-slate-800">
+                    <span className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black ${theme.numBg}`}>
+                      09
+                    </span>
+                    <div>
+                      <h3 className="font-display text-sm font-bold text-slate-900 dark:text-white">Manager Comments</h3>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">Overall performance summary</p>
+                    </div>
+                  </div>
+                  <textarea
+                    rows={4}
+                    value={isViewingMyReport ? (effectiveData.managerComments || '') : currentData.managerComments}
+                    readOnly={isViewingMyReport}
+                    onChange={(e) => !isViewingMyReport && setCurrentData((p) => ({ ...p, managerComments: e.target.value }))}
+                    placeholder="Manager review and observations..."
+                    className={`w-full px-3.5 py-2.5 text-xs font-medium ${isViewingMyReport ? 'bg-slate-100 dark:bg-slate-800/80 cursor-default' : 'bg-slate-50/70 dark:bg-slate-800/60'} border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing} leading-relaxed`}
+                  />
+                </section>
               </div>
-            </section>
 
-            {/* Form Footer Actions */}
-            <div className="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-800 print:hidden">
-              <Button
-                variant="outline"
-                size="md"
-                icon={Download}
-                loading={isGeneratingPdf}
-                onClick={handleDownloadPdf}
-                className="text-sm font-semibold"
-              >
-                {isGeneratingPdf ? 'Generating PDF...' : 'Download PDF'}
-              </Button>
+              {/* 10: Overall Performance Rating */}
+              <section className="space-y-4">
+                <div className="flex items-center gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
+                  <span className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black ${theme.numBg}`}>
+                    10
+                  </span>
+                  <div>
+                    <h3 className="font-display text-base font-bold text-slate-900 dark:text-white">
+                      Overall Performance Rating
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Consolidated review outcome score</p>
+                  </div>
+                </div>
 
-              {canReviewOthers && viewMode === 'reviews' && (
-                <Button
-                  variant="primary"
-                  size="md"
-                  icon={Send}
-                  loading={isSending}
-                  onClick={handleSendReport}
-                  className="text-sm font-semibold shadow-lg shadow-brand-500/20"
-                >
-                  Send
-                </Button>
-              )}
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                  {[
+                    { label: 'Exceptional', icon: '⭐', color: 'border-emerald-500 bg-emerald-50/60 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-300' },
+                    { label: 'Exceeds Expectations', icon: '✨', color: 'border-sky-500 bg-sky-50/60 dark:bg-sky-950/40 text-sky-900 dark:text-sky-300' },
+                    { label: 'Meets Expectations', icon: '👍', color: 'border-indigo-500 bg-indigo-50/60 dark:bg-indigo-950/40 text-indigo-900 dark:text-indigo-300' },
+                    { label: 'Needs Improvement', icon: '⚠️', color: 'border-amber-500 bg-amber-50/60 dark:bg-amber-950/40 text-amber-900 dark:text-amber-300' },
+                    { label: 'Unsatisfactory', icon: '❌', color: 'border-rose-500 bg-rose-50/60 dark:bg-rose-950/40 text-rose-900 dark:text-rose-300' },
+                  ].map((rating) => {
+                    const activeRating = isViewingMyReport ? effectiveData.overallRating : currentData.overallRating;
+                    const isChecked = activeRating === rating.label;
+                    return (
+                      <label
+                        key={rating.label}
+                        onClick={() => !isViewingMyReport && setCurrentData((p) => ({ ...p, overallRating: rating.label }))}
+                        className={`rounded-2xl border-2 p-3.5 text-center transition flex flex-col items-center justify-center gap-1.5 shadow-2xs ${isViewingMyReport ? 'cursor-default' : 'cursor-pointer'
+                          } ${isChecked
+                            ? `${rating.color} font-bold shadow-sm`
+                            : 'border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700 hover:bg-slate-100'
+                          }`}
+                      >
+                        <span className="text-xl">{rating.icon}</span>
+                        <span className="text-xs font-bold leading-tight">{rating.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </section>
+
+              {/* 11: Final Recommendations / Administrative Actions */}
+              <section className="space-y-4">
+                <div className="flex items-center gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
+                  <span className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black ${theme.numBg}`}>
+                    11
+                  </span>
+                  <div>
+                    <h3 className="font-display text-base font-bold text-slate-900 dark:text-white">
+                      Final Actions &amp; Recommendations
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Select administrative / HR decisions for this cycle</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {[
+                    { id: 'action1', text: 'Continue in Current Role' },
+                    { id: 'action2', text: 'Salary Revision Recommended' },
+                    { id: 'action3', text: 'Promotion / Role Advancement Recommended' },
+                    { id: 'action4', text: 'Additional / Advanced Training Required' },
+                    { id: 'action5', text: 'Performance Improvement Plan (PIP) Required' },
+                    { id: 'action6', text: 'Role / Responsibility Change Recommended' },
+                  ].map((act) => {
+                    const actionsObj = isViewingMyReport ? (effectiveData.actions || {}) : (currentData.actions || {});
+                    return (
+                      <label
+                        key={act.id}
+                        className={`flex items-center gap-3 p-3.5 bg-slate-50/70 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/80 rounded-2xl transition shadow-2xs ${isViewingMyReport ? 'cursor-default' : 'cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800'
+                          }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={Boolean(actionsObj[act.id])}
+                          disabled={isViewingMyReport}
+                          onChange={(e) => {
+                            if (isViewingMyReport) return;
+                            const checked = e.target.checked;
+                            setCurrentData((p) => ({
+                              ...p,
+                              actions: { ...p.actions, [act.id]: checked },
+                            }));
+                          }}
+                          className="w-4 h-4 rounded text-brand-600 focus:ring-brand-500 cursor-pointer disabled:cursor-default"
+                        />
+                        <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">{act.text}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </section>
+
+              {/* 12: CEO Signature & Authorization */}
+              <section className="space-y-4">
+                <div className="flex items-center gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
+                  <span className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black ${theme.numBg}`}>
+                    12
+                  </span>
+                  <div>
+                    <h3 className="font-display text-base font-bold text-slate-900 dark:text-white">
+                      CEO Approval &amp; Final Authorization
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Executive authorization, signature verification, and approval date</p>
+                  </div>
+                </div>
+
+                <div className="max-w-xl mx-auto">
+                  <div className={`bg-white dark:bg-slate-900 rounded-3xl border-2 p-6 shadow-md ${theme.sigCardBorder}`}>
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                        CEO Authorization
+                      </span>
+                      <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                        Chief Executive Officer
+                      </span>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
+                          Authorized Signatory Name
+                        </label>
+                        <input
+                          type="text"
+                          value={isViewingMyReport ? (effectiveData.ceoName || '') : currentData.ceoName}
+                          readOnly={isViewingMyReport}
+                          onChange={(e) => !isViewingMyReport && setCurrentData((p) => ({ ...p, ceoName: e.target.value }))}
+                          className={`w-full px-3.5 py-2.5 text-xs font-bold ${isViewingMyReport ? 'bg-slate-100 dark:bg-slate-800/80 cursor-default' : 'bg-slate-50/70 dark:bg-slate-800/60'} border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing}`}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
+                          Authorization Date
+                        </label>
+                        <input
+                          type="date"
+                          value={isViewingMyReport ? (effectiveData.ceoDate || '') : currentData.ceoDate}
+                          readOnly={isViewingMyReport}
+                          onChange={(e) => !isViewingMyReport && setCurrentData((p) => ({ ...p, ceoDate: e.target.value }))}
+                          className={`w-full px-3.5 py-2.5 text-xs font-medium ${isViewingMyReport ? 'bg-slate-100 dark:bg-slate-800/80 cursor-default' : 'bg-slate-50/70 dark:bg-slate-800/60'} border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all ${theme.focusRing}`}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* Form Footer Actions */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-6 border-t border-slate-200 dark:border-slate-800 print:hidden">
+                <div>
+                  {isViewingMyReport && activeMyReport && (
+                    <Button
+                      variant="outline"
+                      size="md"
+                      icon={Trash2}
+                      onClick={() => setReportToDelete(activeMyReport)}
+                      className="text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 border-rose-200 dark:border-rose-800"
+                    >
+                      Delete Report
+                    </Button>
+                  )}
+                  {!isViewingMyReport && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon={RotateCcw}
+                      onClick={handleResetForm}
+                      className="text-xs text-slate-500 hover:text-slate-800"
+                    >
+                      Reset Form
+                    </Button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="outline"
+                    size="md"
+                    icon={Download}
+                    onClick={handleDownloadExcel}
+                    className="text-xs font-semibold"
+                  >
+                    Export Excel
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="md"
+                    icon={Download}
+                    loading={isGeneratingPdf}
+                    onClick={handleDownloadPdf}
+                    className="text-xs font-semibold"
+                  >
+                    {isGeneratingPdf ? 'Generating PDF...' : 'Download PDF'}
+                  </Button>
+
+                  {canReviewOthers && viewMode === 'reviews' && (
+                    <Button
+                      variant="primary"
+                      size="md"
+                      icon={empReportStatus?.sentCount > 0 ? RotateCw : Send}
+                      loading={isSending}
+                      onClick={() => handleSendReport()}
+                      className="text-xs font-bold shadow-lg shadow-brand-500/20"
+                    >
+                      {empReportStatus?.status === 'DELETED_BY_USER'
+                        ? 'Send Again (User Deleted)'
+                        : empReportStatus?.sentCount > 0
+                          ? `Send Again (${empReportStatus.sentCount} sent)`
+                          : 'Send Report'}
+                    </Button>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+        </div>
+      )}
 
       {/* Dedicated Clean Offscreen PDF Dossier Container */}
       <div
@@ -1701,13 +2252,26 @@ export const ReportsPage = () => {
       >
         <PrintableReportDossier
           ref={printDossierRef}
-          department={department}
-          data={currentData}
-          averageScore={currentAverageScore}
+          department={effectiveDepartment}
+          data={effectiveData}
+          averageScore={effectiveAverageScore}
         />
       </div>
 
-        {/* Floating Toast Notification */}
+      {/* Confirm Dialog for Recipient Deleting Report */}
+      <ConfirmDialog
+        isOpen={Boolean(reportToDelete)}
+        onClose={() => setReportToDelete(null)}
+        onConfirm={handleDeleteMyReport}
+        title="Remove Performance Report from Your View?"
+        message="This performance report will be removed from your dashboard. If needed, your manager or HR can send it back to you at any time with no restrictions."
+        confirmText="Remove Report"
+        cancelText="Keep Report"
+        variant="danger"
+        isLoading={isDeletingReport}
+      />
+
+      {/* Floating Toast Notification */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 rounded-xl bg-slate-900 text-white text-xs font-semibold shadow-2xl border border-slate-700 animate-in fade-in slide-in-from-bottom-5">
           {toastMessage.type === 'loading' ? (

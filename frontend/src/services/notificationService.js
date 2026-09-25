@@ -40,6 +40,14 @@ export const notificationService = {
     const res = await http.post('/v1/notifications/mark-all-read');
     return res.data;
   },
+
+  /**
+   * Create custom or system notification
+   */
+  async createNotification(payload) {
+    const res = await http.post('/v1/notifications', payload);
+    return res.data;
+  },
 };
 
 export default notificationService;
