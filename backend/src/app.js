@@ -6,7 +6,7 @@ import { config } from './config/index.js';
 import apiRouter from './routes/index.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 
-import { apiRateLimiter, authRateLimiter } from './middleware/rateLimiter.js';
+import { apiRateLimiter } from './middleware/rateLimiter.js';
 
 const app = express();
 
@@ -78,8 +78,7 @@ if (config.nodeEnv !== 'test') {
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Apply rate limiting
-app.use('/api/v1/auth/login', authRateLimiter);
+// Apply rate limiting (login requests are exempt from rate limiting)
 app.use('/api', apiRateLimiter);
 
 // Mount API Routes
