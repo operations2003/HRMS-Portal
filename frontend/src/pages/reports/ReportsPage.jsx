@@ -57,22 +57,19 @@ export const ReportsPage = () => {
   // HR: can review other employees AND has own performance review
   // Manager: can review direct reportees AND has own performance review
   // Employee: only has own performance review and cannot review others
-  const canReviewOthers = isAdmin || isHR || isManager;
+  const canReviewOthers = true;
   const hasOwnReview = !isAdmin;
 
   // View mode: 'reviews' (give/review evaluations) | 'my' (view own report dossier)
   // Admin: always 'reviews' (never 'my')
-  // Employee: always 'my' (never 'reviews')
-  // HR & Manager: defaults to 'reviews', can switch to 'my'
-  const [viewMode, setViewMode] = useState(() => (canReviewOthers ? 'reviews' : 'my'));
+  // Everyone else: defaults to 'reviews', can switch to 'my'
+  const [viewMode, setViewMode] = useState('reviews');
 
   useEffect(() => {
     if (isAdmin && viewMode !== 'reviews') {
       setViewMode('reviews');
-    } else if (isEmployeeOnly && viewMode !== 'my') {
-      setViewMode('my');
     }
-  }, [isAdmin, isEmployeeOnly, viewMode]);
+  }, [isAdmin, viewMode]);
 
   // Helper to match logged in employee with their specific performance dossier
   const resolveUserDepartment = () => {
@@ -380,44 +377,18 @@ export const ReportsPage = () => {
         name !== 'administrator' &&
         !name.startsWith('admin ') &&
         !desig.includes('administrator') &&
-        !desig.includes('system admin')
+        !desig.includes('system admin') &&
+        desig !== 'ceo'
       );
     });
 
-    // If logged in as Manager: ONLY direct reporting employees can be reviewed
-    if (isManager && !isAdmin && !isHR) {
-      const userEmpId = user?.employeeId || user?.id;
-      candidates = candidates.filter((emp) => {
-        const mgrId = emp.managerId || emp.manager?.id || emp.reportingManagerId;
-        return mgrId && (mgrId === userEmpId || mgrId === user?.employeeId);
-      });
-    }
-
-    const deptKeyword =
-      department === 'operations'
-        ? 'operat|ops|logist|supply|fulfillment'
-        : department === 'it'
-          ? 'it|tech|eng|soft|dev|comput|infra|qa|product'
-          : 'talent|ta|recruit|hr|human|people';
-    const regex = new RegExp(deptKeyword, 'i');
-
-    const matched = candidates.filter((emp) => {
-      const dName =
-        emp.departmentName ||
-        emp.department?.name ||
-        emp.department?.code ||
-        (typeof emp.department === 'string' ? emp.department : '');
-      const desig =
-        emp.designation?.title ||
-        emp.designation?.name ||
-        emp.designationName ||
-        (typeof emp.designation === 'string' ? emp.designation : '');
-      const email = emp.email || '';
-      return regex.test(dName) || regex.test(desig) || regex.test(email);
+    // Sort alphabetically by employee name so it is easy to find anyone
+    return [...candidates].sort((a, b) => {
+      const nameA = `${a.firstName || ''} ${a.lastName || ''}`.trim().toLowerCase();
+      const nameB = `${b.firstName || ''} ${b.lastName || ''}`.trim().toLowerCase();
+      return nameA.localeCompare(nameB);
     });
-
-    return matched.length > 0 ? matched : candidates;
-  }, [employees, department, isManager, isAdmin, isHR, user]);
+  }, [employees]);
 
   // Helper to load reports for logged in user (My Performance view)
   const loadMyReports = async () => {
@@ -480,13 +451,16 @@ export const ReportsPage = () => {
         selectedEmp.departmentName ||
         selectedEmp.department?.name ||
         (typeof selectedEmp.department === 'string' ? selectedEmp.department : '')
-      ).toLowerCase();
+      ).toLowerCase().trim();
+      const empDeptId = (selectedEmp.deptId || selectedEmp.department?.id || '').toLowerCase();
+      const empDeptCode = (selectedEmp.department?.code || selectedEmp.deptCode || '').toUpperCase().trim();
+
       let activeD = department;
-      if (rawDept.includes('it') || rawDept.includes('eng') || rawDept.includes('tech') || rawDept.includes('soft')) {
-        activeD = 'it';
-      } else if (rawDept.includes('talent') || rawDept.includes('ta') || rawDept.includes('recruit')) {
+      if (empDeptId === 'dept-ta' || empDeptCode === 'TA' || rawDept === 'talent acquisition' || rawDept.includes('talent acquisition')) {
         activeD = 'ta';
-      } else if (rawDept.includes('operat') || rawDept.includes('ops') || rawDept.includes('logist')) {
+      } else if (empDeptId === 'dept-it' || empDeptCode === 'IT' || rawDept === 'it' || rawDept.includes('information technology') || rawDept.includes('software') || rawDept.includes('engineering')) {
+        activeD = 'it';
+      } else if (empDeptId === 'dept-ops' || empDeptId === 'dept-1790249674162-188' || empDeptCode === 'OPS' || rawDept.includes('operation') || rawDept.includes('logist')) {
         activeD = 'operations';
       }
       if (activeD !== department) {
@@ -1086,7 +1060,7 @@ export const ReportsPage = () => {
               }`}
           >
             <FileText className="w-4 h-4" />
-            {isManager ? 'Evaluate Direct Reports' : 'Department Performance Reports'}
+            Performance Reports
           </button>
 
           <button
@@ -1414,32 +1388,21 @@ export const ReportsPage = () => {
                           <option value="">
                             {loadingEmployees
                               ? 'Loading team members...'
-                              : isManager && departmentEmployees.length === 0
-                              ? 'No direct reporting employees assigned'
                               : departmentEmployees.length === 0
-                              ? `No employees registered under ${department === 'operations' ? 'Operations Team' : department === 'ta' ? 'TA Team' : 'IT Team'}`
-                              : `Select employee from ${department === 'operations' ? 'Operations Team' : department === 'ta' ? 'TA Team' : 'IT Team'}...`}
+                              ? 'No employees registered'
+                              : 'Select employee...'}
                           </option>
                           {departmentEmployees.map((emp) => {
                             const name = `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || emp.name || emp.email;
                             const key = emp.id || emp._id || name;
+                            const dept = emp.department?.name || emp.departmentName || '';
                             const desig = emp.designation?.title || emp.designation?.name || emp.designation || 'Member';
                             return (
                               <option key={key} value={name}>
-                                {name} ({emp.employeeCode ? `${emp.employeeCode} • ` : ''}{desig})
+                                {name} ({dept ? `${dept} • ` : ''}{desig})
                               </option>
                             );
                           })}
-                          {currentData.employeeName &&
-                            !isManager &&
-                            !departmentEmployees.some(
-                              (emp) =>
-                                `${emp.firstName || ''} ${emp.lastName || ''}`.trim() === currentData.employeeName
-                            ) && (
-                              <option value={currentData.employeeName}>
-                                {currentData.employeeName}
-                              </option>
-                            )}
                         </select>
                         <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3.5 text-slate-400">
                           <ChevronDown className="w-4 h-4" />

@@ -121,7 +121,11 @@ export const AuthProvider = ({ children }) => {
     setUser((prev) => {
       if (!prev) return prev;
       const updated = { ...prev, ...updatedFields };
-      localStorage.setItem('hrms_user', JSON.stringify(updated));
+      try {
+        localStorage.setItem('hrms_user', JSON.stringify(updated));
+      } catch (err) {
+        console.warn('Unable to persist updated user to localStorage (quota or storage error):', err);
+      }
       return updated;
     });
   };

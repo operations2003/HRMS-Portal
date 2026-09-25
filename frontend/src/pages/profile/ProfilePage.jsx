@@ -39,6 +39,7 @@ import { Alert } from '../../components/common/Alert.jsx';
 import { Badge } from '../../components/common/Badge.jsx';
 import { Modal } from '../../components/common/Modal.jsx';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
+import { Avatar } from '../../components/common/Avatar.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 
 export const ProfilePage = () => {
@@ -85,6 +86,8 @@ export const ProfilePage = () => {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [removingPhoto, setRemovingPhoto] = useState(false);
   const [photoError, setPhotoError] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [optimizingPhoto, setOptimizingPhoto] = useState(false);
   const fileInputRef = React.useRef(null);
 
   const fetchProfile = async (isBackground = false) => {
@@ -210,10 +213,109 @@ export const ProfilePage = () => {
     }
   };
 
+  /**
+   * Resilient client-side image optimizer using HTML5 Canvas.
+   * Ensures photos are perfectly scaled (max 800x800) and lightweight (~80-150KB),
+   * ensuring ultra-fast uploads, zero payload rejections, and no localStorage quota issues.
+   */
+  const optimizeAvatarFile = async (file) => {
+    return new Promise((resolve) => {
+      // If SVG, return as is
+      if (file.type === 'image/svg+xml') {
+        return resolve(file);
+      }
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          try {
+            const maxDim = 800;
+            let { width, height } = img;
+            if (width > maxDim || height > maxDim) {
+              if (width > height) {
+                height = Math.round((height * maxDim) / width);
+                width = maxDim;
+              } else {
+                width = Math.round((width * maxDim) / height);
+                height = maxDim;
+              }
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(width, 1);
+            canvas.height = Math.max(height, 1);
+            const ctx = canvas.getContext('2d');
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(img, 0, 0, width, height);
+
+            canvas.toBlob(
+              (blob) => {
+                if (!blob) return resolve(file);
+                const cleanBase = file.name.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_');
+                const optimizedFile = new File([blob], `${cleanBase || 'avatar'}.jpg`, {
+                  type: 'image/jpeg',
+                  lastModified: Date.now(),
+                });
+                resolve(optimizedFile);
+              },
+              'image/jpeg',
+              0.88
+            );
+          } catch {
+            resolve(file);
+          }
+        };
+        img.onerror = () => resolve(file);
+        img.src = e.target.result;
+      };
+      reader.onerror = () => resolve(file);
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const processSelectedFile = async (file) => {
+    if (!file) return;
+
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    const isImageExt = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'jfif', 'svg', 'heic', 'heif'].includes(ext);
+    const isImageMime = file.type ? file.type.startsWith('image/') : false;
+
+    if (!isImageExt && !isImageMime) {
+      setPhotoError('Please select a valid image file (JPG, PNG, WEBP, GIF, BMP).');
+      return;
+    }
+
+    if (file.size > 20 * 1024 * 1024) {
+      setPhotoError('Image size exceeds maximum limit of 20MB.');
+      return;
+    }
+
+    try {
+      setOptimizingPhoto(true);
+      setPhotoError(null);
+      const readyFile = await optimizeAvatarFile(file);
+      setPhotoFile(readyFile);
+      const previewUrl = URL.createObjectURL(readyFile);
+      setPhotoPreview(previewUrl);
+    } catch {
+      setPhotoFile(file);
+      const previewUrl = URL.createObjectURL(file);
+      setPhotoPreview(previewUrl);
+    } finally {
+      setOptimizingPhoto(false);
+    }
+  };
+
   const handleOpenPhotoModal = () => {
     setPhotoFile(null);
     setPhotoPreview(null);
     setPhotoError(null);
+    setIsDragging(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
     setIsPhotoModalOpen(true);
   };
 
@@ -223,27 +325,39 @@ export const ProfilePage = () => {
     setPhotoFile(null);
     setPhotoPreview(null);
     setPhotoError(null);
+    setIsDragging(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
-  const handleSelectPhoto = (e) => {
+  const handleSelectPhoto = async (e) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-
-    const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg', 'image/gif'];
-    if (!validTypes.includes(file.type)) {
-      setPhotoError('Please select a valid image file (JPG, PNG, WEBP, GIF).');
-      return;
+    if (file) {
+      await processSelectedFile(file);
     }
+  };
 
-    if (file.size > 5 * 1024 * 1024) {
-      setPhotoError('Image size exceeds maximum limit of 5MB.');
-      return;
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      await processSelectedFile(file);
     }
-
-    setPhotoError(null);
-    setPhotoFile(file);
-    const previewUrl = URL.createObjectURL(file);
-    setPhotoPreview(previewUrl);
   };
 
   const handleUploadPhoto = async () => {
@@ -252,11 +366,15 @@ export const ProfilePage = () => {
       setUploadingPhoto(true);
       setPhotoError(null);
       const res = await profileService.uploadAvatar(photoFile);
-      const newUrl = res.avatarUrl;
-      setProfile((prev) => ({ ...prev, avatarUrl: newUrl }));
-      updateUser?.({ avatarUrl: newUrl });
+      const newUrl = res?.avatarUrl || res?.data?.avatarUrl || (typeof res === 'string' ? res : '');
+      if (newUrl) {
+        setProfile((prev) => ({ ...prev, avatarUrl: newUrl }));
+        updateUser?.({ avatarUrl: newUrl });
+      }
       toast.success('Profile photo updated successfully.');
       handleClosePhotoModal();
+      // Silently refresh profile in background so all pages and state stay aligned
+      fetchProfile(true);
     } catch (err) {
       console.error('Failed to upload photo:', err);
       setPhotoError(err.message || 'Failed to upload photo. Please try again.');
@@ -274,6 +392,7 @@ export const ProfilePage = () => {
       updateUser?.({ avatarUrl: null });
       toast.success('Profile photo removed.');
       handleClosePhotoModal();
+      fetchProfile(true);
     } catch (err) {
       console.error('Failed to remove photo:', err);
       setPhotoError(err.message || 'Failed to remove photo.');
@@ -350,16 +469,16 @@ export const ProfilePage = () => {
         <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5">
           {/* Avatar with Photo Upload Trigger */}
           <div className="relative group shrink-0">
-            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 font-bold text-2xl flex items-center justify-center border border-brand-200/60 dark:border-brand-800/60 overflow-hidden shadow-xs relative">
-              {profile?.avatarUrl ? (
-                <img
-                  src={profile.avatarUrl}
-                  alt={profile?.fullName || 'Profile photo'}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                initials
-              )}
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden shadow-xs relative">
+              <Avatar
+                src={profile?.avatarUrl}
+                name={profile?.fullName || 'Employee'}
+                firstName={profile?.firstName}
+                lastName={profile?.lastName}
+                shape="rounded-2xl"
+                size="2xl"
+                className="w-full h-full text-2xl border border-brand-200/60 dark:border-brand-800/60"
+              />
 
               {/* Hover overlay for quick change */}
               <button
@@ -959,13 +1078,19 @@ export const ProfilePage = () => {
           {/* Current & Preview display */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-6 py-2">
             <div className="text-center space-y-2">
-              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 font-bold text-3xl flex items-center justify-center border-2 border-dashed border-brand-300 dark:border-brand-700 overflow-hidden shadow-inner mx-auto">
+              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden shadow-inner mx-auto border-2 border-dashed border-brand-300 dark:border-brand-700 bg-brand-50 dark:bg-brand-900/30">
                 {photoPreview ? (
                   <img src={photoPreview} alt="Preview" className="w-full h-full object-cover" />
-                ) : profile?.avatarUrl ? (
-                  <img src={profile.avatarUrl} alt="Current profile" className="w-full h-full object-cover" />
                 ) : (
-                  initials
+                  <Avatar
+                    src={profile?.avatarUrl}
+                    name={profile?.fullName || 'Employee'}
+                    firstName={profile?.firstName}
+                    lastName={profile?.lastName}
+                    shape="rounded-2xl"
+                    size="3xl"
+                    className="w-full h-full text-3xl font-bold"
+                  />
                 )}
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
@@ -990,27 +1115,40 @@ export const ProfilePage = () => {
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/png,image/jpeg,image/jpg,image/webp,image/gif"
+            accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.jfif"
             onChange={handleSelectPhoto}
             className="hidden"
           />
 
           <div
             onClick={() => fileInputRef.current?.click()}
-            className="border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-brand-500 dark:hover:border-brand-500 rounded-xl p-5 text-center cursor-pointer transition-colors bg-slate-50/60 dark:bg-slate-800/40 hover:bg-brand-50/30 group"
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={`border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-all ${
+              isDragging
+                ? 'border-brand-500 bg-brand-50/70 dark:bg-brand-900/40 scale-[1.01]'
+                : 'border-slate-300 dark:border-slate-700 hover:border-brand-500 dark:hover:border-brand-500 bg-slate-50/60 dark:bg-slate-800/40 hover:bg-brand-50/30'
+            } group`}
           >
             <div className="w-10 h-10 rounded-full bg-brand-50 dark:bg-brand-900/40 text-brand-600 dark:text-brand-400 flex items-center justify-center mx-auto mb-2 group-hover:scale-110 transition-transform">
               <Upload className="w-5 h-5" />
             </div>
             <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">
-              {photoFile ? photoFile.name : 'Click to select a photo from your device'}
+              {optimizingPhoto
+                ? 'Optimizing image for fast upload...'
+                : photoFile
+                ? photoFile.name
+                : isDragging
+                ? 'Drop image here'
+                : 'Click to select or drag and drop a photo'}
             </p>
             <p className="text-[11px] text-slate-400 mt-1">
-              Supports JPEG, PNG, WEBP up to 5MB
+              Supports JPG, PNG, WEBP, GIF, BMP (auto-optimized)
             </p>
             {photoFile && (
               <p className="text-[11px] text-brand-600 font-semibold mt-1">
-                {(photoFile.size / 1024).toFixed(1)} KB — Selected
+                {(photoFile.size / 1024).toFixed(1)} KB — Ready to upload
               </p>
             )}
           </div>

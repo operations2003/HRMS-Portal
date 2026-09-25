@@ -186,13 +186,16 @@ export const employeeController = {
     try {
       const user = req.user;
       const empQuery = await pool.query(
-        `SELECT e.*, d.name as department_name, des.title as designation_title,
+        `SELECT e.*, 
+                COALESCE(e.avatar_url, u.avatar_url) AS avatar_url,
+                d.name as department_name, des.title as designation_title,
                 m.first_name as manager_first_name, m.last_name as manager_last_name
          FROM employees e
+         LEFT JOIN users u ON u.id = e.user_id OR LOWER(u.email) = LOWER(e.email)
          LEFT JOIN departments d ON e.dept_id = d.id
          LEFT JOIN designations des ON e.desig_id = des.id
          LEFT JOIN employees m ON e.manager_id = m.id
-         WHERE e.user_id = $1 OR e.email = $2
+         WHERE e.user_id = $1 OR LOWER(e.email) = LOWER($2)
          LIMIT 1;`,
         [user.id, user.email]
       );
@@ -272,10 +275,17 @@ export const employeeController = {
            avatar_url = COALESCE($6, avatar_url),
            personal_email = COALESCE($7, personal_email),
            updated_at = NOW()
-         WHERE user_id = $8 OR email = $9
+         WHERE user_id = $8 OR LOWER(email) = LOWER($9)
          RETURNING *;`,
         [phone, emergencyContact, address, fatherName, motherName, avatarUrl, pEmail, user.id, user.email]
       );
+
+      if (avatarUrl) {
+        await pool.query(
+          `UPDATE users SET avatar_url = $1, updated_at = NOW() WHERE id = $2 OR LOWER(email) = LOWER($3);`,
+          [avatarUrl, user.id, user.email]
+        ).catch(() => {});
+      }
 
       if (updateRes.rows.length === 0) {
         return sendError(res, 'Employee record not found.', 404);
@@ -299,9 +309,12 @@ export const employeeController = {
       const isHrAdmin = ['admin', 'superadmin', 'hr', 'hrmanager', 'orgadmin'].some(r => role.includes(r));
 
       const empQuery = await pool.query(
-        `SELECT e.*, d.name as department_name, des.title as designation_title,
+        `SELECT e.*, 
+                COALESCE(e.avatar_url, u.avatar_url) AS avatar_url,
+                d.name as department_name, des.title as designation_title,
                 m.first_name as manager_first_name, m.last_name as manager_last_name
          FROM employees e
+         LEFT JOIN users u ON u.id = e.user_id OR LOWER(u.email) = LOWER(e.email)
          LEFT JOIN departments d ON e.dept_id = d.id
          LEFT JOIN designations des ON e.desig_id = des.id
          LEFT JOIN employees m ON e.manager_id = m.id
@@ -384,33 +397,28 @@ export const employeeController = {
         return sendError(res, 'No image file uploaded. Please select an image.', 400);
       }
 
+      const fileBuffer = fs.readFileSync(req.file.path);
+      const mimeType = req.file.mimetype || 'image/jpeg';
+
       let avatarUrl = '';
       try {
-        const cloudRes = await cloudinaryService.upload(req.file.path, {
+        const cloudRes = await cloudinaryService.upload(fileBuffer, {
           folder: 'hrms-portal/avatars',
           filename: `avatar_${user.id}_${Date.now()}`,
           resourceType: 'image',
+          mimeType,
         });
-        avatarUrl = cloudRes.secureUrl;
-      } catch (cloudErr) {
-        try {
-          const avatarsDir = path.join(process.cwd(), 'uploads', 'avatars');
-          if (!fs.existsSync(avatarsDir)) {
-            fs.mkdirSync(avatarsDir, { recursive: true });
-          }
-          const ext = path.extname(req.file.originalname || '').toLowerCase() || '.jpg';
-          const localFileName = `avatar_${user.id}_${Date.now()}${ext}`;
-          const localDest = path.join(avatarsDir, localFileName);
-          fs.copyFileSync(req.file.path, localDest);
-          avatarUrl = `/uploads/avatars/${localFileName}`;
-        } catch {
-          // Fallback to base64 Data URI if file copy fails
-          const fileBuffer = fs.readFileSync(req.file.path);
-          const mimeType = req.file.mimetype || 'image/jpeg';
-          avatarUrl = `data:${mimeType};base64,${fileBuffer.toString('base64')}`;
+        if (cloudRes?.secureUrl) {
+          avatarUrl = cloudRes.secureUrl;
+        } else {
+          throw new Error('Cloudinary response did not return secureUrl');
         }
+      } catch (cloudErr) {
+        console.error('Cloudinary avatar upload error:', cloudErr.message || cloudErr);
+        // Resilient fallback: base64 Data URI ensures photo ALWAYS displays everywhere immediately
+        avatarUrl = `data:${mimeType};base64,${fileBuffer.toString('base64')}`;
       } finally {
-        // Clean up temporary local file if created
+        // Clean up temporary local file
         try {
           if (req.file.path && fs.existsSync(req.file.path)) {
             fs.unlinkSync(req.file.path);
@@ -488,30 +496,25 @@ export const employeeController = {
         return sendError(res, 'No image file uploaded. Please select an image.', 400);
       }
 
+      const fileBuffer = fs.readFileSync(req.file.path);
+      const mimeType = req.file.mimetype || 'image/jpeg';
+
       let avatarUrl = '';
       try {
-        const cloudRes = await cloudinaryService.upload(req.file.path, {
+        const cloudRes = await cloudinaryService.upload(fileBuffer, {
           folder: 'hrms-portal/avatars',
           filename: `avatar_${targetEmp.id}_${Date.now()}`,
           resourceType: 'image',
+          mimeType,
         });
-        avatarUrl = cloudRes.secureUrl;
-      } catch (cloudErr) {
-        try {
-          const avatarsDir = path.join(process.cwd(), 'uploads', 'avatars');
-          if (!fs.existsSync(avatarsDir)) {
-            fs.mkdirSync(avatarsDir, { recursive: true });
-          }
-          const ext = path.extname(req.file.originalname || '').toLowerCase() || '.jpg';
-          const localFileName = `avatar_${targetEmp.id}_${Date.now()}${ext}`;
-          const localDest = path.join(avatarsDir, localFileName);
-          fs.copyFileSync(req.file.path, localDest);
-          avatarUrl = `/uploads/avatars/${localFileName}`;
-        } catch {
-          const fileBuffer = fs.readFileSync(req.file.path);
-          const mimeType = req.file.mimetype || 'image/jpeg';
-          avatarUrl = `data:${mimeType};base64,${fileBuffer.toString('base64')}`;
+        if (cloudRes?.secureUrl) {
+          avatarUrl = cloudRes.secureUrl;
+        } else {
+          throw new Error('Cloudinary response did not return secureUrl');
         }
+      } catch (cloudErr) {
+        console.error('Cloudinary avatar upload error:', cloudErr.message || cloudErr);
+        avatarUrl = `data:${mimeType};base64,${fileBuffer.toString('base64')}`;
       } finally {
         try {
           if (req.file.path && fs.existsSync(req.file.path)) {

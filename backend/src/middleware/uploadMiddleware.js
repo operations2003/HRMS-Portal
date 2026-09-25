@@ -13,14 +13,36 @@ if (!fs.existsSync(uploadDir)) {
 const ALLOWED_MIME_TYPES = new Set([
   'application/pdf',
   'image/jpeg',
+  'image/jpg',
   'image/png',
   'image/webp',
   'image/gif',
+  'image/bmp',
+  'image/jfif',
+  'image/svg+xml',
+  'image/x-png',
+  'image/pjpeg',
+  'image/heic',
+  'image/heif',
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ]);
 
-const ALLOWED_EXTENSIONS = new Set(['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.gif', '.doc', '.docx']);
+const ALLOWED_EXTENSIONS = new Set([
+  '.pdf',
+  '.jpg',
+  '.jpeg',
+  '.png',
+  '.webp',
+  '.gif',
+  '.bmp',
+  '.jfif',
+  '.svg',
+  '.heic',
+  '.heif',
+  '.doc',
+  '.docx',
+]);
 
 // Storage engine configuration
 const storage = multer.diskStorage({
@@ -41,13 +63,16 @@ const storage = multer.diskStorage({
 // File filter function
 const fileFilter = (req, file, cb) => {
   const ext = path.extname(file.originalname).toLowerCase();
-  const mime = file.mimetype.toLowerCase();
+  const mime = (file.mimetype || '').toLowerCase();
 
-  if (ALLOWED_MIME_TYPES.has(mime) && ALLOWED_EXTENSIONS.has(ext)) {
+  const isMimeAllowed = ALLOWED_MIME_TYPES.has(mime) || mime.startsWith('image/');
+  const isExtAllowed = ALLOWED_EXTENSIONS.has(ext);
+
+  if (isMimeAllowed && isExtAllowed) {
     cb(null, true);
   } else {
     const err = new Error(
-      `Unsupported file type '${file.originalname}'. Allowed formats: PDF, JPEG, PNG, WEBP, DOC, DOCX.`
+      `Unsupported file type '${file.originalname}'. Allowed formats: PDF, JPEG, PNG, WEBP, GIF, BMP, DOC, DOCX.`
     );
     err.code = 'INVALID_FILE_TYPE';
     cb(err, false);

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 /**
  * Modern, resilient Avatar component with graceful image loading and fallback to initials.
@@ -17,6 +17,10 @@ export const Avatar = ({
   ...props
 }) => {
   const [imageError, setImageError] = useState(false);
+
+  useEffect(() => {
+    setImageError(false);
+  }, [src]);
 
   // Compute initials
   const resolvedName = (name || `${firstName || ''} ${lastName || ''}`).trim();

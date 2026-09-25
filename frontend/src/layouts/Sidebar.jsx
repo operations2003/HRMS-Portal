@@ -231,12 +231,6 @@ export const Sidebar = ({ isOpen, onClose }) => {
           icon: Award,
           roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
         },
-        {
-          name: 'Performance Reports',
-          path: '/reports',
-          icon: FileText,
-          roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
-        },
       ],
     },
     {
@@ -292,12 +286,6 @@ export const Sidebar = ({ isOpen, onClose }) => {
           name: 'Performance Reviews',
           path: '/performance',
           icon: Award,
-          roles: ['Admin', 'SuperAdmin', 'OrgAdmin'],
-        },
-        {
-          name: 'Performance Reports',
-          path: '/reports',
-          icon: FileText,
           roles: ['Admin', 'SuperAdmin', 'OrgAdmin'],
         },
         {
