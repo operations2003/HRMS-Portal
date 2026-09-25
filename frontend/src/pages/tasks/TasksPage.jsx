@@ -26,6 +26,7 @@ import { useToast } from '../../context/ToastContext.jsx';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
 import { Badge } from '../../components/common/Badge.jsx';
 import { Button } from '../../components/common/Button.jsx';
+import { isCeoOrAdmin, filterNonCeoEmployees } from '../../utils/roleUtils.js';
 
 const STATUS_COLUMNS = [
   { id: 'TODO', label: 'To Do', color: 'border-slate-300 bg-slate-50' },
@@ -93,15 +94,23 @@ export const TasksPage = () => {
   }, [fetchTasks]);
 
   useEffect(() => {
-    // Fetch employees for assignment
+    // Fetch employees for assignment (excluding CEO/Admin globally)
     employeeService.listEmployees({ limit: 100 }).then((res) => {
-      setEmployees(res.employees || res.data?.employees || (Array.isArray(res) ? res : []));
+      const list = res.employees || res.data?.employees || (Array.isArray(res) ? res : []);
+      setEmployees(filterNonCeoEmployees(list));
     }).catch(() => {});
   }, []);
 
   const handleCreateTask = async (e) => {
     e.preventDefault();
     try {
+      const isUserAdminCeo = isCeoOrAdmin(user);
+      const assigneeId = formData.assigneeId || (!isUserAdminCeo ? user.employeeId : null);
+      if (!assigneeId) {
+        toast.error('Please select an employee to assign this task to.');
+        return;
+      }
+
       const subtasks = formData.subtasksText
         .split('\n')
         .map((s) => s.trim())
@@ -111,7 +120,7 @@ export const TasksPage = () => {
       await taskService.createTask({
         title: formData.title,
         description: formData.description,
-        assigneeId: formData.assigneeId || user.employeeId,
+        assigneeId,
         priority: formData.priority,
         dueDate: formData.dueDate || null,
         subtasks,
@@ -580,13 +589,20 @@ export const TasksPage = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Assignee</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Assignee {!isCeoOrAdmin(user) && <span className="font-normal text-slate-400">(Default: You)</span>}
+                  </label>
                   <select
                     value={formData.assigneeId}
                     onChange={(e) => setFormData({ ...formData, assigneeId: e.target.value })}
                     className="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none"
+                    required={isCeoOrAdmin(user)}
                   >
-                    <option value="">Assign to myself</option>
+                    {!isCeoOrAdmin(user) ? (
+                      <option value="">Assign to myself</option>
+                    ) : (
+                      <option value="">Select Employee...</option>
+                    )}
                     {employees.map((emp) => (
                       <option key={emp.id} value={emp.id}>
                         {emp.firstName} {emp.lastName} ({emp.employeeCode})

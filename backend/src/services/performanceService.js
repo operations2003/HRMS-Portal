@@ -4,6 +4,7 @@ import { workflowRepository } from '../repositories/workflowRepository.js';
 import { notificationService } from './notificationService.js';
 import { validateEmployeeId } from '../validators/managerValidator.js';
 import { logger } from '../utils/logger.js';
+import { isCeoOrAdmin, checkIsEmployeeCeoOrAdmin } from '../utils/roleUtils.js';
 
 export const performanceService = {
   /**
@@ -125,10 +126,9 @@ export const performanceService = {
       throw err;
     }
 
-    // Admin does not have their own performance review -> target employee cannot be an admin account
-    const targetRole = (targetEmp.user?.roleName || targetEmp.roleName || targetEmp.role?.name || (typeof targetEmp.role === 'string' ? targetEmp.role : '') || '').toLowerCase();
-    if (['admin', 'superadmin', 'orgadmin'].some((r) => targetRole.includes(r))) {
-      const err = new Error('Forbidden: Administrators do not participate in employee performance reviews.');
+    // The CEO/Admin must NEVER be selectable or targeted as a performance reviewee
+    if (isCeoOrAdmin(targetEmp) || (await checkIsEmployeeCeoOrAdmin(data.employeeId, currentUser.orgId))) {
+      const err = new Error('Forbidden: The CEO or Administrator cannot be the subject of an employee performance review.');
       err.statusCode = 400;
       throw err;
     }
@@ -295,6 +295,12 @@ export const performanceService = {
     // Only allow editing draft/returned reviews
     if (!['DRAFT', 'RETURNED'].includes(record.status)) {
       const err = new Error(`Cannot modify review in status '${record.status}'. Only DRAFT or RETURNED appraisals can be edited.`);
+      err.statusCode = 400;
+      throw err;
+    }
+
+    if (updates.employeeId && (await checkIsEmployeeCeoOrAdmin(updates.employeeId, currentUser.orgId))) {
+      const err = new Error('Forbidden: The CEO or Administrator cannot be the subject of a performance review.');
       err.statusCode = 400;
       throw err;
     }

@@ -29,13 +29,14 @@ import { CreateAppraisalModal } from '../../components/performance/CreateApprais
 import { ManagerReviewModal } from '../../components/performance/ManagerReviewModal.jsx';
 import { CreatePeriodModal } from '../../components/performance/CreatePeriodModal.jsx';
 import { AppraisalDetailModal } from '../../components/performance/AppraisalDetailModal.jsx';
+import { isCeoOrAdmin } from '../../utils/roleUtils.js';
 
 export const PerformancePage = () => {
   const { user, hasRole } = useAuth();
   const toast = useToast();
 
   const userRoleStr = (user?.roleName || user?.role?.name || user?.role || '').toLowerCase().trim();
-  const isAdmin = ['admin', 'superadmin', 'orgadmin'].some((r) => userRoleStr.includes(r));
+  const isAdmin = isCeoOrAdmin(user) || ['admin', 'superadmin', 'orgadmin'].some((r) => userRoleStr.includes(r));
   const isHR = !isAdmin && ['hr', 'hrmanager'].some((r) => userRoleStr.includes(r));
   const isManager = !isAdmin && !isHR && (['manager', 'lead', 'supervisor'].some((r) => userRoleStr.includes(r)) || hasRole('Manager'));
   const isEmployeeOnly = !isAdmin && !isHR && !isManager;

@@ -1,6 +1,7 @@
 import { query } from '../config/db.js';
 import { adminService } from './adminService.js';
 import { notificationService } from './notificationService.js';
+import { checkIsEmployeeCeoOrAdmin } from '../utils/roleUtils.js';
 
 export const taskService = {
   /**
@@ -82,8 +83,17 @@ export const taskService = {
       throw err;
     }
 
-    const id = `tsk-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const assigneeId = payload.assigneeId || creatorId;
+
+    // Enforce business rule: The CEO/Admin must NEVER be a target of work assignment
+    const isAssigneeCeo = await checkIsEmployeeCeoOrAdmin(assigneeId, orgId);
+    if (isAssigneeCeo) {
+      const err = new Error('Forbidden: Work or tasks cannot be assigned to the CEO or Administrator. Please assign to an operational team member.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const id = `tsk-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
     const res = await query(
       `INSERT INTO work_tasks (

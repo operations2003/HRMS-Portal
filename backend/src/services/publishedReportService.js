@@ -3,6 +3,7 @@ import { employeeRepository } from '../repositories/employeeRepository.js';
 import { userRepository } from '../repositories/userRepository.js';
 import { notificationRepository } from '../repositories/notificationRepository.js';
 import { logger } from '../utils/logger.js';
+import { isCeoOrAdmin, checkIsEmployeeCeoOrAdmin } from '../utils/roleUtils.js';
 
 export const publishedReportService = {
   /**
@@ -36,6 +37,13 @@ export const publishedReportService = {
     if (!emp) {
       const err = new Error('Selected employee was not found in the organization directory.');
       err.statusCode = 404;
+      throw err;
+    }
+
+    // Enforce business rule: The CEO/Admin must NEVER be a target or reviewee of a performance report
+    if (isCeoOrAdmin(emp) || (await checkIsEmployeeCeoOrAdmin(employeeId, orgId))) {
+      const err = new Error('Forbidden: The CEO or Administrator cannot be the subject of a performance review.');
+      err.statusCode = 400;
       throw err;
     }
 

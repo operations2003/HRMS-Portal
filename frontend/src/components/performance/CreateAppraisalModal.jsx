@@ -8,6 +8,7 @@ import { performanceService } from '../../services/performanceService.js';
 import { employeeService } from '../../services/employeeService.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
+import { filterNonCeoEmployees } from '../../utils/roleUtils.js';
 
 export const CreateAppraisalModal = ({ isOpen, onClose, onSuccess }) => {
   const toast = useToast();
@@ -80,24 +81,8 @@ export const CreateAppraisalModal = ({ isOpen, onClose, onSuccess }) => {
       const res = await employeeService.listEmployees({ limit: 300 });
       const all = res.employees || res.data || (Array.isArray(res) ? res : []);
 
-      // Filter out Admin accounts because Admins do NOT have their own performance review
-      const nonAdminCandidates = all.filter((e) => {
-        const rName = (e.user?.roleName || e.roleName || e.role?.name || (typeof e.role === 'string' ? e.role : '') || '').toLowerCase();
-        const dName = (e.designation?.title || e.designationName || e.designation?.name || '').toLowerCase();
-        const email = (e.email || '').toLowerCase();
-        const name = `${e.firstName || ''} ${e.lastName || ''}`.trim().toLowerCase();
-
-        const isAdm =
-          ['admin', 'superadmin', 'orgadmin'].some((r) => rName.includes(r)) ||
-          email.startsWith('admin@') ||
-          email.includes('superadmin') ||
-          name === 'admin' ||
-          name === 'administrator' ||
-          dName.includes('administrator') ||
-          dName.includes('system admin');
-
-        return !isAdm;
-      });
+      // Filter out CEO and Admin accounts globally (they cannot be reviewees)
+      const nonAdminCandidates = filterNonCeoEmployees(all);
 
       // Exclude self (employees cannot evaluate themselves)
       const nonSelf = nonAdminCandidates.filter(

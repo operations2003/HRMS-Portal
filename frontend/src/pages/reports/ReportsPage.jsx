@@ -41,6 +41,7 @@ import { employeeService } from '../../services/employeeService.js';
 import { performanceReportService } from '../../services/performanceReportService.js';
 import { notificationService } from '../../services/notificationService.js';
 import { PrintableReportDossier } from '../../components/performance/PrintableReportDossier.jsx';
+import { filterNonCeoEmployees } from '../../utils/roleUtils.js';
 
 
 
@@ -352,35 +353,8 @@ export const ReportsPage = () => {
   const departmentEmployees = useMemo(() => {
     if (!employees || employees.length === 0) return [];
 
-    let candidates = employees.filter((emp) => {
-      const role = (
-        emp.user?.roleName ||
-        emp.roleName ||
-        emp.role?.name ||
-        (typeof emp.role === 'string' ? emp.role : '') ||
-        ''
-      ).toLowerCase();
-      const desig = (
-        emp.designation?.title ||
-        emp.designationName ||
-        emp.designation?.name ||
-        (typeof emp.designation === 'string' ? emp.designation : '')
-      ).toLowerCase();
-      const email = (emp.email || '').toLowerCase();
-      const name = `${emp.firstName || ''} ${emp.lastName || ''}`.trim().toLowerCase();
-
-      return (
-        !['admin', 'superadmin', 'orgadmin'].some((r) => role.includes(r)) &&
-        !email.startsWith('admin@') &&
-        !email.includes('superadmin') &&
-        name !== 'admin' &&
-        name !== 'administrator' &&
-        !name.startsWith('admin ') &&
-        !desig.includes('administrator') &&
-        !desig.includes('system admin') &&
-        desig !== 'ceo'
-      );
-    });
+    // Exclude CEO and Admin accounts globally (cannot be assigned or reviewed)
+    let candidates = filterNonCeoEmployees(employees);
 
     // Sort alphabetically by employee name so it is easy to find anyone
     return [...candidates].sort((a, b) => {
