@@ -19,8 +19,6 @@ import {
   ExternalLink,
   ChevronRight,
   TrendingUp,
-  LogIn,
-  LogOut,
   Bell,
   ShieldCheck,
   Send,
@@ -30,7 +28,6 @@ import {
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { managerService } from '../../services/managerService.js';
-import { attendanceService } from '../../services/attendanceService.js';
 import { leaveService } from '../../services/leaveService.js';
 import { notificationService } from '../../services/notificationService.js';
 import { Button } from '../../components/common/Button.jsx';
@@ -53,8 +50,6 @@ export const ManagerDashboardView = () => {
   const [teamLeaves, setTeamLeaves] = useState([]);
   const [pendingApprovals, setPendingApprovals] = useState({ leaves: [], appraisals: [] });
   const [myLeaveBalances, setMyLeaveBalances] = useState([]);
-  const [myTodayAttendance, setMyTodayAttendance] = useState(null);
-  const [punchLoading, setPunchLoading] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState(null);
 
   // Roster search filter
@@ -74,7 +69,6 @@ export const ManagerDashboardView = () => {
         leavesRes,
         approvalsRes,
         balancesRes,
-        myAttRes,
       ] = await Promise.allSettled([
         managerService.getDashboard(),
         managerService.getTeam(),
@@ -82,7 +76,6 @@ export const ManagerDashboardView = () => {
         managerService.getTeamLeaves(),
         managerService.getPendingApprovals(),
         leaveService.getMyBalances(),
-        attendanceService.getMyAttendance({ limit: 1 }),
       ]);
 
       if (dashRes.status === 'fulfilled') {
@@ -118,15 +111,6 @@ export const ManagerDashboardView = () => {
       if (balancesRes.status === 'fulfilled') {
         setMyLeaveBalances(Array.isArray(balancesRes.value) ? balancesRes.value : []);
       }
-
-      if (myAttRes.status === 'fulfilled') {
-        const recs = myAttRes.value?.records || [];
-        const todayRec = recs.find((r) => {
-          const rDate = r.attendanceDate || r.attendance_date;
-          return rDate && rDate.startsWith(todayStr);
-        }) || recs[0];
-        setMyTodayAttendance(todayRec || null);
-      }
     } catch (err) {
       console.error('Error loading manager dashboard data:', err);
       toast.showError('Failed to refresh dashboard intelligence.');
@@ -139,38 +123,6 @@ export const ManagerDashboardView = () => {
   useEffect(() => {
     loadData();
   }, []);
-
-  // Quick punch handler for manager's personal attendance
-  const handleQuickPunch = async () => {
-    try {
-      setPunchLoading(true);
-      if (!myTodayAttendance?.checkInTime && !myTodayAttendance?.check_in_time) {
-        await attendanceService.checkIn({
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          source: 'WEB_PORTAL',
-        });
-        toast.showSuccess('Clocked in successfully! Have a productive day.');
-      } else {
-        await attendanceService.checkOut({
-          notes: 'Standard shift completion',
-        });
-        toast.showSuccess('Clocked out successfully.');
-      }
-      // Refresh personal attendance
-      const myAttRes = await attendanceService.getMyAttendance({ limit: 1 });
-      const recs = myAttRes?.records || [];
-      const todayStr = new Date().toISOString().split('T')[0];
-      const todayRec = recs.find((r) => {
-        const rDate = r.attendanceDate || r.attendance_date;
-        return rDate && rDate.startsWith(todayStr);
-      }) || recs[0];
-      setMyTodayAttendance(todayRec || null);
-    } catch (err) {
-      toast.showError(err.message || 'Failed to record attendance punch.');
-    } finally {
-      setPunchLoading(false);
-    }
-  };
 
   // Quick Leave Approval from Dashboard
   const handleQuickApproveLeave = async (leaveId) => {
@@ -217,9 +169,6 @@ export const ManagerDashboardView = () => {
   const upcomingLeaves = teamLeaves
     .filter((l) => l.status === 'APPROVED' || l.status === 'PENDING')
     .slice(0, 5);
-
-  const isCheckedIn = Boolean(myTodayAttendance?.checkInTime || myTodayAttendance?.check_in_time);
-  const isCheckedOut = Boolean(myTodayAttendance?.checkOutTime || myTodayAttendance?.check_out_time);
 
   return (
     <div className="space-y-6">
@@ -302,7 +251,7 @@ export const ManagerDashboardView = () => {
       </div>
 
       {/* 2. Top Metric KPI Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* KPI 1: Assigned Team */}
         <div
           onClick={() => navigate('/team')}
@@ -391,35 +340,6 @@ export const ManagerDashboardView = () => {
             <div className="text-xs text-slate-500 mt-1">
               {pendingApprovals.leaves.length} leaves • {pendingApprovals.appraisals.length} reviews
             </div>
-          </div>
-        </div>
-
-        {/* KPI 5: Manager's Personal Clock-In Widget */}
-        <div className="bg-gradient-to-br from-slate-50 to-indigo-50/40 dark:from-slate-900 dark:to-indigo-950/30 rounded-2xl border border-indigo-200/60 dark:border-indigo-900/50 p-5 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider">
-              My Attendance
-            </span>
-            <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
-          </div>
-          <div className="mt-2">
-            <div className="text-sm font-bold text-slate-900 dark:text-white">
-              {isCheckedOut
-                ? 'Shift Completed'
-                : isCheckedIn
-                ? `Clocked In (${myTodayAttendance.checkInTime || myTodayAttendance.check_in_time})`
-                : 'Not Clocked In'}
-            </div>
-            <Button
-              variant={isCheckedIn && !isCheckedOut ? 'danger' : 'primary'}
-              size="xs"
-              className="mt-2.5 w-full text-xs"
-              loading={punchLoading}
-              icon={isCheckedIn && !isCheckedOut ? LogOut : LogIn}
-              onClick={handleQuickPunch}
-            >
-              {isCheckedIn && !isCheckedOut ? 'Clock Out Shift' : 'Quick Clock In'}
-            </Button>
           </div>
         </div>
       </div>
