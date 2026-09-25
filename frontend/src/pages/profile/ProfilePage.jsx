@@ -219,59 +219,77 @@ export const ProfilePage = () => {
    * ensuring ultra-fast uploads, zero payload rejections, and no localStorage quota issues.
    */
   const optimizeAvatarFile = async (file) => {
+    if (!file || file.type === 'image/svg+xml' || file.type === 'image/gif') {
+      return file;
+    }
+
     return new Promise((resolve) => {
-      // If SVG, return as is
-      if (file.type === 'image/svg+xml') {
-        return resolve(file);
-      }
+      // 2.5 second safety timeout: if optimization takes too long or freezes, resolve original file immediately
+      const timer = setTimeout(() => resolve(file), 2500);
 
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
-          try {
-            const maxDim = 800;
-            let { width, height } = img;
-            if (width > maxDim || height > maxDim) {
-              if (width > height) {
-                height = Math.round((height * maxDim) / width);
-                width = maxDim;
-              } else {
-                width = Math.round((width * maxDim) / height);
-                height = maxDim;
+      try {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onload = () => {
+            clearTimeout(timer);
+            try {
+              const maxDim = 800;
+              let { width, height } = img;
+              if (width > maxDim || height > maxDim) {
+                if (width > height) {
+                  height = Math.round((height * maxDim) / width);
+                  width = maxDim;
+                } else {
+                  width = Math.round((width * maxDim) / height);
+                  height = maxDim;
+                }
               }
+
+              const canvas = document.createElement('canvas');
+              canvas.width = Math.max(width, 1);
+              canvas.height = Math.max(height, 1);
+              const ctx = canvas.getContext('2d');
+              ctx.imageSmoothingEnabled = true;
+              ctx.imageSmoothingQuality = 'high';
+              ctx.drawImage(img, 0, 0, width, height);
+
+              canvas.toBlob(
+                (blob) => {
+                  if (!blob) return resolve(file);
+                  const cleanBase = (file.name || 'avatar').replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_');
+                  try {
+                    const optimizedFile = new File([blob], `${cleanBase || 'avatar'}.jpg`, {
+                      type: 'image/jpeg',
+                      lastModified: Date.now(),
+                    });
+                    resolve(optimizedFile);
+                  } catch {
+                    resolve(blob);
+                  }
+                },
+                'image/jpeg',
+                0.86
+              );
+            } catch {
+              resolve(file);
             }
-
-            const canvas = document.createElement('canvas');
-            canvas.width = Math.max(width, 1);
-            canvas.height = Math.max(height, 1);
-            const ctx = canvas.getContext('2d');
-            ctx.imageSmoothingEnabled = true;
-            ctx.imageSmoothingQuality = 'high';
-            ctx.drawImage(img, 0, 0, width, height);
-
-            canvas.toBlob(
-              (blob) => {
-                if (!blob) return resolve(file);
-                const cleanBase = file.name.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_');
-                const optimizedFile = new File([blob], `${cleanBase || 'avatar'}.jpg`, {
-                  type: 'image/jpeg',
-                  lastModified: Date.now(),
-                });
-                resolve(optimizedFile);
-              },
-              'image/jpeg',
-              0.88
-            );
-          } catch {
+          };
+          img.onerror = () => {
+            clearTimeout(timer);
             resolve(file);
-          }
+          };
+          img.src = e.target.result;
         };
-        img.onerror = () => resolve(file);
-        img.src = e.target.result;
-      };
-      reader.onerror = () => resolve(file);
-      reader.readAsDataURL(file);
+        reader.onerror = () => {
+          clearTimeout(timer);
+          resolve(file);
+        };
+        reader.readAsDataURL(file);
+      } catch {
+        clearTimeout(timer);
+        resolve(file);
+      }
     });
   };
 
@@ -287,22 +305,36 @@ export const ProfilePage = () => {
       return;
     }
 
-    if (file.size > 20 * 1024 * 1024) {
-      setPhotoError('Image size exceeds maximum limit of 20MB.');
+    if (file.size > 25 * 1024 * 1024) {
+      setPhotoError('Image size exceeds maximum limit of 25MB.');
       return;
     }
 
+    // Instant Preview: Show user their selected photo immediately with 0 delay!
+    try {
+      const immediateUrl = URL.createObjectURL(file);
+      setPhotoPreview(immediateUrl);
+      setPhotoFile(file);
+      setPhotoError(null);
+    } catch {
+      // Ignore
+    }
+
+    // Run background optimization to compress payload size
     try {
       setOptimizingPhoto(true);
-      setPhotoError(null);
       const readyFile = await optimizeAvatarFile(file);
-      setPhotoFile(readyFile);
-      const previewUrl = URL.createObjectURL(readyFile);
-      setPhotoPreview(previewUrl);
+      if (readyFile && readyFile !== file) {
+        setPhotoFile(readyFile);
+        try {
+          const readyUrl = URL.createObjectURL(readyFile);
+          setPhotoPreview(readyUrl);
+        } catch {
+          // Keep immediate preview
+        }
+      }
     } catch {
-      setPhotoFile(file);
-      const previewUrl = URL.createObjectURL(file);
-      setPhotoPreview(previewUrl);
+      // Keep immediate preview
     } finally {
       setOptimizingPhoto(false);
     }
@@ -335,6 +367,9 @@ export const ProfilePage = () => {
     const file = e.target.files?.[0];
     if (file) {
       await processSelectedFile(file);
+    }
+    if (e.target) {
+      e.target.value = '';
     }
   };
 

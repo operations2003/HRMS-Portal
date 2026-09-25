@@ -397,7 +397,10 @@ export const employeeController = {
         return sendError(res, 'No image file uploaded. Please select an image.', 400);
       }
 
-      const fileBuffer = fs.readFileSync(req.file.path);
+      const fileBuffer = req.file.buffer || (req.file.path && fs.existsSync(req.file.path) ? fs.readFileSync(req.file.path) : null);
+      if (!fileBuffer) {
+        return sendError(res, 'Failed to process the uploaded photo. Please try another image.', 400);
+      }
       const mimeType = req.file.mimetype || 'image/jpeg';
 
       let avatarUrl = '';
@@ -418,9 +421,9 @@ export const employeeController = {
         // Resilient fallback: base64 Data URI ensures photo ALWAYS displays everywhere immediately
         avatarUrl = `data:${mimeType};base64,${fileBuffer.toString('base64')}`;
       } finally {
-        // Clean up temporary local file
+        // Clean up temporary local file if any
         try {
-          if (req.file.path && fs.existsSync(req.file.path)) {
+          if (req.file?.path && fs.existsSync(req.file.path)) {
             fs.unlinkSync(req.file.path);
           }
         } catch {
@@ -496,7 +499,10 @@ export const employeeController = {
         return sendError(res, 'No image file uploaded. Please select an image.', 400);
       }
 
-      const fileBuffer = fs.readFileSync(req.file.path);
+      const fileBuffer = req.file.buffer || (req.file.path && fs.existsSync(req.file.path) ? fs.readFileSync(req.file.path) : null);
+      if (!fileBuffer) {
+        return sendError(res, 'Failed to process the uploaded photo. Please try another image.', 400);
+      }
       const mimeType = req.file.mimetype || 'image/jpeg';
 
       let avatarUrl = '';
@@ -517,7 +523,7 @@ export const employeeController = {
         avatarUrl = `data:${mimeType};base64,${fileBuffer.toString('base64')}`;
       } finally {
         try {
-          if (req.file.path && fs.existsSync(req.file.path)) {
+          if (req.file?.path && fs.existsSync(req.file.path)) {
             fs.unlinkSync(req.file.path);
           }
         } catch {
