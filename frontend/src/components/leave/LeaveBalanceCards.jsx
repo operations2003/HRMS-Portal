@@ -40,15 +40,11 @@ export const LeaveBalanceCards = ({
   error = null,
   onApplyClick,
   canApply = true,
-  title = 'Annual Leave Entitlements & Balances',
-  showAll = false,
 }) => {
   const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'table'
 
-  // Filter to display only leaves that can be applied by the employee, or all if requested
-  const displayBalances = showAll
-    ? (balances || [])
-    : (balances || []).filter((bal) => !isRestrictedLeave(bal));
+  // Filter to display only leaves that can be applied by the employee
+  const displayBalances = (balances || []).filter((bal) => !isRestrictedLeave(bal));
 
   if (isLoading) {
     return (
@@ -82,7 +78,7 @@ export const LeaveBalanceCards = ({
         <div className="flex items-center gap-2">
           <CalendarDays className="w-4 h-4 text-brand-500" />
           <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider">
-            {title}
+            Annual Leave Entitlements & Balances
           </h2>
         </div>
 

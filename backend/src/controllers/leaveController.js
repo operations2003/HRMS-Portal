@@ -57,24 +57,6 @@ export const leaveController = {
   },
 
   /**
-   * GET /api/v1/leaves/all-balances
-   * Fetch leave balances for all active employees (Admin / HR)
-   */
-  async getAllEmployeeBalances(req, res, next) {
-    try {
-      const orgId = req.user.orgId || 'org-1';
-      const year = req.query.year ? parseInt(req.query.year, 10) : new Date().getFullYear();
-      const balances = await leaveRepository.getAllEmployeesBalances(orgId, year);
-      return sendSuccess(res, 'All employee leave balances fetched successfully.', balances);
-    } catch (error) {
-      if (error.statusCode) {
-        return sendError(res, error.message, error.statusCode);
-      }
-      next(error);
-    }
-  },
-
-  /**
    * GET /api/v1/leaves/employee/:employeeId/balances
    * Fetch leave balances for a specific employee (Admin / HR)
    */

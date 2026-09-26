@@ -23,11 +23,6 @@ router.post(
 );
 router.get('/balances', authorize('leave:read'), leaveController.getMyBalances);
 router.get(
-  '/all-balances',
-  requireRoles(['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin']),
-  leaveController.getAllEmployeeBalances
-);
-router.get(
   '/employee/:employeeId/balances',
   requireRoles(['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin']),
   leaveController.getEmployeeBalances

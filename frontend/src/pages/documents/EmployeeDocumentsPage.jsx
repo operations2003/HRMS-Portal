@@ -37,14 +37,10 @@ export const EmployeeDocumentsPage = () => {
   const { user, hasRole, hasPermission, isAuthenticated } = useAuth();
   const toast = useToast();
 
-  const normRole = (user?.roleName || '').toLowerCase();
-  const isAdminOrCeo = ['admin', 'superadmin', 'orgadmin'].some(r => normRole.includes(r)) || user?.email === 'sheetalbedi@tasknera.com';
-
   const canManageDocuments =
     hasPermission('document:manage') ||
     hasPermission('document:write') ||
-    hasRole(['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin']) ||
-    isAdminOrCeo;
+    hasRole(['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin']);
 
   const isAuthorized =
     isAuthenticated &&
@@ -53,8 +49,8 @@ export const EmployeeDocumentsPage = () => {
       hasPermission('employee:read') ||
       hasRole(['Employee', 'Manager']));
 
-  // Tab: 'directory' (Employee Documents) | 'my' (My Personal Documents)
-  const [activeTab, setActiveTab] = useState(canManageDocuments ? 'directory' : 'my');
+  // Tab: 'all' | 'directory' | 'my'
+  const [activeTab, setActiveTab] = useState(canManageDocuments ? 'all' : 'my');
 
   // Documents state
   const [myDocuments, setMyDocuments] = useState([]);
@@ -121,7 +117,7 @@ export const EmployeeDocumentsPage = () => {
   const fetchEmployees = useCallback(async () => {
     if (!canManageDocuments) return;
     try {
-      const res = await employeeService.getAllEmployees();
+      const res = await employeeService.listEmployees({ limit: 100 });
       const empList = Array.isArray(res?.employees)
         ? res.employees
         : Array.isArray(res?.data)
@@ -163,12 +159,10 @@ export const EmployeeDocumentsPage = () => {
 
   useEffect(() => {
     if (canManageDocuments) {
+      fetchAllDocuments();
       fetchEmployees();
-      if (activeTab === 'all') {
-        fetchAllDocuments();
-      }
     }
-  }, [canManageDocuments, activeTab, fetchEmployees, fetchAllDocuments]);
+  }, [canManageDocuments, fetchAllDocuments, fetchEmployees]);
 
   useEffect(() => {
     if (activeTab === 'directory' && selectedEmployeeId) {
@@ -273,6 +267,27 @@ export const EmployeeDocumentsPage = () => {
         <div className="flex items-center">
           <div className="bg-slate-200/70 p-1.5 rounded-2xl flex items-center gap-1.5 shadow-inner">
             <button
+              onClick={() => setActiveTab('all')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer ${
+                activeTab === 'all'
+                  ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-900/5'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+              }`}
+            >
+              <Layers className="w-4 h-4 text-brand-600" />
+              <span>All Company Documents</span>
+              <span
+                className={`text-xs px-2 py-0.5 rounded-full font-bold ${
+                  activeTab === 'all'
+                    ? 'bg-brand-50 text-brand-700 ring-1 ring-brand-200/50'
+                    : 'bg-slate-300/60 text-slate-700'
+                }`}
+              >
+                {allDocuments.length}
+              </span>
+            </button>
+
+            <button
               onClick={() => setActiveTab('directory')}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer ${
                 activeTab === 'directory'
@@ -281,18 +296,7 @@ export const EmployeeDocumentsPage = () => {
               }`}
             >
               <Users className="w-4 h-4 text-indigo-600" />
-              <span>Employee Documents</span>
-              {employees.length > 0 && (
-                <span
-                  className={`text-xs px-2 py-0.5 rounded-full font-bold ${
-                    activeTab === 'directory'
-                      ? 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200/50'
-                      : 'bg-slate-300/60 text-slate-700'
-                  }`}
-                >
-                  {employees.length}
-                </span>
-              )}
+              <span>By Employee</span>
             </button>
 
             <button
@@ -624,11 +628,11 @@ export const EmployeeDocumentsPage = () => {
                 <select
                   value={selectedEmployeeId}
                   onChange={(e) => setSelectedEmployeeId(e.target.value)}
-                  className="px-3.5 py-1.5 text-xs font-semibold rounded-xl border border-slate-200 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 shadow-2xs cursor-pointer max-w-xs sm:max-w-md truncate"
+                  className="px-3.5 py-1.5 text-xs font-semibold rounded-xl border border-slate-200 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 shadow-2xs cursor-pointer"
                 >
                   {filteredEmployees.map((emp) => (
                     <option key={emp.id} value={emp.id}>
-                      {emp.firstName} {emp.lastName} ({emp.employeeCode || emp.employeeNumber || emp.id}) {emp.department?.name ? `• ${emp.department.name}` : emp.departmentName ? `• ${emp.departmentName}` : ''}
+                      {emp.firstName} {emp.lastName} ({emp.employeeNumber || emp.id})
                     </option>
                   ))}
                 </select>
@@ -649,9 +653,6 @@ export const EmployeeDocumentsPage = () => {
                   <div>
                     <span className="text-xs font-bold text-slate-900">
                       {selectedEmpObj.firstName} {selectedEmpObj.lastName}
-                      <span className="text-slate-400 font-mono font-normal ml-1.5">
-                        {selectedEmpObj.employeeCode || selectedEmpObj.employeeNumber || ''}
-                      </span>
                     </span>
                     <span className="text-xs text-slate-400 ml-2">
                       {selectedEmpObj.email}
@@ -659,20 +660,17 @@ export const EmployeeDocumentsPage = () => {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 text-xs flex-wrap">
-                  {(selectedEmpObj.department?.name || selectedEmpObj.departmentName) && (
+                <div className="flex items-center gap-2 text-xs">
+                  {selectedEmpObj.department?.name && (
                     <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-medium">
-                      Dept: {selectedEmpObj.department?.name || selectedEmpObj.departmentName}
+                      Dept: {selectedEmpObj.department.name}
                     </span>
                   )}
-                  {(selectedEmpObj.designation?.title || selectedEmpObj.designationTitle) && (
+                  {selectedEmpObj.designation?.title && (
                     <span className="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 font-medium">
-                      {selectedEmpObj.designation?.title || selectedEmpObj.designationTitle}
+                      {selectedEmpObj.designation.title}
                     </span>
                   )}
-                  <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 font-bold border border-emerald-200">
-                    {selectedEmployeeDocs.length} {selectedEmployeeDocs.length === 1 ? 'Document' : 'Documents'}
-                  </span>
                 </div>
               </div>
             )}
