@@ -123,9 +123,10 @@ export const validateRegularize = (body) => {
     errors.push('Regularization reason must not exceed 500 characters.');
   }
 
-  if (body.status !== undefined && body.status !== null) {
-    if (typeof body.status !== 'string' || !VALID_STATUSES.includes(body.status.toUpperCase())) {
-      errors.push(`Status must be one of: ${VALID_STATUSES.join(', ')}.`);
+  if (body.status !== undefined && body.status !== null && body.status !== '') {
+    const normStatus = body.status.trim().toUpperCase();
+    if (!VALID_STATUSES.includes(normStatus) && normStatus !== 'AUTO') {
+      errors.push(`Status must be one of: ${VALID_STATUSES.join(', ')}, or AUTO.`);
     }
   }
 

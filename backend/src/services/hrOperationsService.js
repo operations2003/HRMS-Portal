@@ -317,6 +317,22 @@ export const hrOperationsService = {
       return { recipientCount: 0 };
     }
 
+    const textLower = `${title} ${message}`.toLowerCase();
+    let targetActionUrl = '/dashboard';
+    if (textLower.includes('course') || textLower.includes('training') || textLower.includes('learning')) {
+      targetActionUrl = '/training';
+    } else if (textLower.includes('policy') || textLower.includes('handbook') || textLower.includes('code of conduct')) {
+      targetActionUrl = '/policies';
+    } else if (textLower.includes('attendance') || textLower.includes('shift') || textLower.includes('timing')) {
+      targetActionUrl = '/attendance';
+    } else if (textLower.includes('leave') || textLower.includes('holiday')) {
+      targetActionUrl = '/leaves';
+    } else if (textLower.includes('task')) {
+      targetActionUrl = '/tasks';
+    } else if (textLower.includes('payroll') || textLower.includes('salary') || textLower.includes('payslip')) {
+      targetActionUrl = '/payroll';
+    }
+
     const notifications = userIds.map((userId) => ({
       orgId,
       userId,
@@ -325,7 +341,7 @@ export const hrOperationsService = {
       message,
       entityType: 'HR_OPERATIONS',
       entityId: 'announcement',
-      actionUrl: '/dashboard',
+      actionUrl: targetActionUrl,
     }));
 
     await notificationService.createSystemNotification({

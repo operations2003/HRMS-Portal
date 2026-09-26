@@ -17,6 +17,7 @@ import {
   RotateCcw,
   Tag,
   AlertTriangle,
+  Edit3,
 } from 'lucide-react';
 import { Modal } from '../common/Modal.jsx';
 import { Badge } from '../common/Badge.jsx';
@@ -28,6 +29,8 @@ export const AttendanceDetailModal = ({
   record = null,
   onAddRemark,
   canRemark = false,
+  onEditTiming,
+  canEditTiming = false,
 }) => {
   if (!record) return null;
 
@@ -89,12 +92,28 @@ export const AttendanceDetailModal = ({
 
           <div className="flex items-center gap-2">
             <Badge variant={getStatusVariant(record.status)} size="md">
-              {record.status}
+              {record.status === 'LATE' ? 'Late Arrival' : record.status}
             </Badge>
             {record.isRegularized && (
               <Badge variant="brand" size="md">
-                Regularized
+                Timing Adjusted
               </Badge>
+            )}
+            {canEditTiming && (
+              <Button
+                variant={record.status === 'LATE' ? 'primary' : 'secondary'}
+                size="sm"
+                icon={Edit3}
+                className={
+                  record.status === 'LATE'
+                    ? '!bg-amber-600 hover:!bg-amber-700 text-white !py-1 !px-2.5 !text-xs font-semibold shadow-xs'
+                    : '!py-1 !px-2.5 !text-xs'
+                }
+                onClick={() => onEditTiming && onEditTiming(record)}
+                title="Adjust arrival/departure timing"
+              >
+                {record.status === 'LATE' ? 'Adjust Late Arrival' : 'Edit Timing'}
+              </Button>
             )}
           </div>
         </div>
@@ -321,22 +340,48 @@ export const AttendanceDetailModal = ({
           );
         })()}
 
-        {/* Regularization Details if applicable */}
+        {/* Timing Adjustment & Regularization Audit Card */}
         {record.isRegularized && !record.regularizationReason?.match(/^\[(EMERGENCY|OT|MISTAKE)\]/i) && (
-          <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200/80 space-y-2">
-            <div className="flex items-center gap-2 text-xs font-bold text-amber-800 uppercase tracking-wider">
-              <UserCheck className="w-4 h-4 text-amber-600" />
-              Regularization Audit Trail
+          <div className="p-4 rounded-2xl bg-gradient-to-br from-indigo-50/70 via-brand-50/40 to-slate-50 border border-indigo-200/80 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-xs font-bold text-indigo-950 uppercase tracking-wider">
+                <Clock className="w-4 h-4 text-brand-600" />
+                Timing Adjustment Audit Trail
+              </div>
+              {canEditTiming && (
+                <button
+                  type="button"
+                  onClick={() => onEditTiming && onEditTiming(record)}
+                  className="text-xs font-semibold text-brand-600 hover:text-brand-700 underline cursor-pointer"
+                >
+                  Edit Again
+                </button>
+              )}
             </div>
-            <div className="text-xs text-slate-700 space-y-1">
-              <div>
-                <span className="font-semibold text-slate-800">Reason:</span>{' '}
-                {record.regularizationReason || 'No detailed reason provided.'}
-              </div>
-              <div>
-                <span className="font-semibold text-slate-800">Regularized At:</span>{' '}
-                {formatTimestamp(record.regularizedAt)}
-              </div>
+            <div className="text-xs text-slate-700 space-y-2">
+              {record.regularizer && (
+                <div className="flex items-center gap-1.5">
+                  <span className="font-semibold text-slate-600">Adjusted By:</span>
+                  <span className="font-bold text-slate-900">{record.regularizer.name}</span>
+                  <span className="text-slate-400">({record.regularizer.email})</span>
+                </div>
+              )}
+              {record.regularizedAt && (
+                <div>
+                  <span className="font-semibold text-slate-600">Adjusted At:</span>{' '}
+                  <span className="text-slate-800 font-medium">{formatTimestamp(record.regularizedAt)}</span>
+                </div>
+              )}
+              {record.regularizationReason && (
+                <div className="p-3 rounded-xl bg-white/90 border border-indigo-100 shadow-2xs">
+                  <span className="font-bold text-indigo-950 block mb-1">
+                    Explanation / Reason Text Message:
+                  </span>
+                  <p className="whitespace-pre-wrap text-slate-800 leading-relaxed font-medium">
+                    {record.regularizationReason}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -354,8 +399,21 @@ export const AttendanceDetailModal = ({
           </div>
         )}
 
-        {/* Close Button */}
-        <div className="flex items-center justify-end pt-4 border-t border-slate-100">
+        {/* Footer Actions */}
+        <div className="flex items-center justify-between pt-4 border-t border-slate-100 flex-wrap gap-2">
+          <div>
+            {canEditTiming && (
+              <Button
+                variant={record.status === 'LATE' ? 'primary' : 'secondary'}
+                size="md"
+                icon={Edit3}
+                className={record.status === 'LATE' ? '!bg-amber-600 hover:!bg-amber-700 text-white shadow-xs' : ''}
+                onClick={() => onEditTiming && onEditTiming(record)}
+              >
+                {record.status === 'LATE' ? 'Adjust Late Arrival' : 'Edit Timing'}
+              </Button>
+            )}
+          </div>
           <Button variant="secondary" size="md" onClick={onClose}>
             Close
           </Button>

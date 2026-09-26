@@ -17,153 +17,383 @@ import {
   CheckCircle2,
   XCircle,
   RotateCcw,
+  GraduationCap,
+  CheckSquare,
+  CreditCard,
+  FileCheck,
+  UserPlus,
+  LogOut,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { notificationService } from '../../services/notificationService.js';
 
-export const getNotificationIcon = (eventType, title = '', entityType = '') => {
-  const type = (eventType || '').toUpperCase();
-  const lowerTitle = (title || '').toLowerCase();
-  const ent = (entityType || '').toUpperCase();
+/**
+ * Intelligent Destination Route Resolver
+ * Maps any notification (by entityType, eventType, content keywords, actionUrl, or role)
+ * to its exact target destination URL.
+ */
+export const resolveNotificationRoute = (notif, userRole = '') => {
+  if (!notif) return '/dashboard';
 
-  // Phase 5: Helpdesk Tickets
+  const actionUrl = notif.actionUrl || notif.action_url || '';
+  const type = (notif.eventType || notif.event_type || '').toUpperCase();
+  const ent = (notif.entityType || notif.entity_type || '').toUpperCase();
+  const entId = notif.entityId || notif.entity_id;
+  const title = (notif.title || '').toLowerCase();
+  const msg = (notif.message || '').toLowerCase();
+  const combined = `${title} ${msg}`;
+  const normRole = (userRole || '').toLowerCase();
+  const isManagerOrAdmin = ['manager', 'hr', 'hrmanager', 'admin', 'superadmin', 'orgadmin'].includes(normRole);
+
+  // 1. If explicit specific actionUrl exists (not a generic fallback like /dashboard or /), respect it!
+  if (actionUrl && actionUrl !== '/dashboard' && actionUrl !== '/' && actionUrl !== '/notifications') {
+    if (actionUrl === '/helpdesk' && (ent === 'HELPDESK_TICKET' || ent === 'TICKET') && entId) {
+      return `/helpdesk/${entId}`;
+    }
+    return actionUrl;
+  }
+
+  // 2. Training / Courses / Learning & Development (handles "HR Announcement: course alert", etc.)
   if (
-    type === 'TICKET_CREATED' ||
-    type === 'TICKET_STATUS_CHANGED' ||
-    type === 'TICKET_ASSIGNED' ||
+    ent === 'COURSE' ||
+    ent === 'TRAINING' ||
+    ent === 'COURSE_ENROLLMENT' ||
+    type.includes('TRAINING') ||
+    type.includes('COURSE') ||
+    combined.includes('course') ||
+    combined.includes('training') ||
+    combined.includes('learning') ||
+    combined.includes('curriculum') ||
+    combined.includes('skill')
+  ) {
+    return '/training';
+  }
+
+  // 3. Work Tasks
+  if (
+    ent === 'TASK' ||
+    ent === 'WORK_TASK' ||
+    type.includes('TASK') ||
+    combined.includes('task') ||
+    combined.includes('work item')
+  ) {
+    return '/tasks';
+  }
+
+  // 4. Attendance, Shift, Timings & Punching
+  if (
+    ent === 'ATTENDANCE' ||
+    ent === 'ATTENDANCE_RECORD' ||
+    type.includes('ATTENDANCE') ||
+    type.includes('PUNCH') ||
+    type.includes('SHIFT') ||
+    combined.includes('attendance') ||
+    combined.includes('punch') ||
+    combined.includes('late arrival') ||
+    combined.includes('shift timing') ||
+    combined.includes('regulariz') ||
+    combined.includes('check-in') ||
+    combined.includes('check-out')
+  ) {
+    return '/attendance';
+  }
+
+  // 5. Helpdesk & Support Tickets
+  if (
     ent === 'HELPDESK_TICKET' ||
-    lowerTitle.includes('ticket')
+    ent === 'TICKET' ||
+    type.includes('TICKET') ||
+    combined.includes('ticket') ||
+    combined.includes('helpdesk')
   ) {
-    return {
-      icon: LifeBuoy,
-      color: 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40',
-      route: '/helpdesk',
-    };
+    return entId ? `/helpdesk/${entId}` : '/helpdesk';
   }
 
-  // Phase 5: Employee Requests
-  if (type === 'EMPLOYEE_REQUEST_CREATED' || type === 'EMPLOYEE_REQUEST_STATUS_CHANGED') {
-    return {
-      icon: ClipboardList,
-      color: 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40',
-      route: '/requests',
-    };
+  // 6. Employee Requests
+  if (
+    ent === 'EMPLOYEE_REQUEST' ||
+    type.includes('EMPLOYEE_REQUEST') ||
+    combined.includes('employee request')
+  ) {
+    return entId ? `/requests/${entId}` : '/helpdesk?tab=requests';
   }
 
-  // Phase 6: Performance Reviews
+  // 7. Leaves & Approvals
   if (
-    type === 'PERFORMANCE_SUBMITTED' ||
-    type === 'PERFORMANCE_REVIEW_PENDING' ||
-    type === 'PERFORMANCE_PENDING' ||
-    lowerTitle.includes('performance review awaiting') ||
-    lowerTitle.includes('manager review completed') ||
-    (ent === 'PERFORMANCE_REVIEW' && lowerTitle.includes('awaiting'))
+    ent === 'LEAVE' ||
+    ent === 'LEAVE_REQUEST' ||
+    type.includes('LEAVE') ||
+    combined.includes('leave')
   ) {
-    return {
-      icon: Award,
-      color: 'text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/40',
-      route: '/performance',
-    };
-  }
-  if (
-    type === 'PERFORMANCE_APPROVED' ||
-    lowerTitle.includes('performance review approved')
-  ) {
-    return {
-      icon: CheckCircle2,
-      color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40',
-      route: '/performance',
-    };
-  }
-  if (
-    type === 'PERFORMANCE_RETURNED' ||
-    lowerTitle.includes('performance review returned')
-  ) {
-    return {
-      icon: RotateCcw,
-      color: 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40',
-      route: '/performance',
-    };
-  }
-  if (
-    type === 'PERFORMANCE_REJECTED' ||
-    lowerTitle.includes('performance review rejected')
-  ) {
-    return {
-      icon: XCircle,
-      color: 'text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40',
-      route: '/performance',
-    };
+    if (
+      isManagerOrAdmin &&
+      (type.includes('PENDING') || type.includes('APPROVAL') || combined.includes('pending') || combined.includes('awaiting approval'))
+    ) {
+      return '/approvals';
+    }
+    return entId ? `/leaves/${entId}` : '/leaves';
   }
 
-  // Phase 6: Leaves
+  // 8. Performance Reviews & Appraisals
   if (
-    type === 'LEAVE_APPROVAL_PENDING' ||
-    type === 'LEAVE_PENDING' ||
-    type === 'LEAVE_APPLIED' ||
-    lowerTitle.includes('leave request pending')
+    ent === 'PERFORMANCE' ||
+    ent === 'PERFORMANCE_REVIEW' ||
+    ent === 'PERFORMANCE_REPORT' ||
+    type.includes('PERFORMANCE') ||
+    combined.includes('performance review') ||
+    combined.includes('appraisal')
   ) {
-    return {
-      icon: CalendarDays,
-      color: 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40',
-      route: '/approvals',
-    };
-  }
-  if (
-    type === 'LEAVE_APPROVED' ||
-    lowerTitle.includes('leave request approved')
-  ) {
-    return {
-      icon: CheckCircle2,
-      color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40',
-      route: '/leaves',
-    };
-  }
-  if (
-    type === 'LEAVE_REJECTED' ||
-    lowerTitle.includes('leave request rejected')
-  ) {
-    return {
-      icon: XCircle,
-      color: 'text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40',
-      route: '/leaves',
-    };
+    if (ent === 'PERFORMANCE_REPORT' || combined.includes('appraisal report') || combined.includes('performance report')) {
+      return '/reports';
+    }
+    return entId ? `/performance/${entId}` : '/performance';
   }
 
-  // Phase 6: Manager & Hierarchy
+  // 9. Payroll, Salary & Compensation
   if (
+    ent === 'PAYROLL' ||
+    ent === 'PAYSLIP' ||
+    ent === 'SALARY' ||
+    type.includes('PAYROLL') ||
+    type.includes('SALARY') ||
+    combined.includes('payroll') ||
+    combined.includes('payslip') ||
+    combined.includes('salary') ||
+    combined.includes('compensation')
+  ) {
+    return '/payroll';
+  }
+
+  // 10. Company Policies & Handbooks
+  if (
+    ent === 'POLICY' ||
+    type.includes('POLICY') ||
+    combined.includes('policy') ||
+    combined.includes('code of conduct') ||
+    combined.includes('handbook')
+  ) {
+    return '/policies';
+  }
+
+  // 11. Documents & Document Vault
+  if (
+    ent === 'DOCUMENT' ||
+    ent === 'DOCUMENT_VAULT' ||
+    type.includes('DOCUMENT') ||
+    combined.includes('document') ||
+    combined.includes('vault')
+  ) {
+    if (isManagerOrAdmin && (type.includes('VERIF') || combined.includes('verify') || combined.includes('submitted a document'))) {
+      return '/team?tab=documents';
+    }
+    return '/documents';
+  }
+
+  // 12. Onboarding & New Hires
+  if (
+    ent === 'ONBOARDING' ||
+    ent === 'NEW_HIRE' ||
+    type.includes('ONBOARDING') ||
+    combined.includes('onboarding') ||
+    combined.includes('new hire')
+  ) {
+    return entId ? `/onboarding/${entId}` : '/onboarding';
+  }
+
+  // 13. Exit, Resignation & Clearances
+  if (
+    ent === 'EXIT' ||
+    ent === 'RESIGNATION' ||
+    ent === 'OFFBOARDING' ||
+    ent === 'FNF' ||
+    type.includes('EXIT') ||
+    type.includes('RESIGNATION') ||
+    type.includes('OFFBOARDING') ||
+    combined.includes('resignation') ||
+    combined.includes('clearance') ||
+    combined.includes('offboarding') ||
+    combined.includes('fnf')
+  ) {
+    if (combined.includes('clearance')) return '/exit-checklist';
+    if (combined.includes('fnf') || combined.includes('settlement')) return '/fnf';
+    if (isManagerOrAdmin && (combined.includes('offboarding') || type.includes('EXIT'))) return '/offboarding';
+    return '/resignation';
+  }
+
+  // 14. Manager & Team Assignment
+  if (
+    ent === 'TEAM' ||
     type === 'MANAGER_ASSIGNED' ||
     type === 'TEAM_ASSIGNED' ||
-    lowerTitle.includes('reporting manager assigned') ||
-    lowerTitle.includes('direct report assigned')
+    combined.includes('reporting manager') ||
+    combined.includes('direct report')
   ) {
+    return isManagerOrAdmin ? '/team' : '/profile';
+  }
+
+  // 15. Probation
+  if (
+    ent === 'PROBATION' ||
+    type.includes('PROBATION') ||
+    combined.includes('probation')
+  ) {
+    return isManagerOrAdmin ? '/probation' : '/profile';
+  }
+
+  // 16. HR Broadcasts & Announcements
+  if (
+    ent === 'HR_OPERATIONS' ||
+    type.includes('HR_') ||
+    combined.includes('announcement') ||
+    combined.includes('broadcast')
+  ) {
+    return isManagerOrAdmin ? '/hr-operations' : '/dashboard';
+  }
+
+  return actionUrl || '/dashboard';
+};
+
+/**
+ * Returns icon, color, and destination route for any notification
+ */
+export const getNotificationIcon = (
+  eventType = '',
+  title = '',
+  entityType = '',
+  message = '',
+  userRole = ''
+) => {
+  const route = resolveNotificationRoute(
+    { eventType, title, entityType, message },
+    userRole
+  );
+
+  if (route.startsWith('/training')) {
+    return {
+      icon: GraduationCap,
+      color: 'text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/40',
+      route,
+    };
+  }
+
+  if (route.startsWith('/tasks')) {
+    return {
+      icon: CheckSquare,
+      color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40',
+      route,
+    };
+  }
+
+  if (route.startsWith('/attendance')) {
+    return {
+      icon: Clock,
+      color: 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40',
+      route,
+    };
+  }
+
+  if (route.startsWith('/leaves') || route.startsWith('/approvals')) {
+    const isApproval = route.startsWith('/approvals');
+    return {
+      icon: CalendarDays,
+      color: isApproval
+        ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40'
+        : 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40',
+      route,
+    };
+  }
+
+  if (route.startsWith('/helpdesk') || route.startsWith('/requests')) {
+    const isTicket = route.startsWith('/helpdesk');
+    return {
+      icon: isTicket ? LifeBuoy : ClipboardList,
+      color: isTicket
+        ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40'
+        : 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40',
+      route,
+    };
+  }
+
+  if (route.startsWith('/reports')) {
+    return {
+      icon: FileText,
+      color: 'text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/40',
+      route,
+    };
+  }
+
+  if (route.startsWith('/performance')) {
+    const isRejected = title.toLowerCase().includes('reject');
+    return {
+      icon: isRejected ? XCircle : Award,
+      color: isRejected
+        ? 'text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40'
+        : 'text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/40',
+      route,
+    };
+  }
+
+  if (route.startsWith('/payroll')) {
+    return {
+      icon: CreditCard,
+      color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40',
+      route,
+    };
+  }
+
+  if (route.startsWith('/policies')) {
+    return {
+      icon: FileCheck,
+      color: 'text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-950/40',
+      route,
+    };
+  }
+
+  if (route.startsWith('/documents')) {
+    return {
+      icon: FileText,
+      color: 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40',
+      route,
+    };
+  }
+
+  if (route.startsWith('/onboarding')) {
+    return {
+      icon: UserPlus,
+      color: 'text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-950/40',
+      route,
+    };
+  }
+
+  if (route.startsWith('/resignation') || route.startsWith('/exit') || route.startsWith('/fnf') || route.startsWith('/offboarding')) {
+    return {
+      icon: LogOut,
+      color: 'text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40',
+      route,
+    };
+  }
+
+  if (route.startsWith('/team')) {
     return {
       icon: UserCheck,
       color: 'text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-950/40',
-      route: '/team',
+      route,
     };
   }
 
-  // Phase 6: HR Operations & Broadcasts
-  if (
-    type === 'HR_APPROVAL_PENDING' ||
-    type === 'HR_ANNOUNCEMENT' ||
-    lowerTitle.includes('hr announcement') ||
-    lowerTitle.includes('hr approval') ||
-    ent === 'HR_OPERATIONS'
-  ) {
+  if (route.startsWith('/hr-operations')) {
     return {
       icon: ShieldCheck,
       color: 'text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-950/40',
-      route: '/hr-operations',
+      route,
     };
   }
 
   return {
     icon: Bell,
     color: 'text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800',
-    route: '/notifications',
+    route,
   };
 };
 
@@ -250,7 +480,7 @@ export const NotificationBell = () => {
     }
   };
 
-  // Click on single notification
+  // Click on single notification to redirect to particular section
   const handleItemClick = async (notif) => {
     const isUnread = notif.isRead === false || notif.is_read === false;
     if (isUnread) {
@@ -268,25 +498,9 @@ export const NotificationBell = () => {
     }
 
     setIsOpen(false);
-    let targetUrl = notif.actionUrl || notif.action_url;
-    const ent = (notif.entityType || notif.entity_type || '').toUpperCase();
-    const entId = notif.entityId || notif.entity_id;
-
-    if ((!targetUrl || targetUrl === '/helpdesk') && (ent === 'HELPDESK_TICKET' || ent === 'TICKET') && entId) {
-      targetUrl = `/helpdesk/${entId}`;
-    }
-
+    const targetUrl = resolveNotificationRoute(notif, user?.roleName);
     if (targetUrl) {
       navigate(targetUrl);
-    } else {
-      const { route } = getNotificationIcon(
-        notif.eventType || notif.event_type,
-        notif.title,
-        notif.entityType || notif.entity_type
-      );
-      if (route) {
-        navigate(route);
-      }
     }
   };
 
@@ -355,7 +569,9 @@ export const NotificationBell = () => {
                 const { icon: EventIcon, color } = getNotificationIcon(
                   eventType,
                   notif.title,
-                  notif.entityType || notif.entity_type
+                  notif.entityType || notif.entity_type,
+                  notif.message,
+                  user?.roleName
                 );
 
                 return (

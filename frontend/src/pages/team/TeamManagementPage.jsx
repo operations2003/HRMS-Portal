@@ -42,6 +42,7 @@ import { TeamMemberDetailModal } from '../../components/team/TeamMemberDetailMod
 import { AssignManagerModal } from '../../components/team/AssignManagerModal.jsx';
 import { ApprovalActionModal } from '../../components/approvals/ApprovalActionModal.jsx';
 import { AttendanceDetailModal } from '../../components/attendance/AttendanceDetailModal.jsx';
+import { EditAttendanceTimingModal } from '../../components/attendance/EditAttendanceTimingModal.jsx';
 import { attendanceService } from '../../services/attendanceService.js';
 import { Avatar } from '../../components/common/Avatar.jsx';
 
@@ -81,6 +82,7 @@ export const TeamManagementPage = () => {
   const [assigningMember, setAssigningMember] = useState(null);
   const [approvalAction, setApprovalAction] = useState({ isOpen: false, item: null, type: 'APPROVE' });
   const [selectedAttendanceDetail, setSelectedAttendanceDetail] = useState(null);
+  const [selectedEditTimingRecord, setSelectedEditTimingRecord] = useState(null);
 
   // Team Documents State
   const [teamDocuments, setTeamDocuments] = useState([]);
@@ -220,6 +222,40 @@ export const TeamManagementPage = () => {
         employeeCode: row.employeeCode || row.employee_code || row.id?.slice(0, 8) || '',
         departmentName: (typeof row.department === 'object' ? row.department?.name : row.department) || '',
         designationTitle: (typeof row.designation === 'object' ? row.designation?.name : row.designation) || '',
+      },
+    });
+  };
+
+  const handleEditTiming = async (row) => {
+    const attId = row.attendance?.id || row.id;
+    if (attId) {
+      try {
+        const fullRec = await attendanceService.getAttendanceById(attId);
+        if (fullRec) {
+          setSelectedEditTimingRecord(fullRec);
+          return;
+        }
+      } catch (err) {
+        console.warn('Could not fetch full record for timing edit, falling back:', err);
+      }
+    }
+    const hrs = row.attendance?.totalHours ?? row.totalHours ?? 0;
+    const ot = row.attendance?.overtimeHours ?? row.overtimeHours ?? 0;
+    setSelectedEditTimingRecord({
+      id: row.attendance?.id || row.id,
+      attendanceDate: row.attendance?.attendanceDate || selectedDate,
+      checkIn: row.attendance?.punchIn || row.punchIn || row.checkIn,
+      checkOut: row.attendance?.punchOut || row.punchOut || row.checkOut,
+      totalHours: hrs,
+      status: (row.attendance?.status || row.status || 'ABSENT').toUpperCase(),
+      overtimeHours: ot,
+      employee: {
+        firstName: row.firstName || row.fullName?.split(' ')[0] || '',
+        lastName: row.lastName || row.fullName?.split(' ').slice(1).join(' ') || '',
+        employeeCode: row.employeeCode || row.employee_code || row.id?.slice(0, 8) || '',
+        departmentName: (typeof row.department === 'object' ? row.department?.name : row.department) || '',
+        designationTitle: (typeof row.designation === 'object' ? row.designation?.name : row.designation) || '',
+        shiftTiming: row.shiftTiming || '11:00 AM - 07:00 PM',
       },
     });
   };
@@ -519,14 +555,32 @@ export const TeamManagementPage = () => {
       header: 'Action',
       className: 'text-right',
       render: (row) => (
-        <Button
-          size="sm"
-          variant="ghost"
-          icon={Eye}
-          onClick={() => handleViewPunch(row)}
-        >
-          View Punch
-        </Button>
+        <div className="flex items-center justify-end gap-1.5">
+          {row.attendance && (
+            <Button
+              size="sm"
+              variant={row.attendance.status === 'LATE' ? 'primary' : 'secondary'}
+              icon={Clock}
+              className={
+                row.attendance.status === 'LATE'
+                  ? '!bg-amber-600 hover:!bg-amber-700 text-white !py-1 !px-2.5 !text-xs font-semibold shadow-xs'
+                  : '!py-1 !px-2.5 !text-xs text-slate-700 hover:text-slate-900 border-slate-200'
+              }
+              onClick={() => handleEditTiming(row)}
+              title="Adjust arrival/departure timing"
+            >
+              {row.attendance.status === 'LATE' ? 'Adjust Late Arrival' : 'Edit Timing'}
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="ghost"
+            icon={Eye}
+            onClick={() => handleViewPunch(row)}
+          >
+            View Punch
+          </Button>
+        </div>
       ),
     },
   ];
@@ -1255,6 +1309,20 @@ export const TeamManagementPage = () => {
         isOpen={Boolean(selectedAttendanceDetail)}
         onClose={() => setSelectedAttendanceDetail(null)}
         record={selectedAttendanceDetail}
+        canEditTiming={true}
+        onEditTiming={(rec) => {
+          setSelectedAttendanceDetail(null);
+          setSelectedEditTimingRecord(rec);
+        }}
+      />
+
+      <EditAttendanceTimingModal
+        isOpen={Boolean(selectedEditTimingRecord)}
+        onClose={() => setSelectedEditTimingRecord(null)}
+        record={selectedEditTimingRecord}
+        onSuccess={() => {
+          loadTabData();
+        }}
       />
 
       {/* Document Rejection Modal */}

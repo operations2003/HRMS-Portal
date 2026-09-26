@@ -18,6 +18,7 @@ import { AttendanceStatsBar } from '../../components/attendance/AttendanceStatsB
 import { AttendanceHistoryTable } from '../../components/attendance/AttendanceHistoryTable.jsx';
 import { AttendanceDetailModal } from '../../components/attendance/AttendanceDetailModal.jsx';
 import { AttendanceRemarkModal } from '../../components/attendance/AttendanceRemarkModal.jsx';
+import { EditAttendanceTimingModal } from '../../components/attendance/EditAttendanceTimingModal.jsx';
 import { AttendanceAnalyticsSection } from '../../components/attendance/AttendanceAnalyticsSection.jsx';
 import { Button } from '../../components/common/Button.jsx';
 import { Alert } from '../../components/common/Alert.jsx';
@@ -29,6 +30,7 @@ export const AttendanceDashboardPage = () => {
 
   // Role permissions: Only HR and Admin can see the whole organization's attendance
   const canViewOrg = hasRole(['HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin']);
+  const canEditTiming = hasRole(['HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin', 'Manager']) || hasPermission('attendance:regularize');
   const canRemark = true; // All authenticated roles can tag/review (employees for their own sessions, managers/HR/admin for team/org)
 
   // Active view tab: Admin and HR default to 'org', Managers and Employees only have 'my'
@@ -42,6 +44,7 @@ export const AttendanceDashboardPage = () => {
   const [isBreakLoading, setIsBreakLoading] = useState(false);
   const [punchError, setPunchError] = useState(null);
   const [selectedRemarkRecord, setSelectedRemarkRecord] = useState(null);
+  const [selectedEditTimingRecord, setSelectedEditTimingRecord] = useState(null);
 
   // History & Metrics state
   const [records, setRecords] = useState([]);
@@ -379,6 +382,8 @@ export const AttendanceDashboardPage = () => {
         onViewDetails={(rec) => setSelectedDetailRecord(rec)}
         onAddRemark={(rec) => setSelectedRemarkRecord(rec)}
         canRemark={canRemark}
+        onEditTiming={(rec) => setSelectedEditTimingRecord(rec)}
+        canEditTiming={canEditTiming}
         showEmployeeCol={activeTab !== 'my'}
         showSearch={activeTab === 'org'}
         filters={filters}
@@ -397,6 +402,11 @@ export const AttendanceDashboardPage = () => {
           setSelectedRemarkRecord(rec);
         }}
         canRemark={canRemark}
+        onEditTiming={(rec) => {
+          setSelectedDetailRecord(null);
+          setSelectedEditTimingRecord(rec);
+        }}
+        canEditTiming={canEditTiming}
       />
 
       {/* Attendance Remark Modal (Emergency vs OT for 10h+ Post-Shift) */}
@@ -404,6 +414,19 @@ export const AttendanceDashboardPage = () => {
         isOpen={Boolean(selectedRemarkRecord)}
         onClose={() => setSelectedRemarkRecord(null)}
         record={selectedRemarkRecord}
+        onSuccess={(updated) => {
+          fetchTableData(pagination?.page || 1);
+          if (todayRecord && todayRecord.id === updated.id) {
+            setTodayRecord(updated);
+          }
+        }}
+      />
+
+      {/* Attendance Timing Adjustment Modal (for Late Arrival / Technical Issues) */}
+      <EditAttendanceTimingModal
+        isOpen={Boolean(selectedEditTimingRecord)}
+        onClose={() => setSelectedEditTimingRecord(null)}
+        record={selectedEditTimingRecord}
         onSuccess={(updated) => {
           fetchTableData(pagination?.page || 1);
           if (todayRecord && todayRecord.id === updated.id) {

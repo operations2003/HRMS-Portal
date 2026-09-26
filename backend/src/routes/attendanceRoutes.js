@@ -80,10 +80,10 @@ router.get(
   attendanceController.getById
 );
 
-// 7. Regularize attendance API (Admin, HR, Manager)
+// 7. Regularize / Edit timing attendance API (Admin, HR, Manager)
 router.put(
   '/:id/regularize',
-  authorize('attendance:regularize'),
+  requireRoles(['Admin', 'SuperAdmin', 'HR', 'HRManager', 'Manager', 'OrgAdmin']),
   validate(validateRegularize),
   attendanceController.regularize
 );

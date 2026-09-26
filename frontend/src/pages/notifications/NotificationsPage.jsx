@@ -14,7 +14,7 @@ import {
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { notificationService } from '../../services/notificationService.js';
-import { getNotificationIcon } from '../../components/notifications/NotificationBell.jsx';
+import { getNotificationIcon, resolveNotificationRoute } from '../../components/notifications/NotificationBell.jsx';
 import { Button } from '../../components/common/Button.jsx';
 import { Badge } from '../../components/common/Badge.jsx';
 import { Alert } from '../../components/common/Alert.jsx';
@@ -93,27 +93,23 @@ export const NotificationsPage = () => {
     }
   };
 
-  const handleNavigate = (notif) => {
-    let targetUrl = notif.actionUrl || notif.action_url;
-    const ent = (notif.entityType || notif.entity_type || '').toUpperCase();
-    const entId = notif.entityId || notif.entity_id;
-
-    if ((!targetUrl || targetUrl === '/helpdesk') && (ent === 'HELPDESK_TICKET' || ent === 'TICKET') && entId) {
-      targetUrl = `/helpdesk/${entId}`;
+  const handleNavigate = async (notif) => {
+    const isUnread = notif.isRead === false || notif.is_read === false;
+    if (isUnread) {
+      try {
+        await notificationService.markAsRead(notif.id);
+        setNotifications((prev) =>
+          prev.map((n) => (n.id === notif.id ? { ...n, isRead: true, is_read: true } : n))
+        );
+        setUnreadCount((c) => Math.max(0, c - 1));
+      } catch {
+        // silent
+      }
     }
 
+    const targetUrl = resolveNotificationRoute(notif, user?.roleName);
     if (targetUrl) {
       navigate(targetUrl);
-    } else {
-      const eventType = notif.eventType || notif.event_type;
-      const { route } = getNotificationIcon(
-        eventType,
-        notif.title,
-        notif.entityType || notif.entity_type
-      );
-      if (route) {
-        navigate(route);
-      }
     }
   };
 
@@ -296,8 +292,28 @@ export const NotificationsPage = () => {
             const { icon: EventIcon, color } = getNotificationIcon(
               eventType,
               notif.title,
-              notif.entityType || notif.entity_type
+              notif.entityType || notif.entity_type,
+              notif.message,
+              user?.roleName
             );
+            const targetUrl = resolveNotificationRoute(notif, user?.roleName);
+
+            const getSectionLabel = (url) => {
+              if (url.startsWith('/training')) return 'View Training';
+              if (url.startsWith('/tasks')) return 'View Tasks';
+              if (url.startsWith('/attendance')) return 'View Attendance';
+              if (url.startsWith('/leaves')) return 'View Leaves';
+              if (url.startsWith('/approvals')) return 'View Approvals';
+              if (url.startsWith('/reports')) return 'View Reports';
+              if (url.startsWith('/performance')) return 'View Performance';
+              if (url.startsWith('/payroll')) return 'View Payroll';
+              if (url.startsWith('/policies')) return 'View Policies';
+              if (url.startsWith('/documents')) return 'View Documents';
+              if (url.startsWith('/helpdesk')) return 'View Ticket';
+              if (url.startsWith('/team')) return 'View Team';
+              if (url.startsWith('/profile')) return 'View Profile';
+              return 'Open section';
+            };
 
             return (
               <div
@@ -340,11 +356,7 @@ export const NotificationsPage = () => {
                       <span>{new Date(notif.createdAt || notif.created_at).toLocaleString()}</span>
                       <span>•</span>
                       <span className="font-medium text-brand-600 dark:text-brand-400 flex items-center gap-1">
-                        {(notif.entityType || notif.entity_type || '').toUpperCase().includes('TICKET') ||
-                        (notif.eventType || notif.event_type || '').toUpperCase().includes('TICKET') ||
-                        (notif.actionUrl || notif.action_url || '').includes('/helpdesk')
-                          ? 'View Ticket'
-                          : 'View related module'}{' '}
+                        {getSectionLabel(targetUrl)}{' '}
                         <ExternalLink className="w-3 h-3" />
                       </span>
                     </div>

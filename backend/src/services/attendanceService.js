@@ -686,6 +686,9 @@ export const attendanceService = {
     let finalStatus = 'PRESENT';
     if (totalHours < 4.0) {
       finalStatus = 'HALF_DAY';
+    } else if (existing.isRegularized && ['PRESENT', 'REGULARIZED'].includes(existing.status)) {
+      // Preserve HR/Manager waived on-time or regularized status
+      finalStatus = existing.status;
     } else {
       const tz = data.timezone || existing.timezone || targetEmployee.timezone || 'Asia/Kolkata';
       finalStatus = existing.checkIn
@@ -1016,6 +1019,9 @@ export const attendanceService = {
       }
     }
 
+    const shiftTiming = record.employee?.shiftTiming || '11:00 AM - 07:00 PM';
+    const tz = record.timezone || 'Asia/Kolkata';
+
     // Compute updated hours if check-in or check-out adjusted
     const newCheckIn = data.checkIn ? new Date(data.checkIn) : record.checkIn ? new Date(record.checkIn) : null;
     const newCheckOut = data.checkOut ? new Date(data.checkOut) : record.checkOut ? new Date(record.checkOut) : null;
@@ -1030,7 +1036,6 @@ export const attendanceService = {
         error.statusCode = 400;
         throw error;
       }
-      const shiftTiming = record.employee?.shiftTiming || '11:00 AM - 07:00 PM';
       const calc = calculateWorkingHoursAndOvertime({
         checkIn: newCheckIn,
         checkOut: newCheckOut,
@@ -1043,18 +1048,45 @@ export const attendanceService = {
       breakDurationMinutes = calc.breakDurationMinutes;
     }
 
+    // Wisely determine final attendance status
+    let finalStatus = data.status && data.status.trim().toUpperCase() !== 'AUTO' ? data.status.trim().toUpperCase() : null;
+
+    if (!finalStatus) {
+      if (newCheckIn) {
+        // Intelligently evaluate whether arrival is on-time with 10-minute grace window
+        const evaluatedStatus = determineAttendanceStatus(newCheckIn, shiftTiming, tz, 10);
+        if (evaluatedStatus === 'PRESENT') {
+          // If check-in is within shift start + grace window, wisely set to PRESENT
+          finalStatus = 'PRESENT';
+        } else {
+          finalStatus = (totalHours > 0 && totalHours < 4.0) ? 'HALF_DAY' : 'LATE';
+        }
+      } else {
+        finalStatus = record.status || 'REGULARIZED';
+      }
+    }
+
+    // Build transparent audit remarks with text message
+    const userDisplayName = user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : (user.email || 'HR/Manager');
+    const roleLabel = normRole === 'manager' ? 'Manager' : (['hr', 'hrmanager'].includes(normRole) ? 'HR' : 'Admin');
+    const reasonText = (data.regularizationReason || '').trim();
+    const auditNote = `[TIMING_ADJUSTED by ${roleLabel} (${userDisplayName}): ${reasonText}]`;
+    const combinedNotes = data.notes
+      ? (record.notes ? `${record.notes} | ${data.notes} | ${auditNote}` : `${data.notes} | ${auditNote}`)
+      : (record.notes ? `${record.notes} | ${auditNote}` : auditNote);
+
     return attendanceRepository.update(id, {
       checkIn: newCheckIn,
       checkOut: newCheckOut,
       totalHours,
       overtimeHours,
       breakDurationMinutes,
-      status: data.status || 'REGULARIZED',
+      status: finalStatus,
       isRegularized: true,
-      regularizationReason: data.regularizationReason,
+      regularizationReason: reasonText,
       regularizedBy: user.id,
       regularizedAt: new Date(),
-      notes: data.notes ? (record.notes ? `${record.notes} | ${data.notes}` : data.notes) : record.notes,
+      notes: combinedNotes,
     });
   },
 

@@ -37,6 +37,8 @@ export const AttendanceHistoryTable = ({
   onViewDetails,
   onRegularize,
   canRegularize = false,
+  onEditTiming,
+  canEditTiming = false,
   onAddRemark,
   canRemark = false,
   showEmployeeCol = false,
@@ -46,6 +48,9 @@ export const AttendanceHistoryTable = ({
   showSearch = false,
   onRetry,
 }) => {
+  const handleEditTiming = onEditTiming || onRegularize;
+  const canEdit = canEditTiming || canRegularize;
+
   const getRemarkInfo = (row) => {
     const notes = row?.notes || '';
     const regReason = row?.regularizationReason || '';
@@ -299,10 +304,11 @@ export const AttendanceHistoryTable = ({
                       {getStatusBadge(row.status)}
                       {row.isRegularized && (
                         <span
-                          title="Record regularized"
-                          className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] font-bold"
+                          title={`Timing adjusted: ${row.regularizationReason || 'Adjusted by HR/Manager'}`}
+                          className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-bold inline-flex items-center gap-1"
                         >
-                          REG
+                          <Clock className="w-2.5 h-2.5 text-indigo-600" />
+                          Adjusted
                         </span>
                       )}
                     </div>
@@ -399,7 +405,23 @@ export const AttendanceHistoryTable = ({
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {canEdit && (
+                        <Button
+                          variant={row.status === 'LATE' ? 'primary' : 'secondary'}
+                          size="sm"
+                          icon={Clock}
+                          className={
+                            row.status === 'LATE'
+                              ? '!bg-amber-600 hover:!bg-amber-700 text-white !py-1 !px-2.5 !text-xs font-semibold shadow-xs'
+                              : '!py-1 !px-2.5 !text-xs text-slate-700 hover:text-slate-900 border-slate-200'
+                          }
+                          onClick={() => handleEditTiming && handleEditTiming(row)}
+                          title="Adjust arrival/departure timing"
+                        >
+                          {row.status === 'LATE' ? 'Adjust Late Arrival' : 'Edit Timing'}
+                        </Button>
+                      )}
                       {(remarkInfo.isPending || remarkInfo.hasRemark || ot > 0) && (
                         <Button
                           variant={remarkInfo.isPending ? 'primary' : 'secondary'}
@@ -534,10 +556,11 @@ export const AttendanceHistoryTable = ({
                           {getStatusBadge(row.status)}
                           {row.isRegularized && (
                             <span
-                              title="Record regularized"
-                              className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold"
+                              title={`Timing adjusted: ${row.regularizationReason || 'Adjusted by HR/Manager'}`}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200"
                             >
-                              R
+                              <Clock className="w-2.5 h-2.5 text-indigo-500" />
+                              Timing Adjusted
                             </span>
                           )}
                           {remarkInfo.isPending && (
@@ -637,6 +660,22 @@ export const AttendanceHistoryTable = ({
                       {/* Actions */}
                       <td className="px-6 py-4 whitespace-nowrap text-right">
                         <div className="flex items-center justify-end gap-1.5">
+                          {canEdit && (
+                            <Button
+                              variant={row.status === 'LATE' ? 'primary' : 'secondary'}
+                              size="sm"
+                              icon={Clock}
+                              className={
+                                row.status === 'LATE'
+                                  ? '!bg-amber-600 hover:!bg-amber-700 text-white !py-1 !px-2.5 !text-xs font-semibold shadow-xs'
+                                  : '!py-1 !px-2.5 !text-xs text-slate-700 hover:text-slate-900 border-slate-200'
+                              }
+                              onClick={() => handleEditTiming && handleEditTiming(row)}
+                              title="Adjust arrival/departure timings (e.g. for late arrival due to technical issue)"
+                            >
+                              {row.status === 'LATE' ? 'Adjust Late Arrival' : 'Edit Timing'}
+                            </Button>
+                          )}
                           {(remarkInfo.isPending || remarkInfo.hasRemark || ot > 0) && (
                             <Button
                               variant={remarkInfo.isPending ? 'primary' : 'secondary'}
