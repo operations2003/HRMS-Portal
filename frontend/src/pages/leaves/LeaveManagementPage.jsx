@@ -19,6 +19,8 @@ import {
   Info,
   ShieldCheck,
   Check,
+  Search,
+  PieChart,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
@@ -51,12 +53,25 @@ export const LeaveManagementPage = () => {
   const canApprove = hasPermission('leave:approve') || hasRole(['Manager', 'HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin']);
   const canViewTeam = hasRole(['Manager', 'HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin']);
   const canManageTypes = hasRole(['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin']);
+  const canViewAllBalances = hasRole(['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin']) || isAdminOrCeo;
 
-  // Active Tab: 'my' | 'team' (synced with ?tab= query param)
+  // Active Tab: 'my' | 'team' | 'balances' (synced with ?tab= query param)
   const tabParam = searchParams.get('tab');
   const [activeTab, setActiveTab] = useState(
-    isAdminOrCeo ? 'team' : ((tabParam === 'team' || tabParam === 'approvals') && canViewTeam ? 'team' : 'my')
+    tabParam === 'balances' && canViewAllBalances
+      ? 'balances'
+      : isAdminOrCeo
+      ? 'team'
+      : ((tabParam === 'team' || tabParam === 'approvals') && canViewTeam ? 'team' : 'my')
   );
+
+  // Admin & HR: Employee Leave Balances Viewing
+  const [allEmployeesBalances, setAllEmployeesBalances] = useState([]);
+  const [loadingAllBalances, setLoadingAllBalances] = useState(false);
+  const [balanceSearchTerm, setBalanceSearchTerm] = useState('');
+  const [selectedBalanceEmpId, setSelectedBalanceEmpId] = useState('');
+  const [selectedEmpBalances, setSelectedEmpBalances] = useState([]);
+  const [loadingSelectedEmpBalances, setLoadingSelectedEmpBalances] = useState(false);
 
   // Leave data
   const [leaveTypes, setLeaveTypes] = useState([]);
@@ -223,16 +238,61 @@ export const LeaveManagementPage = () => {
     [activeTab, statusFilter]
   );
 
+  // Fetch all employees' balances for Admin & HR
+  const fetchAllEmployeesBalances = useCallback(async () => {
+    if (!canViewAllBalances) return;
+    try {
+      setLoadingAllBalances(true);
+      const data = await leaveService.getAllEmployeeBalances();
+      const list = Array.isArray(data) ? data : [];
+      setAllEmployeesBalances(list);
+      if (list.length > 0 && !selectedBalanceEmpId) {
+        setSelectedBalanceEmpId(list[0].employeeId || list[0].id);
+      }
+    } catch (err) {
+      console.error('Failed to load all employees balances:', err);
+    } finally {
+      setLoadingAllBalances(false);
+    }
+  }, [canViewAllBalances, selectedBalanceEmpId]);
+
+  // Fetch balances for specifically selected employee
+  const fetchSelectedEmpBalances = useCallback(async (empId) => {
+    if (!empId) return;
+    try {
+      setLoadingSelectedEmpBalances(true);
+      const balances = await leaveService.getEmployeeBalances(empId);
+      setSelectedEmpBalances(Array.isArray(balances) ? balances : []);
+    } catch (err) {
+      console.error('Failed to load selected employee balances:', err);
+      const found = allEmployeesBalances.find((e) => (e.employeeId || e.id) === empId);
+      setSelectedEmpBalances(found?.balances || []);
+    } finally {
+      setLoadingSelectedEmpBalances(false);
+    }
+  }, [allEmployeesBalances]);
+
   useEffect(() => {
     fetchMetadata();
     if (canViewTeam) {
       fetchTeamStats();
     }
-  }, [fetchMetadata, fetchTeamStats, canViewTeam]);
+    if (canViewAllBalances) {
+      fetchAllEmployeesBalances();
+    }
+  }, [fetchMetadata, fetchTeamStats, fetchAllEmployeesBalances, canViewTeam, canViewAllBalances]);
 
   useEffect(() => {
-    fetchRecords(1);
-  }, [fetchRecords]);
+    if (selectedBalanceEmpId) {
+      fetchSelectedEmpBalances(selectedBalanceEmpId);
+    }
+  }, [selectedBalanceEmpId, fetchSelectedEmpBalances]);
+
+  useEffect(() => {
+    if (activeTab === 'my' || activeTab === 'team') {
+      fetchRecords(1);
+    }
+  }, [fetchRecords, activeTab]);
 
   // Handle successful application
   const handleApplySuccess = () => {
@@ -668,6 +728,18 @@ export const LeaveManagementPage = () => {
     { value: 'CANCELLED', label: 'Cancelled' },
   ];
 
+  const filteredEmployeesForBalances = (allEmployeesBalances || []).filter((emp) => {
+    const q = balanceSearchTerm.toLowerCase();
+    const name = (emp.fullName || `${emp.firstName || ''} ${emp.lastName || ''}`).toLowerCase();
+    const code = (emp.employeeCode || '').toLowerCase();
+    const dept = (emp.departmentName || '').toLowerCase();
+    return name.includes(q) || code.includes(q) || dept.includes(q);
+  });
+
+  const selectedBalanceEmpObj = (allEmployeesBalances || []).find(
+    (e) => (e.employeeId || e.id) === selectedBalanceEmpId
+  );
+
   return (
     <div className="space-y-8">
       {/* Header Banner */}
@@ -678,14 +750,18 @@ export const LeaveManagementPage = () => {
             <span>Time Off & Leave Management</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
-            {isAdminOrCeo
+            {activeTab === 'balances'
+              ? 'Employee Leave Balances & Buckets'
+              : isAdminOrCeo
               ? 'Organization Leave Management & Approvals'
               : activeTab === 'team'
               ? 'Manager Leave Approvals'
               : 'Leave Applications'}
           </h1>
           <p className="mt-1 text-sm text-slate-500 leading-relaxed">
-            {isAdminOrCeo
+            {activeTab === 'balances'
+              ? 'View category-wise remaining leave balances and quota allocations for all employees across the organization.'
+              : isAdminOrCeo
               ? 'Executive oversight and approval authority for all organizational employee leave requests.'
               : activeTab === 'team'
               ? 'Review, approve, or reject authorized pending leave requests from your reporting team.'
@@ -700,8 +776,13 @@ export const LeaveManagementPage = () => {
             icon={RefreshCw}
             onClick={() => {
               fetchMetadata();
-              fetchRecords(pagination?.page || 1);
-              if (canViewTeam) fetchTeamStats();
+              if (activeTab === 'balances') {
+                fetchAllEmployeesBalances();
+                if (selectedBalanceEmpId) fetchSelectedEmpBalances(selectedBalanceEmpId);
+              } else {
+                fetchRecords(pagination?.page || 1);
+                if (canViewTeam) fetchTeamStats();
+              }
             }}
           >
             Refresh
@@ -777,6 +858,26 @@ export const LeaveManagementPage = () => {
               {teamStats.pending > 0 && (
                 <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300 animate-pulse">
                   {teamStats.pending} pending
+                </span>
+              )}
+            </button>
+          )}
+
+          {canViewAllBalances && (
+            <button
+              type="button"
+              onClick={() => handleTabChange('balances')}
+              className={`pb-4 px-1 border-b-2 font-semibold text-sm transition-colors flex items-center gap-2 ${
+                activeTab === 'balances'
+                  ? 'border-brand-500 text-brand-600 font-bold'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              <PieChart className="w-4 h-4" />
+              <span>Employee Leave Balances</span>
+              {allEmployeesBalances.length > 0 && (
+                <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                  {allEmployeesBalances.length}
                 </span>
               )}
             </button>
@@ -880,127 +981,365 @@ export const LeaveManagementPage = () => {
         </div>
       )}
 
-      {/* Filter Bar & Quick Status Pills */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center flex-wrap gap-2.5">
-          {activeTab === 'team' ? (
-            <div className="flex items-center flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setStatusFilter('')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
-                  statusFilter === ''
-                    ? 'bg-slate-900 text-white shadow-xs'
-                    : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
-                }`}
-              >
-                All Team Requests ({teamStats.total})
-              </button>
-              <button
-                type="button"
-                onClick={() => setStatusFilter('PENDING')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
-                  statusFilter === 'PENDING'
-                    ? 'bg-amber-100 text-amber-800 border border-amber-300 shadow-xs'
-                    : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
-                }`}
-              >
-                Pending Approvals ({teamStats.pending})
-              </button>
-              <button
-                type="button"
-                onClick={() => setStatusFilter('APPROVED')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
-                  statusFilter === 'APPROVED'
-                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-xs'
-                    : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
-                }`}
-              >
-                Approved ({teamStats.approved})
-              </button>
-              <button
-                type="button"
-                onClick={() => setStatusFilter('REJECTED')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
-                  statusFilter === 'REJECTED'
-                    ? 'bg-rose-100 text-rose-800 border border-rose-300 shadow-xs'
-                    : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
-                }`}
-              >
-                Rejected ({teamStats.rejected})
-              </button>
-              <button
-                type="button"
-                onClick={() => setStatusFilter('ON_LEAVE_TODAY')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
-                  statusFilter === 'ON_LEAVE_TODAY'
-                    ? 'bg-sky-100 text-sky-800 border border-sky-300 shadow-xs'
-                    : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
-                }`}
-              >
-                On Leave Today ({teamStats.onLeaveToday})
-              </button>
+      {/* When on Balances Tab: Employee Selection, Detailed Category Cards & Overview Table */}
+      {activeTab === 'balances' && canViewAllBalances ? (
+        <div className="space-y-6">
+          {/* Employee Selector Bar */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center ring-1 ring-brand-100">
+                  <PieChart className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 font-display">
+                    Select Employee
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Choose an employee to view their category-wise remaining leave balances.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="relative w-full sm:w-60">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Search employee list..."
+                    value={balanceSearchTerm}
+                    onChange={(e) => setBalanceSearchTerm(e.target.value)}
+                    className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all"
+                  />
+                </div>
+
+                <select
+                  value={selectedBalanceEmpId}
+                  onChange={(e) => setSelectedBalanceEmpId(e.target.value)}
+                  className="px-3.5 py-1.5 text-xs font-semibold rounded-xl border border-slate-200 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 shadow-2xs cursor-pointer max-w-xs sm:max-w-md truncate"
+                >
+                  {filteredEmployeesForBalances.map((emp) => (
+                    <option key={emp.employeeId || emp.id} value={emp.employeeId || emp.id}>
+                      {emp.fullName || `${emp.firstName} ${emp.lastName}`} {emp.employeeCode ? `(${emp.employeeCode})` : ''} {emp.departmentName ? `• ${emp.departmentName}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
-          ) : (
-            <div className="w-full sm:w-48">
-              <Select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                options={statusOptions}
-              />
+
+            {/* Selected Employee Info Banner */}
+            {selectedBalanceEmpObj && (
+              <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between flex-wrap gap-3">
+                <div className="flex items-center gap-3">
+                  <Avatar
+                    src={selectedBalanceEmpObj.avatarUrl}
+                    firstName={selectedBalanceEmpObj.firstName}
+                    lastName={selectedBalanceEmpObj.lastName}
+                    size="sm"
+                    className="ring-1 ring-brand-200"
+                  />
+                  <div>
+                    <div className="text-xs font-bold text-slate-900">
+                      {selectedBalanceEmpObj.fullName || `${selectedBalanceEmpObj.firstName} ${selectedBalanceEmpObj.lastName}`}
+                      <span className="text-slate-400 font-mono font-normal ml-1.5">
+                        {selectedBalanceEmpObj.employeeCode}
+                      </span>
+                    </div>
+                    <div className="text-xs text-slate-400">
+                      {selectedBalanceEmpObj.email}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 text-xs flex-wrap">
+                  {selectedBalanceEmpObj.departmentName && (
+                    <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-medium">
+                      {selectedBalanceEmpObj.departmentName}
+                    </span>
+                  )}
+                  {selectedBalanceEmpObj.designationTitle && (
+                    <span className="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 font-medium">
+                      {selectedBalanceEmpObj.designationTitle}
+                    </span>
+                  )}
+                  <span className="px-2.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 font-bold border border-emerald-200">
+                    Total Remaining: {selectedEmpBalances.reduce((sum, b) => sum + (parseFloat(b.remainingDays) || 0), 0)} days
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Category-wise Leave Balance Cards for Selected Employee */}
+          <LeaveBalanceCards
+            balances={selectedEmpBalances}
+            isLoading={loadingSelectedEmpBalances}
+            title={
+              selectedBalanceEmpObj
+                ? `${selectedBalanceEmpObj.fullName || selectedBalanceEmpObj.firstName}'s Leave Entitlements & Balances`
+                : 'Leave Entitlements & Balances'
+            }
+            showAll={true}
+            canApply={false}
+          />
+
+          {/* All Employees Leave Balances Summary Table */}
+          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between flex-wrap gap-3">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+                  All Employees Remaining Leave Buckets
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Overview of remaining balances across all leave categories for organization staff.
+                </p>
+              </div>
+              <span className="text-xs font-semibold text-slate-400">
+                {filteredEmployeesForBalances.length} employees
+              </span>
             </div>
-          )}
 
-          {statusFilter && (
-            <Button
-              variant="secondary"
-              size="md"
-              icon={RotateCcw}
-              onClick={() => setStatusFilter('')}
-            >
-              Reset
-            </Button>
-          )}
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-slate-200 text-left text-xs">
+                <thead className="bg-slate-50/80 font-semibold text-slate-600 uppercase tracking-wider">
+                  <tr>
+                    <th className="px-6 py-3.5">Employee</th>
+                    <th className="px-6 py-3.5">Department</th>
+                    <th className="px-6 py-3.5">Remaining Buckets</th>
+                    <th className="px-6 py-3.5 text-center">Total Remaining</th>
+                    <th className="px-6 py-3.5 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {loadingAllBalances ? (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-12 text-center text-slate-400">
+                        <LoadingSpinner size="md" message="Loading employee balances..." />
+                      </td>
+                    </tr>
+                  ) : filteredEmployeesForBalances.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-12 text-center text-slate-400">
+                        No employees found matching the search criteria.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredEmployeesForBalances.map((emp) => {
+                      const isSelected = (emp.employeeId || emp.id) === selectedBalanceEmpId;
+                      const totalRem = (emp.balances || []).reduce(
+                        (sum, b) => sum + (parseFloat(b.remainingDays) || 0),
+                        0
+                      );
+
+                      return (
+                        <tr
+                          key={emp.employeeId || emp.id}
+                          className={`hover:bg-slate-50/70 transition-colors ${
+                            isSelected ? 'bg-brand-50/30' : ''
+                          }`}
+                        >
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center gap-3">
+                              <Avatar
+                                src={emp.avatarUrl}
+                                firstName={emp.firstName}
+                                lastName={emp.lastName}
+                                size="sm"
+                              />
+                              <div>
+                                <div className="font-bold text-slate-900">
+                                  {emp.fullName || `${emp.firstName} ${emp.lastName}`}
+                                </div>
+                                <div className="text-[11px] text-slate-400 font-mono">
+                                  {emp.employeeCode || emp.email}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="font-medium text-slate-700">
+                              {emp.departmentName || '—'}
+                            </div>
+                            <div className="text-[11px] text-slate-400">
+                              {emp.designationTitle || '—'}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {(emp.balances || []).length > 0 ? (
+                                emp.balances.map((b) => (
+                                  <span
+                                    key={b.id || b.leaveTypeId}
+                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold border ${
+                                      b.remainingDays > 0
+                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                        : 'bg-slate-100 text-slate-500 border-slate-200'
+                                    }`}
+                                    title={`${b.leaveTypeName}: ${b.remainingDays} remaining out of ${b.allocatedDays} allocated`}
+                                  >
+                                    <span className="font-mono">{b.leaveTypeCode}:</span>
+                                    <span className="font-bold">{b.remainingDays}</span>
+                                    <span className="text-slate-400 text-[10px]">/{b.allocatedDays}</span>
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="text-slate-400 italic text-[11px]">
+                                  Balances not initialized
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-center">
+                            <span className="font-mono font-extrabold text-sm text-slate-900 bg-slate-100 px-2.5 py-1 rounded-lg">
+                              {totalRem} d
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right">
+                            <Button
+                              variant={isSelected ? 'primary' : 'outline'}
+                              size="xs"
+                              onClick={() => {
+                                setSelectedBalanceEmpId(emp.employeeId || emp.id);
+                                window.scrollTo({ top: 200, behavior: 'smooth' });
+                              }}
+                            >
+                              {isSelected ? 'Viewing' : 'View Details'}
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
+      ) : (
+        <>
+          {/* Filter Bar & Quick Status Pills */}
+          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center flex-wrap gap-2.5">
+              {activeTab === 'team' ? (
+                <div className="flex items-center flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setStatusFilter('')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
+                      statusFilter === ''
+                        ? 'bg-slate-900 text-white shadow-xs'
+                        : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
+                    }`}
+                  >
+                    All Team Requests ({teamStats.total})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStatusFilter('PENDING')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
+                      statusFilter === 'PENDING'
+                        ? 'bg-amber-100 text-amber-800 border border-amber-300 shadow-xs'
+                        : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
+                    }`}
+                  >
+                    Pending Approvals ({teamStats.pending})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStatusFilter('APPROVED')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
+                      statusFilter === 'APPROVED'
+                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-xs'
+                        : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
+                    }`}
+                  >
+                    Approved ({teamStats.approved})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStatusFilter('REJECTED')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
+                      statusFilter === 'REJECTED'
+                        ? 'bg-rose-100 text-rose-800 border border-rose-300 shadow-xs'
+                        : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
+                    }`}
+                  >
+                    Rejected ({teamStats.rejected})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStatusFilter('ON_LEAVE_TODAY')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
+                      statusFilter === 'ON_LEAVE_TODAY'
+                        ? 'bg-sky-100 text-sky-800 border border-sky-300 shadow-xs'
+                        : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
+                    }`}
+                  >
+                    On Leave Today ({teamStats.onLeaveToday})
+                  </button>
+                </div>
+              ) : (
+                <div className="w-full sm:w-48">
+                  <Select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    options={statusOptions}
+                  />
+                </div>
+              )}
 
-        <div className="text-xs text-slate-500 font-medium">
-          Showing {records.length} {records.length === 1 ? 'request' : 'requests'}
-          {pagination?.total ? ` of ${pagination.total}` : ''}
-          {statusFilter ? ` (${statusFilter === 'ON_LEAVE_TODAY' ? 'On Leave Today' : statusFilter})` : ''}
-        </div>
-      </div>
+              {statusFilter && (
+                <Button
+                  variant="secondary"
+                  size="md"
+                  icon={RotateCcw}
+                  onClick={() => setStatusFilter('')}
+                >
+                  Reset
+                </Button>
+              )}
+            </div>
 
-      {/* Main Leave Table (Team columns for managers, My columns for employees) */}
-      <DataTable
-        columns={activeTab === 'team' ? teamColumns : myColumns}
-        data={records}
-        isLoading={loading}
-        error={error}
-        emptyTitle={
-          activeTab === 'team'
-            ? statusFilter === 'PENDING'
-              ? 'No Pending Leave Reviews'
-              : statusFilter === 'APPROVED'
-              ? 'No Approved Leave Requests'
-              : statusFilter === 'REJECTED'
-              ? 'No Rejected Leave Requests'
-              : statusFilter === 'ON_LEAVE_TODAY'
-              ? (isAdminOrCeo ? 'No Employees On Leave Today' : 'No Team Members On Leave Today')
-              : (isAdminOrCeo ? 'No Organization Leave Requests Found' : 'No Team Requests Found')
-            : 'No Leave Requests Found'
-        }
-        emptyDescription={
-          activeTab === 'team'
-            ? statusFilter === 'PENDING'
-              ? (isAdminOrCeo ? 'All employee leave requests across the organization have been reviewed.' : 'All leave requests from your reporting team have been reviewed and actioned.')
-              : statusFilter === 'ON_LEAVE_TODAY'
-              ? (isAdminOrCeo ? 'No employees across the organization have active approved leave scheduled for today.' : 'No team members have active approved leave scheduled for today.')
-              : (isAdminOrCeo ? 'There are no leave requests matching this filter across the organization.' : 'There are no leave requests matching this filter from your authorized team members.')
-            : 'You have not submitted any leave requests matching the current filter.'
-        }
-        pagination={pagination}
-        onPageChange={(p) => fetchRecords(p)}
-      />
+            <div className="text-xs text-slate-500 font-medium">
+              Showing {records.length} {records.length === 1 ? 'request' : 'requests'}
+              {pagination?.total ? ` of ${pagination.total}` : ''}
+              {statusFilter ? ` (${statusFilter === 'ON_LEAVE_TODAY' ? 'On Leave Today' : statusFilter})` : ''}
+            </div>
+          </div>
+
+          {/* Main Leave Table (Team columns for managers, My columns for employees) */}
+          <DataTable
+            columns={activeTab === 'team' ? teamColumns : myColumns}
+            data={records}
+            isLoading={loading}
+            error={error}
+            emptyTitle={
+              activeTab === 'team'
+                ? statusFilter === 'PENDING'
+                  ? 'No Pending Leave Reviews'
+                  : statusFilter === 'APPROVED'
+                  ? 'No Approved Leave Requests'
+                  : statusFilter === 'REJECTED'
+                  ? 'No Rejected Leave Requests'
+                  : statusFilter === 'ON_LEAVE_TODAY'
+                  ? (isAdminOrCeo ? 'No Employees On Leave Today' : 'No Team Members On Leave Today')
+                  : (isAdminOrCeo ? 'No Organization Leave Requests Found' : 'No Team Requests Found')
+                : 'No Leave Requests Found'
+            }
+            emptyDescription={
+              activeTab === 'team'
+                ? statusFilter === 'PENDING'
+                  ? (isAdminOrCeo ? 'All employee leave requests across the organization have been reviewed.' : 'All leave requests from your reporting team have been reviewed and actioned.')
+                  : statusFilter === 'ON_LEAVE_TODAY'
+                  ? (isAdminOrCeo ? 'No employees across the organization have active approved leave scheduled for today.' : 'No team members have active approved leave scheduled for today.')
+                  : (isAdminOrCeo ? 'There are no leave requests matching this filter across the organization.' : 'There are no leave requests matching this filter from your authorized team members.')
+                : 'You have not submitted any leave requests matching the current filter.'
+            }
+            pagination={pagination}
+            onPageChange={(p) => fetchRecords(p)}
+          />
+        </>
+      )}
 
       {/* Apply Leave Modal */}
       <ApplyLeaveModal
