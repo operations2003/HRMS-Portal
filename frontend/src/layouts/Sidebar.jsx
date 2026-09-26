@@ -229,7 +229,8 @@ export const Sidebar = ({ isOpen, onClose }) => {
           name: 'Performance Reviews',
           path: '/performance',
           icon: Award,
-          roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
+          roles: ['HR', 'HRManager'],
+          excludeRoles: ['Admin', 'SuperAdmin', 'OrgAdmin'],
         },
       ],
     },
@@ -303,7 +304,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
     if (item.excludeRoles) {
       const userRoleStr = (user?.roleName || user?.role?.name || user?.role || '').toLowerCase().trim();
       const excluded = item.excludeRoles.map((r) => r.toLowerCase().trim());
-      if (excluded.includes(userRoleStr)) return false;
+      if (excluded.includes(userRoleStr) || excluded.some((r) => userRoleStr.includes(r))) return false;
     }
     if (item.roles && !hasRole(item.roles)) return false;
     if (item.permission && !hasPermission(item.permission)) return false;

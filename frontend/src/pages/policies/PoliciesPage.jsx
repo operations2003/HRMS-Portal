@@ -296,6 +296,19 @@ export const PoliciesPage = () => {
                 </span>
 
                 <div className="flex items-center gap-1.5">
+                  {(p.document_url || p.documentUrl) && (
+                    <a
+                      href={(p.document_url || p.documentUrl).startsWith('http') ? (p.document_url || p.documentUrl) : `https://${p.document_url || p.documentUrl}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 transition-colors"
+                      title="Open Policy Link"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      Policy Link
+                    </a>
+                  )}
+
                   <Button
                     size="xs"
                     variant="outline"
@@ -339,6 +352,24 @@ export const PoliciesPage = () => {
           maxWidth="max-w-2xl"
         >
           <div className="space-y-4">
+            {(viewingPolicy.document_url || viewingPolicy.documentUrl) && (
+              <div className="p-3 bg-indigo-50/70 dark:bg-indigo-950/40 rounded-xl border border-indigo-100 dark:border-indigo-900/60 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-xs font-semibold text-indigo-900 dark:text-indigo-200 truncate">
+                  <ExternalLink className="w-4 h-4 text-indigo-600 shrink-0" />
+                  <span className="truncate">Policy Material / External Document Link</span>
+                </div>
+                <a
+                  href={(viewingPolicy.document_url || viewingPolicy.documentUrl).startsWith('http') ? (viewingPolicy.document_url || viewingPolicy.documentUrl) : `https://${viewingPolicy.document_url || viewingPolicy.documentUrl}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 shrink-0 shadow-xs transition"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  Open Link
+                </a>
+              </div>
+            )}
+
             <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-xl space-y-2">
               <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
                 Policy Summary & Directives
@@ -423,6 +454,21 @@ export const PoliciesPage = () => {
                 value={formData.effectiveDate}
                 onChange={(e) => setFormData({ ...formData, effectiveDate: e.target.value })}
               />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Policy Document Link (URL)
+              </label>
+              <Input
+                type="url"
+                placeholder="https://example.com/policy-document or Google Drive / OneDrive link"
+                value={formData.documentUrl}
+                onChange={(e) => setFormData({ ...formData, documentUrl: e.target.value })}
+              />
+              <p className="text-[11px] text-slate-400 mt-1">
+                Employees and staff can click this link to directly open and view the official policy document, slides, or handbook.
+              </p>
             </div>
 
             <div>
