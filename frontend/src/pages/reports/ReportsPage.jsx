@@ -57,20 +57,23 @@ export const ReportsPage = () => {
   // Admin: can review other employees, does NOT have own performance review
   // HR: can review other employees AND has own performance review
   // Manager: can review direct reportees AND has own performance review
-  // Employee: only has own performance review and cannot review others
-  const canReviewOthers = true;
+  // Employee: ONLY has own performance review ("My Performance") and CANNOT review or send reports to anyone
+  const canReviewOthers = isAdmin || isHR || isManager;
   const hasOwnReview = !isAdmin;
 
   // View mode: 'reviews' (give/review evaluations) | 'my' (view own report dossier)
   // Admin: always 'reviews' (never 'my')
-  // Everyone else: defaults to 'reviews', can switch to 'my'
-  const [viewMode, setViewMode] = useState('reviews');
+  // HR & Manager: defaults to 'reviews', can switch to 'my'
+  // Employee: ALWAYS 'my' (only option is 'My Performance')
+  const [viewMode, setViewMode] = useState(() => (canReviewOthers ? 'reviews' : 'my'));
 
   useEffect(() => {
     if (isAdmin && viewMode !== 'reviews') {
       setViewMode('reviews');
+    } else if (isEmployeeOnly && viewMode !== 'my') {
+      setViewMode('my');
     }
-  }, [isAdmin, viewMode]);
+  }, [isAdmin, isEmployeeOnly, viewMode]);
 
   // Helper to match logged in employee with their specific performance dossier
   const resolveUserDepartment = () => {
@@ -149,6 +152,7 @@ export const ReportsPage = () => {
   const [loadingEmployees, setLoadingEmployees] = useState(false);
 
   useEffect(() => {
+    if (!canReviewOthers) return;
     const fetchEmployees = async () => {
       try {
         setLoadingEmployees(true);
@@ -195,7 +199,7 @@ export const ReportsPage = () => {
       }
     };
     fetchEmployees();
-  }, []);
+  }, [canReviewOthers]);
 
   const documentRef = useRef(null);
   const printDossierRef = useRef(null);
@@ -510,6 +514,11 @@ export const ReportsPage = () => {
 
   // Handle Send / Re-send Report action specifically to the selected employee
   const handleSendReport = async (overrideEmpId = null, overrideData = null) => {
+    if (!canReviewOthers) {
+      showToast('You do not have permission to evaluate or dispatch performance reports to other employees.', 'error');
+      return;
+    }
+
     const empId = overrideEmpId || selectedEmployeeId;
     const sendData = overrideData || currentData;
     const empName = sendData.employeeName;
@@ -1028,8 +1037,8 @@ export const ReportsPage = () => {
         </div>
       </div>
 
-      {/* Role Navigation: Review Dossiers vs My Review (Visible to HR & Manager who have both capabilities) */}
-      {canReviewOthers && hasOwnReview && (
+      {/* Role Navigation: Review Dossiers vs My Review */}
+      {canReviewOthers && hasOwnReview ? (
         <div className="flex border-b border-slate-200 dark:border-slate-800 gap-6 text-sm font-semibold">
           <button
             type="button"
@@ -1055,7 +1064,17 @@ export const ReportsPage = () => {
             My Performance
           </button>
         </div>
-      )}
+      ) : isEmployeeOnly ? (
+        <div className="flex border-b border-slate-200 dark:border-slate-800 gap-6 text-sm font-semibold">
+          <button
+            type="button"
+            className="pb-3 text-brand-600 border-b-2 border-brand-600 flex items-center gap-2 font-bold cursor-default"
+          >
+            <Award className="w-4 h-4" />
+            My Performance
+          </button>
+        </div>
+      ) : null}
 
       {/* Reviewer Sub-Tabs: Form vs Sent Reports Tracker (Visible when reviewing others) */}
       {canReviewOthers && viewMode === 'reviews' && (
