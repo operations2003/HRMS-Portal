@@ -1106,8 +1106,8 @@ export const ReportsPage = () => {
             type="button"
             onClick={() => setViewMode('reviews')}
             className={`pb-3 transition-colors flex items-center gap-2 cursor-pointer ${viewMode === 'reviews'
-                ? 'text-brand-600 border-b-2 border-brand-600'
-                : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+              ? 'text-brand-600 border-b-2 border-brand-600'
+              : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
               }`}
           >
             <FileText className="w-4 h-4" />
@@ -1118,8 +1118,8 @@ export const ReportsPage = () => {
             type="button"
             onClick={() => setViewMode('my')}
             className={`pb-3 transition-colors flex items-center gap-2 cursor-pointer ${viewMode === 'my'
-                ? 'text-brand-600 border-b-2 border-brand-600'
-                : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+              ? 'text-brand-600 border-b-2 border-brand-600'
+              : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
               }`}
           >
             <Award className="w-4 h-4" />
@@ -1146,8 +1146,8 @@ export const ReportsPage = () => {
               type="button"
               onClick={() => setReviewerSubTab('form')}
               className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${reviewerSubTab === 'form'
-                  ? 'bg-brand-600 text-white shadow-xs'
-                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-50'
+                ? 'bg-brand-600 text-white shadow-xs'
+                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-50'
                 }`}
             >
               Appraisal Evaluation Form
@@ -1159,8 +1159,8 @@ export const ReportsPage = () => {
                 fetchSentReports();
               }}
               className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${reviewerSubTab === 'tracker'
-                  ? 'bg-brand-600 text-white shadow-xs'
-                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-50'
+                ? 'bg-brand-600 text-white shadow-xs'
+                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-50'
                 }`}
             >
               <History className="w-3.5 h-3.5" />
@@ -1180,8 +1180,8 @@ export const ReportsPage = () => {
                 type="button"
                 onClick={() => setDepartment('operations')}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${department === 'operations'
-                    ? 'bg-brand-500 text-white shadow-brand shadow-xs'
-                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 border border-slate-200 dark:border-slate-700'
+                  ? 'bg-brand-500 text-white shadow-brand shadow-xs'
+                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 border border-slate-200 dark:border-slate-700'
                   }`}
               >
                 <Building2 className="w-3.5 h-3.5" />
@@ -1192,8 +1192,8 @@ export const ReportsPage = () => {
                 type="button"
                 onClick={() => setDepartment('ta')}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${department === 'ta'
-                    ? 'bg-brand-500 text-white shadow-brand shadow-xs'
-                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 border border-slate-200 dark:border-slate-700'
+                  ? 'bg-brand-500 text-white shadow-brand shadow-xs'
+                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 border border-slate-200 dark:border-slate-700'
                   }`}
               >
                 <Target className="w-3.5 h-3.5" />
@@ -1204,8 +1204,8 @@ export const ReportsPage = () => {
                 type="button"
                 onClick={() => setDepartment('it')}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${department === 'it'
-                    ? 'bg-brand-500 text-white shadow-brand shadow-xs'
-                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 border border-slate-200 dark:border-slate-700'
+                  ? 'bg-brand-500 text-white shadow-brand shadow-xs'
+                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 border border-slate-200 dark:border-slate-700'
                   }`}
               >
                 <Laptop className="w-3.5 h-3.5" />
@@ -1335,7 +1335,7 @@ export const ReportsPage = () => {
               </div>
               <div className="bg-white/5 backdrop-blur-xs rounded-xl p-3 border border-white/10">
                 <span className="text-[11px] font-semibold text-slate-400 block">Signatory</span>
-                <span className="text-xs font-bold text-slate-200 truncate block">Sheetal Jamdar (CEO)</span>
+                <span className="text-xs font-bold text-slate-200 truncate block">Sheetal Bedi (CEO)</span>
               </div>
             </div>
           </div>
@@ -1371,11 +1371,10 @@ export const ReportsPage = () => {
                 return (
                   <div
                     key={report.id || idx}
-                    className={`bg-white dark:bg-slate-900 rounded-2xl border transition-all duration-200 hover:shadow-lg flex flex-col justify-between overflow-hidden group ${
-                      isLatest
+                    className={`bg-white dark:bg-slate-900 rounded-2xl border transition-all duration-200 hover:shadow-lg flex flex-col justify-between overflow-hidden group ${isLatest
                         ? 'border-brand-500/40 dark:border-brand-500/30 shadow-md shadow-brand-500/5 ring-1 ring-brand-500/20'
                         : 'border-slate-200/90 dark:border-slate-800 shadow-xs'
-                    }`}
+                      }`}
                   >
                     {/* Card Content */}
                     <div className="p-5 pb-4 space-y-3.5">
@@ -1410,15 +1409,14 @@ export const ReportsPage = () => {
                       <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-3">
                         <div>
                           <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">Rating</span>
-                          <span className={`inline-block text-xs font-extrabold mt-0.5 px-2 py-0.5 rounded-md ${
-                            isExceptional
+                          <span className={`inline-block text-xs font-extrabold mt-0.5 px-2 py-0.5 rounded-md ${isExceptional
                               ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
                               : isExceeds
-                              ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
-                              : isNeedsImp
-                              ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
-                              : 'bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300'
-                          }`}>
+                                ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
+                                : isNeedsImp
+                                  ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+                                  : 'bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300'
+                            }`}>
                             {rating}
                           </span>
                         </div>
@@ -1599,8 +1597,8 @@ export const ReportsPage = () => {
                             {loadingEmployees
                               ? 'Loading team members...'
                               : departmentEmployees.length === 0
-                              ? 'No employees registered'
-                              : 'Select employee...'}
+                                ? 'No employees registered'
+                                : 'Select employee...'}
                           </option>
                           {departmentEmployees.map((emp) => {
                             const name = `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || emp.name || emp.email;
