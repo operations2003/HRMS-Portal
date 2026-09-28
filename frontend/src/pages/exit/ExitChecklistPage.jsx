@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   CheckCircle2,
   Clock,
@@ -11,6 +12,9 @@ import {
   Calendar,
   AlertCircle,
   FileCheck,
+  UserX,
+  Wallet,
+  ArrowRight,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
@@ -22,8 +26,10 @@ import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
 import { EmptyState } from '../../components/common/EmptyState.jsx';
 import { ClearanceChecklistTable } from '../../components/exit/ClearanceChecklistTable.jsx';
 import { AddClearanceTaskModal } from '../../components/exit/AddClearanceTaskModal.jsx';
+import { AccessDeprovisionModal } from '../../components/exit/AccessDeprovisionModal.jsx';
 
 export const ExitChecklistPage = () => {
+  const navigate = useNavigate();
   const { user, hasRole, hasPermission } = useAuth();
   const toast = useToast();
 
@@ -54,6 +60,13 @@ export const ExitChecklistPage = () => {
 
   // Modals
   const [isAddTaskOpen, setIsAddTaskOpen] = useState(false);
+  const [showDeprovisionModal, setShowDeprovisionModal] = useState(false);
+
+  const isSelectedAllCleared =
+    selectedClearances.length > 0 &&
+    selectedClearances.every((t) =>
+      ['CLEARED', 'COMPLETED', 'WAIVED', 'NOT_APPLICABLE'].includes((t.status || '').toUpperCase())
+    );
 
   const fetchMyExit = async () => {
     try {
@@ -279,12 +292,62 @@ export const ExitChecklistPage = () => {
                 <Badge variant="brand" size="sm">
                   Status: {selectedExit.status}
                 </Badge>
-                <Badge variant="neutral" size="sm">
-                  Stage: {selectedExit.currentStage || 'CLEARANCE'}
+                <Badge
+                  variant={isSelectedAllCleared ? 'success' : 'neutral'}
+                  size="sm"
+                >
+                  Stage:{' '}
+                  {isSelectedAllCleared && selectedExit.currentStage === 'CLEARANCE_IN_PROGRESS'
+                    ? 'CLEARANCES_COMPLETED'
+                    : selectedExit.currentStage || 'CLEARANCE'}
                 </Badge>
               </div>
             )}
           </div>
+
+          {/* Phase Advancement Banner when all clearances complete */}
+          {isSelectedAllCleared && selectedExit && (
+            <div className="p-4 bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 border border-emerald-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm shadow-emerald-600/30">
+                  <CheckCircle2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-emerald-950 uppercase tracking-wider">
+                      All Departmental Clearances Complete (Stage 4 Done)
+                    </span>
+                    <Badge variant="success" size="sm">
+                      100% Cleared
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-emerald-800 mt-0.5">
+                    All asset returns, KT handovers, and department clearances are verified. You can now proceed to revoke access and execute Full & Final (FnF) settlement.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {isHrOrAdmin && (
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    icon={UserX}
+                    onClick={() => setShowDeprovisionModal(true)}
+                  >
+                    Revoke Access (Phase 5)
+                  </Button>
+                )}
+                <Button
+                  variant="primary"
+                  size="sm"
+                  icon={Wallet}
+                  onClick={() => navigate('/fnf')}
+                >
+                  Go to FnF Settlement (Phase 6)
+                </Button>
+              </div>
+            </div>
+          )}
 
           {isLoadingManage ? (
             <div className="bg-white rounded-2xl border border-slate-200/80 p-8 shadow-sm">
@@ -317,6 +380,16 @@ export const ExitChecklistPage = () => {
           onClose={() => setIsAddTaskOpen(false)}
           onSuccess={() => fetchSelectedClearances(selectedExitId)}
           exitRequestId={selectedExitId}
+        />
+      )}
+
+      {/* Deprovision Access Modal (Phase 5) */}
+      {showDeprovisionModal && selectedExit && (
+        <AccessDeprovisionModal
+          isOpen={showDeprovisionModal}
+          onClose={() => setShowDeprovisionModal(false)}
+          record={selectedExit}
+          onSuccess={() => fetchSelectedClearances(selectedExitId)}
         />
       )}
     </div>

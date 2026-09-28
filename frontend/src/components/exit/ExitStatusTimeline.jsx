@@ -105,16 +105,27 @@ export const ExitStatusTimeline = ({ status, currentStage, offboarding = null, c
     offboarding?.fnf?.paymentStatus === 'DISBURSED' ||
     offboarding?.paymentStatus === 'DISBURSED';
 
+  const allClearancesDone =
+    Array.isArray(clearances) &&
+    clearances.length > 0 &&
+    clearances.every((cl) => ['CLEARED', 'COMPLETED', 'WAIVED', 'NOT_APPLICABLE'].includes((cl.status || '').toUpperCase()));
+
+  const offboardingCleared = offboarding?.clearanceStatus === 'CLEARED';
+
   if (s === 'SUBMITTED' || c === 'MANAGER_REVIEW' || c === 'EMPLOYEE_SUBMISSION') {
     activeIndex = 1;
   } else if (s === 'UNDER_REVIEW' || c === 'HR_REVIEW') {
     activeIndex = 2;
-  } else if (s === 'APPROVED' || s === 'NOTICE_PERIOD') {
-    // Stage 3: Active Notice Period
+  } else if (s === 'NOTICE_PERIOD' || (s === 'APPROVED' && c !== 'CLEARANCE_IN_PROGRESS' && c !== 'FNF_PENDING' && c !== 'ACCESS_REVOCATION')) {
     activeIndex = 3;
-  } else if (s === 'EXIT_PROCESSING' || c === 'CLEARANCE_IN_PROGRESS') {
-    // Notice period cleared! Move forward to Checklist (Stage 4)
+  } else if ((s === 'EXIT_PROCESSING' || c === 'CLEARANCE_IN_PROGRESS') && !allClearancesDone && !offboardingCleared && c !== 'FNF_PENDING') {
     activeIndex = 4;
+  } else if (!accessRevoked && (allClearancesDone || offboardingCleared || c === 'FNF_PENDING' || c === 'ACCESS_REVOCATION')) {
+    activeIndex = 5;
+  } else if (accessRevoked && !fnfSettled) {
+    activeIndex = 6;
+  } else if (fnfSettled && s !== 'COMPLETED' && c !== 'COMPLETED') {
+    activeIndex = 6;
   } else if (s === 'COMPLETED' || c === 'COMPLETED') {
     activeIndex = 7;
   }

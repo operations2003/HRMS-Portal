@@ -297,6 +297,23 @@ export const exitService = {
       exitRepository.findDeprovisionAudits(exit.id),
     ]);
 
+    const allClearancesDone =
+      clearances.length > 0 &&
+      clearances.every((t) => ['CLEARED', 'COMPLETED', 'WAIVED', 'NOT_APPLICABLE'].includes((t.status || '').toUpperCase()));
+
+    if (allClearancesDone && exit.currentStage === 'CLEARANCE_IN_PROGRESS') {
+      await exitRepository.update(exit.id, { currentStage: 'FNF_PENDING' });
+      await exitRepository.updateOffboarding(exit.id, {
+        clearanceStatus: 'CLEARED',
+        offboardingStatus: 'FNF_PENDING',
+      });
+      exit.currentStage = 'FNF_PENDING';
+      if (offboarding) {
+        offboarding.clearanceStatus = 'CLEARED';
+        offboarding.offboardingStatus = 'FNF_PENDING';
+      }
+    }
+
     return {
       ...exit,
       clearances,
@@ -768,6 +785,28 @@ export const exitService = {
     const tasks = await exitRepository.findClearancesByRequestId(exitRequestId);
     const totalRecovery = await exitRepository.getTotalRecoveryAmount(exitRequestId);
     const completedCount = tasks.filter((t) => ['CLEARED', 'COMPLETED', 'WAIVED', 'NOT_APPLICABLE'].includes(t.status)).length;
+    const isAllCleared = tasks.length > 0 && completedCount === tasks.length;
+
+    if (isAllCleared && exit.currentStage === 'CLEARANCE_IN_PROGRESS') {
+      await exitRepository.update(exitRequestId, { currentStage: 'FNF_PENDING' });
+      await exitRepository.updateOffboarding(exitRequestId, {
+        clearanceStatus: 'CLEARED',
+        offboardingStatus: 'FNF_PENDING',
+      });
+      const wf = await workflowRepository.findByEntity('EXIT_REQUEST', exitRequestId);
+      if (wf && wf.currentStage === 'CLEARANCE_IN_PROGRESS') {
+        await workflowRepository.recordAction(wf.id, {
+          stage: 'CLEARANCE_IN_PROGRESS',
+          actorUserId: currentUser.id,
+          actorRole: currentUser.roleName || 'HR',
+          action: 'APPROVE',
+          fromStatus: wf.currentStatus,
+          toStatus: wf.currentStatus,
+          nextStage: 'FNF_PENDING',
+          comments: 'All departmental clearance tasks completed and cleared.',
+        });
+      }
+    }
 
     return {
       items: tasks,
@@ -776,7 +815,7 @@ export const exitService = {
         completedTasks: completedCount,
         pendingTasks: tasks.length - completedCount,
         totalRecoveryAmount: totalRecovery,
-        isAllCleared: tasks.length > 0 && completedCount === tasks.length,
+        isAllCleared,
       },
     };
   },
