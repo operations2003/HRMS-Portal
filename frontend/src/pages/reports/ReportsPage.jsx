@@ -27,6 +27,9 @@ import {
   Eye,
   RefreshCw,
   ChevronDown,
+  ChevronUp,
+  ChevronRight,
+  Search,
   X,
   FileSpreadsheet,
   FileEdit,
@@ -142,6 +145,11 @@ export const ReportsPage = () => {
   const [loadingSentReports, setLoadingSentReports] = useState(false);
   const [empReportStatus, setEmpReportStatus] = useState(null);
   const [loadingStatus, setLoadingStatus] = useState(false);
+
+  // Tracker Employee Directory States
+  const [trackerSearch, setTrackerSearch] = useState('');
+  const [trackerDeptFilter, setTrackerDeptFilter] = useState('all');
+  const [expandedEmployees, setExpandedEmployees] = useState(new Set());
 
   // Recipient ("My Performance") States
   const [myReports, setMyReports] = useState([]);
@@ -1057,6 +1065,112 @@ export const ReportsPage = () => {
     },
   ];
 
+  // Initials generator
+  const getInitials = (name) => {
+    if (!name) return 'EM';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  };
+
+  // Group sent reports by recipient employee into an Employee Directory
+  const employeeDirectory = useMemo(() => {
+    const map = new Map();
+
+    (sentReports || []).forEach((report) => {
+      const key = String(report.employeeId || report.employeeUserId || report.employeeName || report.id);
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          employeeId: report.employeeId,
+          employeeUserId: report.employeeUserId,
+          employeeName: report.employeeName || 'Unknown Employee',
+          employeeCode: report.employeeCode || report.empCode || '',
+          empEmail: report.empEmail || '',
+          designation: report.designation || '',
+          department: report.department || 'operations',
+          reports: [],
+          totalSentCount: 0,
+        });
+      }
+      const entry = map.get(key);
+      entry.reports.push(report);
+      entry.totalSentCount += (report.sentCount || 1);
+    });
+
+    const list = Array.from(map.values()).map((emp) => {
+      emp.reports.sort((a, b) => new Date(b.lastSentAt || b.createdAt || 0) - new Date(a.lastSentAt || a.createdAt || 0));
+      emp.latestReport = emp.reports[0] || null;
+      return emp;
+    });
+
+    list.sort((a, b) => {
+      const dateA = new Date(a.latestReport?.lastSentAt || a.latestReport?.createdAt || 0);
+      const dateB = new Date(b.latestReport?.lastSentAt || b.latestReport?.createdAt || 0);
+      return dateB - dateA;
+    });
+
+    return list;
+  }, [sentReports]);
+
+  // Filtered employee directory based on search query & department
+  const filteredEmployeeDirectory = useMemo(() => {
+    return employeeDirectory.filter((emp) => {
+      if (trackerDeptFilter !== 'all') {
+        const d = (emp.department || '').toLowerCase();
+        if (d !== trackerDeptFilter.toLowerCase()) return false;
+      }
+      if (trackerSearch.trim()) {
+        const q = trackerSearch.toLowerCase().trim();
+        const matchName = (emp.employeeName || '').toLowerCase().includes(q);
+        const matchCode = (emp.employeeCode || '').toLowerCase().includes(q);
+        const matchEmail = (emp.empEmail || '').toLowerCase().includes(q);
+        const matchCycle = emp.reports.some((r) =>
+          (r.reviewCycle || '').toLowerCase().includes(q) ||
+          (r.reviewPeriod || '').toLowerCase().includes(q) ||
+          (r.overallRating || '').toLowerCase().includes(q)
+        );
+        return matchName || matchCode || matchEmail || matchCycle;
+      }
+      return true;
+    });
+  }, [employeeDirectory, trackerSearch, trackerDeptFilter]);
+
+  // Auto-expand all employees on initial directory load
+  useEffect(() => {
+    if (sentReports.length > 0) {
+      setExpandedEmployees((prev) => {
+        if (prev.size === 0) {
+          return new Set(sentReports.map((r) => String(r.employeeId || r.employeeUserId || r.employeeName || r.id)));
+        }
+        return prev;
+      });
+    }
+  }, [sentReports]);
+
+  const toggleExpandEmployee = (key) => {
+    setExpandedEmployees((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
+  const isAllExpanded = filteredEmployeeDirectory.length > 0 &&
+    filteredEmployeeDirectory.every((e) => expandedEmployees.has(e.key));
+
+  const toggleAllExpanded = () => {
+    if (isAllExpanded) {
+      setExpandedEmployees(new Set());
+    } else {
+      setExpandedEmployees(new Set(filteredEmployeeDirectory.map((e) => e.key)));
+    }
+  };
+
   // Department theme styles
   const getTheme = () => {
     const activeD = effectiveDepartment || department;
@@ -1258,35 +1372,410 @@ export const ReportsPage = () => {
 
       {/* Tracker View vs Evaluation Form / My Performance View */}
       {canReviewOthers && viewMode === 'reviews' && reviewerSubTab === 'tracker' ? (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-6 shadow-sm space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 gap-3">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-5 sm:p-6 shadow-sm space-y-5">
+          {/* Header & Controls */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 gap-4">
             <div>
-              <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-brand-50 text-brand-700 dark:bg-brand-950/60 dark:text-brand-300 border border-brand-200 dark:border-brand-800">
+                  <Users className="w-3 h-3" />
+                  Employee Directory
+                </span>
+                <span className="text-xs text-slate-400 font-medium">
+                  {filteredEmployeeDirectory.length} {filteredEmployeeDirectory.length === 1 ? 'Recipient' : 'Recipients'} • {sentReports.length} {sentReports.length === 1 ? 'Report Sent' : 'Reports Sent'}
+                </span>
+              </div>
+              <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <History className="w-5 h-5 text-brand-500" />
-                <span>Sent Performance Reports Tracker</span>
+                <span>Sent Performance Reports Directory</span>
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Audit delivery status of reports sent to specific team members. Monitor sent counts, see if a user dismissed a report, and re-send anytime.
+                Organized directory of all team members and their delivered performance appraisals. Click any employee to view all reports dispatched to them.
               </p>
             </div>
-            <Button
-              size="sm"
-              variant="outline"
-              icon={RefreshCw}
-              loading={loadingSentReports}
-              onClick={fetchSentReports}
-              className="text-xs font-semibold"
-            >
-              Refresh Tracker
-            </Button>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              {filteredEmployeeDirectory.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  icon={isAllExpanded ? ChevronUp : ChevronDown}
+                  onClick={toggleAllExpanded}
+                  className="text-xs font-semibold text-slate-700 dark:text-slate-300"
+                >
+                  {isAllExpanded ? 'Collapse All' : 'Expand All'}
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                icon={RefreshCw}
+                loading={loadingSentReports}
+                onClick={fetchSentReports}
+                className="text-xs font-semibold"
+              >
+                Refresh
+              </Button>
+            </div>
           </div>
 
-          <DataTable
-            columns={sentTrackerColumns}
-            data={sentReports}
-            isLoading={loadingSentReports}
-            emptyMessage="No performance reports have been sent yet. Switch back to the Appraisal Evaluation Form to select an employee and dispatch their report."
-          />
+          {/* Search & Department Filter Bar */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+            {/* Search Input */}
+            <div className="relative flex-1 max-w-md">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search directory by employee name, code, email, cycle..."
+                value={trackerSearch}
+                onChange={(e) => setTrackerSearch(e.target.value)}
+                className="w-full pl-9 pr-8 py-2 text-xs bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
+              />
+              {trackerSearch && (
+                <button
+                  type="button"
+                  onClick={() => setTrackerSearch('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Department Filter Pills */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+              <button
+                type="button"
+                onClick={() => setTrackerDeptFilter('all')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${trackerDeptFilter === 'all'
+                  ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-2xs'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200/80 dark:hover:bg-slate-700'
+                }`}
+              >
+                All ({employeeDirectory.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setTrackerDeptFilter('operations')}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${trackerDeptFilter === 'operations'
+                  ? 'bg-teal-600 text-white shadow-2xs'
+                  : 'bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 hover:bg-teal-100 border border-teal-200/60 dark:border-teal-800/60'
+                }`}
+              >
+                <Building2 className="w-3.5 h-3.5" />
+                Operations ({employeeDirectory.filter((e) => (e.department || '').toLowerCase() === 'operations').length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setTrackerDeptFilter('ta')}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${trackerDeptFilter === 'ta'
+                  ? 'bg-amber-600 text-white shadow-2xs'
+                  : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 hover:bg-amber-100 border border-amber-200/60 dark:border-amber-800/60'
+                }`}
+              >
+                <Target className="w-3.5 h-3.5" />
+                TA ({employeeDirectory.filter((e) => (e.department || '').toLowerCase() === 'ta').length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setTrackerDeptFilter('it')}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${trackerDeptFilter === 'it'
+                  ? 'bg-indigo-600 text-white shadow-2xs'
+                  : 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 border border-indigo-200/60 dark:border-indigo-800/60'
+                }`}
+              >
+                <Laptop className="w-3.5 h-3.5" />
+                IT ({employeeDirectory.filter((e) => (e.department || '').toLowerCase() === 'it').length})
+              </button>
+            </div>
+          </div>
+
+          {/* Directory Content */}
+          {loadingSentReports ? (
+            <div className="py-20 flex flex-col items-center justify-center">
+              <LoadingSpinner size="lg" message="Loading employee performance reports directory..." />
+            </div>
+          ) : sentReports.length === 0 ? (
+            <div className="py-16 text-center space-y-3 bg-slate-50/50 dark:bg-slate-800/20 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
+              <div className="w-14 h-14 rounded-2xl bg-brand-50 dark:bg-brand-950 text-brand-600 dark:text-brand-400 flex items-center justify-center mx-auto border border-brand-200 dark:border-brand-800 shadow-sm">
+                <History className="w-7 h-7" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-slate-800 dark:text-white">No Performance Reports Sent Yet</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
+                  When you evaluate and dispatch appraisal reports from the Appraisal Evaluation Form, they will appear here neatly grouped under each employee's directory entry.
+                </p>
+              </div>
+              <div className="pt-2">
+                <Button size="sm" variant="primary" onClick={() => setReviewerSubTab('form')}>
+                  Go to Appraisal Form
+                </Button>
+              </div>
+            </div>
+          ) : filteredEmployeeDirectory.length === 0 ? (
+            <div className="py-14 text-center space-y-3 bg-slate-50/50 dark:bg-slate-800/20 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
+              <Search className="w-8 h-8 text-slate-400 mx-auto" />
+              <div className="space-y-1">
+                <h4 className="text-sm font-bold text-slate-800 dark:text-white">No Matching Employees in Directory</h4>
+                <p className="text-xs text-slate-500">No records match your search or filter. Try a different query or clear the filter.</p>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setTrackerSearch('');
+                  setTrackerDeptFilter('all');
+                }}
+              >
+                Clear Search &amp; Filter
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {filteredEmployeeDirectory.map((emp) => {
+                const isExpanded = expandedEmployees.has(emp.key);
+                const dept = (emp.department || 'operations').toLowerCase();
+                const DeptIcon = dept === 'it' ? Laptop : dept === 'ta' ? Target : Building2;
+                const deptLabel = dept === 'it' ? 'IT' : dept === 'ta' ? 'TA' : 'Operations';
+
+                return (
+                  <div
+                    key={emp.key}
+                    className={`rounded-2xl border transition-all duration-200 overflow-hidden ${
+                      isExpanded
+                        ? 'border-brand-500/40 dark:border-brand-500/30 shadow-md shadow-brand-500/5 bg-white dark:bg-slate-900 ring-1 ring-brand-500/20'
+                        : 'border-slate-200/90 dark:border-slate-800 shadow-2xs bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700'
+                    }`}
+                  >
+                    {/* Employee Directory Header Row */}
+                    <div
+                      onClick={() => toggleExpandEmployee(emp.key)}
+                      className="p-4 sm:p-4.5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 cursor-pointer select-none hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors"
+                    >
+                      {/* Left: Avatar + Details */}
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-brand-50 to-indigo-100 dark:from-brand-950 dark:to-slate-800 text-brand-700 dark:text-brand-300 border border-brand-200/80 dark:border-brand-800/80 flex items-center justify-center font-bold text-sm tracking-wider shadow-2xs shrink-0">
+                          {getInitials(emp.employeeName)}
+                        </div>
+
+                        <div className="min-w-0 space-y-0.5">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white truncate">
+                              {emp.employeeName}
+                            </h3>
+                            {emp.employeeCode && (
+                              <span className="font-mono text-[11px] font-semibold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">
+                                {emp.employeeCode}
+                              </span>
+                            )}
+                            <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${
+                              dept === 'it'
+                                ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60'
+                                : dept === 'ta'
+                                  ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/60'
+                                  : 'bg-teal-50 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300 border border-teal-200/60 dark:border-teal-800/60'
+                            }`}>
+                              <DeptIcon className="w-3 h-3" />
+                              {deptLabel}
+                            </span>
+                          </div>
+
+                          <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2 flex-wrap">
+                            {emp.empEmail && <span>{emp.empEmail}</span>}
+                            {emp.empEmail && emp.designation && <span>•</span>}
+                            {emp.designation && <span>{emp.designation}</span>}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Right: Latest Score & Reports Count Pill & Toggle */}
+                      <div className="flex items-center justify-between lg:justify-end gap-4 shrink-0 pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-100 dark:border-slate-800">
+                        {emp.latestReport && (
+                          <div className="text-left lg:text-right">
+                            <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
+                              Latest Review
+                            </span>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <span className="text-xs font-black text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-950/50 px-2 py-0.5 rounded border border-brand-200 dark:border-brand-800 font-mono">
+                                {emp.latestReport.averageScore ? Number(emp.latestReport.averageScore).toFixed(1) : '--'}
+                                <span className="text-[10px] font-normal text-slate-400">/5.0</span>
+                              </span>
+                              <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 truncate max-w-[140px]">
+                                {emp.latestReport.overallRating || 'Meets Expectations'}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-brand-50 dark:bg-brand-950/60 text-brand-700 dark:text-brand-300 border border-brand-200/80 dark:border-brand-800/80">
+                            <FileText className="w-3.5 h-3.5 text-brand-600 dark:text-brand-400" />
+                            {emp.reports.length} {emp.reports.length === 1 ? 'Report' : 'Reports'}
+                          </span>
+
+                          <div
+                            className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors ${
+                              isExpanded
+                                ? 'bg-brand-100 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300'
+                                : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+                            }`}
+                          >
+                            {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Expanded Section: All Reports Sent to This Employee */}
+                    {isExpanded && (
+                      <div className="border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-850/50 p-4 sm:p-5 space-y-3.5 animate-in fade-in duration-200">
+                        {/* Section Sub-Header */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2 border-b border-slate-200/60 dark:border-slate-800 gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                              <History className="w-3.5 h-3.5 text-brand-500" />
+                              Reports Delivered to {emp.employeeName} ({emp.reports.length})
+                            </span>
+                            <span className="text-[11px] text-slate-400">
+                              (Sent {emp.totalSentCount} time{emp.totalSentCount > 1 ? 's' : ''} total)
+                            </span>
+                          </div>
+
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            icon={Plus}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSelectEmployee(emp.employeeId);
+                              setDepartment(emp.department || 'operations');
+                              setReviewerSubTab('form');
+                            }}
+                            className="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-950/40"
+                          >
+                            New Appraisal for {emp.employeeName.split(' ')[0]}
+                          </Button>
+                        </div>
+
+                        {/* Reports Table for this Employee */}
+                        <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs">
+                          <table className="w-full text-left text-xs">
+                            <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-200 dark:border-slate-800">
+                              <tr>
+                                <th className="py-3 px-4 font-bold">Review Period &amp; Cycle</th>
+                                <th className="py-3 px-4 font-bold">Score / Rating</th>
+                                <th className="py-3 px-4 font-bold">Delivery Status</th>
+                                <th className="py-3 px-4 font-bold">Last Sent</th>
+                                <th className="py-3 px-4 font-bold text-right">Action</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
+                              {emp.reports.map((report) => (
+                                <tr
+                                  key={report.id}
+                                  className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors"
+                                >
+                                  {/* Period & Cycle */}
+                                  <td className="py-3.5 px-4">
+                                    <div className="space-y-0.5">
+                                      <span className="font-semibold text-xs text-slate-900 dark:text-white block">
+                                        {report.reviewPeriod || 'Current Period'}
+                                      </span>
+                                      <span className="text-[11px] text-slate-400 block font-mono">
+                                        {report.reviewCycle || 'Quarterly Review'}
+                                      </span>
+                                    </div>
+                                  </td>
+
+                                  {/* Score / Rating */}
+                                  <td className="py-3.5 px-4">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="text-xs font-bold text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-950/40 px-2 py-0.5 rounded border border-brand-200 dark:border-brand-800 font-mono">
+                                        {report.averageScore ? Number(report.averageScore).toFixed(1) : '--'}/5.0
+                                      </span>
+                                      <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                                        {report.overallRating || 'Meets Expectations'}
+                                      </span>
+                                    </div>
+                                  </td>
+
+                                  {/* Delivery Status */}
+                                  <td className="py-3.5 px-4">
+                                    {report.status === 'DELETED_BY_USER' ? (
+                                      <div>
+                                        <Badge variant="warning" size="sm">
+                                          Deleted by Recipient
+                                        </Badge>
+                                        <span className="text-[10px] text-amber-600 block mt-0.5 font-medium">
+                                          Option to Send Again
+                                        </span>
+                                      </div>
+                                    ) : (
+                                      <div>
+                                        <Badge variant="success" size="sm">
+                                          Delivered
+                                        </Badge>
+                                        <span className="text-[10px] text-slate-400 block mt-0.5">
+                                          Sent {report.sentCount || 1} time{(report.sentCount || 1) > 1 ? 's' : ''}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </td>
+
+                                  {/* Last Sent */}
+                                  <td className="py-3.5 px-4 text-slate-500 dark:text-slate-400 text-xs">
+                                    {report.lastSentAt ? new Date(report.lastSentAt).toLocaleDateString() : 'N/A'}
+                                  </td>
+
+                                  {/* Action Buttons */}
+                                  <td className="py-3.5 px-4 text-right">
+                                    <div className="flex items-center justify-end gap-2">
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        icon={Eye}
+                                        onClick={() => setPreviewReport(report)}
+                                        title="Review performance appraisal report"
+                                        className="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-950/40 border-brand-200 dark:border-brand-800"
+                                      >
+                                        Review
+                                      </Button>
+
+                                      <Button
+                                        size="sm"
+                                        variant={report.status === 'DELETED_BY_USER' ? 'primary' : 'outline'}
+                                        icon={RotateCw}
+                                        onClick={() => handleSendAgainFromHistory(report)}
+                                        title="Re-send appraisal report"
+                                        className="text-xs font-semibold"
+                                      >
+                                        Send Again
+                                      </Button>
+
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        icon={Trash2}
+                                        onClick={() => setSentReportToDelete(report)}
+                                        title="Delete this performance report"
+                                        className="text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 border-rose-200 dark:border-rose-800"
+                                      >
+                                        Delete
+                                      </Button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       ) : isViewingMyReport && loadingMyReports ? (
         <div className="py-24 flex flex-col items-center justify-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
