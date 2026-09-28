@@ -55,45 +55,55 @@ export const PrintableReportDossier = forwardRef(({ department, data: rawData, a
       val: 5,
       title: 'Exceptional',
       desc: 'Consistently surpasses highest standards',
-      cardBg: 'bg-emerald-50 border-emerald-300 text-emerald-950 font-bold',
-      numColor: 'bg-emerald-600 text-white',
+      colorHex: '#059669',
+      bgHex: '#ecfdf5',
+      borderHex: '#10b981',
+      textHex: '#065f46',
     },
     {
       val: 4,
       title: 'Exceeds Expectations',
       desc: 'Frequently goes beyond role demands',
-      cardBg: 'bg-sky-50 border-sky-300 text-sky-950 font-bold',
-      numColor: 'bg-sky-600 text-white',
+      colorHex: '#0284c7',
+      bgHex: '#f0f9ff',
+      borderHex: '#0ea5e9',
+      textHex: '#075985',
     },
     {
       val: 3,
       title: 'Meets Expectations',
       desc: 'Consistently achieves core deliverables',
-      cardBg: 'bg-indigo-50 border-indigo-300 text-indigo-950 font-bold',
-      numColor: 'bg-indigo-600 text-white',
+      colorHex: '#4f46e5',
+      bgHex: '#eef2ff',
+      borderHex: '#6366f1',
+      textHex: '#3730a3',
     },
     {
       val: 2,
       title: 'Needs Improvement',
       desc: 'Fails to meet expected benchmarks',
-      cardBg: 'bg-amber-50 border-amber-300 text-amber-950 font-bold',
-      numColor: 'bg-amber-600 text-white',
+      colorHex: '#d97706',
+      bgHex: '#fffbeb',
+      borderHex: '#f59e0b',
+      textHex: '#92400e',
     },
     {
       val: 1,
       title: 'Unsatisfactory',
       desc: 'Critical performance deficiency',
-      cardBg: 'bg-rose-50 border-rose-300 text-rose-950 font-bold',
-      numColor: 'bg-rose-600 text-white',
+      colorHex: '#e11d48',
+      bgHex: '#fff1f2',
+      borderHex: '#f43f5e',
+      textHex: '#9f1239',
     },
   ];
 
   const overallRatingOptions = [
-    { label: 'Exceptional', icon: '⭐', color: 'border-emerald-500 bg-emerald-50 text-emerald-950 font-bold' },
-    { label: 'Exceeds Expectations', icon: '✨', color: 'border-sky-500 bg-sky-50 text-sky-950 font-bold' },
-    { label: 'Meets Expectations', icon: '👍', color: 'border-indigo-500 bg-indigo-50 text-indigo-950 font-bold' },
-    { label: 'Needs Improvement', icon: '⚠️', color: 'border-amber-500 bg-amber-50 text-amber-950 font-bold' },
-    { label: 'Unsatisfactory', icon: '❌', color: 'border-rose-500 bg-rose-50 text-rose-950 font-bold' },
+    { label: 'Exceptional', icon: '⭐', colorHex: '#059669', bgHex: '#ecfdf5', borderHex: '#10b981', textHex: '#065f46' },
+    { label: 'Exceeds Expectations', icon: '✨', colorHex: '#0284c7', bgHex: '#f0f9ff', borderHex: '#0ea5e9', textHex: '#075985' },
+    { label: 'Meets Expectations', icon: '👍', colorHex: '#4f46e5', bgHex: '#eef2ff', borderHex: '#6366f1', textHex: '#3730a3' },
+    { label: 'Needs Improvement', icon: '⚠️', colorHex: '#d97706', bgHex: '#fffbeb', borderHex: '#f59e0b', textHex: '#92400e' },
+    { label: 'Unsatisfactory', icon: '❌', colorHex: '#e11d48', bgHex: '#fff1f2', borderHex: '#f43f5e', textHex: '#9f1239' },
   ];
 
   const renderSectionHeader = (num, title, rightElement = null) => (
@@ -102,18 +112,19 @@ export const PrintableReportDossier = forwardRef(({ department, data: rawData, a
         borderBottom: '1px solid #e2e8f0',
         paddingBottom: '3px',
         marginBottom: '6px',
-        lineHeight: '24px',
+        lineHeight: '22px',
         display: 'block',
         position: 'relative',
+        boxSizing: 'border-box',
       }}
     >
       <span
         className={`rounded font-black text-[11px] border shrink-0 ${numBgClass}`}
         style={{
           display: 'inline-block',
-          width: '22px',
-          height: '22px',
-          lineHeight: '20px',
+          width: '20px',
+          height: '20px',
+          lineHeight: '18px',
           textAlign: 'center',
           boxSizing: 'border-box',
           verticalAlign: 'middle',
@@ -133,13 +144,27 @@ export const PrintableReportDossier = forwardRef(({ department, data: rawData, a
         {title}
       </span>
       {rightElement && (
-        <span style={{ float: 'right', verticalAlign: 'middle', lineHeight: '22px' }}>
+        <span style={{ float: 'right', verticalAlign: 'middle', lineHeight: '20px' }}>
           {rightElement}
         </span>
       )}
       <div style={{ clear: 'both' }} />
     </div>
   );
+
+  const infoRow1 = [
+    { label: 'Employee Name', value: data.employeeName || '—' },
+    { label: 'Employee ID', value: data.employeeId || '—', isMono: true },
+    { label: 'Department', value: data.department || (isOps ? 'Operations Team' : isIt ? 'IT Team' : 'TA Team') },
+    { label: 'Designation', value: data.designation || 'Team Member' },
+  ];
+
+  const infoRow2 = [
+    { label: 'Reporting Manager', value: data.manager || '—' },
+    { label: 'Review Date', value: data.reviewDate || '—', isMono: true },
+    { label: 'Review Period', value: data.reviewPeriod || '—' },
+    { label: 'L&D Executive', value: data.ldExecutive || 'Swati Batabyal' },
+  ];
 
   return (
     <div
@@ -148,6 +173,7 @@ export const PrintableReportDossier = forwardRef(({ department, data: rawData, a
       style={{
         width: '794px',
         backgroundColor: '#ffffff',
+        color: '#0f172a',
         WebkitFontSmoothing: 'antialiased',
         MozOsxFontSmoothing: 'grayscale',
       }}
@@ -167,199 +193,196 @@ export const PrintableReportDossier = forwardRef(({ department, data: rawData, a
           fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
         }}
       >
-        <div className="space-y-3">
-          {/* Executive Header Banner */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {/* Executive Header Banner - Rock Solid High Contrast */}
           <div
-            className="rounded-xl text-white p-3.5 px-4 border border-slate-700 relative overflow-hidden"
             style={{
-              background:
-                'radial-gradient(circle at 85% 20%, rgba(99, 102, 241, 0.25) 0%, transparent 60%), linear-gradient(135deg, #090d16 0%, #1e1b4b 60%, #0f172a 100%)',
+              backgroundColor: '#0f172a',
+              backgroundImage: 'linear-gradient(135deg, #090d16 0%, #1e1b4b 60%, #0f172a 100%)',
+              borderRadius: '10px',
+              padding: '14px 18px',
+              border: '1px solid #1e293b',
+              borderBottom: '3px solid #6366f1',
+              boxSizing: 'border-box',
+              position: 'relative',
+              overflow: 'hidden',
+              color: '#ffffff',
             }}
           >
-            <div className="flex items-center justify-between relative z-10">
-              <div className="space-y-1 max-w-[500px]">
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-white/15 border border-white/20 text-slate-100">
-                    <Icon className="w-3 h-3 text-indigo-300" />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative', zIndex: 10 }}>
+              <div style={{ maxWidth: '500px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      padding: '2px 8px',
+                      borderRadius: '9999px',
+                      fontSize: '9px',
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                      backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                      border: '1px solid rgba(255, 255, 255, 0.25)',
+                      color: '#f8fafc',
+                    }}
+                  >
+                    <Icon className="w-3 h-3 text-indigo-300" style={{ display: 'inline-block', verticalAlign: 'middle' }} />
                     {deptTag}
                   </span>
-                  <span className="text-[9px] font-bold text-slate-300 tracking-wider uppercase">
+                  <span style={{ fontSize: '9px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     TaskNera HRMS
                   </span>
                 </div>
-                <h1 className="text-lg font-black tracking-tight text-white leading-tight">
+                <h1 style={{ fontSize: '18px', fontWeight: 900, color: '#ffffff', letterSpacing: '-0.02em', margin: 0, lineHeight: 1.2 }}>
                   {deptTitle}
                 </h1>
-                <p className="text-[10px] text-slate-300 leading-tight font-normal">
+                <p style={{ fontSize: '9.5px', color: '#cbd5e1', margin: '4px 0 0 0', lineHeight: 1.3, fontWeight: 400 }}>
                   {deptSubtitle}
                 </p>
               </div>
 
               {/* Header Right Status Determination Card */}
-              <div className="text-right space-y-0.5 shrink-0 bg-white/15 px-3.5 py-2 rounded-xl border border-white/20 min-w-[165px]">
-                <div className="text-[8.5px] font-bold text-indigo-300 uppercase tracking-wider">
+              <div
+                style={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.12)',
+                  border: '1px solid rgba(255, 255, 255, 0.25)',
+                  padding: '8px 14px',
+                  borderRadius: '10px',
+                  textAlign: 'right',
+                  minWidth: '160px',
+                  boxSizing: 'border-box',
+                }}
+              >
+                <div style={{ fontSize: '8px', fontWeight: 700, color: '#a5b4fc', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                   Review Determination
                 </div>
-                <div className="text-sm font-black text-white leading-snug">
+                <div style={{ fontSize: '13.5px', fontWeight: 900, color: '#ffffff', lineHeight: 1.2, marginTop: '2px' }}>
                   {data.overallRating || 'Meets Expectations'}
                 </div>
-                <div className="text-[9.5px] text-slate-300">
+                <div style={{ fontSize: '9.5px', color: '#cbd5e1', marginTop: '2px' }}>
                   Cycle: {data.reviewCycle || 'Quarterly Review'}
                 </div>
               </div>
             </div>
-
-            {/* Accent color bar */}
-            <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 via-sky-400 to-indigo-600" />
           </div>
 
-          {/* 01: Employee & Review Information Grid */}
-          <section className="space-y-1.5">
+          {/* 01: Employee & Review Information (2 Rows of 4 Flex Items) */}
+          <section>
             {renderSectionHeader('01', 'Employee & Review Information')}
 
-            <div className="grid grid-cols-4 gap-2">
-              <div
-                className="bg-slate-50 border border-slate-200 rounded-lg"
-                style={{ height: '48px', padding: '6px 10px', boxSizing: 'border-box' }}
-              >
-                <div style={{ fontSize: '8px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', lineHeight: '12px', marginBottom: '3px' }}>
-                  Employee Name
+            {/* Row 1 */}
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '6px', width: '100%', boxSizing: 'border-box' }}>
+              {infoRow1.map((item, i) => (
+                <div
+                  key={i}
+                  style={{
+                    flex: '1 1 25%',
+                    width: '25%',
+                    minWidth: 0,
+                    height: '46px',
+                    padding: '5px 8px',
+                    boxSizing: 'border-box',
+                    backgroundColor: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '6px',
+                  }}
+                >
+                  <div style={{ fontSize: '7.5px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em', lineHeight: '11px', marginBottom: '2px' }}>
+                    {item.label}
+                  </div>
+                  <div style={{ fontSize: '10.5px', fontWeight: 700, fontFamily: item.isMono ? 'monospace' : 'inherit', color: '#0f172a', lineHeight: '14px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {item.value}
+                  </div>
                 </div>
-                <div style={{ fontSize: '11px', fontWeight: 700, color: '#0f172a', lineHeight: '16px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {data.employeeName || '—'}
-                </div>
-              </div>
+              ))}
+            </div>
 
-              <div
-                className="bg-slate-50 border border-slate-200 rounded-lg"
-                style={{ height: '48px', padding: '6px 10px', boxSizing: 'border-box' }}
-              >
-                <div style={{ fontSize: '8px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', lineHeight: '12px', marginBottom: '3px' }}>
-                  Employee ID
+            {/* Row 2 */}
+            <div style={{ display: 'flex', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
+              {infoRow2.map((item, i) => (
+                <div
+                  key={i}
+                  style={{
+                    flex: '1 1 25%',
+                    width: '25%',
+                    minWidth: 0,
+                    height: '46px',
+                    padding: '5px 8px',
+                    boxSizing: 'border-box',
+                    backgroundColor: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '6px',
+                  }}
+                >
+                  <div style={{ fontSize: '7.5px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em', lineHeight: '11px', marginBottom: '2px' }}>
+                    {item.label}
+                  </div>
+                  <div style={{ fontSize: '10px', fontWeight: 700, fontFamily: item.isMono ? 'monospace' : 'inherit', color: '#0f172a', lineHeight: '14px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {item.value}
+                  </div>
                 </div>
-                <div style={{ fontSize: '11px', fontWeight: 700, fontFamily: 'monospace', color: '#1e293b', lineHeight: '16px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {data.employeeId || '—'}
-                </div>
-              </div>
-
-              <div
-                className="bg-slate-50 border border-slate-200 rounded-lg"
-                style={{ height: '48px', padding: '6px 10px', boxSizing: 'border-box' }}
-              >
-                <div style={{ fontSize: '8px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', lineHeight: '12px', marginBottom: '3px' }}>
-                  Department
-                </div>
-                <div style={{ fontSize: '11px', fontWeight: 700, color: '#0f172a', lineHeight: '16px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {data.department || (isOps ? 'Operations Team' : isIt ? 'IT Team' : 'TA Team')}
-                </div>
-              </div>
-
-              <div
-                className="bg-slate-50 border border-slate-200 rounded-lg"
-                style={{ height: '48px', padding: '6px 10px', boxSizing: 'border-box' }}
-              >
-                <div style={{ fontSize: '8px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', lineHeight: '12px', marginBottom: '3px' }}>
-                  Designation
-                </div>
-                <div style={{ fontSize: '11px', fontWeight: 700, color: '#0f172a', lineHeight: '16px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {data.designation || 'Team Member'}
-                </div>
-              </div>
-
-              <div
-                className="bg-slate-50 border border-slate-200 rounded-lg"
-                style={{ height: '48px', padding: '6px 10px', boxSizing: 'border-box' }}
-              >
-                <div style={{ fontSize: '8px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', lineHeight: '12px', marginBottom: '3px' }}>
-                  Reporting Manager
-                </div>
-                <div style={{ fontSize: '11px', fontWeight: 700, color: '#0f172a', lineHeight: '16px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {data.manager || '—'}
-                </div>
-              </div>
-
-              <div
-                className="bg-slate-50 border border-slate-200 rounded-lg"
-                style={{ height: '48px', padding: '6px 10px', boxSizing: 'border-box' }}
-              >
-                <div style={{ fontSize: '8px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', lineHeight: '12px', marginBottom: '3px' }}>
-                  Review Date
-                </div>
-                <div style={{ fontSize: '10.5px', fontWeight: 700, fontFamily: 'monospace', color: '#1e293b', lineHeight: '16px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {data.reviewDate || '—'}
-                </div>
-              </div>
-
-              <div
-                className="bg-slate-50 border border-slate-200 rounded-lg"
-                style={{ height: '48px', padding: '6px 10px', boxSizing: 'border-box' }}
-              >
-                <div style={{ fontSize: '8px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', lineHeight: '12px', marginBottom: '3px' }}>
-                  Review Period
-                </div>
-                <div style={{ fontSize: '10px', fontWeight: 700, color: '#0f172a', lineHeight: '16px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {data.reviewPeriod || '—'}
-                </div>
-              </div>
-
-              <div
-                className="bg-slate-50 border border-slate-200 rounded-lg"
-                style={{ height: '48px', padding: '6px 10px', boxSizing: 'border-box' }}
-              >
-                <div style={{ fontSize: '8px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', lineHeight: '12px', marginBottom: '3px' }}>
-                  L&amp;D Executive
-                </div>
-                <div style={{ fontSize: '11px', fontWeight: 700, color: '#0f172a', lineHeight: '16px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {data.ldExecutive || 'Swati Batabyal'}
-                </div>
-              </div>
+              ))}
             </div>
           </section>
 
-          {/* 02: Rating Scale Reference */}
-          <section className="space-y-1.5">
+          {/* 02: Rating Scale Reference (5 Rubrics in 1 Row) */}
+          <section>
             {renderSectionHeader(
               '02',
               'Rating Scale Reference',
               <span
                 className={`px-3 py-0.5 rounded-full border text-[10px] font-bold inline-block ${scoreBadgeClass}`}
-                style={{ height: '22px', lineHeight: '20px', boxSizing: 'border-box' }}
+                style={{ height: '20px', lineHeight: '18px', boxSizing: 'border-box' }}
               >
                 Average Score: <span className="font-black font-mono text-[11px]">{averageScore} / 5.0</span>
               </span>
             )}
 
-            <div className="grid grid-cols-5 gap-2">
+            <div style={{ display: 'flex', gap: '6px', width: '100%', boxSizing: 'border-box' }}>
               {ratingRubric.map((item) => {
                 const isSelected = data.overallRating?.toLowerCase().includes(item.title.toLowerCase());
                 return (
                   <div
                     key={item.val}
-                    className={`border rounded-lg text-center ${
-                      isSelected
-                        ? `${item.cardBg} border-indigo-400 border-2`
-                        : 'bg-white border-slate-200 text-slate-700'
-                    }`}
-                    style={{ height: '70px', padding: '6px 4px', boxSizing: 'border-box' }}
+                    style={{
+                      flex: '1 1 20%',
+                      width: '20%',
+                      minWidth: 0,
+                      height: '66px',
+                      padding: '5px 4px',
+                      boxSizing: 'border-box',
+                      borderRadius: '6px',
+                      border: isSelected ? `2px solid ${item.borderHex}` : '1px solid #e2e8f0',
+                      backgroundColor: isSelected ? item.bgHex : '#ffffff',
+                      textAlign: 'center',
+                    }}
                   >
                     <span
-                      className={`rounded font-black text-[11px] text-white ${item.numColor}`}
                       style={{
                         display: 'block',
-                        width: '22px',
-                        height: '22px',
-                        lineHeight: '22px',
+                        width: '20px',
+                        height: '20px',
+                        lineHeight: '20px',
                         textAlign: 'center',
-                        margin: '0 auto 4px auto',
+                        margin: '0 auto 3px auto',
+                        borderRadius: '4px',
+                        fontSize: '10.5px',
+                        fontWeight: 900,
+                        color: '#ffffff',
+                        backgroundColor: item.colorHex,
                         boxSizing: 'border-box',
                       }}
                     >
                       {item.val}
                     </span>
-                    <div style={{ fontSize: '9.5px', fontWeight: 700, lineHeight: '13px', marginBottom: '2px' }}>
+                    <div style={{ fontSize: '9px', fontWeight: 700, color: isSelected ? item.textHex : '#1e293b', lineHeight: '12px', marginBottom: '1px' }}>
                       {item.title}
                     </div>
-                    <div style={{ fontSize: '8px', opacity: 0.8, lineHeight: '11px' }}>{item.desc}</div>
+                    <div style={{ fontSize: '7.5px', color: '#64748b', lineHeight: '10px' }}>
+                      {item.desc}
+                    </div>
                   </div>
                 );
               })}
@@ -367,7 +390,7 @@ export const PrintableReportDossier = forwardRef(({ department, data: rawData, a
           </section>
 
           {/* 03: Performance Competency Evaluation Table */}
-          <section className="space-y-1.5">
+          <section>
             {renderSectionHeader(
               '03',
               isOps
@@ -380,58 +403,64 @@ export const PrintableReportDossier = forwardRef(({ department, data: rawData, a
               </span>
             )}
 
-            <div className="border border-slate-200 rounded-lg overflow-hidden bg-white">
-              <table className="w-full text-left border-collapse" style={{ tableLayout: 'fixed' }}>
+            <div style={{ border: '1px solid #e2e8f0', borderRadius: '6px', overflow: 'hidden', backgroundColor: '#ffffff' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                 <thead>
-                  <tr className="bg-slate-100 border-b border-slate-200 text-[8.5px] font-bold text-slate-600 uppercase tracking-wider" style={{ height: '26px' }}>
-                    <th className="py-1 px-2.5 text-center" style={{ width: '34px', verticalAlign: 'middle' }}>#</th>
-                    <th className="py-1 px-2.5" style={{ width: '220px', verticalAlign: 'middle' }}>Performance Area / Metric</th>
-                    <th className="py-1 px-2.5 text-center" style={{ width: '110px', verticalAlign: 'middle' }}>Rating (1-5)</th>
-                    <th className="py-1 px-3" style={{ verticalAlign: 'middle' }}>Evaluator Comments &amp; Observations</th>
+                  <tr style={{ backgroundColor: '#f1f5f9', borderBottom: '1px solid #e2e8f0', height: '26px' }}>
+                    <th style={{ width: '32px', textAlign: 'center', padding: '4px 6px', fontSize: '8px', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>#</th>
+                    <th style={{ width: '220px', textAlign: 'left', padding: '4px 8px', fontSize: '8px', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Performance Area / Metric</th>
+                    <th style={{ width: '105px', textAlign: 'center', padding: '4px 6px', fontSize: '8px', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Rating (1-5)</th>
+                    <th style={{ textAlign: 'left', padding: '4px 8px', fontSize: '8px', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Evaluator Comments &amp; Observations</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody>
                   {data.competencies &&
                     data.competencies.map((comp, idx) => {
                       const numScore = parseFloat(comp.score) || 0;
-                      const scoreBadge =
+                      const badgeStyle =
                         numScore >= 4.5
-                          ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                          ? { backgroundColor: '#ecfdf5', color: '#065f46', border: '1px solid #a7f3d0' }
                           : numScore >= 3.5
-                          ? 'bg-sky-50 text-sky-800 border-sky-300'
+                          ? { backgroundColor: '#f0f9ff', color: '#075985', border: '1px solid #bae6fd' }
                           : numScore >= 2.5
-                          ? 'bg-indigo-50 text-indigo-800 border-indigo-300'
-                          : 'bg-amber-50 text-amber-800 border-amber-300';
+                          ? { backgroundColor: '#eef2ff', color: '#3730a3', border: '1px solid #c7d2fe' }
+                          : { backgroundColor: '#fffbeb', color: '#92400e', border: '1px solid #fde68a' };
 
                       return (
                         <tr
                           key={idx}
-                          className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'}
-                          style={{ height: '34px' }}
+                          style={{
+                            backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8fafc',
+                            borderBottom: '1px solid #f1f5f9',
+                            height: '32px',
+                          }}
                         >
-                          <td className="text-center font-bold text-slate-400 text-[10px]" style={{ verticalAlign: 'middle' }}>
+                          <td style={{ textAlign: 'center', fontWeight: 700, color: '#94a3b8', fontSize: '9.5px', verticalAlign: 'middle' }}>
                             {idx + 1}
                           </td>
-                          <td className="px-2.5 font-bold text-slate-900 text-[10.5px] leading-tight truncate" style={{ verticalAlign: 'middle' }}>
+                          <td style={{ padding: '4px 8px', fontWeight: 700, color: '#0f172a', fontSize: '10px', verticalAlign: 'middle', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {comp.area}
                           </td>
-                          <td className="text-center" style={{ verticalAlign: 'middle' }}>
+                          <td style={{ textAlign: 'center', verticalAlign: 'middle', padding: '2px 4px' }}>
                             <span
-                              className={`rounded font-bold font-mono text-center border ${scoreBadge}`}
                               style={{
                                 display: 'inline-block',
-                                minWidth: '76px',
-                                height: '24px',
-                                lineHeight: '22px',
+                                minWidth: '72px',
+                                height: '22px',
+                                lineHeight: '20px',
+                                borderRadius: '4px',
                                 boxSizing: 'border-box',
                                 verticalAlign: 'middle',
-                                fontSize: '10px',
+                                fontSize: '9.5px',
+                                fontWeight: 800,
+                                fontFamily: 'monospace',
+                                ...badgeStyle,
                               }}
                             >
                               {numScore.toFixed(1)} / 5.0
                             </span>
                           </td>
-                          <td className="px-3 text-slate-700 text-[10px] leading-tight truncate" style={{ verticalAlign: 'middle' }}>
+                          <td style={{ padding: '4px 8px', color: '#334155', fontSize: '9.5px', verticalAlign: 'middle', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {comp.comment || 'Performance aligned with established benchmark.'}
                           </td>
                         </tr>
@@ -444,12 +473,12 @@ export const PrintableReportDossier = forwardRef(({ department, data: rawData, a
         </div>
 
         {/* Page 1 Footer */}
-        <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-[9.5px] text-slate-500 font-medium">
-          <div className="flex items-center gap-1.5">
-            <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
+        <div style={{ paddingTop: '8px', borderTop: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '9px', color: '#64748b', fontWeight: 500, boxSizing: 'border-box' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <ShieldCheck className="w-3.5 h-3.5 text-indigo-600 inline" />
             <span>TaskNera HRMS • Performance Appraisal Record • Confidential</span>
           </div>
-          <div className="font-mono font-bold text-slate-700 text-[10px]">Page 1 of 2</div>
+          <div style={{ fontFamily: 'monospace', fontWeight: 700, color: '#334155', fontSize: '9.5px' }}>Page 1 of 2</div>
         </div>
       </div>
 
@@ -468,79 +497,76 @@ export const PrintableReportDossier = forwardRef(({ department, data: rawData, a
           fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
         }}
       >
-        <div className="space-y-2">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {/* Top Page 2 Header Running Strip */}
-          <div className="pb-1.5 border-b border-slate-200 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded border ${scoreBadgeClass}`}>
+          <div style={{ paddingBottom: '6px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <span style={{ fontSize: '8.5px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', padding: '2px 6px', borderRadius: '4px', border: '1px solid #c7d2fe', backgroundColor: '#eef2ff', color: '#3730a3', marginRight: '8px' }}>
                 {deptTag}
               </span>
-              <span className="text-xs font-bold text-slate-900">
+              <span style={{ fontSize: '11px', fontWeight: 700, color: '#0f172a', marginRight: '6px' }}>
                 {deptTitle}
               </span>
               {data.employeeName && (
-                <span className="text-xs font-semibold text-slate-600">
+                <span style={{ fontSize: '11px', fontWeight: 600, color: '#475569' }}>
                   • {data.employeeName}
                 </span>
               )}
             </div>
-            <div className="text-[9.5px] font-mono text-slate-600">
+            <div style={{ fontSize: '9px', fontFamily: 'monospace', color: '#475569' }}>
               {data.employeeId ? `ID: ${data.employeeId} • ` : ''}Review Date: {data.reviewDate || '—'}
             </div>
           </div>
 
-          {/* 04 & 05: Accomplishments & Development Areas */}
-          <div className="grid grid-cols-2 gap-3 text-xs">
-            {/* 04: Key Accomplishments */}
-            <section className="space-y-1">
+          {/* 04 & 05: Accomplishments & Development Areas (2 Columns Side by Side) */}
+          <div style={{ display: 'flex', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
+            <div style={{ flex: '1 1 50%', width: '50%', minWidth: 0 }}>
               {renderSectionHeader('04', 'Key Accomplishments')}
-              <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 min-h-[56px] text-[9.5px] text-slate-800 leading-relaxed whitespace-pre-line">
+              <div style={{ backgroundColor: '#f8fafc', padding: '8px 10px', borderRadius: '6px', border: '1px solid #e2e8f0', minHeight: '52px', fontSize: '9.5px', color: '#1e293b', lineHeight: 1.4, whiteSpace: 'pre-line', boxSizing: 'border-box' }}>
                 {data.achievements || 'No specific accomplishments recorded for this cycle.'}
               </div>
-            </section>
-
-            {/* 05: Areas for Improvement */}
-            <section className="space-y-1">
+            </div>
+            <div style={{ flex: '1 1 50%', width: '50%', minWidth: 0 }}>
               {renderSectionHeader('05', 'Areas for Development')}
-              <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 min-h-[56px] text-[9.5px] text-slate-800 leading-relaxed whitespace-pre-line">
+              <div style={{ backgroundColor: '#f8fafc', padding: '8px 10px', borderRadius: '6px', border: '1px solid #e2e8f0', minHeight: '52px', fontSize: '9.5px', color: '#1e293b', lineHeight: 1.4, whiteSpace: 'pre-line', boxSizing: 'border-box' }}>
                 {data.improvements || 'Continue scaling performance according to quarterly deliverables.'}
               </div>
-            </section>
+            </div>
           </div>
 
           {/* 06: Goals & Key Performance Objectives Table */}
-          <section className="space-y-1">
+          <section>
             {renderSectionHeader(
               '06',
               'Goals & Performance Objectives',
-              <span className="text-[8.5px] text-slate-500 font-semibold">Agreed Target Deliverables</span>
+              <span style={{ fontSize: '8.5px', color: '#64748b', fontWeight: 600 }}>Agreed Target Deliverables</span>
             )}
 
-            <div className="border border-slate-200 rounded-lg overflow-hidden bg-white">
-              <table className="w-full text-left border-collapse text-xs" style={{ tableLayout: 'fixed' }}>
+            <div style={{ border: '1px solid #e2e8f0', borderRadius: '6px', overflow: 'hidden', backgroundColor: '#ffffff' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                 <thead>
-                  <tr className="bg-slate-100 border-b border-slate-200 text-[8.5px] font-bold text-slate-600 uppercase tracking-wider">
-                    <th className="py-1 px-2.5" style={{ width: '190px' }}>Goal Objective</th>
-                    <th className="py-1 px-2.5">Target / Key Result</th>
-                    <th className="py-1 px-2 text-center" style={{ width: '85px' }}>Deadline</th>
-                    <th className="py-1 px-2 text-center" style={{ width: '80px' }}>Status</th>
+                  <tr style={{ backgroundColor: '#f1f5f9', borderBottom: '1px solid #e2e8f0', height: '24px' }}>
+                    <th style={{ width: '180px', textAlign: 'left', padding: '3px 8px', fontSize: '8px', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Goal Objective</th>
+                    <th style={{ textAlign: 'left', padding: '3px 8px', fontSize: '8px', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Target / Key Result</th>
+                    <th style={{ width: '85px', textAlign: 'center', padding: '3px 6px', fontSize: '8px', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Deadline</th>
+                    <th style={{ width: '80px', textAlign: 'center', padding: '3px 6px', fontSize: '8px', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody>
                   {data.goals &&
                     data.goals.map((g, idx) => (
-                      <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'} style={{ height: '26px' }}>
-                        <td className="py-1 px-2.5 font-bold text-slate-900 text-[9.5px] leading-tight truncate">
+                      <tr key={idx} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8fafc', borderBottom: '1px solid #f1f5f9', height: '25px' }}>
+                        <td style={{ padding: '3px 8px', fontWeight: 700, color: '#0f172a', fontSize: '9px', verticalAlign: 'middle', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {g.goal || '—'}
                         </td>
-                        <td className="py-1 px-2.5 text-slate-700 text-[9.5px] leading-tight truncate">
+                        <td style={{ padding: '3px 8px', color: '#334155', fontSize: '9px', verticalAlign: 'middle', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {g.target || '—'}
                         </td>
-                        <td className="py-1 px-2 text-center font-mono text-slate-600 text-[9px] leading-tight">
+                        <td style={{ textAlign: 'center', fontFamily: 'monospace', color: '#475569', fontSize: '8.5px', verticalAlign: 'middle' }}>
                           {g.deadline || '—'}
                         </td>
-                        <td className="py-1 px-2 text-center">
-                          <span className="inline-block px-2 py-0.5 rounded text-[8.5px] font-bold bg-blue-50 text-blue-700 border border-blue-200 whitespace-nowrap">
+                        <td style={{ textAlign: 'center', verticalAlign: 'middle' }}>
+                          <span style={{ display: 'inline-block', padding: '1px 6px', borderRadius: '4px', fontSize: '8px', fontWeight: 700, backgroundColor: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', whiteSpace: 'nowrap' }}>
                             {g.status || 'Planned'}
                           </span>
                         </td>
@@ -552,39 +578,45 @@ export const PrintableReportDossier = forwardRef(({ department, data: rawData, a
           </section>
 
           {/* 07: Training & Skill Development Needs Table */}
-          <section className="space-y-1">
+          <section>
             {renderSectionHeader(
               '07',
               'Training & Skill Development Plan',
-              <span className="text-[8.5px] text-slate-500 font-semibold">Development Roadmaps</span>
+              <span style={{ fontSize: '8.5px', color: '#64748b', fontWeight: 600 }}>Development Roadmaps</span>
             )}
 
-            <div className="border border-slate-200 rounded-lg overflow-hidden bg-white">
-              <table className="w-full text-left border-collapse text-xs" style={{ tableLayout: 'fixed' }}>
+            <div style={{ border: '1px solid #e2e8f0', borderRadius: '6px', overflow: 'hidden', backgroundColor: '#ffffff' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                 <thead>
-                  <tr className="bg-slate-100 border-b border-slate-200 text-[8.5px] font-bold text-slate-600 uppercase tracking-wider">
-                    <th className="py-1 px-2.5" style={{ width: '220px' }}>Skill / Operational Area</th>
-                    <th className="py-1 px-2.5">Training Required / Workshop</th>
-                    <th className="py-1 px-2 text-center" style={{ width: '80px' }}>Priority</th>
+                  <tr style={{ backgroundColor: '#f1f5f9', borderBottom: '1px solid #e2e8f0', height: '24px' }}>
+                    <th style={{ width: '200px', textAlign: 'left', padding: '3px 8px', fontSize: '8px', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Skill / Operational Area</th>
+                    <th style={{ textAlign: 'left', padding: '3px 8px', fontSize: '8px', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Training Required / Workshop</th>
+                    <th style={{ width: '80px', textAlign: 'center', padding: '3px 6px', fontSize: '8px', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Priority</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody>
                   {data.training &&
                     data.training.map((t, idx) => (
-                      <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'} style={{ height: '26px' }}>
-                        <td className="py-1 px-2.5 font-bold text-slate-900 text-[9.5px] leading-tight truncate">
+                      <tr key={idx} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8fafc', borderBottom: '1px solid #f1f5f9', height: '25px' }}>
+                        <td style={{ padding: '3px 8px', fontWeight: 700, color: '#0f172a', fontSize: '9px', verticalAlign: 'middle', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {t.skill || '—'}
                         </td>
-                        <td className="py-1 px-2.5 text-slate-700 text-[9.5px] leading-tight truncate">
+                        <td style={{ padding: '3px 8px', color: '#334155', fontSize: '9px', verticalAlign: 'middle', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {t.training || '—'}
                         </td>
-                        <td className="py-1 px-2 text-center">
+                        <td style={{ textAlign: 'center', verticalAlign: 'middle' }}>
                           <span
-                            className={`inline-block px-2 py-0.5 rounded text-[8.5px] font-bold border whitespace-nowrap ${
-                              t.priority === 'High'
-                                ? 'bg-rose-50 text-rose-700 border-rose-200'
-                                : 'bg-indigo-50 text-indigo-700 border-indigo-200'
-                            }`}
+                            style={{
+                              display: 'inline-block',
+                              padding: '1px 6px',
+                              borderRadius: '4px',
+                              fontSize: '8px',
+                              fontWeight: 700,
+                              whiteSpace: 'nowrap',
+                              border: t.priority === 'High' ? '1px solid #fecdd3' : '1px solid #c7d2fe',
+                              backgroundColor: t.priority === 'High' ? '#fff1f2' : '#eef2ff',
+                              color: t.priority === 'High' ? '#be123c' : '#4338ca',
+                            }}
                           >
                             {t.priority || 'Medium'}
                           </span>
@@ -596,77 +628,82 @@ export const PrintableReportDossier = forwardRef(({ department, data: rawData, a
             </div>
           </section>
 
-          {/* 08 & 09: Feedback Comments */}
-          <div className="grid grid-cols-2 gap-3 text-xs">
-            {/* 08: Employee Comments */}
-            <section className="space-y-1">
+          {/* 08 & 09: Feedback Comments (2 Columns Side by Side) */}
+          <div style={{ display: 'flex', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
+            <div style={{ flex: '1 1 50%', width: '50%', minWidth: 0 }}>
               {renderSectionHeader('08', 'Employee Comments')}
-              <div className="bg-slate-50 p-2 rounded-lg border border-slate-200 min-h-[46px] text-[9.5px] text-slate-800 leading-relaxed whitespace-pre-line">
+              <div style={{ backgroundColor: '#f8fafc', padding: '6px 10px', borderRadius: '6px', border: '1px solid #e2e8f0', minHeight: '44px', fontSize: '9px', color: '#1e293b', lineHeight: 1.4, whiteSpace: 'pre-line', boxSizing: 'border-box' }}>
                 {data.employeeComments || 'Employee self-reflection confirmed and submitted.'}
               </div>
-            </section>
-
-            {/* 09: Manager Comments */}
-            <section className="space-y-1">
+            </div>
+            <div style={{ flex: '1 1 50%', width: '50%', minWidth: 0 }}>
               {renderSectionHeader('09', 'Manager Comments')}
-              <div className="bg-slate-50 p-2 rounded-lg border border-slate-200 min-h-[46px] text-[9.5px] text-slate-800 leading-relaxed whitespace-pre-line">
+              <div style={{ backgroundColor: '#f8fafc', padding: '6px 10px', borderRadius: '6px', border: '1px solid #e2e8f0', minHeight: '44px', fontSize: '9px', color: '#1e293b', lineHeight: 1.4, whiteSpace: 'pre-line', boxSizing: 'border-box' }}>
                 {data.managerComments || 'Performance evaluation completed in accordance with quarterly standards.'}
               </div>
-            </section>
+            </div>
           </div>
 
-          {/* 10: Overall Performance Rating */}
-          <section className="space-y-1">
+          {/* 10: Overall Performance Rating (5 Horizontal Pills) */}
+          <section>
             {renderSectionHeader('10', 'Overall Performance Rating')}
 
-            <div className="grid grid-cols-5 gap-2">
+            <div style={{ display: 'flex', gap: '6px', width: '100%', boxSizing: 'border-box' }}>
               {overallRatingOptions.map((rating) => {
                 const isSelected = data.overallRating?.toLowerCase() === rating.label.toLowerCase();
                 return (
                   <div
                     key={rating.label}
-                    className={`rounded-lg border px-2 text-center ${
-                      isSelected
-                        ? `${rating.color} border-2`
-                        : 'border-slate-200 bg-slate-50 text-slate-600'
-                    }`}
-                    style={{ height: '36px', lineHeight: '34px', boxSizing: 'border-box', textAlign: 'center' }}
+                    style={{
+                      flex: '1 1 20%',
+                      width: '20%',
+                      minWidth: 0,
+                      height: '32px',
+                      lineHeight: '30px',
+                      textAlign: 'center',
+                      borderRadius: '6px',
+                      boxSizing: 'border-box',
+                      border: isSelected ? `2px solid ${rating.borderHex}` : '1px solid #e2e8f0',
+                      backgroundColor: isSelected ? rating.bgHex : '#f8fafc',
+                      color: isSelected ? rating.textHex : '#475569',
+                      fontWeight: isSelected ? 800 : 600,
+                    }}
                   >
-                    <span style={{ fontSize: '13px', verticalAlign: 'middle', marginRight: '5px' }}>{rating.icon}</span>
-                    <span style={{ fontSize: '9.5px', fontWeight: 700, verticalAlign: 'middle' }}>{rating.label}</span>
+                    <span style={{ fontSize: '11px', verticalAlign: 'middle', marginRight: '4px' }}>{rating.icon}</span>
+                    <span style={{ fontSize: '9px', verticalAlign: 'middle' }}>{rating.label}</span>
                   </div>
                 );
               })}
             </div>
           </section>
 
-          {/* 11: Final Recommendations / Administrative Actions */}
-          <section className="space-y-1">
+          {/* 11: Final Actions & Recommendations (3 Rows of 2 Columns) */}
+          <section>
             {renderSectionHeader('11', 'Final Actions & Recommendations')}
 
-            <div className="grid grid-cols-2 gap-2">
-              {actionLabels.map((act) => {
-                const isChecked = Boolean(data.actions && data.actions[act.id]);
-                return (
-                  <div
-                    key={act.id}
-                    className={`rounded-lg border ${
-                      isChecked
-                        ? 'bg-indigo-50 border-indigo-300 text-indigo-950 font-bold'
-                        : 'bg-slate-50 border-slate-200 text-slate-700'
-                    }`}
-                    style={{
-                      height: '36px',
-                      padding: '0 10px',
-                      boxSizing: 'border-box',
-                      display: 'table',
-                      width: '100%',
-                    }}
-                  >
-                    <div style={{ display: 'table-row' }}>
-                      <div style={{ display: 'table-cell', verticalAlign: 'middle', width: '20px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', width: '100%', boxSizing: 'border-box' }}>
+              {[0, 2, 4].map((startIndex) => (
+                <div key={startIndex} style={{ display: 'flex', gap: '6px', width: '100%', boxSizing: 'border-box' }}>
+                  {actionLabels.slice(startIndex, startIndex + 2).map((act) => {
+                    const isChecked = Boolean(data.actions && data.actions[act.id]);
+                    return (
+                      <div
+                        key={act.id}
+                        style={{
+                          flex: '1 1 50%',
+                          width: '50%',
+                          minWidth: 0,
+                          height: '32px',
+                          padding: '0 8px',
+                          boxSizing: 'border-box',
+                          borderRadius: '6px',
+                          border: isChecked ? '1px solid #818cf8' : '1px solid #e2e8f0',
+                          backgroundColor: isChecked ? '#f5f3ff' : '#f8fafc',
+                          display: 'flex',
+                          alignItems: 'center',
+                        }}
+                      >
                         <div
-                          className={`border ${isChecked ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-300 bg-white'}`}
                           style={{
                             width: '14px',
                             height: '14px',
@@ -674,64 +711,77 @@ export const PrintableReportDossier = forwardRef(({ department, data: rawData, a
                             textAlign: 'center',
                             borderRadius: '3px',
                             boxSizing: 'border-box',
+                            border: isChecked ? '1px solid #4f46e5' : '1px solid #cbd5e1',
+                            backgroundColor: isChecked ? '#4f46e5' : '#ffffff',
+                            color: '#ffffff',
+                            marginRight: '6px',
+                            flexShrink: 0,
                           }}
                         >
                           {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" style={{ display: 'inline-block', verticalAlign: 'middle' }} />}
                         </div>
+                        <div
+                          style={{
+                            fontSize: '9px',
+                            fontWeight: isChecked ? 700 : 500,
+                            color: isChecked ? '#1e1b4b' : '#334155',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {act.text}
+                        </div>
                       </div>
-                      <div
-                        style={{
-                          display: 'table-cell',
-                          verticalAlign: 'middle',
-                          paddingLeft: '8px',
-                          fontSize: '9.5px',
-                          lineHeight: '14px',
-                          fontWeight: 600,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {act.text}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+                    );
+                  })}
+                </div>
+              ))}
             </div>
           </section>
 
           {/* 12: CEO Signature & Final Authorization */}
-          <section className="space-y-1">
+          <section>
             {renderSectionHeader('12', 'CEO Approval & Final Authorization')}
 
-            <div className="rounded-xl border border-indigo-200 bg-gradient-to-r from-slate-50 via-white to-indigo-50/50 p-2.5 px-3.5 flex items-center justify-between">
-              <div className="space-y-0.5">
-                <div className="flex items-center gap-2">
-                  <span className="text-[8px] font-bold uppercase tracking-wider text-slate-500">
+            <div
+              style={{
+                borderRadius: '8px',
+                border: '1px solid #c7d2fe',
+                background: 'linear-gradient(135deg, #f8fafc 0%, #ffffff 50%, #eff6ff 100%)',
+                padding: '8px 12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                boxSizing: 'border-box',
+              }}
+            >
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+                  <span style={{ fontSize: '8px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#64748b' }}>
                     CEO Authorization
                   </span>
-                  <span className="text-[8px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                  <span style={{ fontSize: '7.5px', fontWeight: 700, padding: '1px 5px', borderRadius: '3px', backgroundColor: '#f1f5f9', color: '#334155', border: '1px solid #e2e8f0' }}>
                     Chief Executive Officer
                   </span>
                 </div>
-                <div className="text-sm font-black text-slate-900 leading-tight">
+                <div style={{ fontSize: '13px', fontWeight: 900, color: '#0f172a', lineHeight: 1.2 }}>
                   {data.ceoName || "Sheetal Ma'am"}
                 </div>
-                <div className="text-[9px] text-slate-600 font-semibold leading-tight">
+                <div style={{ fontSize: '8.5px', fontWeight: 600, color: '#475569' }}>
                   Chief Executive Officer • Executive Leadership Approval
                 </div>
               </div>
 
-              <div className="text-right space-y-0.5">
-                <div className="text-[8px] font-bold text-slate-500 uppercase tracking-wider">
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '8px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#64748b' }}>
                   Authorization Date
                 </div>
-                <div className="font-mono font-bold text-xs text-slate-800 leading-tight">
+                <div style={{ fontSize: '11px', fontWeight: 700, fontFamily: 'monospace', color: '#1e293b', marginTop: '1px' }}>
                   {data.ceoDate || '2026-09-16'}
                 </div>
-                <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[8.5px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300">
-                  <CheckCircle2 className="w-3 h-3 text-emerald-700" />
+                <div style={{ marginTop: '2px', display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 6px', borderRadius: '4px', fontSize: '8px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', backgroundColor: '#ecfdf5', color: '#065f46', border: '1px solid #a7f3d0' }}>
+                  <CheckCircle2 className="w-3 h-3 text-emerald-600 inline" />
                   Officially Authorized
                 </div>
               </div>
@@ -740,12 +790,12 @@ export const PrintableReportDossier = forwardRef(({ department, data: rawData, a
         </div>
 
         {/* Page 2 Footer */}
-        <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-[9.5px] text-slate-500 font-medium">
-          <div className="flex items-center gap-1.5">
-            <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
+        <div style={{ paddingTop: '8px', borderTop: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '9px', color: '#64748b', fontWeight: 500, boxSizing: 'border-box' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <ShieldCheck className="w-3.5 h-3.5 text-indigo-600 inline" />
             <span>TaskNera HRMS • Performance Appraisal Record • Confidential</span>
           </div>
-          <div className="font-mono font-bold text-slate-700 text-[10px]">Page 2 of 2</div>
+          <div style={{ fontFamily: 'monospace', fontWeight: 700, color: '#334155', fontSize: '9.5px' }}>Page 2 of 2</div>
         </div>
       </div>
     </div>

@@ -136,6 +136,8 @@ h1, h2, h3, .font-heading {
   text-rendering: geometricPrecision;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background-color: #ffffff !important;
+  color: #0f172a !important;
 }
 
 .pdf-export-container * {

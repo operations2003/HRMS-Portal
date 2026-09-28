@@ -965,22 +965,33 @@ export const ReportsPage = () => {
       for (let i = 0; i < pageElements.length; i++) {
         const pageEl = pageElements[i];
         const canvas = await html2canvas(pageEl, {
-          scale: 2, // 2x Retina clarity: numbers, text and badges are crystal clear
+          scale: 3, // 3x ultra-high-definition clarity (equivalent to ~300 DPI print quality)
           useCORS: true,
           logging: false,
           backgroundColor: '#ffffff',
-          scrollX: 0,
-          scrollY: 0,
-          windowWidth: 1000,
-          windowHeight: 3000,
+          imageTimeout: 15000,
+          removeContainer: true,
+          onclone: (clonedDoc) => {
+            const dossierRoot = clonedDoc.getElementById('pdf-dossier-export-root');
+            if (dossierRoot) {
+              dossierRoot.style.position = 'static';
+              dossierRoot.style.display = 'block';
+              dossierRoot.style.visibility = 'visible';
+              dossierRoot.style.opacity = '1';
+              dossierRoot.style.left = '0';
+              dossierRoot.style.top = '0';
+              dossierRoot.style.zIndex = '999999';
+            }
+          },
         });
 
-        const imgData = canvas.toDataURL('image/jpeg', 0.98);
+        // Use lossless PNG for pin-sharp typography and badges with ZERO JPEG compression artifacts
+        const imgData = canvas.toDataURL('image/png');
         if (i > 0) {
           pdf.addPage('a4', 'portrait');
         }
         // Exactly standard A4 dimensions: 210mm x 297mm
-        pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
+        pdf.addImage(imgData, 'PNG', 0, 0, 210, 297, undefined, 'FAST');
       }
 
       pdf.save(fileName);
@@ -3124,12 +3135,12 @@ export const ReportsPage = () => {
         style={{
           position: 'fixed',
           top: 0,
-          left: 0,
+          left: isGeneratingPdf ? 0 : '-9999px',
           width: '794px',
           minWidth: '794px',
           maxWidth: '794px',
-          zIndex: -50,
-          opacity: 0.999,
+          zIndex: isGeneratingPdf ? 99999 : -50,
+          opacity: 1,
           backgroundColor: '#ffffff',
         }}
         aria-hidden="true"
