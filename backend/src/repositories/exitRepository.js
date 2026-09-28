@@ -21,7 +21,34 @@ const mapExitRow = (row) => {
     reason: row.reason,
     comments: row.comments || '',
     status: row.status,
-    currentStage: row.current_stage,
+    currentStage: (() => {
+      const totalCl = parseInt(row.total_clearances, 10) || 0;
+      const pendingCl = parseInt(row.pending_clearances, 10) || 0;
+      const isAllCleared = totalCl > 0 && pendingCl === 0;
+      const isAccessRevoked = ['DEPROVISIONED', 'REVOKED'].includes((row.access_removal_status || '').toUpperCase());
+      const isFnfDisbursed = (row.fnf_payment_status || '').toUpperCase() === 'DISBURSED';
+
+      let stage = row.current_stage || 'IN_PROGRESS';
+      if (row.status === 'COMPLETED' || stage === 'COMPLETED') {
+        return 'COMPLETED';
+      }
+      if (isFnfDisbursed) {
+        return 'FNF_SETTLED';
+      }
+      if (isAccessRevoked) {
+        return 'FNF_PENDING';
+      }
+      if (isAllCleared || row.offb_clearance_status === 'CLEARED' || stage === 'FNF_PENDING' || stage === 'ACCESS_REVOCATION') {
+        return 'ACCESS_REVOCATION';
+      }
+      return stage;
+    })(),
+    totalClearances: parseInt(row.total_clearances, 10) || 0,
+    pendingClearances: parseInt(row.pending_clearances, 10) || 0,
+    accessRemovalStatus: row.access_removal_status || null,
+    fnfPaymentStatus: row.fnf_payment_status || null,
+    offboardingStatus: row.offboarding_status || null,
+    clearanceStatus: row.offb_clearance_status || null,
     managerFeedback: row.manager_feedback || '',
     managerRating: row.manager_rating ? parseFloat(row.manager_rating) : null,
     managerRehireEligible: row.manager_rehire_eligible,
@@ -128,12 +155,28 @@ const BASE_EXIT_SELECT = `
     d.name AS department_name,
     ds.title AS designation_title,
     m.first_name AS m_first_name,
-    m.last_name AS m_last_name
+    m.last_name AS m_last_name,
+    eo.access_removal_status,
+    eo.clearance_status AS offb_clearance_status,
+    eo.offboarding_status,
+    COALESCE(cl.total_clearances, 0) AS total_clearances,
+    COALESCE(cl.pending_clearances, 0) AS pending_clearances,
+    fnf.payment_status AS fnf_payment_status
   FROM exit_requests er
   JOIN employees e ON er.employee_id = e.id
   LEFT JOIN departments d ON e.dept_id = d.id
   LEFT JOIN designations ds ON e.desig_id = ds.id
   LEFT JOIN employees m ON e.manager_id = m.id
+  LEFT JOIN employee_offboardings eo ON er.id = eo.exit_request_id
+  LEFT JOIN exit_fnf_settlements fnf ON er.id = fnf.exit_request_id
+  LEFT JOIN (
+    SELECT 
+      exit_request_id,
+      COUNT(*)::int AS total_clearances,
+      COUNT(CASE WHEN status NOT IN ('CLEARED', 'COMPLETED', 'WAIVED', 'NOT_APPLICABLE') THEN 1 END)::int AS pending_clearances
+    FROM exit_clearance_checklists
+    GROUP BY exit_request_id
+  ) cl ON er.id = cl.exit_request_id
 `;
 
 export const exitRepository = {

@@ -300,27 +300,76 @@ export const ResignationPage = () => {
     },
     {
       header: 'Status & Stage',
-      render: (row) => (
-        <div>
-          <Badge
-            variant={
-              row.status === 'COMPLETED'
-                ? 'success'
-                : row.status === 'APPROVED'
-                ? 'brand'
-                : row.status === 'UNDER_REVIEW'
-                ? 'info'
-                : row.status === 'SUBMITTED'
-                ? 'warning'
-                : 'neutral'
-            }
-            size="sm"
-          >
-            {row.status}
-          </Badge>
-          <p className="text-[10px] text-slate-400 mt-0.5">{row.currentStage || 'IN_PROGRESS'}</p>
-        </div>
-      ),
+      render: (row) => {
+        const s = (row.status || '').toUpperCase();
+        const c = (row.currentStage || '').toUpperCase();
+        const totalCl = parseInt(row.totalClearances ?? (Array.isArray(row.clearances) ? row.clearances.length : 0), 10);
+        const pendingCl = parseInt(row.pendingClearances ?? (Array.isArray(row.clearances) ? row.clearances.filter(t => !['CLEARED', 'COMPLETED', 'WAIVED', 'NOT_APPLICABLE'].includes((t.status || '').toUpperCase())).length : 0), 10);
+        const clearancesDone = (totalCl > 0 && pendingCl === 0) || row.clearanceStatus === 'CLEARED' || row.offboardingStatus === 'FNF_PENDING' || c === 'FNF_PENDING' || c === 'ACCESS_REVOCATION';
+        const accessRevoked = ['DEPROVISIONED', 'REVOKED'].includes((row.accessRemovalStatus || '').toUpperCase());
+        const fnfSettled = ['DISBURSED', 'SETTLED'].includes((row.fnfPaymentStatus || '').toUpperCase());
+
+        let stageBadge = { stage: 1, label: 'Stage 1: Submitted', variant: 'warning' };
+        if (s === 'WITHDRAWN') {
+          stageBadge = { stage: 0, label: 'Withdrawn', variant: 'warning' };
+        } else if (s === 'REJECTED') {
+          stageBadge = { stage: 0, label: 'Rejected', variant: 'danger' };
+        } else if (s === 'COMPLETED' || c === 'COMPLETED') {
+          stageBadge = { stage: 7, label: 'Stage 7: Completed', variant: 'success' };
+        } else if (fnfSettled) {
+          stageBadge = { stage: 6, label: 'Stage 6: FnF Disbursed', variant: 'success' };
+        } else if (accessRevoked) {
+          stageBadge = { stage: 6, label: 'Stage 6: FnF Pending', variant: 'brand' };
+        } else if (clearancesDone || c === 'ACCESS_REVOCATION' || c === 'FNF_PENDING') {
+          stageBadge = { stage: 5, label: 'Stage 5: Access Removal', variant: 'brand' };
+        } else if (s === 'EXIT_PROCESSING' || c === 'CLEARANCE_IN_PROGRESS') {
+          const prog = totalCl > 0 ? ` (${totalCl - pendingCl}/${totalCl})` : '';
+          stageBadge = { stage: 4, label: `Stage 4: Clearances${prog}`, variant: 'brand' };
+        } else if (s === 'APPROVED' || s === 'NOTICE_PERIOD') {
+          stageBadge = { stage: 3, label: 'Stage 3: Notice Period', variant: 'brand' };
+        } else if (s === 'UNDER_REVIEW' || c === 'HR_REVIEW') {
+          stageBadge = { stage: 2, label: 'Stage 2: HR Review', variant: 'info' };
+        }
+
+        const statusVariant =
+          s === 'COMPLETED'
+            ? 'success'
+            : s === 'EXIT_PROCESSING' || s === 'APPROVED' || s === 'NOTICE_PERIOD'
+            ? 'brand'
+            : s === 'UNDER_REVIEW'
+            ? 'info'
+            : s === 'REJECTED'
+            ? 'danger'
+            : s === 'WITHDRAWN'
+            ? 'warning'
+            : 'neutral';
+
+        return (
+          <div className="space-y-1">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <Badge variant={statusVariant} size="sm">
+                {row.status}
+              </Badge>
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
+                stageBadge.variant === 'success'
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  : stageBadge.variant === 'brand'
+                  ? 'bg-brand-50 text-brand-700 border border-brand-200'
+                  : stageBadge.variant === 'info'
+                  ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                  : stageBadge.variant === 'danger'
+                  ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                  : 'bg-amber-50 text-amber-700 border border-amber-200'
+              }`}>
+                {stageBadge.label}
+              </span>
+            </div>
+            <p className="text-[10px] text-slate-400 font-mono tracking-tight">
+              {c || s}
+            </p>
+          </div>
+        );
+      },
     },
     {
       header: 'Manager Review',
