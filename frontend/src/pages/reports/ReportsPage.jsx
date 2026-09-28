@@ -31,7 +31,6 @@ import {
   ChevronRight,
   Search,
   X,
-  FileSpreadsheet,
   FileEdit,
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
@@ -2095,15 +2094,6 @@ export const ReportsPage = () => {
                         <Button
                           variant="outline"
                           size="sm"
-                          icon={FileSpreadsheet}
-                          onClick={() => handleDownloadExcel(report)}
-                          title="Download Excel Spreadsheet"
-                          className="text-xs font-semibold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 px-2.5 py-1.5"
-                        />
-
-                        <Button
-                          variant="outline"
-                          size="sm"
                           icon={Trash2}
                           title="Remove from my view"
                           onClick={() => setReportToDelete(report)}
@@ -3320,15 +3310,7 @@ export const ReportsPage = () => {
               </div>
 
               <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  icon={FileSpreadsheet}
-                  onClick={() => handleDownloadExcel(previewReport)}
-                  className="text-xs font-semibold"
-                >
-                  Download Excel
-                </Button>
+
                 <Button
                   variant="primary"
                   size="sm"
