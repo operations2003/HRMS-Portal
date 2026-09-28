@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { documentRepository } from '../repositories/documentRepository.js';
 
 export const documentService = {
@@ -101,12 +103,32 @@ export const documentService = {
    * Delete document
    */
   async deleteDocument(id) {
+    const doc = await documentRepository.findById(id);
+    if (!doc) {
+      const err = new Error(`Document '${id}' not found.`);
+      err.statusCode = 404;
+      throw err;
+    }
+
     const deleted = await documentRepository.delete(id);
     if (!deleted) {
       const err = new Error(`Document '${id}' not found.`);
       err.statusCode = 404;
       throw err;
     }
+
+    // Clean up local disk file if present
+    if (doc.fileUrl && typeof doc.fileUrl === 'string' && doc.fileUrl.startsWith('/uploads/')) {
+      try {
+        const localPath = path.join(process.cwd(), doc.fileUrl);
+        if (fs.existsSync(localPath)) {
+          fs.unlinkSync(localPath);
+        }
+      } catch (e) {
+        // Non-blocking cleanup failure
+      }
+    }
+
     return { success: true, id };
   },
 };

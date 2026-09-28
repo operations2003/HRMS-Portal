@@ -22,7 +22,7 @@ router.post('/owner/:ownerType/:ownerId/upload', authorize('document:write'), up
 router.get('/owner/:ownerType/:ownerId', authorize(['document:read', 'employee:read']), documentController.getDocumentsByOwner);
 router.get('/:id/download', documentController.downloadDocument);
 router.get('/:id', authorize(['document:read', 'employee:read']), documentController.getDocumentById);
-router.delete('/:id', authorize('document:write'), documentController.deleteDocument);
+router.delete('/:id', documentController.deleteDocument);
 
 // Document Verification Workflow
 router.patch(

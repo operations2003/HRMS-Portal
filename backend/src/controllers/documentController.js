@@ -546,11 +546,65 @@ export const documentController = {
 
   /**
    * DELETE /api/v1/documents/:id
+   * Allows HR/Admin (privileged) or document owner during pending review (or rejected) phase
    */
   async deleteDocument(req, res, next) {
     try {
       const { id } = req.params;
+      const doc = await documentService.getDocumentById(id);
+      if (!doc) {
+        return sendError(res, 'Document not found.', 404);
+      }
+
+      // Check authorization:
+      // 1. Privileged roles or document:write permission
+      const userRole = (req.user?.roleName || '').toLowerCase();
+      const userPermissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
+      const isPrivileged =
+        ['admin', 'superadmin', 'orgadmin', 'hr', 'hrmanager'].includes(userRole) ||
+        userPermissions.includes('*') ||
+        userPermissions.includes('document:write') ||
+        userPermissions.includes('document:manage');
+
+      // 2. Owner check
+      const isOwner =
+        (req.user?.employeeId && doc.ownerId === req.user.employeeId) ||
+        (doc.ownerType === 'EMPLOYEE' && req.user?.id && doc.ownerId === req.user.id);
+
+      if (!isPrivileged && !isOwner) {
+        return sendError(res, 'Access denied: You do not have permission to delete this document.', 403);
+      }
+
+      // Non-privileged owners can only delete documents that are in pending review or rejected
+      if (!isPrivileged && isOwner) {
+        const status = (doc.verificationStatus || '').toUpperCase();
+        if (status !== 'PENDING' && status !== 'REJECTED') {
+          return sendError(
+            res,
+            'Cannot delete document: Only documents pending review or rejected can be deleted by employees.',
+            400
+          );
+        }
+      }
+
       const result = await documentService.deleteDocument(id);
+
+      // Best-effort audit log
+      try {
+        await adminService.logAction({
+          orgId: req.user?.orgId,
+          actorUserId: req.user?.id,
+          actorRole: req.user?.roleName,
+          targetType: 'DOCUMENT',
+          targetId: doc.id,
+          action: 'DELETE',
+          details: { title: doc.title, documentType: doc.documentType, status: doc.verificationStatus },
+          ipAddress: req.ip,
+        });
+      } catch (logErr) {
+        // Non-blocking
+      }
+
       return sendSuccess(res, 'Document removed from vault.', result);
     } catch (error) {
       if (error.statusCode === 404) {

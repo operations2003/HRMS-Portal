@@ -65,6 +65,8 @@ export const ProfilePage = () => {
   const [uploadFile, setUploadFile] = useState(null);
   const [uploadError, setUploadError] = useState(null);
   const docFileInputRef = React.useRef(null);
+  const [docToDelete, setDocToDelete] = useState(null);
+  const [deletingDocId, setDeletingDocId] = useState(null);
 
   // Edit Modal State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -181,6 +183,20 @@ export const ProfilePage = () => {
       toast.error(msg);
     } finally {
       setUploadingDoc(false);
+    }
+  };
+
+  const handleDeleteDoc = async (docId) => {
+    try {
+      setDeletingDocId(docId);
+      await documentService.deleteDocument(docId);
+      toast.success('Document deleted successfully.');
+      setDocToDelete(null);
+      fetchMyDocs();
+    } catch (err) {
+      toast.error(err.message || 'Failed to delete document.');
+    } finally {
+      setDeletingDocId(null);
     }
   };
 
@@ -973,6 +989,17 @@ export const ProfilePage = () => {
                         >
                           Download
                         </Button>
+                        {(status === 'PENDING' || status === 'REJECTED') && (
+                          <Button
+                            size="xs"
+                            variant="ghost"
+                            className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                            icon={Trash2}
+                            onClick={() => setDocToDelete(doc)}
+                          >
+                            Delete
+                          </Button>
+                        )}
                       </div>
                     </div>
                   );
@@ -1240,6 +1267,45 @@ export const ProfilePage = () => {
           </div>
         </div>
       </Modal>
+
+      {/* Delete Document Confirmation Modal */}
+      {docToDelete && (
+        <Modal
+          isOpen={true}
+          onClose={() => setDocToDelete(null)}
+          title="Delete Document"
+          subtitle={`Are you sure you want to remove '${docToDelete.title}'?`}
+        >
+          <div className="space-y-4">
+            <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/30 border border-rose-100 dark:border-rose-900/40 text-rose-800 dark:text-rose-300 text-xs flex items-center gap-2.5">
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400" />
+              <span>
+                Are you sure you want to delete this document? You can upload a new copy anytime.
+              </span>
+            </div>
+
+            <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={deletingDocId === docToDelete.id}
+                onClick={() => setDocToDelete(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                loading={deletingDocId === docToDelete.id}
+                icon={Trash2}
+                onClick={() => handleDeleteDoc(docToDelete.id)}
+              >
+                Delete Document
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };

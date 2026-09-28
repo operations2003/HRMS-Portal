@@ -21,6 +21,7 @@ import {
   User,
   ShieldCheck,
   ChevronDown,
+  Trash2,
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext.jsx';
 import { onboardingService } from '../../services/onboardingService.js';
@@ -126,9 +127,11 @@ export const DocumentVaultUploader = ({
   canVerify = false,
   canUpload = false,
   canAcknowledge = false,
+  canDelete,
   onUpload,
   onVerify,
   onAcknowledge,
+  onDelete,
   titlePrefix = 'Documents',
   subtitle = 'Uploaded documents and files.',
   onDocumentsUpdated,
@@ -150,6 +153,10 @@ export const DocumentVaultUploader = ({
   const [rejectionReason, setRejectionReason] = useState('');
   const [verifyingDocId, setVerifyingDocId] = useState(null);
   const [acknowledgingDocId, setAcknowledgingDocId] = useState(null);
+
+  // Delete State
+  const [docToDelete, setDocToDelete] = useState(null);
+  const [deletingDocId, setDeletingDocId] = useState(null);
 
   // Document View / Download State
   const [loadingActionDocId, setLoadingActionDocId] = useState(null);
@@ -314,6 +321,26 @@ export const DocumentVaultUploader = ({
       showError(err.message || 'Failed to acknowledge document.');
     } finally {
       setAcknowledgingDocId(null);
+    }
+  };
+
+  const handleDelete = async (docId) => {
+    try {
+      setDeletingDocId(docId);
+      if (onDelete) {
+        await onDelete(docId);
+      } else {
+        await documentService.deleteDocument(docId);
+      }
+      showSuccess('Document removed from vault.');
+      setDocToDelete(null);
+      if (onDocumentsUpdated) {
+        onDocumentsUpdated();
+      }
+    } catch (err) {
+      showError(err.message || 'Failed to delete document.');
+    } finally {
+      setDeletingDocId(null);
     }
   };
 
@@ -503,10 +530,18 @@ export const DocumentVaultUploader = ({
             {documents.map((doc) => {
               const isVerifying = verifyingDocId === doc.id;
               const isAcknowledging = acknowledgingDocId === doc.id;
+              const isDeleting = deletingDocId === doc.id;
               const acks = doc.acknowledgementLog || doc.acknowledgement_log || [];
               const isAcknowledged = Array.isArray(acks) && acks.length > 0;
               const fileMeta = getFileTypeMeta(doc.title, doc.mimeType);
               const FileIcon = fileMeta.icon;
+
+              const normStatus = (doc.verificationStatus || 'PENDING').toUpperCase();
+              const isPending = normStatus === 'PENDING';
+              const isRejected = normStatus === 'REJECTED';
+              // Allowed for HR (canVerify) or explicitly configured, or employee during pending review or rejected phase
+              const canDeleteThisDoc =
+                canDelete !== false && (canVerify || canDelete === true || isPending || isRejected);
 
               return (
                 <div
@@ -621,6 +656,24 @@ export const DocumentVaultUploader = ({
                       )}
                       Download
                     </button>
+
+                    {/* Delete Button (Allowed for employee during pending review/rejected phase, or HR) */}
+                    {canDeleteThisDoc && (
+                      <button
+                        type="button"
+                        disabled={isDeleting}
+                        onClick={() => setDocToDelete(doc)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100/90 border border-rose-200/70 shadow-2xs transition-all cursor-pointer disabled:opacity-50"
+                        title={isPending ? 'Delete document during pending review' : 'Delete document'}
+                      >
+                        {isDeleting ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-600" />
+                        ) : (
+                          <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                        )}
+                        Delete
+                      </button>
+                    )}
 
                     {/* Employee Acknowledgement Button */}
                     {canAcknowledge && !isAcknowledged && (
@@ -739,6 +792,62 @@ export const DocumentVaultUploader = ({
                 onClick={() => handleVerify(rejectingDoc.id, 'REJECTED', rejectionReason)}
               >
                 Confirm Rejection
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Delete Document Confirmation Modal */}
+      {docToDelete && (
+        <Modal
+          isOpen={true}
+          onClose={() => setDocToDelete(null)}
+          title="Delete Document"
+          subtitle={`Are you sure you want to remove '${docToDelete.title}'?`}
+        >
+          <div className="space-y-4">
+            <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-100 text-rose-800 text-xs flex items-center gap-2.5">
+              <ShieldAlert className="w-4 h-4 shrink-0 text-rose-600" />
+              <span>
+                Are you sure you want to remove this document from the vault? You will be able to upload a corrected version after deleting.
+              </span>
+            </div>
+
+            <div className="text-xs text-slate-600 bg-slate-50 rounded-xl p-3.5 border border-slate-100 space-y-1.5">
+              <div className="flex justify-between">
+                <span className="text-slate-500">Document Title:</span>
+                <span className="font-semibold text-slate-800">{docToDelete.title}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Document Type:</span>
+                <span className="font-semibold text-slate-800">{getDocumentLabel(docToDelete.documentType || docToDelete.category)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Status:</span>
+                <span className="font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200/60">
+                  {docToDelete.verificationStatus === 'APPROVED' ? 'Verified' : docToDelete.verificationStatus === 'REJECTED' ? 'Rejected' : 'Pending Review'}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-100">
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={deletingDocId === docToDelete.id}
+                onClick={() => setDocToDelete(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                loading={deletingDocId === docToDelete.id}
+                icon={Trash2}
+                onClick={() => handleDelete(docToDelete.id)}
+              >
+                Delete Document
               </Button>
             </div>
           </div>
