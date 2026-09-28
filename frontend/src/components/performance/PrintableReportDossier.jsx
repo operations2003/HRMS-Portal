@@ -29,17 +29,17 @@ export const PrintableReportDossier = forwardRef(({ department, data: rawData, a
   const deptTag = isOps ? 'Operations Team • L&D' : isIt ? 'IT Team • L&D' : 'TA Team • L&D';
   const Icon = isOps ? Building2 : isIt ? Laptop : Target;
 
-  const numBgClass = isOps
-    ? 'bg-teal-50 text-teal-800 border-teal-300'
+  const numBgStyle = isOps
+    ? { backgroundColor: '#f0fdfa', color: '#0f766e', border: '1px solid #99f6e4' }
     : isIt
-    ? 'bg-indigo-50 text-indigo-800 border-indigo-300'
-    : 'bg-purple-50 text-purple-800 border-purple-300';
+    ? { backgroundColor: '#eef2ff', color: '#4338ca', border: '1px solid #c7d2fe' }
+    : { backgroundColor: '#faf5ff', color: '#7e22ce', border: '1px solid #e9d5ff' };
 
-  const scoreBadgeClass = isOps
-    ? 'bg-teal-50 text-teal-800 border-teal-300'
+  const scoreBadgeStyle = isOps
+    ? { backgroundColor: '#f0fdfa', color: '#0f766e', border: '1px solid #99f6e4' }
     : isIt
-    ? 'bg-indigo-50 text-indigo-800 border-indigo-300'
-    : 'bg-purple-50 text-purple-800 border-purple-300';
+    ? { backgroundColor: '#eef2ff', color: '#4338ca', border: '1px solid #c7d2fe' }
+    : { backgroundColor: '#faf5ff', color: '#7e22ce', border: '1px solid #e9d5ff' };
 
   const actionLabels = [
     { id: 'action1', text: 'Continue in Current Role' },
@@ -58,7 +58,7 @@ export const PrintableReportDossier = forwardRef(({ department, data: rawData, a
       colorHex: '#059669',
       bgHex: '#ecfdf5',
       borderHex: '#10b981',
-      textHex: '#065f46',
+      textHex: '#064e3b',
     },
     {
       val: 4,
@@ -106,49 +106,53 @@ export const PrintableReportDossier = forwardRef(({ department, data: rawData, a
     { label: 'Unsatisfactory', icon: '❌', colorHex: '#e11d48', bgHex: '#fff1f2', borderHex: '#f43f5e', textHex: '#9f1239' },
   ];
 
+  // Clean Flexbox Section Header - Border line stays neatly UNDER both Title and Right Badge
   const renderSectionHeader = (num, title, rightElement = null) => (
     <div
       style={{
-        borderBottom: '1px solid #e2e8f0',
-        paddingBottom: '3px',
-        marginBottom: '6px',
-        lineHeight: '22px',
-        display: 'block',
-        position: 'relative',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        borderBottom: '1.5px solid #e2e8f0',
+        paddingBottom: '5px',
+        marginBottom: '7px',
+        width: '100%',
         boxSizing: 'border-box',
       }}
     >
-      <span
-        className={`rounded font-black text-[11px] border shrink-0 ${numBgClass}`}
-        style={{
-          display: 'inline-block',
-          width: '20px',
-          height: '20px',
-          lineHeight: '18px',
-          textAlign: 'center',
-          boxSizing: 'border-box',
-          verticalAlign: 'middle',
-          marginRight: '6px',
-        }}
-      >
-        {num}
-      </span>
-      <span
-        style={{
-          fontSize: '11px',
-          fontWeight: 700,
-          color: '#0f172a',
-          verticalAlign: 'middle',
-        }}
-      >
-        {title}
-      </span>
-      {rightElement && (
-        <span style={{ float: 'right', verticalAlign: 'middle', lineHeight: '20px' }}>
-          {rightElement}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '20px',
+            height: '20px',
+            borderRadius: '4px',
+            fontSize: '10px',
+            fontWeight: 800,
+            boxSizing: 'border-box',
+            ...numBgStyle,
+          }}
+        >
+          {num}
         </span>
+        <span
+          style={{
+            fontSize: '11.5px',
+            fontWeight: 800,
+            color: '#0f172a',
+            letterSpacing: '-0.01em',
+          }}
+        >
+          {title}
+        </span>
+      </div>
+      {rightElement && (
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          {rightElement}
+        </div>
       )}
-      <div style={{ clear: 'both' }} />
     </div>
   );
 
@@ -193,14 +197,14 @@ export const PrintableReportDossier = forwardRef(({ department, data: rawData, a
           fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
         }}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {/* Executive Header Banner - Rock Solid High Contrast */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '9px' }}>
+          {/* Executive Header Banner - Sleek High Contrast */}
           <div
             style={{
               backgroundColor: '#0f172a',
               backgroundImage: 'linear-gradient(135deg, #090d16 0%, #1e1b4b 60%, #0f172a 100%)',
               borderRadius: '10px',
-              padding: '14px 18px',
+              padding: '13px 18px',
               border: '1px solid #1e293b',
               borderBottom: '3px solid #6366f1',
               boxSizing: 'border-box',
@@ -248,7 +252,7 @@ export const PrintableReportDossier = forwardRef(({ department, data: rawData, a
                 style={{
                   backgroundColor: 'rgba(255, 255, 255, 0.12)',
                   border: '1px solid rgba(255, 255, 255, 0.25)',
-                  padding: '8px 14px',
+                  padding: '7px 14px',
                   borderRadius: '10px',
                   textAlign: 'right',
                   minWidth: '160px',
@@ -268,12 +272,12 @@ export const PrintableReportDossier = forwardRef(({ department, data: rawData, a
             </div>
           </div>
 
-          {/* 01: Employee & Review Information (2 Rows of 4 Flex Items) */}
+          {/* 01: Employee & Review Information (Generous Height to Prevent Text Clipping) */}
           <section>
             {renderSectionHeader('01', 'Employee & Review Information')}
 
             {/* Row 1 */}
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '6px', width: '100%', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '7px', width: '100%', boxSizing: 'border-box' }}>
               {infoRow1.map((item, i) => (
                 <div
                   key={i}
@@ -281,18 +285,21 @@ export const PrintableReportDossier = forwardRef(({ department, data: rawData, a
                     flex: '1 1 25%',
                     width: '25%',
                     minWidth: 0,
-                    height: '46px',
-                    padding: '5px 8px',
+                    minHeight: '50px',
+                    padding: '6px 10px',
                     boxSizing: 'border-box',
                     backgroundColor: '#f8fafc',
                     border: '1px solid #e2e8f0',
                     borderRadius: '6px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'center',
                   }}
                 >
-                  <div style={{ fontSize: '7.5px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em', lineHeight: '11px', marginBottom: '2px' }}>
+                  <div style={{ fontSize: '8px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em', lineHeight: '12px', marginBottom: '2px' }}>
                     {item.label}
                   </div>
-                  <div style={{ fontSize: '10.5px', fontWeight: 700, fontFamily: item.isMono ? 'monospace' : 'inherit', color: '#0f172a', lineHeight: '14px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 700, fontFamily: item.isMono ? 'monospace' : 'inherit', color: '#0f172a', lineHeight: '16px' }}>
                     {item.value}
                   </div>
                 </div>
@@ -308,18 +315,21 @@ export const PrintableReportDossier = forwardRef(({ department, data: rawData, a
                     flex: '1 1 25%',
                     width: '25%',
                     minWidth: 0,
-                    height: '46px',
-                    padding: '5px 8px',
+                    minHeight: '50px',
+                    padding: '6px 10px',
                     boxSizing: 'border-box',
                     backgroundColor: '#f8fafc',
                     border: '1px solid #e2e8f0',
                     borderRadius: '6px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'center',
                   }}
                 >
-                  <div style={{ fontSize: '7.5px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em', lineHeight: '11px', marginBottom: '2px' }}>
+                  <div style={{ fontSize: '8px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em', lineHeight: '12px', marginBottom: '2px' }}>
                     {item.label}
                   </div>
-                  <div style={{ fontSize: '10px', fontWeight: 700, fontFamily: item.isMono ? 'monospace' : 'inherit', color: '#0f172a', lineHeight: '14px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <div style={{ fontSize: '10.5px', fontWeight: 700, fontFamily: item.isMono ? 'monospace' : 'inherit', color: '#0f172a', lineHeight: '16px' }}>
                     {item.value}
                   </div>
                 </div>
@@ -327,16 +337,25 @@ export const PrintableReportDossier = forwardRef(({ department, data: rawData, a
             </div>
           </section>
 
-          {/* 02: Rating Scale Reference (5 Rubrics in 1 Row) */}
+          {/* 02: Rating Scale Reference (5 Rubrics in 1 Row - No Border Line Crossing) */}
           <section>
             {renderSectionHeader(
               '02',
               'Rating Scale Reference',
               <span
-                className={`px-3 py-0.5 rounded-full border text-[10px] font-bold inline-block ${scoreBadgeClass}`}
-                style={{ height: '20px', lineHeight: '18px', boxSizing: 'border-box' }}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  padding: '3px 10px',
+                  borderRadius: '9999px',
+                  fontSize: '9.5px',
+                  fontWeight: 700,
+                  boxSizing: 'border-box',
+                  ...scoreBadgeStyle,
+                }}
               >
-                Average Score: <span className="font-black font-mono text-[11px]">{averageScore} / 5.0</span>
+                Average Score: <span style={{ fontWeight: 900, fontFamily: 'monospace', fontSize: '11px' }}>{averageScore} / 5.0</span>
               </span>
             )}
 
@@ -350,25 +369,29 @@ export const PrintableReportDossier = forwardRef(({ department, data: rawData, a
                       flex: '1 1 20%',
                       width: '20%',
                       minWidth: 0,
-                      height: '66px',
-                      padding: '5px 4px',
+                      height: '72px',
+                      padding: '6px 4px',
                       boxSizing: 'border-box',
                       borderRadius: '6px',
                       border: isSelected ? `2px solid ${item.borderHex}` : '1px solid #e2e8f0',
                       backgroundColor: isSelected ? item.bgHex : '#ffffff',
                       textAlign: 'center',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
                     }}
                   >
                     <span
                       style={{
                         display: 'block',
-                        width: '20px',
-                        height: '20px',
-                        lineHeight: '20px',
+                        width: '22px',
+                        height: '22px',
+                        lineHeight: '22px',
                         textAlign: 'center',
                         margin: '0 auto 3px auto',
                         borderRadius: '4px',
-                        fontSize: '10.5px',
+                        fontSize: '11px',
                         fontWeight: 900,
                         color: '#ffffff',
                         backgroundColor: item.colorHex,
@@ -377,7 +400,7 @@ export const PrintableReportDossier = forwardRef(({ department, data: rawData, a
                     >
                       {item.val}
                     </span>
-                    <div style={{ fontSize: '9px', fontWeight: 700, color: isSelected ? item.textHex : '#1e293b', lineHeight: '12px', marginBottom: '1px' }}>
+                    <div style={{ fontSize: '9.5px', fontWeight: 700, color: isSelected ? item.textHex : '#1e293b', lineHeight: '13px', marginBottom: '1px' }}>
                       {item.title}
                     </div>
                     <div style={{ fontSize: '7.5px', color: '#64748b', lineHeight: '10px' }}>
@@ -398,7 +421,18 @@ export const PrintableReportDossier = forwardRef(({ department, data: rawData, a
                 : isIt
                 ? 'Technical Competency Evaluation'
                 : 'Functional Competency Evaluation',
-              <span className={`text-[9px] font-bold px-2.5 py-0.5 rounded-full border inline-block ${scoreBadgeClass}`}>
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  padding: '2px 8px',
+                  borderRadius: '9999px',
+                  fontSize: '9px',
+                  fontWeight: 700,
+                  boxSizing: 'border-box',
+                  ...scoreBadgeStyle,
+                }}
+              >
                 Calibrated Competency Assessment
               </span>
             )}
@@ -518,17 +552,17 @@ export const PrintableReportDossier = forwardRef(({ department, data: rawData, a
             </div>
           </div>
 
-          {/* 04 & 05: Accomplishments & Development Areas (2 Columns Side by Side) */}
+          {/* 04 & 05: Accomplishments & Development Areas (Generous Padding & Line Height) */}
           <div style={{ display: 'flex', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
             <div style={{ flex: '1 1 50%', width: '50%', minWidth: 0 }}>
               {renderSectionHeader('04', 'Key Accomplishments')}
-              <div style={{ backgroundColor: '#f8fafc', padding: '8px 10px', borderRadius: '6px', border: '1px solid #e2e8f0', minHeight: '52px', fontSize: '9.5px', color: '#1e293b', lineHeight: 1.4, whiteSpace: 'pre-line', boxSizing: 'border-box' }}>
+              <div style={{ backgroundColor: '#f8fafc', padding: '8px 12px', borderRadius: '6px', border: '1px solid #e2e8f0', minHeight: '54px', fontSize: '9.5px', color: '#1e293b', lineHeight: 1.45, whiteSpace: 'pre-line', boxSizing: 'border-box' }}>
                 {data.achievements || 'No specific accomplishments recorded for this cycle.'}
               </div>
             </div>
             <div style={{ flex: '1 1 50%', width: '50%', minWidth: 0 }}>
               {renderSectionHeader('05', 'Areas for Development')}
-              <div style={{ backgroundColor: '#f8fafc', padding: '8px 10px', borderRadius: '6px', border: '1px solid #e2e8f0', minHeight: '52px', fontSize: '9.5px', color: '#1e293b', lineHeight: 1.4, whiteSpace: 'pre-line', boxSizing: 'border-box' }}>
+              <div style={{ backgroundColor: '#f8fafc', padding: '8px 12px', borderRadius: '6px', border: '1px solid #e2e8f0', minHeight: '54px', fontSize: '9.5px', color: '#1e293b', lineHeight: 1.45, whiteSpace: 'pre-line', boxSizing: 'border-box' }}>
                 {data.improvements || 'Continue scaling performance according to quarterly deliverables.'}
               </div>
             </div>
@@ -555,7 +589,7 @@ export const PrintableReportDossier = forwardRef(({ department, data: rawData, a
                 <tbody>
                   {data.goals &&
                     data.goals.map((g, idx) => (
-                      <tr key={idx} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8fafc', borderBottom: '1px solid #f1f5f9', height: '25px' }}>
+                      <tr key={idx} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8fafc', borderBottom: '1px solid #f1f5f9', height: '26px' }}>
                         <td style={{ padding: '3px 8px', fontWeight: 700, color: '#0f172a', fontSize: '9px', verticalAlign: 'middle', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {g.goal || '—'}
                         </td>
@@ -597,7 +631,7 @@ export const PrintableReportDossier = forwardRef(({ department, data: rawData, a
                 <tbody>
                   {data.training &&
                     data.training.map((t, idx) => (
-                      <tr key={idx} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8fafc', borderBottom: '1px solid #f1f5f9', height: '25px' }}>
+                      <tr key={idx} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8fafc', borderBottom: '1px solid #f1f5f9', height: '26px' }}>
                         <td style={{ padding: '3px 8px', fontWeight: 700, color: '#0f172a', fontSize: '9px', verticalAlign: 'middle', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {t.skill || '—'}
                         </td>
@@ -628,17 +662,17 @@ export const PrintableReportDossier = forwardRef(({ department, data: rawData, a
             </div>
           </section>
 
-          {/* 08 & 09: Feedback Comments (2 Columns Side by Side) */}
+          {/* 08 & 09: Feedback Comments (Generous Padding & Line Height) */}
           <div style={{ display: 'flex', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
             <div style={{ flex: '1 1 50%', width: '50%', minWidth: 0 }}>
               {renderSectionHeader('08', 'Employee Comments')}
-              <div style={{ backgroundColor: '#f8fafc', padding: '6px 10px', borderRadius: '6px', border: '1px solid #e2e8f0', minHeight: '44px', fontSize: '9px', color: '#1e293b', lineHeight: 1.4, whiteSpace: 'pre-line', boxSizing: 'border-box' }}>
+              <div style={{ backgroundColor: '#f8fafc', padding: '8px 12px', borderRadius: '6px', border: '1px solid #e2e8f0', minHeight: '48px', fontSize: '9.5px', color: '#1e293b', lineHeight: 1.45, whiteSpace: 'pre-line', boxSizing: 'border-box' }}>
                 {data.employeeComments || 'Employee self-reflection confirmed and submitted.'}
               </div>
             </div>
             <div style={{ flex: '1 1 50%', width: '50%', minWidth: 0 }}>
               {renderSectionHeader('09', 'Manager Comments')}
-              <div style={{ backgroundColor: '#f8fafc', padding: '6px 10px', borderRadius: '6px', border: '1px solid #e2e8f0', minHeight: '44px', fontSize: '9px', color: '#1e293b', lineHeight: 1.4, whiteSpace: 'pre-line', boxSizing: 'border-box' }}>
+              <div style={{ backgroundColor: '#f8fafc', padding: '8px 12px', borderRadius: '6px', border: '1px solid #e2e8f0', minHeight: '48px', fontSize: '9.5px', color: '#1e293b', lineHeight: 1.45, whiteSpace: 'pre-line', boxSizing: 'border-box' }}>
                 {data.managerComments || 'Performance evaluation completed in accordance with quarterly standards.'}
               </div>
             </div>
@@ -658,8 +692,8 @@ export const PrintableReportDossier = forwardRef(({ department, data: rawData, a
                       flex: '1 1 20%',
                       width: '20%',
                       minWidth: 0,
-                      height: '32px',
-                      lineHeight: '30px',
+                      height: '34px',
+                      lineHeight: '32px',
                       textAlign: 'center',
                       borderRadius: '6px',
                       boxSizing: 'border-box',
@@ -669,21 +703,21 @@ export const PrintableReportDossier = forwardRef(({ department, data: rawData, a
                       fontWeight: isSelected ? 800 : 600,
                     }}
                   >
-                    <span style={{ fontSize: '11px', verticalAlign: 'middle', marginRight: '4px' }}>{rating.icon}</span>
-                    <span style={{ fontSize: '9px', verticalAlign: 'middle' }}>{rating.label}</span>
+                    <span style={{ fontSize: '12px', verticalAlign: 'middle', marginRight: '4px' }}>{rating.icon}</span>
+                    <span style={{ fontSize: '9.5px', verticalAlign: 'middle' }}>{rating.label}</span>
                   </div>
                 );
               })}
             </div>
           </section>
 
-          {/* 11: Final Actions & Recommendations (3 Rows of 2 Columns) */}
+          {/* 11: Final Actions & Recommendations (No Text Clipping / Generous Height & Line-Height) */}
           <section>
             {renderSectionHeader('11', 'Final Actions & Recommendations')}
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', width: '100%', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '100%', boxSizing: 'border-box' }}>
               {[0, 2, 4].map((startIndex) => (
-                <div key={startIndex} style={{ display: 'flex', gap: '6px', width: '100%', boxSizing: 'border-box' }}>
+                <div key={startIndex} style={{ display: 'flex', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
                   {actionLabels.slice(startIndex, startIndex + 2).map((act) => {
                     const isChecked = Boolean(data.actions && data.actions[act.id]);
                     return (
@@ -693,8 +727,9 @@ export const PrintableReportDossier = forwardRef(({ department, data: rawData, a
                           flex: '1 1 50%',
                           width: '50%',
                           minWidth: 0,
-                          height: '32px',
-                          padding: '0 8px',
+                          minHeight: '38px',
+                          height: '38px',
+                          padding: '0 12px',
                           boxSizing: 'border-box',
                           borderRadius: '6px',
                           border: isChecked ? '1px solid #818cf8' : '1px solid #e2e8f0',
@@ -705,29 +740,30 @@ export const PrintableReportDossier = forwardRef(({ department, data: rawData, a
                       >
                         <div
                           style={{
-                            width: '14px',
-                            height: '14px',
-                            lineHeight: '12px',
+                            width: '16px',
+                            height: '16px',
+                            lineHeight: '14px',
                             textAlign: 'center',
                             borderRadius: '3px',
                             boxSizing: 'border-box',
                             border: isChecked ? '1px solid #4f46e5' : '1px solid #cbd5e1',
                             backgroundColor: isChecked ? '#4f46e5' : '#ffffff',
                             color: '#ffffff',
-                            marginRight: '6px',
+                            marginRight: '8px',
                             flexShrink: 0,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
                           }}
                         >
-                          {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" style={{ display: 'inline-block', verticalAlign: 'middle' }} />}
+                          {isChecked && <Check className="w-3 h-3 stroke-[3]" style={{ color: '#ffffff' }} />}
                         </div>
                         <div
                           style={{
-                            fontSize: '9px',
+                            fontSize: '10px',
+                            lineHeight: '20px',
                             fontWeight: isChecked ? 700 : 500,
                             color: isChecked ? '#1e1b4b' : '#334155',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
                           }}
                         >
                           {act.text}
@@ -749,7 +785,7 @@ export const PrintableReportDossier = forwardRef(({ department, data: rawData, a
                 borderRadius: '8px',
                 border: '1px solid #c7d2fe',
                 background: 'linear-gradient(135deg, #f8fafc 0%, #ffffff 50%, #eff6ff 100%)',
-                padding: '8px 12px',
+                padding: '10px 14px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
@@ -765,10 +801,10 @@ export const PrintableReportDossier = forwardRef(({ department, data: rawData, a
                     Chief Executive Officer
                   </span>
                 </div>
-                <div style={{ fontSize: '13px', fontWeight: 900, color: '#0f172a', lineHeight: 1.2 }}>
+                <div style={{ fontSize: '13.5px', fontWeight: 900, color: '#0f172a', lineHeight: 1.2 }}>
                   {data.ceoName || "Sheetal Ma'am"}
                 </div>
-                <div style={{ fontSize: '8.5px', fontWeight: 600, color: '#475569' }}>
+                <div style={{ fontSize: '9px', fontWeight: 600, color: '#475569', marginTop: '2px' }}>
                   Chief Executive Officer • Executive Leadership Approval
                 </div>
               </div>
@@ -780,7 +816,7 @@ export const PrintableReportDossier = forwardRef(({ department, data: rawData, a
                 <div style={{ fontSize: '11px', fontWeight: 700, fontFamily: 'monospace', color: '#1e293b', marginTop: '1px' }}>
                   {data.ceoDate || '2026-09-16'}
                 </div>
-                <div style={{ marginTop: '2px', display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 6px', borderRadius: '4px', fontSize: '8px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', backgroundColor: '#ecfdf5', color: '#065f46', border: '1px solid #a7f3d0' }}>
+                <div style={{ marginTop: '3px', display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 7px', borderRadius: '4px', fontSize: '8.5px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', backgroundColor: '#ecfdf5', color: '#065f46', border: '1px solid #a7f3d0' }}>
                   <CheckCircle2 className="w-3 h-3 text-emerald-600 inline" />
                   Officially Authorized
                 </div>
