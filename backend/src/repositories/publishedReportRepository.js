@@ -209,6 +209,45 @@ export const publishedReportRepository = {
     const { rows } = await pool.query(query, [id, orgId]);
     return mapRow(rows[0]);
   },
+
+  /**
+   * Update an existing performance report
+   */
+  async updateReport(id, orgId, {
+    reviewPeriod,
+    reviewDate,
+    reviewCycle,
+    averageScore,
+    overallRating,
+    reportData,
+  }) {
+    const query = `
+      UPDATE published_performance_reports
+      SET
+        review_period = COALESCE($3, review_period),
+        review_date = COALESCE($4, review_date),
+        review_cycle = COALESCE($5, review_cycle),
+        average_score = COALESCE($6, average_score),
+        overall_rating = COALESCE($7, overall_rating),
+        report_data = COALESCE($8, report_data),
+        status = 'DELIVERED',
+        updated_at = NOW()
+      WHERE id = $1 AND org_id = $2
+      RETURNING *;
+    `;
+    const values = [
+      id,
+      orgId,
+      reviewPeriod || null,
+      reviewDate || null,
+      reviewCycle || null,
+      averageScore !== undefined && !isNaN(averageScore) ? averageScore : null,
+      overallRating || null,
+      reportData ? JSON.stringify(reportData) : null,
+    ];
+    const { rows } = await pool.query(query, values);
+    return mapRow(rows[0]);
+  },
 };
 
 export default publishedReportRepository;

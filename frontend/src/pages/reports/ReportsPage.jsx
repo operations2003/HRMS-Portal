@@ -150,6 +150,7 @@ export const ReportsPage = () => {
   const [trackerSearch, setTrackerSearch] = useState('');
   const [trackerDeptFilter, setTrackerDeptFilter] = useState('all');
   const [expandedEmployees, setExpandedEmployees] = useState(new Set());
+  const [editingReport, setEditingReport] = useState(null);
 
   // Recipient ("My Performance") States
   const [myReports, setMyReports] = useState([]);
@@ -680,6 +681,64 @@ export const ReportsPage = () => {
     };
   };
 
+  // Start editing a sent report
+  const handleStartEditReport = (report) => {
+    if (!report) return;
+    setEditingReport(report);
+    setSelectedEmployeeId(report.employeeId);
+    setDepartment(report.department || 'operations');
+
+    const parsed = parseReportData(report);
+    setCurrentData({
+      ...parsed,
+      employeeName: report.employeeName || parsed.employeeName,
+      employeeId: report.employeeCode || report.employeeId || parsed.employeeId,
+      department: report.department || parsed.department,
+      designation: report.designation || parsed.designation,
+      reviewPeriod: report.reviewPeriod || parsed.reviewPeriod,
+      reviewDate: report.reviewDate || parsed.reviewDate,
+      reviewCycle: report.reviewCycle || parsed.reviewCycle,
+    });
+    setEmpReportStatus(report);
+    setReviewerSubTab('form');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    showToast(`Loaded appraisal for ${report.employeeName}. Edit any rating or feedback and click "Update & Save Appraisal".`, 'info', 4000);
+  };
+
+  // Cancel edit mode
+  const handleCancelEditReport = () => {
+    setEditingReport(null);
+    handleResetForm();
+    showToast('Exited appraisal edit mode.', 'info');
+  };
+
+  // Save updated report
+  const handleUpdateReport = async () => {
+    if (!editingReport) return;
+    setIsSending(true);
+    showToast(`Updating performance appraisal for ${currentData.employeeName}...`, 'loading', 0);
+    try {
+      const avgScore = calculateAverage(currentData.competencies);
+      await performanceReportService.updateReport(editingReport.id, {
+        reportData: currentData,
+        averageScore: avgScore,
+        overallRating: currentData.overallRating,
+        reviewPeriod: currentData.reviewPeriod,
+        reviewDate: currentData.reviewDate,
+        reviewCycle: currentData.reviewCycle,
+      });
+
+      showToast(`Performance appraisal for ${currentData.employeeName} updated successfully!`, 'success');
+      setEditingReport(null);
+      await fetchSentReports();
+      setReviewerSubTab('tracker');
+    } catch (err) {
+      showToast(err.message || 'Failed to update performance report.', 'error');
+    } finally {
+      setIsSending(false);
+    }
+  };
+
   const parsedActiveReportData = useMemo(() => {
     if (!activeMyReport) return null;
     let data = activeMyReport.reportData;
@@ -1035,6 +1094,18 @@ export const ReportsPage = () => {
             className="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-950/40 border-brand-200 dark:border-brand-800"
           >
             Review
+          </Button>
+
+          {/* Edit appraisal button */}
+          <Button
+            size="sm"
+            variant="outline"
+            icon={FileEdit}
+            onClick={() => handleStartEditReport(row)}
+            title="Edit this performance report"
+            className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 border-indigo-200 dark:border-indigo-800"
+          >
+            Edit
           </Button>
 
           {/* Send Again button */}
@@ -1743,6 +1814,17 @@ export const ReportsPage = () => {
 
                                       <Button
                                         size="sm"
+                                        variant="outline"
+                                        icon={FileEdit}
+                                        onClick={() => handleStartEditReport(report)}
+                                        title="Edit this performance report"
+                                        className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 border-indigo-200 dark:border-indigo-800"
+                                      >
+                                        Edit
+                                      </Button>
+
+                                      <Button
+                                        size="sm"
                                         variant={report.status === 'DELETED_BY_USER' ? 'primary' : 'outline'}
                                         icon={RotateCw}
                                         onClick={() => handleSendAgainFromHistory(report)}
@@ -2051,6 +2133,51 @@ export const ReportsPage = () => {
 
             {/* Form Body */}
             <div className="p-6 sm:p-10 space-y-10">
+              {/* Active Editing Report Banner */}
+              {editingReport && (
+                <div className="p-4 sm:p-5 rounded-2xl bg-indigo-50/80 dark:bg-indigo-950/40 border-2 border-indigo-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm animate-in fade-in slide-in-from-top-2">
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-sm shadow-indigo-600/30">
+                      <FileEdit className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-indigo-600 text-white tracking-wider">
+                          Edit Mode Active
+                        </span>
+                        <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                          Editing Sent Appraisal: {editingReport.employeeName}
+                        </h4>
+                      </div>
+                      <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">
+                        Cycle: <strong className="text-slate-800 dark:text-slate-100">{editingReport.reviewPeriod || 'Current Period'}</strong> ({editingReport.reviewCycle || 'Performance Appraisal'}). Modifying ratings, feedback, or goals will update the delivered appraisal record directly.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleCancelEditReport}
+                      className="text-xs font-semibold bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
+                    >
+                      Cancel Edit
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      icon={FileEdit}
+                      loading={isSending}
+                      onClick={handleUpdateReport}
+                      className="text-xs font-bold shadow-md shadow-indigo-500/20"
+                    >
+                      Update &amp; Save
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               {/* 01: Employee Information */}
               <section className="space-y-5">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 gap-2">
@@ -2945,20 +3072,43 @@ export const ReportsPage = () => {
                   </Button>
 
                   {canReviewOthers && viewMode === 'reviews' && (
-                    <Button
-                      variant="primary"
-                      size="md"
-                      icon={empReportStatus?.sentCount > 0 ? RotateCw : Send}
-                      loading={isSending}
-                      onClick={() => handleSendReport()}
-                      className="text-xs font-bold shadow-lg shadow-brand-500/20"
-                    >
-                      {empReportStatus?.status === 'DELETED_BY_USER'
-                        ? 'Send Again (User Deleted)'
-                        : empReportStatus?.sentCount > 0
-                          ? `Send Again (${empReportStatus.sentCount} sent)`
-                          : 'Send Report'}
-                    </Button>
+                    editingReport ? (
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="md"
+                          onClick={handleCancelEditReport}
+                          className="text-xs font-semibold"
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          variant="primary"
+                          size="md"
+                          icon={FileEdit}
+                          loading={isSending}
+                          onClick={handleUpdateReport}
+                          className="text-xs font-bold shadow-lg shadow-indigo-500/20 bg-indigo-600 hover:bg-indigo-700 text-white"
+                        >
+                          Update &amp; Save Appraisal
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        variant="primary"
+                        size="md"
+                        icon={empReportStatus?.sentCount > 0 ? RotateCw : Send}
+                        loading={isSending}
+                        onClick={() => handleSendReport()}
+                        className="text-xs font-bold shadow-lg shadow-brand-500/20"
+                      >
+                        {empReportStatus?.status === 'DELETED_BY_USER'
+                          ? 'Send Again (User Deleted)'
+                          : empReportStatus?.sentCount > 0
+                            ? `Send Again (${empReportStatus.sentCount} sent)`
+                            : 'Send Report'}
+                      </Button>
+                    )
                   )}
                 </div>
               </div>
@@ -3133,14 +3283,12 @@ export const ReportsPage = () => {
                       onClick={() => {
                         const r = previewReport;
                         setPreviewReport(null);
-                        handleSelectEmployee(r.employeeId);
-                        setDepartment(r.department || 'operations');
-                        setReviewerSubTab('form');
+                        handleStartEditReport(r);
                       }}
                       title="Edit this performance review in the evaluation form"
-                      className="text-xs font-semibold text-brand-600 dark:text-brand-400 border-brand-200 dark:border-brand-800 hover:bg-brand-50 dark:hover:bg-brand-950/40"
+                      className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
                     >
-                      Review in Form
+                      Edit Report
                     </Button>
                     <Button
                       variant="outline"

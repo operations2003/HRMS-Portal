@@ -119,6 +119,26 @@ export const publishedReportController = {
       next(error);
     }
   },
+
+  /**
+   * PUT /api/v1/performance-reports/:id
+   * Admin / Reviewer updates an existing performance report
+   */
+  async updateReport(req, res, next) {
+    try {
+      const updated = await publishedReportService.updateReport(
+        req.user,
+        req.params.id,
+        req.body
+      );
+      return sendSuccess(res, 'Performance report updated successfully.', updated);
+    } catch (error) {
+      if (error.statusCode) {
+        return sendError(res, error.message, error.statusCode);
+      }
+      next(error);
+    }
+  },
 };
 
 export default publishedReportController;

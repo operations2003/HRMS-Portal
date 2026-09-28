@@ -174,6 +174,57 @@ export const publishedReportService = {
     logger.info('PublishedReportService', `Report ${reportId} deleted by user ${reviewerUser.id} (${reviewerUser.role})`);
     return deleted;
   },
+
+  /**
+   * Update an existing performance report
+   */
+  async updateReport(reviewerUser, reportId, updatePayload) {
+    const orgId = reviewerUser.orgId || 'org-1';
+    const existing = await publishedReportRepository.findById(reportId);
+    if (!existing || existing.orgId !== orgId) {
+      const err = new Error('Performance report not found.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const {
+      reviewPeriod,
+      reviewDate,
+      reviewCycle,
+      averageScore,
+      overallRating,
+      reportData,
+    } = updatePayload;
+
+    const updated = await publishedReportRepository.updateReport(reportId, orgId, {
+      reviewPeriod: reviewPeriod || reportData?.reviewPeriod,
+      reviewDate: reviewDate || reportData?.reviewDate,
+      reviewCycle: reviewCycle || reportData?.reviewCycle,
+      averageScore: averageScore !== undefined ? parseFloat(averageScore) : undefined,
+      overallRating: overallRating || reportData?.overallRating,
+      reportData,
+    });
+
+    if (updated && updated.employeeUserId) {
+      try {
+        await notificationRepository.create({
+          orgId,
+          userId: updated.employeeUserId,
+          eventType: 'GENERAL_ALERT',
+          title: 'Performance Appraisal Report Updated',
+          message: `Your performance appraisal report for ${updated.reviewPeriod || 'the review cycle'} has been updated by management. Rating: ${Number(updated.averageScore).toFixed(1)}/5.0 (${updated.overallRating}).`,
+          entityType: 'PERFORMANCE_REPORT',
+          entityId: updated.id,
+          actionUrl: '/reports',
+        });
+      } catch (notifErr) {
+        logger.warn('PublishedReportService', `Failed to deliver update notification: ${notifErr.message}`);
+      }
+    }
+
+    logger.info('PublishedReportService', `Report ${reportId} updated by user ${reviewerUser.id}`);
+    return updated;
+  },
 };
 
 export default publishedReportService;

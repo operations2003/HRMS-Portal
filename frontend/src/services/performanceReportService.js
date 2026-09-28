@@ -50,6 +50,14 @@ export const performanceReportService = {
     const res = await http.delete(`/v1/performance-reports/sent/${id}`);
     return res.data;
   },
+
+  /**
+   * Update an existing performance report
+   */
+  async updateReport(id, data) {
+    const res = await http.put(`/v1/performance-reports/${id}`, data);
+    return res.data;
+  },
 };
 
 export default performanceReportService;

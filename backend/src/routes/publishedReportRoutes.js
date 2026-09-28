@@ -38,4 +38,10 @@ router.get(
   publishedReportController.getEmployeeStatus
 );
 
+router.put(
+  '/:id',
+  requireRoles(['Admin', 'SuperAdmin', 'OrgAdmin', 'HR', 'HRManager', 'Manager']),
+  publishedReportController.updateReport
+);
+
 export default router;
