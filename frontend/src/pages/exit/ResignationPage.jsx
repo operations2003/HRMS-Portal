@@ -60,8 +60,14 @@ export const ResignationPage = () => {
     hasRole('SuperAdmin') ||
     hasRole('OrgAdmin');
 
-  // Active Tab: 'my' | 'team' | 'org'
-  const [activeTab, setActiveTab] = useState('my');
+  // Active Tab: 'my' | 'team' | 'org' - HR/Admin defaults to 'org', Manager to 'team', Employee to 'my'
+  const [activeTab, setActiveTab] = useState(() => (isHrOrAdmin ? 'org' : isManager ? 'team' : 'my'));
+
+  useEffect(() => {
+    if (isHrOrAdmin && activeTab === 'my') {
+      setActiveTab('org');
+    }
+  }, [isHrOrAdmin]);
 
   // 1. My Exit State
   const [myExit, setMyExit] = useState(null);
@@ -166,8 +172,9 @@ export const ResignationPage = () => {
       render: (row) => {
         const emp = row.employee;
         const name =
-          emp?.fullName || `${emp?.firstName || ''} ${emp?.lastName || ''}`.trim() || row.employeeName || 'Staff';
-        const avatarUrl = emp?.avatarUrl || emp?.avatar_url || row.avatarUrl || row.employeeAvatar;
+          row.employeeName || emp?.fullName || `${emp?.firstName || ''} ${emp?.lastName || ''}`.trim() || 'Staff';
+        const avatarUrl = row.avatarUrl || emp?.avatarUrl || emp?.avatar_url || row.employeeAvatar;
+        const empCode = row.employeeCode || emp?.empCode || emp?.employeeCode || 'EMP';
         return (
           <div className="flex items-center gap-2.5">
             <Avatar
@@ -178,7 +185,7 @@ export const ResignationPage = () => {
             />
             <div>
               <p className="font-semibold text-xs text-slate-900">{name}</p>
-              <p className="text-[10px] text-slate-400 font-mono">{emp?.empCode || 'EMP'}</p>
+              <p className="text-[10px] text-slate-400 font-mono">{empCode}</p>
             </div>
           </div>
         );
@@ -265,8 +272,10 @@ export const ResignationPage = () => {
       render: (row) => {
         const emp = row.employee;
         const name =
-          emp?.fullName || `${emp?.firstName || ''} ${emp?.lastName || ''}`.trim() || row.employeeName || 'Staff';
-        const avatarUrl = emp?.avatarUrl || emp?.avatar_url || row.avatarUrl || row.employeeAvatar;
+          row.employeeName || emp?.fullName || `${emp?.firstName || ''} ${emp?.lastName || ''}`.trim() || 'Staff';
+        const avatarUrl = row.avatarUrl || emp?.avatarUrl || emp?.avatar_url || row.employeeAvatar;
+        const empCode = row.employeeCode || emp?.empCode || emp?.employeeCode || 'EMP';
+        const dept = row.department || emp?.department?.name || 'Dept';
         return (
           <div className="flex items-center gap-2.5">
             <Avatar
@@ -278,7 +287,7 @@ export const ResignationPage = () => {
             <div>
               <p className="font-semibold text-xs text-slate-900">{name}</p>
               <p className="text-[10px] text-slate-400 font-mono">
-                {emp?.empCode || 'EMP'} • {emp?.department?.name || 'Dept'}
+                {empCode} • {dept}
               </p>
             </div>
           </div>
@@ -300,76 +309,27 @@ export const ResignationPage = () => {
     },
     {
       header: 'Status & Stage',
-      render: (row) => {
-        const s = (row.status || '').toUpperCase();
-        const c = (row.currentStage || '').toUpperCase();
-        const totalCl = parseInt(row.totalClearances ?? (Array.isArray(row.clearances) ? row.clearances.length : 0), 10);
-        const pendingCl = parseInt(row.pendingClearances ?? (Array.isArray(row.clearances) ? row.clearances.filter(t => !['CLEARED', 'COMPLETED', 'WAIVED', 'NOT_APPLICABLE'].includes((t.status || '').toUpperCase())).length : 0), 10);
-        const clearancesDone = (totalCl > 0 && pendingCl === 0) || row.clearanceStatus === 'CLEARED' || row.offboardingStatus === 'FNF_PENDING' || c === 'FNF_PENDING' || c === 'ACCESS_REVOCATION';
-        const accessRevoked = ['DEPROVISIONED', 'REVOKED'].includes((row.accessRemovalStatus || '').toUpperCase());
-        const fnfSettled = ['DISBURSED', 'SETTLED'].includes((row.fnfPaymentStatus || '').toUpperCase());
-
-        let stageBadge = { stage: 1, label: 'Stage 1: Submitted', variant: 'warning' };
-        if (s === 'WITHDRAWN') {
-          stageBadge = { stage: 0, label: 'Withdrawn', variant: 'warning' };
-        } else if (s === 'REJECTED') {
-          stageBadge = { stage: 0, label: 'Rejected', variant: 'danger' };
-        } else if (s === 'COMPLETED' || c === 'COMPLETED') {
-          stageBadge = { stage: 7, label: 'Stage 7: Completed', variant: 'success' };
-        } else if (fnfSettled) {
-          stageBadge = { stage: 6, label: 'Stage 6: FnF Disbursed', variant: 'success' };
-        } else if (accessRevoked) {
-          stageBadge = { stage: 6, label: 'Stage 6: FnF Pending', variant: 'brand' };
-        } else if (clearancesDone || c === 'ACCESS_REVOCATION' || c === 'FNF_PENDING') {
-          stageBadge = { stage: 5, label: 'Stage 5: Access Removal', variant: 'brand' };
-        } else if (s === 'EXIT_PROCESSING' || c === 'CLEARANCE_IN_PROGRESS') {
-          const prog = totalCl > 0 ? ` (${totalCl - pendingCl}/${totalCl})` : '';
-          stageBadge = { stage: 4, label: `Stage 4: Clearances${prog}`, variant: 'brand' };
-        } else if (s === 'APPROVED' || s === 'NOTICE_PERIOD') {
-          stageBadge = { stage: 3, label: 'Stage 3: Notice Period', variant: 'brand' };
-        } else if (s === 'UNDER_REVIEW' || c === 'HR_REVIEW') {
-          stageBadge = { stage: 2, label: 'Stage 2: HR Review', variant: 'info' };
-        }
-
-        const statusVariant =
-          s === 'COMPLETED'
-            ? 'success'
-            : s === 'EXIT_PROCESSING' || s === 'APPROVED' || s === 'NOTICE_PERIOD'
-            ? 'brand'
-            : s === 'UNDER_REVIEW'
-            ? 'info'
-            : s === 'REJECTED'
-            ? 'danger'
-            : s === 'WITHDRAWN'
-            ? 'warning'
-            : 'neutral';
-
-        return (
-          <div className="space-y-1">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <Badge variant={statusVariant} size="sm">
-                {row.status}
-              </Badge>
-              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
-                stageBadge.variant === 'success'
-                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                  : stageBadge.variant === 'brand'
-                  ? 'bg-brand-50 text-brand-700 border border-brand-200'
-                  : stageBadge.variant === 'info'
-                  ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                  : stageBadge.variant === 'danger'
-                  ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                  : 'bg-amber-50 text-amber-700 border border-amber-200'
-              }`}>
-                {stageBadge.label}
-              </span>
-            </div>
-            <p className="text-[10px] text-slate-400 font-mono tracking-tight">
-              {c || s}
-            </p>
-          </div>
-        );
-      },
+      render: (row) => (
+        <div>
+          <Badge
+            variant={
+              row.status === 'COMPLETED'
+                ? 'success'
+                : ['APPROVED', 'NOTICE_PERIOD', 'EXIT_PROCESSING'].includes(row.status)
+                ? 'brand'
+                : row.status === 'UNDER_REVIEW'
+                ? 'info'
+                : row.status === 'SUBMITTED'
+                ? 'warning'
+                : 'neutral'
+            }
+            size="sm"
+          >
+            {row.status}
+          </Badge>
+          <p className="text-[10px] text-slate-400 mt-0.5">{row.currentStage || 'IN_PROGRESS'}</p>
+        </div>
+      ),
     },
     {
       header: 'Manager Review',
@@ -429,6 +389,18 @@ export const ResignationPage = () => {
                     HR Action
                   </Button>
                 )}
+
+                {['NOTICE_PERIOD', 'EXIT_PROCESSING'].includes(row.status) && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon={ShieldCheck}
+                    onClick={() => setInspectingDossierId(row.id)}
+                    title="Manage Clearances & Dossier"
+                  >
+                    Clearances
+                  </Button>
+                )}
               </>
             )}
           </div>
@@ -448,11 +420,50 @@ export const ResignationPage = () => {
           </p>
         </div>
 
-        {!hasActiveExit && (
-          <Button variant="danger" icon={LogOut} onClick={() => setIsSubmitModalOpen(true)}>
-            Submit Resignation
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {activeTab === 'org' && isHrOrAdmin && (
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={RotateCcw}
+              onClick={fetchOrgExits}
+              disabled={isLoadingOrg}
+            >
+              {isLoadingOrg ? 'Refreshing...' : 'Refresh Queue'}
+            </Button>
+          )}
+
+          {activeTab === 'team' && isManager && (
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={RotateCcw}
+              onClick={fetchTeamExits}
+              disabled={isLoadingTeam}
+            >
+              {isLoadingTeam ? 'Refreshing...' : 'Refresh Team'}
+            </Button>
+          )}
+
+          {activeTab === 'my' && !hasActiveExit && (
+            <Button variant="danger" icon={LogOut} onClick={() => setIsSubmitModalOpen(true)}>
+              Submit Resignation
+            </Button>
+          )}
+
+          {activeTab !== 'my' && !hasActiveExit && (
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={LogOut}
+              className="text-slate-500 hover:text-rose-600"
+              onClick={() => setIsSubmitModalOpen(true)}
+              title="Submit your own personal resignation"
+            >
+              Submit My Resignation
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Role-based Tabs */}
@@ -835,8 +846,8 @@ export const ResignationPage = () => {
           exitId={inspectingDossierId}
           canManage={isHrOrAdmin}
           onSuccess={() => {
-            loadOrgExits();
-            loadMyExit();
+            fetchOrgExits();
+            fetchMyExit();
           }}
           onOpenFnF={(record) => {
             setInspectingDossierId(null);

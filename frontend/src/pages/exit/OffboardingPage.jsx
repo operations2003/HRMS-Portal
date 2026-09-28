@@ -156,20 +156,16 @@ export const OffboardingPage = () => {
   const getLifecycleStage = (record) => {
     const s = (record.status || '').toUpperCase();
     const c = (record.currentStage || '').toUpperCase();
-    const totalCl = parseInt(record.totalClearances ?? (Array.isArray(record.clearances) ? record.clearances.length : 0), 10);
-    const pendingCl = parseInt(record.pendingClearances ?? (Array.isArray(record.clearances) ? record.clearances.filter(t => !['CLEARED', 'COMPLETED', 'WAIVED', 'NOT_APPLICABLE'].includes((t.status || '').toUpperCase())).length : 0), 10);
-    const clearancesDone = (totalCl > 0 && pendingCl === 0) || record.clearanceStatus === 'CLEARED' || record.offboarding?.clearanceStatus === 'CLEARED';
-    const accessRevoked = record.offboarding?.accessRemovalStatus === 'DEPROVISIONED' || record.accessRemovalStatus === 'DEPROVISIONED';
-    const fnfSettled = record.fnf?.paymentStatus === 'DISBURSED' || record.fnfPaymentStatus === 'DISBURSED';
+    const accessRevoked = record.offboarding?.accessRemovalStatus === 'DEPROVISIONED';
+    const fnfSettled = record.fnf?.paymentStatus === 'DISBURSED';
 
-    if (s === 'COMPLETED' || c === 'COMPLETED') return { stage: 7, label: 'Completed', percent: 100 };
-    if (fnfSettled) return { stage: 6, label: 'FnF Settled', percent: 90 };
-    if (accessRevoked) return { stage: 6, label: 'Full & Final', percent: 80 };
-    if (clearancesDone || c === 'ACCESS_REVOCATION' || c === 'FNF_PENDING') return { stage: 5, label: 'Access Removal', percent: 65 };
-    if (s === 'EXIT_PROCESSING' || c === 'CLEARANCE_IN_PROGRESS') return { stage: 4, label: 'Clearance', percent: 50 };
-    if (s === 'APPROVED' || s === 'NOTICE_PERIOD') return { stage: 3, label: 'Notice Period', percent: 35 };
-    if (s === 'UNDER_REVIEW' || c === 'HR_REVIEW') return { stage: 2, label: 'Review', percent: 20 };
-    return { stage: 1, label: 'Resignation', percent: 10 };
+    if (s === 'COMPLETED' || c === 'COMPLETED') return { stage: 8, label: 'Completed', percent: 100 };
+    if (fnfSettled || s === 'EXIT_PROCESSING') return { stage: 7, label: 'Full & Final', percent: 87 };
+    if (accessRevoked) return { stage: 6, label: 'Access Removal', percent: 75 };
+    if (c === 'CLEARANCE_IN_PROGRESS') return { stage: 5, label: 'Clearance', percent: 62 };
+    if (s === 'APPROVED' || s === 'NOTICE_PERIOD') return { stage: 3, label: 'Notice Period', percent: 37 };
+    if (s === 'UNDER_REVIEW' || c === 'HR_REVIEW') return { stage: 2, label: 'Review', percent: 25 };
+    return { stage: 1, label: 'Resignation', percent: 12 };
   };
 
   const columns = [

@@ -2,17 +2,32 @@ import { pool } from '../config/db.js';
 
 const mapExitRow = (row) => {
   if (!row) return null;
+  const fullName = `${row.first_name || ''} ${row.last_name || ''}`.trim() || 'Staff';
   return {
     id: row.id,
     orgId: row.org_id,
     employeeId: row.employee_id,
     employeeCode: row.employee_code,
-    employeeName: `${row.first_name || ''} ${row.last_name || ''}`.trim(),
+    employeeName: fullName,
     employeeEmail: row.email,
+    avatarUrl: row.avatar_url || null,
     department: row.department_name || '',
     designation: row.designation_title || '',
     managerId: row.manager_id,
     managerName: row.m_first_name ? `${row.m_first_name} ${row.m_last_name || ''}`.trim() : '',
+    employee: {
+      id: row.employee_id,
+      empCode: row.employee_code,
+      employeeCode: row.employee_code,
+      fullName,
+      firstName: row.first_name,
+      lastName: row.last_name,
+      email: row.email,
+      avatarUrl: row.avatar_url || null,
+      avatar_url: row.avatar_url || null,
+      department: { name: row.department_name || '' },
+      designation: { title: row.designation_title || '' },
+    },
     resignationDate: row.resignation_date ? row.resignation_date.toISOString().split('T')[0] : null,
     noticePeriodDays: row.notice_period_days,
     requestedLastWorkingDay: row.requested_last_working_day ? row.requested_last_working_day.toISOString().split('T')[0] : null,
@@ -21,34 +36,7 @@ const mapExitRow = (row) => {
     reason: row.reason,
     comments: row.comments || '',
     status: row.status,
-    currentStage: (() => {
-      const totalCl = parseInt(row.total_clearances, 10) || 0;
-      const pendingCl = parseInt(row.pending_clearances, 10) || 0;
-      const isAllCleared = totalCl > 0 && pendingCl === 0;
-      const isAccessRevoked = ['DEPROVISIONED', 'REVOKED'].includes((row.access_removal_status || '').toUpperCase());
-      const isFnfDisbursed = (row.fnf_payment_status || '').toUpperCase() === 'DISBURSED';
-
-      let stage = row.current_stage || 'IN_PROGRESS';
-      if (row.status === 'COMPLETED' || stage === 'COMPLETED') {
-        return 'COMPLETED';
-      }
-      if (isFnfDisbursed) {
-        return 'FNF_SETTLED';
-      }
-      if (isAccessRevoked) {
-        return 'FNF_PENDING';
-      }
-      if (isAllCleared || row.offb_clearance_status === 'CLEARED' || stage === 'FNF_PENDING' || stage === 'ACCESS_REVOCATION') {
-        return 'ACCESS_REVOCATION';
-      }
-      return stage;
-    })(),
-    totalClearances: parseInt(row.total_clearances, 10) || 0,
-    pendingClearances: parseInt(row.pending_clearances, 10) || 0,
-    accessRemovalStatus: row.access_removal_status || null,
-    fnfPaymentStatus: row.fnf_payment_status || null,
-    offboardingStatus: row.offboarding_status || null,
-    clearanceStatus: row.offb_clearance_status || null,
+    currentStage: row.current_stage,
     managerFeedback: row.manager_feedback || '',
     managerRating: row.manager_rating ? parseFloat(row.manager_rating) : null,
     managerRehireEligible: row.manager_rehire_eligible,
@@ -150,33 +138,18 @@ const BASE_EXIT_SELECT = `
     e.first_name,
     e.last_name,
     e.email,
+    e.avatar_url,
     e.manager_id,
     e.dept_id,
     d.name AS department_name,
     ds.title AS designation_title,
     m.first_name AS m_first_name,
-    m.last_name AS m_last_name,
-    eo.access_removal_status,
-    eo.clearance_status AS offb_clearance_status,
-    eo.offboarding_status,
-    COALESCE(cl.total_clearances, 0) AS total_clearances,
-    COALESCE(cl.pending_clearances, 0) AS pending_clearances,
-    fnf.payment_status AS fnf_payment_status
+    m.last_name AS m_last_name
   FROM exit_requests er
   JOIN employees e ON er.employee_id = e.id
   LEFT JOIN departments d ON e.dept_id = d.id
   LEFT JOIN designations ds ON e.desig_id = ds.id
   LEFT JOIN employees m ON e.manager_id = m.id
-  LEFT JOIN employee_offboardings eo ON er.id = eo.exit_request_id
-  LEFT JOIN exit_fnf_settlements fnf ON er.id = fnf.exit_request_id
-  LEFT JOIN (
-    SELECT 
-      exit_request_id,
-      COUNT(*)::int AS total_clearances,
-      COUNT(CASE WHEN status NOT IN ('CLEARED', 'COMPLETED', 'WAIVED', 'NOT_APPLICABLE') THEN 1 END)::int AS pending_clearances
-    FROM exit_clearance_checklists
-    GROUP BY exit_request_id
-  ) cl ON er.id = cl.exit_request_id
 `;
 
 export const exitRepository = {

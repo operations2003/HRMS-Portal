@@ -69,7 +69,7 @@ export const ExitDossierDetailModal = ({
       isOpen={isOpen}
       onClose={onClose}
       title={`Exit Dossier — ${empName}`}
-      subtitle={`Employee Code: ${emp?.empCode || 'N/A'} | Status: ${dossier?.status || 'Active'}`}
+      subtitle={`Employee Code: ${emp?.empCode || emp?.employeeCode || dossier?.employeeCode || 'N/A'} | Status: ${dossier?.status || 'Active'}`}
       maxWidth="max-w-4xl"
     >
       <div className="space-y-4">

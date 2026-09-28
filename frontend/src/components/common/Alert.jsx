@@ -2,13 +2,20 @@ import React from 'react';
 import { AlertCircle, CheckCircle2, Info, AlertTriangle, X } from 'lucide-react';
 
 export const Alert = ({
-  type = 'info',
+  type,
+  variant,
   title,
   message,
+  children,
   errors = [],
   onClose,
   className = '',
 }) => {
+  const normalizedType =
+    type ||
+    (variant === 'danger' ? 'error' : variant) ||
+    'info';
+
   const types = {
     success: {
       bg: 'bg-emerald-50 border-emerald-200 text-emerald-800',
@@ -32,15 +39,16 @@ export const Alert = ({
     },
   };
 
-  const current = types[type] || types.info;
+  const current = types[normalizedType] || types.info;
   const Icon = current.icon;
+  const content = message || children;
 
   return (
     <div className={`rounded-xl border p-4 shadow-sm flex items-start gap-3 ${current.bg} ${className}`} role="alert">
       <Icon className={`w-5 h-5 shrink-0 mt-0.5 ${current.iconColor}`} />
       <div className="flex-1 text-sm">
         {title && <h4 className="font-semibold mb-0.5">{title}</h4>}
-        {message && <p>{message}</p>}
+        {content && (typeof content === 'string' ? <p>{content}</p> : content)}
         {errors && errors.length > 0 && (
           <ul className="mt-1.5 list-disc list-inside space-y-0.5 text-xs">
             {errors.map((err, idx) => (
