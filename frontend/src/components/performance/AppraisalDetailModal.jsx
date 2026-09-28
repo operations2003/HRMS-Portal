@@ -13,6 +13,8 @@ import {
   ShieldCheck,
   RotateCcw,
   XCircle,
+  Edit,
+  Trash2,
 } from 'lucide-react';
 import { Modal } from '../common/Modal.jsx';
 import { Button } from '../common/Button.jsx';
@@ -21,6 +23,7 @@ import { Alert } from '../common/Alert.jsx';
 import { ConfirmDialog } from '../common/ConfirmDialog.jsx';
 import { Avatar } from '../common/Avatar.jsx';
 import { WorkflowAuditTimeline } from './WorkflowAuditTimeline.jsx';
+import { EditAppraisalModal } from './EditAppraisalModal.jsx';
 import { performanceService } from '../../services/performanceService.js';
 import { useToast } from '../../context/ToastContext.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
@@ -40,6 +43,8 @@ export const AppraisalDetailModal = ({
   const [isActing, setIsActing] = useState(false);
   const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
   const [showConfirmHrApprove, setShowConfirmHrApprove] = useState(false);
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [activeTab, setActiveTab] = useState('details'); // 'details' | 'audit'
   const [error, setError] = useState(null);
 
@@ -108,9 +113,32 @@ export const AppraisalDetailModal = ({
     }
   };
 
+  const handleDeleteRecord = async () => {
+    try {
+      setIsActing(true);
+      await performanceService.deleteRecord(recordId);
+      toast.success('Performance review deleted successfully.');
+      setShowConfirmDelete(false);
+      onClose();
+      onUpdate?.();
+    } catch (err) {
+      toast.error(err.message || 'Failed to delete performance review.');
+    } finally {
+      setIsActing(false);
+    }
+  };
+
   if (!isOpen) return null;
 
-  const isHrOrAdmin = hasRole('HR') || hasRole('HRManager') || hasRole('Admin') || hasRole('SuperAdmin');
+  const userRoleStr = (user?.roleName || user?.role?.name || user?.role || '').toLowerCase().trim();
+  const isHrOrAdmin =
+    hasRole('HR') ||
+    hasRole('HRManager') ||
+    hasRole('Admin') ||
+    hasRole('SuperAdmin') ||
+    hasRole('OrgAdmin') ||
+    ['admin', 'superadmin', 'orgadmin', 'hr', 'hrmanager', 'ld hr', 'l&d hr'].some((r) => userRoleStr.includes(r));
+
   const empName =
     record?.employee?.fullName ||
     `${record?.employee?.firstName || ''} ${record?.employee?.lastName || ''}`.trim() ||
@@ -119,6 +147,15 @@ export const AppraisalDetailModal = ({
   const isEmployeeOwner =
     (user?.employeeId && record?.employeeId === user.employeeId) ||
     (user?.id && record?.employee?.userId === user.id);
+
+  const isReviewer = Boolean(
+    (record?.reviewerUserId && (record.reviewerUserId === user?.id || record.reviewerUserId === user?._id)) ||
+    (user?.employeeId && record?.reviewerId === user.employeeId) ||
+    (record?.reviewer?.userId && (record.reviewer.userId === user?.id || record.reviewer.userId === user?._id)) ||
+    (record?.reviewer?.id && user?.employeeId && record.reviewer.id === user.employeeId)
+  );
+
+  const canEditOrDelete = isHrOrAdmin || isReviewer;
 
   return (
     <Modal
@@ -375,6 +412,26 @@ export const AppraisalDetailModal = ({
                   Authorize & Finalize HR Approval
                 </Button>
               )}
+              {/* If reviewer who submitted or HR/Admin, allow Edit and Delete */}
+              {canEditOrDelete && (
+                <>
+                  <Button
+                    variant="outline"
+                    icon={Edit}
+                    onClick={() => setShowEditModal(true)}
+                  >
+                    Edit Review
+                  </Button>
+                  <Button
+                    variant="danger"
+                    icon={Trash2}
+                    isLoading={isActing}
+                    onClick={() => setShowConfirmDelete(true)}
+                  >
+                    Delete Review
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -402,6 +459,28 @@ export const AppraisalDetailModal = ({
         cancelText="Cancel"
         variant="primary"
         isLoading={isActing}
+      />
+
+      <ConfirmDialog
+        isOpen={showConfirmDelete}
+        onClose={() => setShowConfirmDelete(false)}
+        onConfirm={handleDeleteRecord}
+        title="Delete Performance Review"
+        message={`Are you sure you want to delete this performance review for ${empName} (${record?.reviewPeriod || 'Cycle'})? This action cannot be undone and will permanently remove the review for the employee.`}
+        confirmText="Delete Review"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={isActing}
+      />
+
+      <EditAppraisalModal
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        record={record}
+        onSuccess={() => {
+          loadDetails();
+          onUpdate?.();
+        }}
       />
     </Modal>
   );

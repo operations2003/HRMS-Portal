@@ -94,6 +94,7 @@ const mapRecordRow = (row) => {
           fullName: `${row.r_first_name || ''} ${row.r_last_name || ''}`.trim(),
           email: row.r_email,
           avatarUrl: row.r_avatar_url || null,
+          userId: row.r_user_id || null,
         }
       : null,
     goals: Array.isArray(row.goals) ? row.goals.map(mapGoalRow) : undefined,
@@ -291,7 +292,7 @@ export const performanceRepository = {
         e.id AS e_id, e.employee_code, e.first_name AS e_first_name, e.last_name AS e_last_name, e.email AS e_email, e.user_id AS e_user_id, e.avatar_url AS e_avatar_url,
         d.name AS dept_name,
         ds.title AS desig_title,
-        r.id AS r_id, r.employee_code AS r_employee_code, r.first_name AS r_first_name, r.last_name AS r_last_name, r.email AS r_email, r.avatar_url AS r_avatar_url
+        r.id AS r_id, r.employee_code AS r_employee_code, r.first_name AS r_first_name, r.last_name AS r_last_name, r.email AS r_email, r.avatar_url AS r_avatar_url, r.user_id AS r_user_id
       FROM performance_records pr
       JOIN employees e ON pr.employee_id = e.id
       LEFT JOIN departments d ON e.dept_id = d.id
@@ -311,7 +312,7 @@ export const performanceRepository = {
         e.id AS e_id, e.employee_code, e.first_name AS e_first_name, e.last_name AS e_last_name, e.email AS e_email, e.user_id AS e_user_id, e.avatar_url AS e_avatar_url,
         d.name AS dept_name,
         ds.title AS desig_title,
-        r.id AS r_id, r.employee_code AS r_employee_code, r.first_name AS r_first_name, r.last_name AS r_last_name, r.email AS r_email, r.avatar_url AS r_avatar_url
+        r.id AS r_id, r.employee_code AS r_employee_code, r.first_name AS r_first_name, r.last_name AS r_last_name, r.email AS r_email, r.avatar_url AS r_avatar_url, r.user_id AS r_user_id
       FROM performance_records pr
       JOIN employees e ON pr.employee_id = e.id
       LEFT JOIN departments d ON e.dept_id = d.id
@@ -341,7 +342,7 @@ export const performanceRepository = {
         e.id AS e_id, e.employee_code, e.first_name AS e_first_name, e.last_name AS e_last_name, e.email AS e_email, e.user_id AS e_user_id, e.avatar_url AS e_avatar_url,
         d.name AS dept_name,
         ds.title AS desig_title,
-        r.id AS r_id, r.employee_code AS r_employee_code, r.first_name AS r_first_name, r.last_name AS r_last_name, r.email AS r_email, r.avatar_url AS r_avatar_url
+        r.id AS r_id, r.employee_code AS r_employee_code, r.first_name AS r_first_name, r.last_name AS r_last_name, r.email AS r_email, r.avatar_url AS r_avatar_url, r.user_id AS r_user_id
       FROM performance_records pr
       JOIN employees e ON pr.employee_id = e.id
       LEFT JOIN departments d ON e.dept_id = d.id
@@ -389,6 +390,26 @@ export const performanceRepository = {
       fields.push(`reviewer_comments = $${idx++}`);
       values.push(updates.reviewerComments);
     }
+    if (updates.reviewPeriod !== undefined) {
+      fields.push(`review_period = $${idx++}`);
+      values.push(updates.reviewPeriod);
+    }
+    if (updates.periodId !== undefined) {
+      fields.push(`period_id = $${idx++}`);
+      values.push(updates.periodId);
+    }
+    if (updates.reviewDate !== undefined) {
+      fields.push(`review_date = $${idx++}`);
+      values.push(updates.reviewDate);
+    }
+    if (updates.status !== undefined) {
+      fields.push(`status = $${idx++}`);
+      values.push(updates.status);
+    }
+    if (updates.approvalState !== undefined) {
+      fields.push(`approval_state = $${idx++}`);
+      values.push(updates.approvalState);
+    }
     if (updates.rejectionReason !== undefined) {
       fields.push(`rejection_reason = $${idx++}`);
       values.push(updates.rejectionReason);
@@ -402,16 +423,71 @@ export const performanceRepository = {
       values.push(updates.reviewerUserId);
     }
 
-    if (fields.length === 0) return this.findRecordById(id, orgId);
+    if (fields.length > 0) {
+      const query = `
+        UPDATE performance_records
+        SET ${fields.join(', ')}
+        WHERE id = $1 AND org_id = $2
+        RETURNING *;
+      `;
+      await pool.query(query, values);
+    }
 
-    const query = `
-      UPDATE performance_records
-      SET ${fields.join(', ')}
-      WHERE id = $1 AND org_id = $2
-      RETURNING *;
-    `;
-    await pool.query(query, values);
+    // Handle goals updates if provided
+    if (Array.isArray(updates.goals)) {
+      const rec = await this.findRecordById(id, orgId);
+      if (rec && rec.employeeId) {
+        await pool.query('DELETE FROM performance_goals WHERE performance_record_id = $1;', [id]);
+        for (const g of updates.goals) {
+          if (!g.title || !g.title.trim()) continue;
+          const goalId = g.id || `goal-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+          await pool.query(
+            `INSERT INTO performance_goals (
+              id, performance_record_id, employee_id, title, description,
+              metric_target, metric_achieved, weightage, rating, status
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);`,
+            [
+              goalId,
+              id,
+              rec.employeeId,
+              g.title.trim(),
+              g.description || '',
+              g.metricTarget || g.metric_target || '',
+              g.metricAchieved || g.metric_achieved || '',
+              parseFloat(g.weightage) || 0.0,
+              g.rating !== undefined && g.rating !== null ? parseFloat(g.rating) : null,
+              g.status || 'IN_PROGRESS',
+            ]
+          );
+        }
+      }
+    }
+
     return this.findRecordById(id, orgId);
+  },
+
+  async deleteRecord(id, orgId) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      // Delete associated workflow instances if any
+      await client.query(
+        `DELETE FROM workflow_instances WHERE org_id = $1 AND entity_type = 'PERFORMANCE_REVIEW' AND entity_id = $2;`,
+        [orgId, id]
+      );
+      // Delete performance record (performance_goals and performance_review_history cascade)
+      const res = await client.query(
+        `DELETE FROM performance_records WHERE id = $1 AND org_id = $2 RETURNING id;`,
+        [id, orgId]
+      );
+      await client.query('COMMIT');
+      return res.rowCount > 0;
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
   },
 
   async updateStatus(id, orgId, newStatus, details = {}) {

@@ -93,7 +93,13 @@ router.put(
   '/records/:id',
   authorize(['performance:write']),
   validate(validateUpdateDraftRecord),
-  performanceController.updateDraft
+  performanceController.updateRecord
+);
+
+router.delete(
+  '/records/:id',
+  authorize(['performance:write']),
+  performanceController.deleteRecord
 );
 
 router.post(

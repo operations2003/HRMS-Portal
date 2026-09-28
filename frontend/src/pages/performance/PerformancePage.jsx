@@ -16,6 +16,8 @@ import {
   Search,
   Filter,
   Users,
+  Edit,
+  Trash2,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
@@ -26,6 +28,7 @@ import { DataTable } from '../../components/common/DataTable.jsx';
 import { ConfirmDialog } from '../../components/common/ConfirmDialog.jsx';
 import { Avatar } from '../../components/common/Avatar.jsx';
 import { CreateAppraisalModal } from '../../components/performance/CreateAppraisalModal.jsx';
+import { EditAppraisalModal } from '../../components/performance/EditAppraisalModal.jsx';
 import { ManagerReviewModal } from '../../components/performance/ManagerReviewModal.jsx';
 import { CreatePeriodModal } from '../../components/performance/CreatePeriodModal.jsx';
 import { AppraisalDetailModal } from '../../components/performance/AppraisalDetailModal.jsx';
@@ -37,7 +40,7 @@ export const PerformancePage = () => {
 
   const userRoleStr = (user?.roleName || user?.role?.name || user?.role || '').toLowerCase().trim();
   const isAdmin = isCeoOrAdmin(user) || ['admin', 'superadmin', 'orgadmin'].some((r) => userRoleStr.includes(r));
-  const isHR = !isAdmin && ['hr', 'hrmanager'].some((r) => userRoleStr.includes(r));
+  const isHR = !isAdmin && ['hr', 'hrmanager', 'ld hr', 'l&d hr'].some((r) => userRoleStr.includes(r));
   const isManager = !isAdmin && !isHR && (['manager', 'lead', 'supervisor'].some((r) => userRoleStr.includes(r)) || hasRole('Manager'));
   const isEmployeeOnly = !isAdmin && !isHR && !isManager;
 
@@ -70,6 +73,8 @@ export const PerformancePage = () => {
   const [isCreatePeriodOpen, setIsCreatePeriodOpen] = useState(false);
   const [reviewingRecord, setReviewingRecord] = useState(null);
   const [selectedRecordId, setSelectedRecordId] = useState(null);
+  const [recordToEdit, setRecordToEdit] = useState(null);
+  const [recordToDelete, setRecordToDelete] = useState(null);
 
   // Quick Action Confirmations
   const [recordToSubmit, setRecordToSubmit] = useState(null);
@@ -153,6 +158,35 @@ export const PerformancePage = () => {
     } finally {
       setIsActing(false);
     }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!recordToDelete) return;
+    try {
+      setIsActing(true);
+      await performanceService.deleteRecord(recordToDelete.id);
+      toast.success('Performance review deleted successfully.');
+      setRecordToDelete(null);
+      loadData();
+    } catch (err) {
+      toast.error(err.message || 'Failed to delete performance review.');
+    } finally {
+      setIsActing(false);
+    }
+  };
+
+  const canEditOrDeleteRecord = (record) => {
+    if (!record || !user) return false;
+    // HR and Admin retain their authorized review-management access
+    if (isAdmin || isHR) return true;
+
+    // Reviewer who gave/submitted the review
+    const isReviewerUser = record.reviewerUserId && (record.reviewerUserId === user.id || record.reviewerUserId === user._id);
+    const isReviewerEmp = user.employeeId && record.reviewerId && record.reviewerId === user.employeeId;
+    const isReviewerObj = record.reviewer && record.reviewer.userId && (record.reviewer.userId === user.id || record.reviewer.userId === user._id);
+    const isReviewerObjEmp = record.reviewer && record.reviewer.id && user.employeeId && record.reviewer.id === user.employeeId;
+
+    return Boolean(isReviewerUser || isReviewerEmp || isReviewerObj || isReviewerObjEmp);
   };
 
   // Helper badge variant for performance states
@@ -315,28 +349,53 @@ export const PerformancePage = () => {
     {
       header: 'Action',
       className: 'text-right',
-      render: (row) => (
-        <div className="flex items-center justify-end gap-2">
-          {['SUBMITTED', 'PENDING'].includes(row.status) && (
+      render: (row) => {
+        const canManage = canEditOrDeleteRecord(row);
+        return (
+          <div className="flex items-center justify-end gap-1.5 flex-wrap">
+            {['SUBMITTED', 'PENDING'].includes(row.status) && (
+              <Button
+                size="sm"
+                variant="primary"
+                icon={Award}
+                onClick={() => setReviewingRecord(row)}
+              >
+                Evaluate
+              </Button>
+            )}
             <Button
               size="sm"
-              variant="primary"
-              icon={Award}
-              onClick={() => setReviewingRecord(row)}
+              variant="ghost"
+              icon={Eye}
+              onClick={() => setSelectedRecordId(row.id)}
             >
-              Evaluate
+              Review
             </Button>
-          )}
-          <Button
-            size="sm"
-            variant="ghost"
-            icon={Eye}
-            onClick={() => setSelectedRecordId(row.id)}
-          >
-            Review
-          </Button>
-        </div>
-      ),
+            {canManage && (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  icon={Edit}
+                  onClick={() => setRecordToEdit(row)}
+                  title="Edit this performance review"
+                >
+                  Edit
+                </Button>
+                <Button
+                  size="sm"
+                  variant="danger"
+                  icon={Trash2}
+                  onClick={() => setRecordToDelete(row)}
+                  title="Delete this performance review"
+                >
+                  Delete
+                </Button>
+              </>
+            )}
+          </div>
+        );
+      },
     },
   ];
 
@@ -441,28 +500,53 @@ export const PerformancePage = () => {
     {
       header: 'Actions',
       className: 'text-right',
-      render: (row) => (
-        <div className="flex items-center justify-end gap-2">
-          {row.status === 'UNDER_REVIEW' && (
+      render: (row) => {
+        const canManage = canEditOrDeleteRecord(row);
+        return (
+          <div className="flex items-center justify-end gap-1.5 flex-wrap">
+            {row.status === 'UNDER_REVIEW' && (
+              <Button
+                size="sm"
+                variant="success"
+                icon={ShieldCheck}
+                onClick={() => setRecordToHrApprove(row)}
+              >
+                Authorize
+              </Button>
+            )}
             <Button
               size="sm"
-              variant="success"
-              icon={ShieldCheck}
-              onClick={() => setRecordToHrApprove(row)}
+              variant="ghost"
+              icon={Eye}
+              onClick={() => setSelectedRecordId(row.id)}
             >
-              Authorize
+              Details
             </Button>
-          )}
-          <Button
-            size="sm"
-            variant="ghost"
-            icon={Eye}
-            onClick={() => setSelectedRecordId(row.id)}
-          >
-            Details
-          </Button>
-        </div>
-      ),
+            {canManage && (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  icon={Edit}
+                  onClick={() => setRecordToEdit(row)}
+                  title="Edit this performance review"
+                >
+                  Edit
+                </Button>
+                <Button
+                  size="sm"
+                  variant="danger"
+                  icon={Trash2}
+                  onClick={() => setRecordToDelete(row)}
+                  title="Delete this performance review"
+                >
+                  Delete
+                </Button>
+              </>
+            )}
+          </div>
+        );
+      },
     },
   ];
 
@@ -837,6 +921,25 @@ export const PerformancePage = () => {
         confirmText="Authorize & Complete"
         cancelText="Cancel"
         variant="primary"
+        isLoading={isActing}
+      />
+
+      <EditAppraisalModal
+        isOpen={Boolean(recordToEdit)}
+        onClose={() => setRecordToEdit(null)}
+        record={recordToEdit}
+        onSuccess={loadData}
+      />
+
+      <ConfirmDialog
+        isOpen={Boolean(recordToDelete)}
+        onClose={() => setRecordToDelete(null)}
+        onConfirm={handleConfirmDelete}
+        title="Delete Performance Review"
+        message={`Are you sure you want to delete the performance review for ${recordToDelete?.employee?.fullName || recordToDelete?.employeeName || 'employee'} (${recordToDelete?.reviewPeriod || 'Cycle'})? This action cannot be undone and will permanently remove the review for the employee.`}
+        confirmText="Delete Review"
+        cancelText="Cancel"
+        variant="danger"
         isLoading={isActing}
       />
     </div>

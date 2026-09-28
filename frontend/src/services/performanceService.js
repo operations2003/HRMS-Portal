@@ -54,6 +54,11 @@ export const performanceService = {
     return res.data;
   },
 
+  async deleteRecord(id) {
+    const res = await http.delete(`/v1/performance/records/${id}`);
+    return res.data;
+  },
+
   async addGoal(recordId, goalData) {
     const res = await http.post(`/v1/performance/records/${recordId}/goals`, goalData);
     return res.data;

@@ -121,8 +121,32 @@ export const performanceController = {
 
   async updateDraft(req, res, next) {
     try {
-      const updated = await performanceService.updateDraftRecord(req.user, req.params.id, req.body);
-      return sendSuccess(res, 'Draft appraisal updated successfully.', updated);
+      const updated = await performanceService.updateRecord(req.user, req.params.id, req.body);
+      return sendSuccess(res, 'Performance review updated successfully.', updated);
+    } catch (error) {
+      if (error.statusCode) {
+        return sendError(res, error.message, error.statusCode);
+      }
+      next(error);
+    }
+  },
+
+  async updateRecord(req, res, next) {
+    try {
+      const updated = await performanceService.updateRecord(req.user, req.params.id, req.body);
+      return sendSuccess(res, 'Performance review updated successfully.', updated);
+    } catch (error) {
+      if (error.statusCode) {
+        return sendError(res, error.message, error.statusCode);
+      }
+      next(error);
+    }
+  },
+
+  async deleteRecord(req, res, next) {
+    try {
+      const result = await performanceService.deleteRecord(req.user, req.params.id);
+      return sendSuccess(res, 'Performance review deleted successfully.', result);
     } catch (error) {
       if (error.statusCode) {
         return sendError(res, error.message, error.statusCode);

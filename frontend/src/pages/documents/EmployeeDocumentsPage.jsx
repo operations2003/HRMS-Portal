@@ -1,26 +1,17 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   FileText,
-  Upload,
   CheckCircle2,
   Clock,
-  AlertCircle,
   FolderLock,
   RefreshCw,
   Search,
-  UserCheck,
-  ShieldCheck,
   Users,
-  ShieldAlert,
   FileCheck,
-  Filter,
   X,
-  Sparkles,
   Shield,
-  Layers,
   ChevronRight,
-  User,
-  Building,
+  ArrowLeft,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
@@ -34,7 +25,7 @@ import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
 import { Avatar } from '../../components/common/Avatar.jsx';
 
 export const EmployeeDocumentsPage = () => {
-  const { user, hasRole, hasPermission, isAuthenticated } = useAuth();
+  const { hasRole, hasPermission, isAuthenticated } = useAuth();
   const toast = useToast();
 
   const canManageDocuments =
@@ -49,51 +40,38 @@ export const EmployeeDocumentsPage = () => {
       hasPermission('employee:read') ||
       hasRole(['Employee', 'Manager']));
 
-  // Tab: 'directory' | 'all' | 'my'
-  const [activeTab, setActiveTab] = useState(canManageDocuments ? 'directory' : 'my');
+  // Tab: 'all-employees' | 'my'
+  const [activeTab, setActiveTab] = useState(canManageDocuments ? 'all-employees' : 'my');
 
   // Documents state
   const [myDocuments, setMyDocuments] = useState([]);
   const [allDocuments, setAllDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [loadingAllDocs, setLoadingAllDocs] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
 
-  // Filters for organization documents
-  const [categoryFilter, setCategoryFilter] = useState('ALL');
-  const [statusFilter, setStatusFilter] = useState('ALL');
-  const [allSearchTerm, setAllSearchTerm] = useState('');
-
-  // HR/Admin directory view state
+  // Employee Directory state
   const [employees, setEmployees] = useState([]);
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
+  const [loadingEmployees, setLoadingEmployees] = useState(false);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState(null);
   const [selectedEmployeeDocs, setSelectedEmployeeDocs] = useState([]);
   const [loadingEmpDocs, setLoadingEmpDocs] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Fetch all organization documents for HR/Admin
+  // Fetch all company documents (for high-level metrics)
   const fetchAllDocuments = useCallback(async (showRefreshing = false) => {
     if (!canManageDocuments) return;
     try {
       if (showRefreshing) setRefreshing(true);
-      else setLoadingAllDocs(true);
       setError(null);
-
-      const docs = await documentService.getAllDocuments({
-        category: categoryFilter !== 'ALL' ? categoryFilter : undefined,
-        verificationStatus: statusFilter !== 'ALL' ? statusFilter : undefined,
-        search: allSearchTerm || undefined,
-      });
+      const docs = await documentService.getAllDocuments();
       setAllDocuments(Array.isArray(docs) ? docs : []);
     } catch (err) {
       console.error('Error fetching company documents:', err);
-      toast.showError(err.message || 'Failed to retrieve company documents.');
     } finally {
-      setLoadingAllDocs(false);
       setRefreshing(false);
     }
-  }, [canManageDocuments, categoryFilter, statusFilter, allSearchTerm, toast]);
+  }, [canManageDocuments]);
 
   // Fetch current user's documents
   const fetchMyDocuments = useCallback(async (showRefreshing = false) => {
@@ -113,10 +91,12 @@ export const EmployeeDocumentsPage = () => {
     }
   }, []);
 
-  // Fetch employee list for HR/Admin
-  const fetchEmployees = useCallback(async () => {
+  // Fetch employee list for Directory
+  const fetchEmployees = useCallback(async (showRefreshing = false) => {
     if (!canManageDocuments) return;
     try {
+      if (showRefreshing) setRefreshing(true);
+      else setLoadingEmployees(true);
       const res = await employeeService.listEmployees({ limit: 100 });
       const empList = Array.isArray(res?.employees)
         ? res.employees
@@ -128,18 +108,21 @@ export const EmployeeDocumentsPage = () => {
         ? res
         : [];
       setEmployees(empList);
-      if (empList.length > 0 && !selectedEmployeeId) {
-        setSelectedEmployeeId(empList[0].id);
-      }
     } catch (err) {
-      console.error('Error loading employees for document management:', err);
+      console.error('Error loading employees for document directory:', err);
       setEmployees([]);
+    } finally {
+      setLoadingEmployees(false);
+      setRefreshing(false);
     }
-  }, [canManageDocuments, selectedEmployeeId]);
+  }, [canManageDocuments]);
 
-  // Fetch selected employee's documents for HR/Admin
+  // Fetch selected employee's documents
   const fetchSelectedEmployeeDocs = useCallback(async (empId) => {
-    if (!empId) return;
+    if (!empId) {
+      setSelectedEmployeeDocs([]);
+      return;
+    }
     try {
       setLoadingEmpDocs(true);
       const docs = await documentService.getDocumentsByOwner('EMPLOYEE', empId);
@@ -165,10 +148,10 @@ export const EmployeeDocumentsPage = () => {
   }, [canManageDocuments, fetchAllDocuments, fetchEmployees]);
 
   useEffect(() => {
-    if (activeTab === 'directory' && selectedEmployeeId) {
+    if (selectedEmployeeId) {
       fetchSelectedEmployeeDocs(selectedEmployeeId);
     }
-  }, [activeTab, selectedEmployeeId, fetchSelectedEmployeeDocs]);
+  }, [selectedEmployeeId, fetchSelectedEmployeeDocs]);
 
   if (!isAuthorized) {
     return (
@@ -182,13 +165,36 @@ export const EmployeeDocumentsPage = () => {
     );
   }
 
-  // Calculate statistics for current view with defensive array guards
+  // Filtered employees list based on search term
+  const safeEmployees = Array.isArray(employees) ? employees : [];
+  const filteredEmployees = useMemo(() => {
+    if (!searchTerm.trim()) return safeEmployees;
+    const term = searchTerm.toLowerCase();
+    return safeEmployees.filter((emp) => {
+      const fullName = `${emp.firstName || ''} ${emp.lastName || ''}`.toLowerCase();
+      const code = (emp.employeeCode || emp.employeeNumber || '').toLowerCase();
+      const email = (emp.email || '').toLowerCase();
+      const dept = (emp.department?.name || '').toLowerCase();
+      const desig = (emp.designation?.title || '').toLowerCase();
+      return (
+        fullName.includes(term) ||
+        code.includes(term) ||
+        email.includes(term) ||
+        dept.includes(term) ||
+        desig.includes(term)
+      );
+    });
+  }, [safeEmployees, searchTerm]);
+
+  const selectedEmpObj = safeEmployees.find((e) => e.id === selectedEmployeeId);
+
+  // Calculate statistics for current view
   const currentDocs =
-    activeTab === 'all'
-      ? allDocuments
-      : activeTab === 'directory'
+    activeTab === 'my'
+      ? myDocuments
+      : selectedEmployeeId
       ? selectedEmployeeDocs
-      : myDocuments;
+      : allDocuments;
   const safeCurrentDocs = Array.isArray(currentDocs) ? currentDocs : [];
   const totalCount = safeCurrentDocs.length;
   const approvedCount = safeCurrentDocs.filter((d) => d.verificationStatus === 'APPROVED').length;
@@ -199,23 +205,13 @@ export const EmployeeDocumentsPage = () => {
     const acks = d.acknowledgementLog || d.acknowledgement_log || [];
     return Array.isArray(acks) && acks.length > 0;
   }).length;
-  const rejectedCount = safeCurrentDocs.filter((d) => d.verificationStatus === 'REJECTED').length;
 
   const complianceRate = totalCount > 0 ? Math.round((approvedCount / totalCount) * 100) : 100;
-
-  const safeEmployees = Array.isArray(employees) ? employees : [];
-  const filteredEmployees = safeEmployees.filter((emp) => {
-    const fullName = `${emp.firstName || ''} ${emp.lastName || ''} ${emp.email || ''}`.toLowerCase();
-    return fullName.includes(searchTerm.toLowerCase());
-  });
-
-  const selectedEmpObj = safeEmployees.find((e) => e.id === selectedEmployeeId);
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-7">
       {/* Premium Header */}
       <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs relative overflow-hidden">
-        {/* Subtle decorative background gradient */}
         <div className="absolute top-0 right-0 w-96 h-full bg-gradient-to-l from-brand-50/50 via-slate-50/20 to-transparent pointer-events-none" />
 
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5 relative z-10">
@@ -234,7 +230,7 @@ export const EmployeeDocumentsPage = () => {
                 </span>
               </div>
               <p className="text-sm text-slate-500 mt-1 max-w-2xl leading-relaxed">
-                View, upload, and check employee documents like ID cards, certificates, and job contracts.
+                View, upload, and verify employee documents like ID cards, certificates, and employment contracts.
               </p>
             </div>
           </div>
@@ -247,12 +243,13 @@ export const EmployeeDocumentsPage = () => {
               loading={refreshing}
               className="bg-white hover:bg-slate-50 border-slate-200 shadow-2xs font-medium text-slate-700 text-xs px-3.5 py-2 rounded-xl transition-all"
               onClick={() => {
-                if (activeTab === 'all') {
-                  fetchAllDocuments(true);
-                } else if (activeTab === 'my') {
+                if (activeTab === 'my') {
                   fetchMyDocuments(true);
                 } else if (selectedEmployeeId) {
                   fetchSelectedEmployeeDocs(selectedEmployeeId);
+                } else {
+                  fetchEmployees(true);
+                  fetchAllDocuments(true);
                 }
               }}
             >
@@ -262,40 +259,31 @@ export const EmployeeDocumentsPage = () => {
         </div>
       </div>
 
-      {/* Role-Based Segmented Navigation Tabs (for HR / Admins) */}
+      {/* Role-Based Navigation Tabs (for HR / Admins) */}
       {canManageDocuments && (
         <div className="flex items-center">
           <div className="bg-slate-200/70 p-1.5 rounded-2xl flex items-center gap-1.5 shadow-inner">
             <button
-              onClick={() => setActiveTab('directory')}
+              onClick={() => {
+                setActiveTab('all-employees');
+                setSelectedEmployeeId(null);
+              }}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer ${
-                activeTab === 'directory'
+                activeTab === 'all-employees'
                   ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-900/5'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
               }`}
             >
-              <Users className="w-4 h-4 text-indigo-600" />
-              <span>By Employee</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('all')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer ${
-                activeTab === 'all'
-                  ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-900/5'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-              }`}
-            >
-              <Layers className="w-4 h-4 text-brand-600" />
-              <span>All Company Documents</span>
+              <Users className="w-4 h-4 text-brand-600" />
+              <span>All Employee Documents</span>
               <span
                 className={`text-xs px-2 py-0.5 rounded-full font-bold ${
-                  activeTab === 'all'
+                  activeTab === 'all-employees'
                     ? 'bg-brand-50 text-brand-700 ring-1 ring-brand-200/50'
                     : 'bg-slate-300/60 text-slate-700'
                 }`}
               >
-                {allDocuments.length}
+                {employees.length}
               </span>
             </button>
 
@@ -330,7 +318,7 @@ export const EmployeeDocumentsPage = () => {
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-brand-500 to-indigo-500 opacity-90" />
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-              Total Documents
+              {selectedEmployeeId ? 'Employee Files' : 'Total Documents'}
             </span>
             <div className="w-9 h-9 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center ring-1 ring-brand-100 group-hover:scale-105 transition-transform">
               <FileText className="w-4 h-4" />
@@ -353,7 +341,7 @@ export const EmployeeDocumentsPage = () => {
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-teal-500 opacity-90" />
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">
-              Verified & Approved
+              Verified &amp; Approved
             </span>
             <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center ring-1 ring-emerald-100 group-hover:scale-105 transition-transform">
               <CheckCircle2 className="w-4 h-4" />
@@ -405,7 +393,7 @@ export const EmployeeDocumentsPage = () => {
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-sky-500 to-blue-500 opacity-90" />
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-sky-700 uppercase tracking-wider">
-              Signed & Accepted
+              Signed &amp; Accepted
             </span>
             <div className="w-9 h-9 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center ring-1 ring-sky-100 group-hover:scale-105 transition-transform">
               <FileCheck className="w-4 h-4" />
@@ -447,141 +435,6 @@ export const EmployeeDocumentsPage = () => {
           </p>
           <p className="text-xs text-slate-400 mt-1">Please wait while we load your files</p>
         </div>
-      ) : activeTab === 'all' ? (
-        /* HR / Admin: Organization-Wide Document Repository */
-        <div className="space-y-5">
-          {/* Sleek Filter & Search Toolbar */}
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-              {/* Quick Status Filter Tabs */}
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mr-1 hidden sm:inline">
-                  Status:
-                </span>
-                <button
-                  onClick={() => setStatusFilter('ALL')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                    statusFilter === 'ALL'
-                      ? 'bg-slate-900 text-white shadow-2xs'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  All ({allDocuments.length})
-                </button>
-                <button
-                  onClick={() => setStatusFilter('PENDING')}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                    statusFilter === 'PENDING'
-                      ? 'bg-amber-600 text-white shadow-2xs'
-                      : 'bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200/60'
-                  }`}
-                >
-                  <Clock className="w-3 h-3" />
-                  Pending Review ({pendingCount})
-                </button>
-                <button
-                  onClick={() => setStatusFilter('APPROVED')}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                    statusFilter === 'APPROVED'
-                      ? 'bg-emerald-600 text-white shadow-2xs'
-                      : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200/60'
-                  }`}
-                >
-                  <CheckCircle2 className="w-3 h-3" />
-                  Approved ({approvedCount})
-                </button>
-                <button
-                  onClick={() => setStatusFilter('REJECTED')}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                    statusFilter === 'REJECTED'
-                      ? 'bg-rose-600 text-white shadow-2xs'
-                      : 'bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200/60'
-                  }`}
-                >
-                  <AlertCircle className="w-3 h-3" />
-                  Rejected ({rejectedCount})
-                </button>
-              </div>
-
-              {/* Search & Category Filter Controls */}
-              <div className="flex flex-wrap items-center gap-3">
-                {/* Search Input */}
-                <div className="relative flex-1 sm:w-64">
-                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <input
-                    type="text"
-                    placeholder="Search by title or employee..."
-                    value={allSearchTerm}
-                    onChange={(e) => setAllSearchTerm(e.target.value)}
-                    className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all"
-                  />
-                  {allSearchTerm && (
-                    <button
-                      onClick={() => setAllSearchTerm('')}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 rounded-md"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-
-                {/* Category Dropdown */}
-                <select
-                  value={categoryFilter}
-                  onChange={(e) => setCategoryFilter(e.target.value)}
-                  className="px-3.5 py-2 text-xs font-medium rounded-xl border border-slate-200 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 shadow-2xs cursor-pointer"
-                >
-                  <option value="ALL">All Categories</option>
-                  <option value="IDENTITY">Identity (Aadhaar, PAN, Passport)</option>
-                  <option value="EDUCATION">Education (10th, 12th, Graduation)</option>
-                  <option value="ADDRESS">Address (Rent Agreement, Electricity Bill)</option>
-                  <option value="OFFER">Offer & Contracts</option>
-                  <option value="EXPERIENCE">Experience & Relieving</option>
-                  <option value="TAX">Tax Forms</option>
-                  <option value="MEDICAL">Medical & Fitness</option>
-                  <option value="OTHER">Other Documents</option>
-                </select>
-
-                {(allSearchTerm || categoryFilter !== 'ALL' || statusFilter !== 'ALL') && (
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    icon={X}
-                    className="text-slate-500 hover:text-slate-800 text-xs px-2.5 py-2 rounded-xl"
-                    onClick={() => {
-                      setAllSearchTerm('');
-                      setCategoryFilter('ALL');
-                      setStatusFilter('ALL');
-                    }}
-                  >
-                    Reset
-                  </Button>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Documents Table / Card Container */}
-          {loadingAllDocs ? (
-            <div className="bg-white rounded-2xl border border-slate-200/80 p-16 flex flex-col items-center justify-center text-center shadow-xs">
-              <LoadingSpinner size="md" />
-              <p className="text-xs font-semibold text-slate-600 mt-3 font-display">
-                Filtering company documents...
-              </p>
-            </div>
-          ) : (
-            <DocumentVaultUploader
-              candidateId={null}
-              documents={allDocuments}
-              canUpload={false}
-              canVerify={true}
-              canAcknowledge={false}
-              titlePrefix="All Documents"
-              subtitle="All documents uploaded by employees across the company."
-              onDocumentsUpdated={() => fetchAllDocuments(true)}
-            />
-          )}
-        </div>
       ) : activeTab === 'my' ? (
         /* Employee's Own Document Vault */
         <DocumentVaultUploader
@@ -593,94 +446,66 @@ export const EmployeeDocumentsPage = () => {
           subtitle="Your identity proofs, certificates, and employment contracts."
           onDocumentsUpdated={() => fetchMyDocuments(true)}
         />
-      ) : (
-        /* HR / Admin: Employee Directory Vault View */
+      ) : selectedEmployeeId ? (
+        /* View That Employee's Documents View */
         <div className="space-y-5">
-          {/* Employee Directory Selector Toolbar */}
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center ring-1 ring-indigo-100">
-                  <UserCheck className="w-5 h-5" />
-                </div>
+          {/* Selected Employee Breadcrumb / Navigation Bar */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setSelectedEmployeeId(null)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200/80 shadow-2xs transition-all cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5 text-slate-500" />
+                Back to Employee List
+              </button>
+
+              <span className="text-slate-300 hidden sm:inline">•</span>
+
+              <div className="flex items-center gap-2.5">
+                <Avatar
+                  src={selectedEmpObj?.avatarUrl}
+                  firstName={selectedEmpObj?.firstName}
+                  lastName={selectedEmpObj?.lastName}
+                  size="sm"
+                  className="ring-1 ring-brand-200"
+                />
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900 font-display">
-                    Select Employee
+                  <h3 className="text-sm font-bold text-slate-900 font-display flex items-center gap-2">
+                    <span>{selectedEmpObj?.firstName} {selectedEmpObj?.lastName}</span>
+                    {selectedEmpObj?.employeeCode && (
+                      <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                        {selectedEmpObj.employeeCode}
+                      </span>
+                    )}
                   </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    View and review documents for a specific employee.
+                  <p className="text-xs text-slate-500">
+                    {selectedEmpObj?.department?.name || 'General'} • {selectedEmpObj?.designation?.title || 'Staff'} • {selectedEmpObj?.email}
                   </p>
                 </div>
               </div>
-
-              <div className="flex items-center gap-3 flex-wrap">
-                <div className="relative w-full sm:w-60">
-                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
-                  <input
-                    type="text"
-                    placeholder="Search employee list..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all"
-                  />
-                </div>
-
-                <select
-                  value={selectedEmployeeId}
-                  onChange={(e) => setSelectedEmployeeId(e.target.value)}
-                  className="px-3.5 py-1.5 text-xs font-semibold rounded-xl border border-slate-200 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 shadow-2xs cursor-pointer"
-                >
-                  {filteredEmployees.map((emp) => (
-                    <option key={emp.id} value={emp.id}>
-                      {emp.firstName} {emp.lastName} ({emp.employeeCode || emp.employeeNumber || emp.id})
-                    </option>
-                  ))}
-                </select>
-              </div>
             </div>
 
-            {/* Selected Employee Info Banner */}
-            {selectedEmpObj && (
-              <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between flex-wrap gap-3">
-                <div className="flex items-center gap-3">
-                  <Avatar
-                    src={selectedEmpObj.avatarUrl}
-                    firstName={selectedEmpObj.firstName}
-                    lastName={selectedEmpObj.lastName}
-                    size="sm"
-                    className="ring-1 ring-brand-200"
-                  />
-                  <div>
-                    <span className="text-xs font-bold text-slate-900">
-                      {selectedEmpObj.firstName} {selectedEmpObj.lastName}
-                    </span>
-                    <span className="text-xs text-slate-400 ml-2">
-                      {selectedEmpObj.email}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 text-xs">
-                  {selectedEmpObj.department?.name && (
-                    <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-medium">
-                      Dept: {selectedEmpObj.department.name}
-                    </span>
-                  )}
-                  {selectedEmpObj.designation?.title && (
-                    <span className="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 font-medium">
-                      {selectedEmpObj.designation.title}
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
+            <div className="flex items-center gap-2 self-end sm:self-center">
+              <Button
+                variant="outline"
+                size="xs"
+                icon={RefreshCw}
+                loading={loadingEmpDocs}
+                onClick={() => fetchSelectedEmployeeDocs(selectedEmployeeId)}
+              >
+                Refresh Documents
+              </Button>
+            </div>
           </div>
 
+          {/* Only this employee's documents */}
           {loadingEmpDocs ? (
             <div className="bg-white rounded-2xl border border-slate-200/80 p-16 flex flex-col items-center justify-center text-center shadow-xs">
               <LoadingSpinner size="md" />
               <p className="text-xs font-semibold text-slate-600 mt-3 font-display">
-                Loading employee documents...
+                Loading {selectedEmpObj?.firstName || 'employee'}'s documents...
               </p>
             </div>
           ) : (
@@ -690,6 +515,7 @@ export const EmployeeDocumentsPage = () => {
               canUpload={true}
               canVerify={true}
               canAcknowledge={false}
+              canDelete={true}
               titlePrefix={
                 selectedEmpObj
                   ? `${selectedEmpObj.firstName} ${selectedEmpObj.lastName}'s Documents`
@@ -702,6 +528,153 @@ export const EmployeeDocumentsPage = () => {
               onDocumentsUpdated={() => fetchSelectedEmployeeDocs(selectedEmployeeId)}
             />
           )}
+        </div>
+      ) : (
+        /* All Employee Documents -> Employee List (Directory View) */
+        <div className="space-y-4">
+          {/* Search & Counter Toolbar */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 font-display flex items-center gap-2">
+                  <Users className="w-5 h-5 text-brand-600" />
+                  All Employee Documents
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Select an employee to view, approve, and manage their uploaded documents.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="relative w-full sm:w-72">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Search by name, code, email, dept..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all"
+                  />
+                  {searchTerm && (
+                    <button
+                      onClick={() => setSearchTerm('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 rounded-md"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+                <span className="text-xs font-semibold text-slate-500 bg-slate-100 border border-slate-200/80 px-2.5 py-1.5 rounded-xl whitespace-nowrap">
+                  {filteredEmployees.length} {filteredEmployees.length === 1 ? 'employee' : 'employees'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Employee Directory Table */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+            {loadingEmployees ? (
+              <div className="p-16 flex flex-col items-center justify-center text-center">
+                <LoadingSpinner size="md" />
+                <p className="text-xs font-semibold text-slate-600 mt-3 font-display">
+                  Loading employee directory...
+                </p>
+              </div>
+            ) : filteredEmployees.length === 0 ? (
+              <div className="p-14 text-center">
+                <div className="w-14 h-14 mx-auto rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mb-3">
+                  <Users className="w-6 h-6" />
+                </div>
+                <p className="text-sm font-bold text-slate-700 font-display">
+                  No employees found
+                </p>
+                <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                  {searchTerm ? 'No employees matched your search.' : 'There are no active employee records.'}
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50/70 border-b border-slate-100 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    <tr>
+                      <th className="py-3.5 px-5">Employee</th>
+                      <th className="py-3.5 px-5">Department &amp; Designation</th>
+                      <th className="py-3.5 px-5">Status</th>
+                      <th className="py-3.5 px-5 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredEmployees.map((emp) => (
+                      <tr
+                        key={emp.id}
+                        onClick={() => setSelectedEmployeeId(emp.id)}
+                        className="hover:bg-slate-50/80 transition-colors cursor-pointer group"
+                      >
+                        <td className="py-4 px-5">
+                          <div className="flex items-center gap-3">
+                            <Avatar
+                              src={emp.avatarUrl}
+                              firstName={emp.firstName}
+                              lastName={emp.lastName}
+                              size="md"
+                              className="ring-1 ring-slate-200 group-hover:ring-brand-200 transition-all shrink-0"
+                            />
+                            <div>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedEmployeeId(emp.id);
+                                }}
+                                className="text-sm font-bold text-slate-900 group-hover:text-brand-600 transition-colors flex items-center gap-2 text-left cursor-pointer"
+                              >
+                                <span>{emp.firstName} {emp.lastName}</span>
+                                {emp.employeeCode && (
+                                  <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                                    {emp.employeeCode}
+                                  </span>
+                                )}
+                              </button>
+                              <div className="text-xs text-slate-400 mt-0.5">{emp.email}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-4 px-5">
+                          <div className="font-semibold text-slate-800">
+                            {emp.department?.name || 'General'}
+                          </div>
+                          <div className="text-xs text-slate-400 mt-0.5">
+                            {emp.designation?.title || 'Staff'}
+                          </div>
+                        </td>
+                        <td className="py-4 px-5">
+                          <Badge
+                            variant={emp.status === 'Active' ? 'success' : emp.status === 'On Leave' ? 'warning' : 'neutral'}
+                            size="sm"
+                          >
+                            {emp.status || 'Active'}
+                          </Badge>
+                        </td>
+                        <td className="py-4 px-5 text-right">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedEmployeeId(emp.id);
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-brand-600 bg-brand-50 hover:bg-brand-100/80 border border-brand-200/60 shadow-2xs group-hover:bg-brand-600 group-hover:text-white transition-all cursor-pointer"
+                          >
+                            <span>View Documents</span>
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

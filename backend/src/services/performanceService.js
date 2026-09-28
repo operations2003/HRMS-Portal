@@ -12,7 +12,8 @@ export const performanceService = {
    */
   isHrOrAdmin(currentUser) {
     const role = (currentUser.roleName || '').toLowerCase();
-    return ['admin', 'superadmin', 'orgadmin', 'hr', 'hrmanager'].includes(role);
+    const hasManage = Array.isArray(currentUser.permissions) && currentUser.permissions.includes('performance:manage');
+    return ['admin', 'superadmin', 'orgadmin', 'hr', 'hrmanager', 'ld hr', 'l&d hr'].includes(role) || hasManage;
   },
 
   /**
@@ -289,13 +290,20 @@ export const performanceService = {
     return record;
   },
 
-  async updateDraftRecord(currentUser, recordId, updates = {}) {
+  async updateRecord(currentUser, recordId, updates = {}) {
     const record = await this.getRecordById(currentUser, recordId);
+    const emp = await this.resolveEmployee(currentUser);
+    const isHrAdmin = this.isHrOrAdmin(currentUser);
 
-    // Only allow editing draft/returned reviews
-    if (!['DRAFT', 'RETURNED'].includes(record.status)) {
-      const err = new Error(`Cannot modify review in status '${record.status}'. Only DRAFT or RETURNED appraisals can be edited.`);
-      err.statusCode = 400;
+    // Authorization: Reviewer who submitted the review or HR/Admin
+    const isReviewer =
+      (record.reviewerUserId && record.reviewerUserId === currentUser.id) ||
+      (emp && record.reviewerId && emp.id === record.reviewerId) ||
+      (record.reviewer?.userId && record.reviewer.userId === currentUser.id);
+
+    if (!isHrAdmin && !isReviewer) {
+      const err = new Error('Forbidden: Only the reviewer who submitted this performance review or an authorized administrator can edit it.');
+      err.statusCode = 403;
       throw err;
     }
 
@@ -305,7 +313,68 @@ export const performanceService = {
       throw err;
     }
 
-    return performanceRepository.updateRecord(record.id, currentUser.orgId, updates);
+    // Keep rating and score aligned if rating is provided
+    if (updates.rating !== undefined && updates.rating !== null) {
+      updates.rating = Number(updates.rating);
+      if (updates.score === undefined) {
+        updates.score = updates.rating;
+      }
+    }
+
+    // Ensure feedback and reviewerComments are synced if either is provided
+    const newComments = updates.reviewerComments !== undefined ? updates.reviewerComments : updates.feedback;
+    if (newComments !== undefined) {
+      updates.feedback = newComments;
+      updates.reviewerComments = newComments;
+    }
+
+    const updated = await performanceRepository.updateRecord(record.id, currentUser.orgId, updates);
+
+    // Record workflow action in history if workflow instance exists
+    try {
+      const wf = await workflowRepository.findByEntity('PERFORMANCE_REVIEW', record.id);
+      if (wf) {
+        await workflowRepository.recordAction(wf.id, {
+          stage: wf.currentStage || record.currentStage || 'MANAGER_REVIEW',
+          actorUserId: currentUser.id,
+          actorRole: currentUser.roleName || 'Reviewer',
+          action: 'EDIT_REVIEW',
+          fromStatus: record.status,
+          toStatus: updated.status,
+          comments: updates.reviewerComments || updates.feedback || 'Performance review updated by reviewer.',
+        });
+      }
+    } catch (e) {
+      logger.warn('PerformanceService', `Failed to audit edit action in workflow: ${e.message}`);
+    }
+
+    return updated;
+  },
+
+  async updateDraftRecord(currentUser, recordId, updates = {}) {
+    return this.updateRecord(currentUser, recordId, updates);
+  },
+
+  async deleteRecord(currentUser, recordId) {
+    const record = await this.getRecordById(currentUser, recordId);
+    const emp = await this.resolveEmployee(currentUser);
+    const isHrAdmin = this.isHrOrAdmin(currentUser);
+
+    // Authorization: Reviewer who submitted the review or HR/Admin
+    const isReviewer =
+      (record.reviewerUserId && record.reviewerUserId === currentUser.id) ||
+      (emp && record.reviewerId && emp.id === record.reviewerId) ||
+      (record.reviewer?.userId && record.reviewer.userId === currentUser.id);
+
+    if (!isHrAdmin && !isReviewer) {
+      const err = new Error('Forbidden: Only the reviewer who submitted this performance review or an authorized administrator can delete it.');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    await performanceRepository.deleteRecord(record.id, currentUser.orgId);
+    logger.info('PerformanceService', `Performance review ${record.id} deleted by user ${currentUser.id}`);
+    return { id: record.id, deleted: true };
   },
 
   /**
