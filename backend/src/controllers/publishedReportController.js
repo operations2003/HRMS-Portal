@@ -103,6 +103,22 @@ export const publishedReportController = {
       next(error);
     }
   },
+
+  /**
+   * DELETE /api/v1/performance-reports/sent/:id
+   * Admin / Reviewer permanently deletes a sent performance report
+   */
+  async deleteSentReport(req, res, next) {
+    try {
+      const deleted = await publishedReportService.deleteSentReport(req.user, req.params.id);
+      return sendSuccess(res, 'Performance report successfully deleted.', deleted);
+    } catch (error) {
+      if (error.statusCode) {
+        return sendError(res, error.message, error.statusCode);
+      }
+      next(error);
+    }
+  },
 };
 
 export default publishedReportController;

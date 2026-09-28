@@ -196,6 +196,19 @@ export const publishedReportRepository = {
       empCode: r.emp_code,
     }));
   },
+
+  /**
+   * Delete a published performance report completely by admin/reviewer
+   */
+  async deleteById(id, orgId) {
+    const query = `
+      DELETE FROM published_performance_reports
+      WHERE id = $1 AND org_id = $2
+      RETURNING *;
+    `;
+    const { rows } = await pool.query(query, [id, orgId]);
+    return mapRow(rows[0]);
+  },
 };
 
 export default publishedReportRepository;

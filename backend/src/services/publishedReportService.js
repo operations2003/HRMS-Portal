@@ -157,6 +157,23 @@ export const publishedReportService = {
       employeeId,
     });
   },
+
+  /**
+   * Delete a sent performance report by Admin/HR/Manager
+   */
+  async deleteSentReport(reviewerUser, reportId) {
+    const orgId = reviewerUser.orgId || 'org-1';
+    const deleted = await publishedReportRepository.deleteById(reportId, orgId);
+
+    if (!deleted) {
+      const err = new Error('Performance report not found or already deleted.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    logger.info('PublishedReportService', `Report ${reportId} deleted by user ${reviewerUser.id} (${reviewerUser.role})`);
+    return deleted;
+  },
 };
 
 export default publishedReportService;

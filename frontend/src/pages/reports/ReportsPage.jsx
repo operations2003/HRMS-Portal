@@ -29,6 +29,7 @@ import {
   ChevronDown,
   X,
   FileSpreadsheet,
+  FileEdit,
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
@@ -148,6 +149,8 @@ export const ReportsPage = () => {
   const [activeMyReportIdx, setActiveMyReportIdx] = useState(0);
   const [reportToDelete, setReportToDelete] = useState(null);
   const [isDeletingReport, setIsDeletingReport] = useState(false);
+  const [sentReportToDelete, setSentReportToDelete] = useState(null);
+  const [isDeletingSentReport, setIsDeletingSentReport] = useState(false);
   const [downloadingReportId, setDownloadingReportId] = useState(null);
   const [pdfCustomReport, setPdfCustomReport] = useState(null);
   const [previewReport, setPreviewReport] = useState(null);
@@ -596,6 +599,28 @@ export const ReportsPage = () => {
     }
   };
 
+  // Handle report deletion by reviewer/admin from Sent Tracker or Form
+  const handleDeleteSentReport = async () => {
+    if (!sentReportToDelete) return;
+    try {
+      setIsDeletingSentReport(true);
+      await performanceReportService.deleteSentReport(sentReportToDelete.id);
+      showToast(
+        `Performance report for ${sentReportToDelete.employeeName || 'employee'} deleted successfully.`,
+        'success'
+      );
+      setSentReportToDelete(null);
+      await fetchSentReports();
+      if (selectedEmployeeId === sentReportToDelete.employeeId) {
+        setEmpReportStatus(null);
+      }
+    } catch (err) {
+      showToast(err.message || 'Failed to delete performance report.', 'error');
+    } finally {
+      setIsDeletingSentReport(false);
+    }
+  };
+
   // Average score calculation
   const calculateAverage = (competencies) => {
     if (!competencies || competencies.length === 0) return '0.00';
@@ -992,25 +1017,40 @@ export const ReportsPage = () => {
       className: 'text-right',
       render: (row) => (
         <div className="flex items-center justify-end gap-2">
+          {/* Review appraisal button */}
+          <Button
+            size="sm"
+            variant="outline"
+            icon={Eye}
+            onClick={() => setPreviewReport(row)}
+            title="Review performance appraisal report"
+            className="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-950/40 border-brand-200 dark:border-brand-800"
+          >
+            Review
+          </Button>
+
+          {/* Send Again button */}
           <Button
             size="sm"
             variant={row?.status === 'DELETED_BY_USER' ? 'primary' : 'outline'}
             icon={RotateCw}
             onClick={() => handleSendAgainFromHistory(row)}
+            title="Re-send appraisal report"
+            className="text-xs font-semibold"
           >
             Send Again
           </Button>
+
+          {/* Delete report button */}
           <Button
             size="sm"
-            variant="ghost"
-            icon={Eye}
-            onClick={() => {
-              handleSelectEmployee(row.employeeId);
-              setDepartment(row.department || 'operations');
-              setReviewerSubTab('form');
-            }}
+            variant="outline"
+            icon={Trash2}
+            onClick={() => setSentReportToDelete(row)}
+            title="Delete this performance report"
+            className="text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 border-rose-200 dark:border-rose-800"
           >
-            Review in Form
+            Delete
           </Button>
         </div>
       ),
@@ -2377,15 +2417,29 @@ export const ReportsPage = () => {
                     </Button>
                   )}
                   {!isViewingMyReport && (
-                    <Button
-                      variant="ghost"
-                      size="md"
-                      icon={RotateCcw}
-                      onClick={handleResetForm}
-                      className="text-xs font-black bg-amber-400 hover:bg-amber-500 active:bg-amber-600 text-slate-950 border border-amber-500 shadow-sm shadow-amber-400/25 transition-all"
-                    >
-                      Reset Form
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="md"
+                        icon={RotateCcw}
+                        onClick={handleResetForm}
+                        className="text-xs font-black bg-amber-400 hover:bg-amber-500 active:bg-amber-600 text-slate-950 border border-amber-500 shadow-sm shadow-amber-400/25 transition-all"
+                      >
+                        Reset Form
+                      </Button>
+                      {empReportStatus?.id && (
+                        <Button
+                          variant="outline"
+                          size="md"
+                          icon={Trash2}
+                          onClick={() => setSentReportToDelete(empReportStatus)}
+                          title="Delete current performance report"
+                          className="text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 border-rose-200 dark:border-rose-800"
+                        >
+                          Delete Report
+                        </Button>
+                      )}
+                    </div>
                   )}
                 </div>
 
@@ -2571,15 +2625,51 @@ export const ReportsPage = () => {
             </div>
 
             {/* Modal Footer */}
-            <div className="p-4 px-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-850 flex items-center justify-between">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPreviewReport(null)}
-                className="text-xs font-semibold"
-              >
-                Close Preview
-              </Button>
+            <div className="p-4 px-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-850 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPreviewReport(null)}
+                  className="text-xs font-semibold"
+                >
+                  Close Preview
+                </Button>
+                {canReviewOthers && (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      icon={FileEdit}
+                      onClick={() => {
+                        const r = previewReport;
+                        setPreviewReport(null);
+                        handleSelectEmployee(r.employeeId);
+                        setDepartment(r.department || 'operations');
+                        setReviewerSubTab('form');
+                      }}
+                      title="Edit this performance review in the evaluation form"
+                      className="text-xs font-semibold text-brand-600 dark:text-brand-400 border-brand-200 dark:border-brand-800 hover:bg-brand-50 dark:hover:bg-brand-950/40"
+                    >
+                      Review in Form
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      icon={Trash2}
+                      onClick={() => {
+                        const r = previewReport;
+                        setPreviewReport(null);
+                        setSentReportToDelete(r);
+                      }}
+                      title="Delete this performance report"
+                      className="text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 border-rose-200 dark:border-rose-800"
+                    >
+                      Delete Report
+                    </Button>
+                  </>
+                )}
+              </div>
 
               <div className="flex items-center gap-2">
                 <Button
@@ -2618,6 +2708,19 @@ export const ReportsPage = () => {
         cancelText="Keep Report"
         variant="danger"
         isLoading={isDeletingReport}
+      />
+
+      {/* Confirm Dialog for Reviewer/Admin Deleting Sent Report */}
+      <ConfirmDialog
+        isOpen={Boolean(sentReportToDelete)}
+        onClose={() => setSentReportToDelete(null)}
+        onConfirm={handleDeleteSentReport}
+        title="Delete Sent Performance Report?"
+        message={`Are you sure you want to delete the performance report for ${sentReportToDelete?.employeeName || 'this employee'}? This will remove the appraisal record from both the sent reports tracker and the employee's delivered appraisals.`}
+        confirmText="Delete Report"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={isDeletingSentReport}
       />
 
       {/* Floating Toast Notification */}

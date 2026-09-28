@@ -42,6 +42,14 @@ export const performanceReportService = {
     });
     return res.data;
   },
+
+  /**
+   * Delete a sent performance report by Admin/HR/Manager
+   */
+  async deleteSentReport(id) {
+    const res = await http.delete(`/v1/performance-reports/sent/${id}`);
+    return res.data;
+  },
 };
 
 export default performanceReportService;
