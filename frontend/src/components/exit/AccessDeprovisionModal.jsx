@@ -50,10 +50,10 @@ export const AccessDeprovisionModal = ({ isOpen, onClose, onSuccess, record }) =
       setError(null);
       const res = await exitService.removeAccess(record.id, {
         reassignManagerId: selectedManagerId || undefined,
-        comments: comments.trim() || 'System credentials revoked during exit offboarding.',
+        comments: comments.trim() || 'System credentials permanently deleted during exit offboarding.',
       });
 
-      toast.success(`Access for ${empName} revoked. Profile marked as Exited.`);
+      toast.success(`Access revoked and credentials for ${empName} permanently deleted.`);
       onSuccess?.(res);
       onClose();
     } catch (err) {
@@ -68,7 +68,7 @@ export const AccessDeprovisionModal = ({ isOpen, onClose, onSuccess, record }) =
       isOpen={isOpen}
       onClose={onClose}
       title={`Revoke Access & Deprovision — ${empName}`}
-      subtitle="Finalize account deactivation, credential revocation, and team reassignment"
+      subtitle="Permanent credential deletion, user account removal, and team reassignment"
       maxWidth="max-w-md"
     >
       <form onSubmit={handleDeprovision} className="space-y-4">
@@ -79,9 +79,9 @@ export const AccessDeprovisionModal = ({ isOpen, onClose, onSuccess, record }) =
           <div className="space-y-1">
             <p className="font-semibold text-rose-900">Security Gate Caution</p>
             <p className="leading-relaxed">
-              This action immediately terminates all portal sessions, deactivates login credentials, marks the
-              employee profile as <span className="font-bold text-rose-900">Exited</span>, and logs an immutable
-              deprovisioning audit.
+              This action immediately terminates all active portal sessions, permanently deletes login credentials
+              and user accounts from the system and database, marks the employee profile as{' '}
+              <span className="font-bold text-rose-900">Exited</span>, and logs an immutable deprovisioning audit.
             </p>
           </div>
         </div>
@@ -105,7 +105,7 @@ export const AccessDeprovisionModal = ({ isOpen, onClose, onSuccess, record }) =
           <textarea
             rows="3"
             className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-500 transition-all"
-            placeholder="Document confirmation of asset receipt, email archiving, and security token invalidation..."
+            placeholder="Document confirmation of credential purge, asset receipt, and security token invalidation..."
             value={comments}
             onChange={(e) => setComments(e.target.value)}
           />
@@ -116,7 +116,7 @@ export const AccessDeprovisionModal = ({ isOpen, onClose, onSuccess, record }) =
             Cancel
           </Button>
           <Button type="submit" variant="danger" icon={UserX} isLoading={isSubmitting}>
-            Confirm & Revoke Access
+            Revoke Access & Delete Credentials
           </Button>
         </div>
       </form>

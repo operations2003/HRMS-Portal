@@ -18,6 +18,7 @@ import { ExitStatusTimeline } from './ExitStatusTimeline.jsx';
 import { ClearanceChecklistTable } from './ClearanceChecklistTable.jsx';
 import { FnFStatementDocument } from './FnFStatementDocument.jsx';
 import { ClearNoticePeriodModal } from './ClearNoticePeriodModal.jsx';
+import { AccessDeprovisionModal } from './AccessDeprovisionModal.jsx';
 import { exitService } from '../../services/exitService.js';
 
 export const ExitDossierDetailModal = ({
@@ -34,6 +35,7 @@ export const ExitDossierDetailModal = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showClearNoticeModal, setShowClearNoticeModal] = useState(false);
+  const [showDeprovisionModal, setShowDeprovisionModal] = useState(false);
 
   const fetchDossier = async () => {
     if (!exitId) return;
@@ -248,10 +250,7 @@ export const ExitDossierDetailModal = ({
                   <Button
                     variant="danger"
                     size="sm"
-                    onClick={() => {
-                      onClose();
-                      onOpenDeprovision?.(dossier);
-                    }}
+                    onClick={() => setShowDeprovisionModal(true)}
                   >
                     Revoke Access & Deprovision
                   </Button>
@@ -332,6 +331,19 @@ export const ExitDossierDetailModal = ({
         <ClearNoticePeriodModal
           isOpen={showClearNoticeModal}
           onClose={() => setShowClearNoticeModal(false)}
+          onSuccess={() => {
+            fetchDossier();
+            onSuccess?.();
+          }}
+          record={dossier}
+        />
+      )}
+
+      {/* Revoke Access & Delete Credentials Modal */}
+      {showDeprovisionModal && (
+        <AccessDeprovisionModal
+          isOpen={showDeprovisionModal}
+          onClose={() => setShowDeprovisionModal(false)}
           onSuccess={() => {
             fetchDossier();
             onSuccess?.();

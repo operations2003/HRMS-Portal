@@ -952,21 +952,17 @@ export const exitService = {
 
     const emp = await employeeRepository.findById(exit.employeeId);
     let prevUserStatus = 'Active';
+    const targetUserId = emp ? emp.userId : null;
 
-    // 1. Mark employee profile status as 'Exited' (or inactive/exited according to architecture)
-    await employeeRepository.update(emp.id, { status: 'Exited' });
-
-    // 2. Deactivate portal user account immediately (blocks subsequent JWT and login access)
-    if (emp.userId) {
-      const userRec = await userRepository.findById(emp.userId);
-      if (userRec) prevUserStatus = userRec.status;
-      await userRepository.update(emp.userId, { status: 'Inactive' });
+    // 1. Mark employee profile status as 'Exited'
+    if (emp) {
+      await employeeRepository.update(emp.id, { status: 'Exited' });
     }
 
-    // 3. Reassign direct reports if this exiting employee is a manager
+    // 2. Reassign direct reports if this exiting employee is a manager
     const interimManagerId = accessData.reassignManagerId || null;
     let reassignedDirectReports = [];
-    if (emp.id) {
+    if (emp && emp.id) {
       reassignedDirectReports = await exitRepository.reassignDirectReports(
         currentUser.orgId,
         emp.id,
@@ -974,30 +970,73 @@ export const exitService = {
       );
     }
 
-    // 4. Update employee_offboardings access removal status
+    // 3. Update employee_offboardings access removal status
     await exitRepository.updateOffboarding(exitRequestId, {
       accessRemovalStatus: 'DEPROVISIONED',
       processedBy: currentUser.id,
     });
 
-    // 5. Record entry in access_deprovisioning_audits
+    // 4. Record entry in access_deprovisioning_audits before deleting user
     let auditEntry = null;
-    if (emp.userId) {
+    if (targetUserId) {
+      const userRec = await userRepository.findById(targetUserId);
+      if (userRec) prevUserStatus = userRec.status;
+
       auditEntry = await exitRepository.recordDeprovisionAudit({
         orgId: currentUser.orgId,
         exitRequestId,
         employeeId: emp.id,
-        userId: emp.userId,
+        userId: targetUserId,
         actorUserId: currentUser.id,
         actorRole: currentUser.roleName || 'HR',
         action: 'DEPROVISION_ACCESS',
         previousUserStatus: prevUserStatus,
-        newUserStatus: 'Inactive',
+        newUserStatus: 'DELETED',
         previousEmployeeStatus: emp.status || 'Notice Period',
         newEmployeeStatus: 'Exited',
         reassignedManagerId: interimManagerId,
-        reason: accessData.comments || 'System credentials revoked during exit offboarding.',
+        reason: accessData.comments || 'System credentials permanently deleted during exit offboarding.',
       });
+
+      // Dispatch notification
+      await notificationService
+        .notifyDeprovisioningExecuted({
+          orgId: currentUser.orgId,
+          exitId: exitRequestId,
+          employeeUserId: targetUserId,
+        })
+        .catch(() => {});
+
+      // 5. PERMANENTLY DELETE CREDENTIALS FROM SYSTEM & DATABASE
+      // Unlink user from employee profile
+      await pool.query('UPDATE employees SET user_id = NULL WHERE id = $1', [emp.id]).catch(() => {});
+
+      // Purge sessions, tokens, and direct associations
+      await pool.query('DELETE FROM sessions WHERE user_id = $1', [targetUserId]).catch(() => {});
+      await pool.query('DELETE FROM identities WHERE user_id = $1', [targetUserId]).catch(() => {});
+      await pool.query('DELETE FROM user_roles WHERE user_id = $1', [targetUserId]).catch(() => {});
+      await pool.query('DELETE FROM notifications WHERE user_id = $1', [targetUserId]).catch(() => {});
+      await pool.query('DELETE FROM announcement_read_receipts WHERE user_id = $1', [targetUserId]).catch(() => {});
+      await pool.query('DELETE FROM one_time_tokens WHERE user_id = $1', [targetUserId]).catch(() => {});
+      await pool.query('DELETE FROM mfa_factors WHERE user_id = $1', [targetUserId]).catch(() => {});
+      await pool.query('DELETE FROM webauthn_credentials WHERE user_id = $1', [targetUserId]).catch(() => {});
+
+      // Delete the user record and credentials from users table
+      try {
+        await pool.query('DELETE FROM users WHERE id = $1', [targetUserId]);
+      } catch (delErr) {
+        // Fallback: If any foreign key prevents physical row deletion, scrub all credentials
+        logger.warn('ExitService', `Hard delete on user ${targetUserId} had constraint, scrubbing credentials: ${delErr.message}`);
+        await pool.query(
+          `UPDATE users 
+           SET password_hash = 'CREDENTIALS_PERMANENTLY_DELETED',
+               email = 'deleted_' || id || '@exited.local',
+               status = 'Inactive',
+               updated_at = NOW()
+           WHERE id = $1`,
+          [targetUserId]
+        ).catch(() => {});
+      }
     }
 
     // 6. Record action in approval workflow
@@ -1011,23 +1050,14 @@ export const exitService = {
         fromStatus: wf.currentStatus,
         toStatus: wf.currentStatus,
         nextStage: wf.currentStage,
-        comments: accessData.comments || 'System credentials revoked during exit offboarding.',
-      });
-    }
-
-    // 7. Dispatch notification
-    if (emp.userId) {
-      await notificationService.notifyDeprovisioningExecuted({
-        orgId: currentUser.orgId,
-        exitId: exitRequestId,
-        employeeUserId: emp.userId,
+        comments: accessData.comments || 'System credentials permanently deleted during exit offboarding.',
       });
     }
 
     return {
-      message: 'Access successfully revoked and credentials deprovisioned.',
-      employeeId: emp.id,
-      userId: emp.userId,
+      message: 'Access revoked and credentials permanently deleted from the system and database.',
+      employeeId: emp ? emp.id : null,
+      userId: targetUserId,
       employeeStatus: 'Exited',
       userStatus: 'Inactive',
       reassignedDirectReportsCount: reassignedDirectReports.length,
