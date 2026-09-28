@@ -404,7 +404,7 @@ export const OffboardingPage = () => {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Offboarding Operations Center</h1>
           <p className="text-xs text-slate-500 mt-1">
-            Complete employee offboarding governance: Resignation → Review → Notice Period → Checklist → Clearance → Access Removal → Full & Final → Completed
+            Complete employee offboarding governance: Resignation → Review → Notice Period → Checklist → Access Removal → Full & Final → Completed
           </p>
         </div>
 

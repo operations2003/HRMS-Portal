@@ -4,7 +4,6 @@ import {
   UserCheck,
   Calendar,
   ClipboardList,
-  ShieldCheck,
   UserX,
   Wallet,
   CheckCircle2,
@@ -48,7 +47,7 @@ export const ExitStatusTimeline = ({ status, currentStage, offboarding = null, c
     );
   }
 
-  // Exact 8-stage lifecycle sequence
+  // Exact 7-stage lifecycle sequence
   const steps = [
     {
       id: 'RESIGNATION',
@@ -73,12 +72,6 @@ export const ExitStatusTimeline = ({ status, currentStage, offboarding = null, c
       title: 'Checklist',
       subtitle: 'Assigned',
       icon: ClipboardList,
-    },
-    {
-      id: 'CLEARANCE',
-      title: 'Clearance',
-      subtitle: 'Depts Sign-off',
-      icon: ShieldCheck,
     },
     {
       id: 'ACCESS_REMOVAL',
@@ -112,13 +105,6 @@ export const ExitStatusTimeline = ({ status, currentStage, offboarding = null, c
     offboarding?.fnf?.paymentStatus === 'DISBURSED' ||
     offboarding?.paymentStatus === 'DISBURSED';
 
-  const totalTasks = clearances?.length || 0;
-  const clearedTasks =
-    clearances?.filter((t) =>
-      ['CLEARED', 'COMPLETED', 'WAIVED'].includes((t.status || '').toUpperCase())
-    )?.length || 0;
-  const allClearancesCleared = totalTasks > 0 && clearedTasks === totalTasks;
-
   if (s === 'SUBMITTED' || c === 'MANAGER_REVIEW' || c === 'EMPLOYEE_SUBMISSION') {
     activeIndex = 1;
   } else if (s === 'UNDER_REVIEW' || c === 'HR_REVIEW') {
@@ -127,24 +113,14 @@ export const ExitStatusTimeline = ({ status, currentStage, offboarding = null, c
     // Stage 3: Active Notice Period
     activeIndex = 3;
   } else if (s === 'EXIT_PROCESSING' || c === 'CLEARANCE_IN_PROGRESS') {
-    // Notice period cleared! Move forward to Checklist (Stage 4) or Clearance (Stage 5)
-    if (
-      allClearancesCleared ||
-      offboarding?.clearanceStatus === 'CLEARED' ||
-      offboarding?.clearanceStatus === 'WAIVED'
-    ) {
-      activeIndex = 5;
-    } else if (clearedTasks > 0) {
-      activeIndex = 5; // Clearances sign-offs underway
-    } else {
-      activeIndex = 4; // Checklist assigned & active
-    }
+    // Notice period cleared! Move forward to Checklist (Stage 4)
+    activeIndex = 4;
   } else if (s === 'COMPLETED' || c === 'COMPLETED') {
-    activeIndex = 8;
+    activeIndex = 7;
   }
 
-  if (accessRevoked && activeIndex < 6) activeIndex = 6;
-  if (fnfSettled && activeIndex < 7) activeIndex = 7;
+  if (accessRevoked && activeIndex < 5) activeIndex = 5;
+  if (fnfSettled && activeIndex < 6) activeIndex = 6;
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 shadow-sm">
@@ -152,11 +128,11 @@ export const ExitStatusTimeline = ({ status, currentStage, offboarding = null, c
         <div>
           <h4 className="text-sm font-bold text-slate-900">Employee Exit Lifecycle</h4>
           <p className="text-xs text-slate-500">
-            Resignation → Review → Notice Period → Checklist → Clearance → Access Removal → Full & Final → Completed
+            Resignation → Review → Notice Period → Checklist → Access Removal → Full & Final → Completed
           </p>
         </div>
         <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700">
-          Stage {activeIndex} of 8
+          Stage {activeIndex} of 7
         </span>
       </div>
 
@@ -165,11 +141,11 @@ export const ExitStatusTimeline = ({ status, currentStage, offboarding = null, c
         <div className="hidden lg:block absolute top-4 left-6 right-6 h-0.5 bg-slate-100 -z-0" />
 
         {/* Steps Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 relative z-10">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 relative z-10">
           {steps.map((step, idx) => {
             const Icon = step.icon;
             const stepNum = idx + 1;
-            const isDone = stepNum < activeIndex || (stepNum === 8 && s === 'COMPLETED');
+            const isDone = stepNum < activeIndex || (stepNum === 7 && s === 'COMPLETED');
             const isCurrent = stepNum === activeIndex && s !== 'COMPLETED';
 
             return (
