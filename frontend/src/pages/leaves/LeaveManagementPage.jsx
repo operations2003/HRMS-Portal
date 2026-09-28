@@ -90,6 +90,7 @@ export const LeaveManagementPage = () => {
 
   // Modals state
   const [isApplyModalOpen, setIsApplyModalOpen] = useState(false);
+  const [assignEmployeeId, setAssignEmployeeId] = useState(null);
   const [selectedDetailRecord, setSelectedDetailRecord] = useState(null);
   const [approvingRecord, setApprovingRecord] = useState(null);
   const [rejectingRecord, setRejectingRecord] = useState(null);
@@ -278,8 +279,27 @@ export const LeaveManagementPage = () => {
   };
 
   // Render Status Badge
-  const renderStatusBadge = (status) => {
-    switch ((status || '').toUpperCase()) {
+  const renderStatusBadge = (status, row = null) => {
+    const norm = (status || '').toUpperCase();
+    const decisions = Array.isArray(row?.dateDecisions) ? row.dateDecisions : [];
+    const hasApproved = decisions.some((d) => d.status === 'APPROVED');
+    const hasRejected = decisions.some((d) => d.status === 'REJECTED');
+    const isPartial = norm === 'APPROVED' && hasApproved && hasRejected;
+
+    if (isPartial) {
+      const appCount = decisions.filter((d) => d.status === 'APPROVED').length;
+      return (
+        <span
+          className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-300 ring-1 ring-amber-600/10 cursor-pointer"
+          title={`Partially Approved: ${appCount} of ${decisions.length} requested dates approved`}
+        >
+          <CheckCircle2 className="w-3.5 h-3.5 text-amber-600" />
+          Partially Approved ({appCount}/{decisions.length}d)
+        </span>
+      );
+    }
+
+    switch (norm) {
       case 'PENDING':
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 ring-1 ring-amber-600/10">
@@ -455,7 +475,7 @@ export const LeaveManagementPage = () => {
     {
       header: 'Current Status',
       key: 'status',
-      render: (row) => renderStatusBadge(row.status),
+      render: (row) => renderStatusBadge(row.status, row),
     },
     {
       header: 'Submitted Date',
@@ -612,7 +632,7 @@ export const LeaveManagementPage = () => {
     {
       header: 'Current Status',
       key: 'status',
-      render: (row) => renderStatusBadge(row.status),
+      render: (row) => renderStatusBadge(row.status, row),
     },
     {
       header: 'Submitted Date',
@@ -725,12 +745,30 @@ export const LeaveManagementPage = () => {
             </Button>
           )}
 
-          {canViewTeam && !isAdminOrCeo && (
+          {isHrOrAdmin && (
+            <Button
+              variant="primary"
+              size="md"
+              icon={ShieldCheck}
+              onClick={() => {
+                setAssignEmployeeId(null);
+                setIsApplyModalOpen(true);
+              }}
+              className="shadow-md shadow-brand-500/20"
+            >
+              Assign Leave
+            </Button>
+          )}
+
+          {canViewTeam && !isHrOrAdmin && (
             <Button
               variant="outline"
               size="md"
               icon={ShieldCheck}
-              onClick={() => setIsApplyModalOpen(true)}
+              onClick={() => {
+                setAssignEmployeeId(null);
+                setIsApplyModalOpen(true);
+              }}
               className="border-brand-200 bg-brand-50/70 text-brand-700 hover:bg-brand-100"
             >
               Grant Team Leave
@@ -739,11 +777,14 @@ export const LeaveManagementPage = () => {
 
           {canApply && (
             <Button
-              variant="primary"
+              variant={isHrOrAdmin ? 'secondary' : 'primary'}
               size="md"
               icon={Plus}
-              onClick={() => setIsApplyModalOpen(true)}
-              className="shadow-md shadow-brand-500/20"
+              onClick={() => {
+                setAssignEmployeeId('SELF');
+                setIsApplyModalOpen(true);
+              }}
+              className={isHrOrAdmin ? '' : 'shadow-md shadow-brand-500/20'}
             >
               Apply for Leave
             </Button>
@@ -807,7 +848,12 @@ export const LeaveManagementPage = () => {
       </div>
 
       {activeTab === 'balances' && isHrOrAdmin ? (
-        <EmployeeLeaveBalancesViewer />
+        <EmployeeLeaveBalancesViewer
+          onAssignLeave={(empId) => {
+            setAssignEmployeeId(empId);
+            setIsApplyModalOpen(true);
+          }}
+        />
       ) : (
         <>
           {/* When on My Tab: Show Personal Leave Balances Display */}
@@ -1030,13 +1076,17 @@ export const LeaveManagementPage = () => {
       </>
       )}
 
-      {/* Apply Leave Modal */}
+      {/* Apply / Assign Leave Modal */}
       <ApplyLeaveModal
         isOpen={isApplyModalOpen}
-        onClose={() => setIsApplyModalOpen(false)}
+        onClose={() => {
+          setIsApplyModalOpen(false);
+          setAssignEmployeeId(null);
+        }}
         onSuccess={handleApplySuccess}
         leaveTypes={leaveTypes}
         leaveBalances={leaveBalances}
+        initialEmployeeId={assignEmployeeId}
       />
 
       {/* Manager Approve Leave Modal */}

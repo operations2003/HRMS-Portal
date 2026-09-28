@@ -21,6 +21,7 @@ import { Select } from '../common/Select.jsx';
 import { Alert } from '../common/Alert.jsx';
 import { leaveService } from '../../services/leaveService.js';
 import { managerService } from '../../services/managerService.js';
+import { employeeService } from '../../services/employeeService.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 
 
@@ -54,11 +55,55 @@ const getNextWorkingDay = (baseDate = new Date()) => {
 };
 
 
-const RESTRICTED_LEAVE_CODES = ['SBL', 'ML', 'PTL', 'AWOL', 'LOP', 'LWP', 'UPL'];
+export const isUnpaidLeave = (lt) => {
+  if (!lt) return false;
+  if (lt.isPaid === false || lt.is_paid === false) {
+    const code = String(lt.code || lt.leaveTypeCode || '').trim().toUpperCase();
+    if (code === 'AWOL') return false;
+    return true;
+  }
+  const code = String(lt.code || lt.leaveTypeCode || '').trim().toUpperCase();
+  const name = String(lt.name || lt.leaveTypeName || '').trim().toLowerCase();
+  return (
+    code === 'LOP' ||
+    code === 'LWP' ||
+    name.includes('without pay') ||
+    name.includes('loss of pay') ||
+    name.includes('unpaid')
+  );
+};
+
+export const getRemainingBalance = (lt, balances = []) => {
+  if (!lt || !Array.isArray(balances)) return 0;
+  const targetCode = String(lt.code || lt.leaveTypeCode || '').trim().toUpperCase();
+  const targetName = String(lt.name || lt.leaveTypeName || '').trim().toLowerCase();
+  const targetId = lt.id || lt.leaveTypeId;
+
+  const match = balances.find((b) => {
+    if (targetId && (b.leaveTypeId === targetId || b.id === targetId)) {
+      return true;
+    }
+    const bCode = String(b.leaveTypeCode || b.code || '').trim().toUpperCase();
+    if (targetCode && bCode && targetCode === bCode) {
+      return true;
+    }
+    const bName = String(b.leaveTypeName || b.name || '').trim().toLowerCase();
+    if (targetName && bName && targetName === bName) {
+      return true;
+    }
+    return false;
+  });
+
+  if (!match) return 0;
+  const rem = parseFloat(match.remainingDays !== undefined ? match.remainingDays : match.remaining_days);
+  return isNaN(rem) ? 0 : Math.max(0, rem);
+};
+
+const RESTRICTED_LEAVE_CODES = ['AWOL', 'ML', 'PTL', 'PATL', 'SBL'];
 const isRestrictedType = (lt) => {
   if (!lt) return false;
-  const code = String(lt.code || '').trim().toUpperCase();
-  const name = String(lt.name || '').trim().toLowerCase();
+  const code = String(lt.code || lt.leaveTypeCode || '').trim().toUpperCase();
+  const name = String(lt.name || lt.leaveTypeName || '').trim().toLowerCase();
   if (RESTRICTED_LEAVE_CODES.includes(code)) return true;
   return (
     code === 'UPL' ||
@@ -66,9 +111,7 @@ const isRestrictedType = (lt) => {
     name.includes('sabbatical') ||
     name.includes('maternity') ||
     name.includes('paternity') ||
-    name.includes('awol') ||
-    name.includes('without pay') ||
-    name.includes('loss of pay')
+    name.includes('awol')
   );
 };
 
@@ -78,35 +121,55 @@ export const ApplyLeaveModal = ({
   onSuccess,
   leaveTypes = [],
   leaveBalances = [],
+  initialEmployeeId = null,
 }) => {
   const { user, hasRole } = useAuth();
   const normRole = (user?.roleName || '').toLowerCase();
   const isAdminOrCeo = ['admin', 'superadmin', 'orgadmin'].some(r => normRole.includes(r)) || user?.email === 'sheetalbedi@tasknera.com';
-  const canApplyForTeam = hasRole(['Manager', 'HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']);
+  const isHr = ['hr', 'hrmanager'].some(r => normRole.includes(r)) || hasRole(['HR', 'HRManager']);
+  const isHrOrAdmin = isHr || isAdminOrCeo || hasRole(['Admin', 'SuperAdmin', 'OrgAdmin']);
+  const isManager = ['manager', 'lead', 'teamlead', 'supervisor'].some(r => normRole.includes(r)) || hasRole(['Manager', 'Lead', 'TeamLead', 'Supervisor']);
+  const canApplyForTeam = isHrOrAdmin || isManager;
   
-  const [targetEmployeeId, setTargetEmployeeId] = useState(isAdminOrCeo ? '' : 'SELF');
+  const [targetEmployeeId, setTargetEmployeeId] = useState(
+    initialEmployeeId || (isAdminOrCeo ? '' : 'SELF')
+  );
   const [teamMembers, setTeamMembers] = useState([]);
   const [loadingTeam, setLoadingTeam] = useState(false);
 
-  // Fetch direct reports if the user is a manager or HR/Admin
+  // Fetch employees: Admin & HR can assign to ALL employees in the org; Managers can assign to their team/department
   useEffect(() => {
     if (isOpen && canApplyForTeam) {
       setLoadingTeam(true);
-      managerService
-        .getTeam()
+      const loader = isHrOrAdmin
+        ? employeeService.listEmployees({ limit: 300 })
+        : managerService.getTeam();
+
+      loader
         .then((res) => {
-          const list = Array.isArray(res) ? res : res?.data || [];
+          let list = [];
+          if (Array.isArray(res)) {
+            list = res;
+          } else if (Array.isArray(res?.employees)) {
+            list = res.employees;
+          } else if (Array.isArray(res?.data)) {
+            list = res.data;
+          } else if (Array.isArray(res?.items)) {
+            list = res.items;
+          }
           setTeamMembers(list);
-          if (isAdminOrCeo && list.length > 0 && (!targetEmployeeId || targetEmployeeId === 'SELF')) {
+          if (initialEmployeeId) {
+            setTargetEmployeeId(initialEmployeeId);
+          } else if (isAdminOrCeo && list.length > 0 && (!targetEmployeeId || targetEmployeeId === 'SELF')) {
             setTargetEmployeeId(list[0].id);
           }
         })
         .catch((err) => {
-          console.warn('Could not load direct reports for manager leave application:', err);
+          console.warn('Could not load employees for leave assignment:', err);
         })
         .finally(() => setLoadingTeam(false));
     }
-  }, [isOpen, canApplyForTeam, isAdminOrCeo]);
+  }, [isOpen, canApplyForTeam, isHrOrAdmin, isAdminOrCeo, initialEmployeeId]);
 
   const selectedMember = teamMembers.find((m) => m.id === targetEmployeeId);
   const userGender = String(user?.gender || user?.employee?.gender || '').toUpperCase();
@@ -114,26 +177,50 @@ export const ApplyLeaveModal = ({
     ? userGender
     : String(selectedMember?.gender || 'Male').toUpperCase();
 
-  const allAvailableTypes = leaveTypes && leaveTypes.length > 0 ? leaveTypes : DEFAULT_LEAVE_CATEGORIES;
-  const effectiveLeaveTypes = allAvailableTypes.filter((lt) => {
-    const code = String(lt.code || '').toUpperCase();
-    const name = String(lt.name || '').toLowerCase();
-    if (code === 'UPL' || name.includes('unplanned')) {
-      return false;
+  const baseTypes = leaveTypes && leaveTypes.length > 0 ? [...leaveTypes] : [...DEFAULT_LEAVE_CATEGORIES];
+  if (!baseTypes.some(isUnpaidLeave)) {
+    const defaultLop = DEFAULT_LEAVE_CATEGORIES.find(isUnpaidLeave);
+    if (defaultLop) {
+      baseTypes.push(defaultLop);
     }
+  }
 
-    // When applying for SELF: restricted leaves (Sabbatical, Maternity, Paternity, AWOL, LOP) MUST NOT appear!
-    if (targetEmployeeId === 'SELF' && isRestrictedType(lt)) {
+  const effectiveLeaveTypes = baseTypes.filter((lt) => {
+    const code = String(lt.code || '').trim().toUpperCase();
+    const name = String(lt.name || '').trim().toLowerCase();
+    if (code === 'UPL' || name.includes('unplanned')) {
       return false;
     }
 
     const ge = String(lt.genderEligibility || lt.gender_eligibility || 'ALL').toUpperCase();
     if (ge === 'FEMALE' || code === 'ML') {
-      return targetGender !== 'MALE';
+      if (targetGender === 'MALE') return false;
     }
     if (ge === 'MALE' || code === 'PTL' || code === 'PATL') {
-      return targetGender !== 'FEMALE';
+      if (targetGender === 'FEMALE') return false;
     }
+
+    // When applying for SELF:
+    if (targetEmployeeId === 'SELF') {
+      // Restricted unauthorized leaves (AWOL, Sabbatical) cannot be self-applied
+      if (code === 'AWOL' || name.includes('awol') || code === 'SBL' || name.includes('sabbatical')) {
+        return false;
+      }
+
+      // Unpaid Leave (LOP / LWP): always selectable (and is the ONLY selectable option if all paid balances are 0)
+      if (isUnpaidLeave(lt)) {
+        return true;
+      }
+
+      // Paid Leave Types: strictly check remaining balance
+      // Rule 1: balance > 0 -> allowed to apply
+      // Rule 2: balance === 0 -> NOT available/selectable
+      // Rule 3: applies independently to every leave type
+      const remaining = getRemainingBalance(lt, leaveBalances);
+      return remaining > 0;
+    }
+
+    // When assigning for another team member (Admin/HR/Manager):
     return true;
   });
 
@@ -146,6 +233,10 @@ export const ApplyLeaveModal = ({
     reason: '',
   });
 
+  const [selectionMode, setSelectionMode] = useState('range'); // 'range' | 'specific'
+  const [selectedDates, setSelectedDates] = useState([]);
+  const [specificDateInput, setSpecificDateInput] = useState('');
+
   const [formErrors, setFormErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [apiError, setApiError] = useState(null);
@@ -154,7 +245,7 @@ export const ApplyLeaveModal = ({
   const [durationPreview, setDurationPreview] = useState(null);
   const [isCalculating, setIsCalculating] = useState(false);
 
-  // Reset or switch category if targetEmployeeId changes or on open
+  // Reset or switch category if targetEmployeeId changes, leave balances change, or on open
   useEffect(() => {
     if (isOpen) {
       const defaultWorkingDay = getNextWorkingDay();
@@ -170,14 +261,18 @@ export const ApplyLeaveModal = ({
       setFormErrors({});
       setApiError(null);
     }
-  }, [isOpen, targetEmployeeId]);
+  }, [isOpen, targetEmployeeId, effectiveLeaveTypes.length, leaveBalances]);
 
   // Initialize form on initial modal open
   useEffect(() => {
     if (isOpen) {
       const defaultType = effectiveLeaveTypes[0]?.id || '';
       const defaultWorkingDay = getNextWorkingDay();
-      setTargetEmployeeId('SELF');
+      const initialTarget = initialEmployeeId || (isAdminOrCeo ? (teamMembers[0]?.id || '') : 'SELF');
+      setTargetEmployeeId(initialTarget);
+      setSelectionMode('range');
+      setSelectedDates([defaultWorkingDay]);
+      setSpecificDateInput(defaultWorkingDay);
       setFormData({
         leaveTypeId: defaultType,
         startDate: defaultWorkingDay,
@@ -190,30 +285,46 @@ export const ApplyLeaveModal = ({
       setApiError(null);
       setDurationPreview(null);
     }
-  }, [isOpen]);
+  }, [isOpen, initialEmployeeId]);
 
   // Handle live duration calculation from backend when dates change
   useEffect(() => {
-    if (!formData.startDate || !formData.endDate) {
-      setDurationPreview(null);
-      return;
-    }
-
-    if (formData.startDate > formData.endDate && !formData.isHalfDay) {
-      setDurationPreview(null);
-      return;
-    }
-
     let isMounted = true;
     const calculate = async () => {
       try {
         setIsCalculating(true);
-        const result = await leaveService.calculateDuration({
-          startDate: formData.startDate,
-          endDate: formData.isHalfDay ? formData.startDate : formData.endDate,
-          isHalfDay: formData.isHalfDay,
-          halfDayPeriod: formData.isHalfDay ? formData.halfDayPeriod : undefined,
-        });
+        let payload;
+
+        if (selectionMode === 'specific') {
+          if (!selectedDates || selectedDates.length === 0) {
+            setDurationPreview(null);
+            return;
+          }
+          payload = {
+            dates: selectedDates,
+            isHalfDay: formData.isHalfDay,
+            halfDayPeriod: formData.isHalfDay ? formData.halfDayPeriod : undefined,
+            leaveTypeId: formData.leaveTypeId,
+          };
+        } else {
+          if (!formData.startDate || !formData.endDate) {
+            setDurationPreview(null);
+            return;
+          }
+          if (formData.startDate > formData.endDate && !formData.isHalfDay) {
+            setDurationPreview(null);
+            return;
+          }
+          payload = {
+            startDate: formData.startDate,
+            endDate: formData.isHalfDay ? formData.startDate : formData.endDate,
+            isHalfDay: formData.isHalfDay,
+            halfDayPeriod: formData.isHalfDay ? formData.halfDayPeriod : undefined,
+            leaveTypeId: formData.leaveTypeId,
+          };
+        }
+
+        const result = await leaveService.calculateDuration(payload);
         if (isMounted) {
           setDurationPreview(result);
         }
@@ -235,7 +346,29 @@ export const ApplyLeaveModal = ({
       isMounted = false;
       clearTimeout(timer);
     };
-  }, [formData.startDate, formData.endDate, formData.isHalfDay, formData.halfDayPeriod]);
+  }, [
+    selectionMode,
+    selectedDates,
+    formData.startDate,
+    formData.endDate,
+    formData.isHalfDay,
+    formData.halfDayPeriod,
+    formData.leaveTypeId,
+  ]);
+
+  const selectedTypeObj = effectiveLeaveTypes.find((t) => t.id === formData.leaveTypeId);
+  const selectedBalanceObj = leaveBalances.find((b) => {
+    if (b.leaveTypeId === formData.leaveTypeId || b.id === formData.leaveTypeId) return true;
+    if (selectedTypeObj) {
+      const targetCode = String(selectedTypeObj.code || '').trim().toUpperCase();
+      const bCode = String(b.leaveTypeCode || b.code || '').trim().toUpperCase();
+      if (targetCode && bCode && targetCode === bCode) return true;
+      const targetName = String(selectedTypeObj.name || '').trim().toLowerCase();
+      const bName = String(b.leaveTypeName || b.name || '').trim().toLowerCase();
+      if (targetName && bName && targetName === bName) return true;
+    }
+    return false;
+  });
 
   // Real-time client validation (backend remains authoritative)
   const validateForm = () => {
@@ -243,17 +376,28 @@ export const ApplyLeaveModal = ({
 
     if (!formData.leaveTypeId) {
       errs.leaveTypeId = 'Please select a leave category.';
+    } else if (targetEmployeeId === 'SELF' && selectedTypeObj && !isUnpaidLeave(selectedTypeObj)) {
+      const rem = getRemainingBalance(selectedTypeObj, leaveBalances);
+      if (rem <= 0) {
+        errs.leaveTypeId = `Selected leave type '${selectedTypeObj.name}' is not available because your current available balance is 0.`;
+      }
     }
 
-    if (!formData.startDate) {
-      errs.startDate = 'Start date is required.';
-    }
+    if (selectionMode === 'specific') {
+      if (!selectedDates || selectedDates.length === 0) {
+        errs.selectedDates = 'Please select at least one leave date.';
+      }
+    } else {
+      if (!formData.startDate) {
+        errs.startDate = 'Start date is required.';
+      }
 
-    if (!formData.isHalfDay) {
-      if (!formData.endDate) {
-        errs.endDate = 'End date is required.';
-      } else if (formData.startDate && formData.endDate && formData.startDate > formData.endDate) {
-        errs.endDate = 'End date cannot be earlier than start date.';
+      if (!formData.isHalfDay) {
+        if (!formData.endDate) {
+          errs.endDate = 'End date is required.';
+        } else if (formData.startDate && formData.endDate && formData.startDate > formData.endDate) {
+          errs.endDate = 'End date cannot be earlier than start date.';
+        }
       }
     }
 
@@ -291,6 +435,20 @@ export const ApplyLeaveModal = ({
     }));
   };
 
+  const handleAddSpecificDate = () => {
+    if (!specificDateInput) return;
+    if (!selectedDates.includes(specificDateInput)) {
+      const updated = [...selectedDates, specificDateInput].sort();
+      setSelectedDates(updated);
+      setFormErrors((prev) => ({ ...prev, selectedDates: undefined }));
+    }
+  };
+
+  const handleRemoveSpecificDate = (dToRemove) => {
+    if (selectedDates.length <= 1) return;
+    setSelectedDates(selectedDates.filter((d) => d !== dToRemove));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (isSubmitting) return;
@@ -303,17 +461,23 @@ export const ApplyLeaveModal = ({
 
       const payload = {
         leaveTypeId: formData.leaveTypeId,
-        startDate: formData.startDate,
-        endDate: formData.isHalfDay ? formData.startDate : formData.endDate,
         isHalfDay: formData.isHalfDay,
         halfDayPeriod: formData.isHalfDay ? formData.halfDayPeriod : undefined,
         reason: formData.reason.trim(),
       };
 
+      if (selectionMode === 'specific') {
+        payload.dates = selectedDates;
+        payload.startDate = selectedDates[0];
+        payload.endDate = selectedDates[selectedDates.length - 1];
+      } else {
+        payload.startDate = formData.startDate;
+        payload.endDate = formData.isHalfDay ? formData.startDate : formData.endDate;
+      }
+
       if (targetEmployeeId && targetEmployeeId !== 'SELF') {
         payload.employeeId = targetEmployeeId;
       }
-
 
       const newRecord = await leaveService.applyLeave(payload);
       if (onSuccess) {
@@ -335,15 +499,18 @@ export const ApplyLeaveModal = ({
     };
   });
 
-  const selectedTypeObj = effectiveLeaveTypes.find((t) => t.id === formData.leaveTypeId);
-  const selectedBalanceObj = leaveBalances.find((b) => b.leaveTypeId === formData.leaveTypeId);
-
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Apply for Leave"
-      subtitle="Submit a new time-off request with duration calculation"
+      title={targetEmployeeId !== 'SELF' ? 'Assign Leave' : 'Apply for Leave'}
+      subtitle={
+        targetEmployeeId !== 'SELF'
+          ? (isHrOrAdmin
+            ? 'Assign exact leave dates for an employee across the organization'
+            : 'Assign exact leave dates for reporting team member')
+          : 'Submit a new time-off request with duration calculation'
+      }
       maxWidth="max-w-xl"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -354,18 +521,18 @@ export const ApplyLeaveModal = ({
           </Alert>
         )}
 
-        {/* Apply Leave For (Manager / Team Member selector) */}
+        {/* Apply Leave For (Manager / Admin / HR selector) */}
         {canApplyForTeam && teamMembers.length > 0 && (
           <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1.5">
             <label className="block text-xs font-semibold text-slate-700 flex items-center justify-between">
               <span className="flex items-center gap-1.5">
                 <Users className="w-3.5 h-3.5 text-brand-600" />
-                Apply Leave For <span className="text-rose-500">*</span>
+                Select Employee <span className="text-rose-500">*</span>
               </span>
               {targetEmployeeId !== 'SELF' && (
-                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                  <ShieldCheck className="w-3 h-3 text-amber-600" />
-                  Manager Action on Behalf of Employee
+                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-brand-700 bg-brand-50 px-2 py-0.5 rounded border border-brand-200">
+                  <ShieldCheck className="w-3 h-3 text-brand-600" />
+                  {isHrOrAdmin ? 'Admin / HR Assignment' : 'Manager Scope Assignment'}
                 </span>
               )}
             </label>
@@ -376,17 +543,17 @@ export const ApplyLeaveModal = ({
                 ...(!isAdminOrCeo ? [{ value: 'SELF', label: `Self (${user?.firstName || 'My Account'}) - Standard Leaves` }] : []),
                 ...teamMembers.map((m) => ({
                   value: m.id,
-                  label: `${m.firstName} ${m.lastName} (${m.employeeCode || m.designation?.title || 'Reportee'})`,
+                  label: `${m.firstName} ${m.lastName} (${m.employeeCode || m.employeeNumber || m.designation?.title || 'Employee'})`,
                 })),
               ]}
             />
             {targetEmployeeId === 'SELF' ? (
               <p className="text-[11px] text-slate-500">
-                Note: Sabbatical, Maternity, Paternity, AWOL, and LOP can only be initiated by your manager.
+                Note: AWOL, Maternity, Sabbatical, and Paternity leaves must be assigned with exact dates by Admin, HR, or your Manager.
               </p>
             ) : (
               <p className="text-[11px] text-emerald-700 font-medium">
-                As manager, you can grant standard and special leaves (Sabbatical, Maternity, Paternity, AWOL, LOP) for this reportee.
+                {isHrOrAdmin ? 'As Admin/HR' : 'As Manager'}, you can assign both standard and restricted leaves (Holiday, AWOL, LOP, Maternity, Sabbatical, Paternity) with exact dates.
               </p>
             )}
           </div>
@@ -414,9 +581,9 @@ export const ApplyLeaveModal = ({
           {selectedTypeObj && (
             <div className="mt-1.5 flex items-center justify-between text-xs text-slate-500">
               <span>{selectedTypeObj.description}</span>
-              {selectedBalanceObj && (
+              {selectedBalanceObj && !isUnpaidLeave(selectedTypeObj) && (
                 <span className="font-semibold text-brand-600">
-                  Available: {selectedBalanceObj.remainingDays} / {selectedBalanceObj.entitledDays} days
+                  Available: {selectedBalanceObj.remainingDays} / {selectedBalanceObj.allocatedDays || selectedBalanceObj.entitledDays || 0} days
                 </span>
               )}
             </div>
@@ -469,34 +636,141 @@ export const ApplyLeaveModal = ({
           )}
         </div>
 
-        {/* 3. Date Selection */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
-              <Calendar className="w-3.5 h-3.5 text-slate-500" />
-              {formData.isHalfDay ? 'Leave Date' : 'Start Date'} <span className="text-rose-500">*</span>
-            </label>
-            <Input
-              type="date"
-              value={formData.startDate}
-              onChange={(e) => handleStartDateChange(e.target.value)}
-              error={formErrors.startDate}
-            />
-          </div>
-
+        {/* 3. Date Selection Mode & Inputs */}
+        <div className="space-y-3">
           {!formData.isHalfDay && (
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-slate-500" />
-                End Date <span className="text-rose-500">*</span>
-              </label>
-              <Input
-                type="date"
-                min={formData.startDate}
-                value={formData.endDate}
-                onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                error={formErrors.endDate}
-              />
+            <div className="flex items-center justify-between pb-1">
+              <span className="text-xs font-semibold text-slate-700">Selection Mode:</span>
+              <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setSelectionMode('range')}
+                  className={`px-2.5 py-1 text-xs font-semibold rounded-md flex items-center gap-1.5 transition-all ${
+                    selectionMode === 'range'
+                      ? 'bg-white text-brand-700 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Calendar className="w-3.5 h-3.5" />
+                  <span>Date Range</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectionMode('specific');
+                    if (selectedDates.length === 0 && formData.startDate) {
+                      setSelectedDates([formData.startDate]);
+                      setSpecificDateInput(formData.startDate);
+                    }
+                  }}
+                  className={`px-2.5 py-1 text-xs font-semibold rounded-md flex items-center gap-1.5 transition-all ${
+                    selectionMode === 'specific'
+                      ? 'bg-white text-brand-700 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <CalendarDays className="w-3.5 h-3.5" />
+                  <span>Multiple Specific Dates</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {selectionMode === 'specific' && !formData.isHalfDay ? (
+            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+              <div className="flex items-end gap-2">
+                <div className="flex-1">
+                  <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                    Select a Date to Add
+                  </label>
+                  <Input
+                    type="date"
+                    value={specificDateInput}
+                    onChange={(e) => setSpecificDateInput(e.target.value)}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="md"
+                  onClick={handleAddSpecificDate}
+                  disabled={!specificDateInput || selectedDates.includes(specificDateInput)}
+                >
+                  + Add Date
+                </Button>
+              </div>
+
+              {formErrors.selectedDates && (
+                <p className="text-xs text-rose-500 font-medium">{formErrors.selectedDates}</p>
+              )}
+
+              <div>
+                <span className="block text-[11px] font-semibold text-slate-600 mb-1.5">
+                  Selected Dates ({selectedDates.length}):
+                </span>
+                <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pr-1">
+                  {selectedDates.map((dStr) => {
+                    const dObj = new Date(dStr + 'T00:00:00');
+                    const label = dObj.toLocaleDateString(undefined, {
+                      weekday: 'short',
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric',
+                    });
+                    return (
+                      <span
+                        key={dStr}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-white text-slate-800 border border-slate-300 shadow-xs"
+                      >
+                        <CalendarDays className="w-3 h-3 text-brand-600" />
+                        <span>{label}</span>
+                        {selectedDates.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveSpecificDate(dStr)}
+                            className="text-slate-400 hover:text-rose-600 transition-colors ml-0.5 font-bold"
+                            title="Remove date"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                  {formData.isHalfDay ? 'Leave Date' : 'Start Date'} <span className="text-rose-500">*</span>
+                </label>
+                <Input
+                  type="date"
+                  value={formData.startDate}
+                  onChange={(e) => handleStartDateChange(e.target.value)}
+                  error={formErrors.startDate}
+                />
+              </div>
+
+              {!formData.isHalfDay && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                    End Date <span className="text-rose-500">*</span>
+                  </label>
+                  <Input
+                    type="date"
+                    min={formData.startDate}
+                    value={formData.endDate}
+                    onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                    error={formErrors.endDate}
+                  />
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -571,7 +845,9 @@ export const ApplyLeaveModal = ({
             isLoading={isSubmitting}
             disabled={isSubmitting || durationPreview?.isNonWorkingPeriod || durationPreview?.totalDays === 0}
           >
-            {isSubmitting ? 'Submitting Application...' : 'Submit Leave Request'}
+            {isSubmitting
+              ? (targetEmployeeId !== 'SELF' ? 'Assigning Leave...' : 'Submitting Application...')
+              : (targetEmployeeId !== 'SELF' ? 'Assign Leave' : 'Submit Leave Request')}
           </Button>
         </div>
       </form>

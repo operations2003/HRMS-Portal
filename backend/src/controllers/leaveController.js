@@ -262,7 +262,7 @@ export const leaveController = {
    */
   async approveLeave(req, res, next) {
     try {
-      const record = await leaveService.approveLeave(req.user, req.params.id);
+      const record = await leaveService.approveLeave(req.user, req.params.id, req.body);
       return sendSuccess(res, 'Leave request approved successfully.', record, 200);
     } catch (error) {
       if (error.statusCode) {

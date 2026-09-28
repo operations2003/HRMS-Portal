@@ -58,6 +58,24 @@ const getProbationEndDate = (startDate) => {
   return d.toISOString().split('T')[0];
 };
 
+const RESTRICTED_LEAVE_CODES = ['HL', 'AWOL', 'LOP', 'LWP', 'ML', 'PTL', 'PATL', 'SBL'];
+const isRestrictedLeaveType = (lt) => {
+  if (!lt) return false;
+  const code = String(lt.code || '').trim().toUpperCase();
+  const name = String(lt.name || '').trim().toLowerCase();
+  if (RESTRICTED_LEAVE_CODES.includes(code)) return true;
+  return (
+    name.includes('holiday') ||
+    name.includes('absent without leave') ||
+    name.includes('awol') ||
+    name.includes('without pay') ||
+    name.includes('loss of pay') ||
+    name.includes('maternity') ||
+    name.includes('sabbatical') ||
+    name.includes('paternity')
+  );
+};
+
 export const EmployeeListPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { user, hasPermission } = useAuth();
@@ -519,9 +537,9 @@ export const EmployeeListPage = () => {
       otherDeductions: '',
     });
 
-    // Reset leave allocations to 0 (admin decides the exact numbers)
+    // Reset leave allocations to 0 (admin decides the exact numbers for standard leaves)
     const initialAlloc = {};
-    leaveTypes.forEach((lt) => {
+    leaveTypes.filter((lt) => !isRestrictedLeaveType(lt)).forEach((lt) => {
       initialAlloc[lt.id] = 0;
     });
     setLeaveAllocations(initialAlloc);
@@ -1953,7 +1971,7 @@ export const EmployeeListPage = () => {
             </div>
 
             <p className="text-[11px] text-slate-600 leading-relaxed">
-              Define the exact annual paid leave days allocated to this employee. These will reflect directly on their personal account and leave balance cards.
+              Define the exact annual paid leave days allocated to this employee (Planned Leave, Casual Leave, Sick Leave). Note: Holiday, AWOL, LOP, Maternity, Sabbatical, and Paternity leaves must be assigned with exact dates in the Leave module.
             </p>
 
             {loadingLeaveBalances ? (
@@ -1962,7 +1980,7 @@ export const EmployeeListPage = () => {
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {leaveTypes.map((lt) => {
+                {leaveTypes.filter((lt) => !isRestrictedLeaveType(lt)).map((lt) => {
                   const currentVal = leaveAllocations[lt.id] !== undefined ? leaveAllocations[lt.id] : 0;
                   const isFemaleOnly = lt.genderEligibility === 'FEMALE' || lt.code === 'ML';
                   const isMaleOnly = lt.genderEligibility === 'MALE' || lt.code === 'PTL' || lt.code === 'PATL';

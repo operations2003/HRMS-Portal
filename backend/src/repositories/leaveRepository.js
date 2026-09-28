@@ -73,6 +73,11 @@ const mapLeaveRequestRow = (row) => {
     rejectionReason: row.rejection_reason || '',
     cancellationReason: row.cancellation_reason || '',
     cancelledAt: row.cancelled_at ? new Date(row.cancelled_at).toISOString() : null,
+    dateDecisions: Array.isArray(row.date_decisions)
+      ? row.date_decisions
+      : typeof row.date_decisions === 'string'
+      ? JSON.parse(row.date_decisions || '[]')
+      : (row.date_decisions || []),
     createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
     updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : null,
     // Joined Leave Type
@@ -132,6 +137,7 @@ const BASE_LEAVE_REQUEST_SELECT = `
     lr.rejection_reason,
     lr.cancellation_reason,
     lr.cancelled_at,
+    lr.date_decisions,
     lr.created_at,
     lr.updated_at,
     lt.id AS lt_id,
@@ -262,19 +268,27 @@ export const leaveRepository = {
     const isHalfDay = Boolean(data.isHalfDay);
     const halfDayPeriod = isHalfDay ? data.halfDayPeriod || 'FIRST_HALF' : null;
     const totalDays = Number(data.totalDays);
-    const reason = data.reason.trim();
-    const status = 'PENDING';
+    const reason = (data.reason || '').trim();
+    const status = data.status || 'PENDING';
     const appliedDate = new Date();
+    const approverId = data.approverId || null;
+    const approverUserId = data.approverUserId || null;
+    const actionDate = status === 'APPROVED' ? new Date() : null;
+    const dateDecisions = JSON.stringify(data.dateDecisions || []);
 
     const sql = `
       INSERT INTO leave_requests (
         id, org_id, employee_id, leave_type_id,
         start_date, end_date, is_half_day, half_day_period,
-        total_days, reason, status, applied_date
+        total_days, reason, status, applied_date,
+        approver_id, approver_user_id, action_date,
+        date_decisions
       ) VALUES (
         $1, $2, $3, $4,
         $5::date, $6::date, $7, $8,
-        $9, $10, $11, $12
+        $9, $10, $11, $12,
+        $13, $14, $15,
+        $16::jsonb
       )
       RETURNING id;
     `;
@@ -292,6 +306,10 @@ export const leaveRepository = {
       reason,
       status,
       appliedDate,
+      approverId,
+      approverUserId,
+      actionDate,
+      dateDecisions,
     ]);
 
     return this.findById(id, orgId);
@@ -645,10 +663,29 @@ export const leaveRepository = {
   /**
    * Update status & audit info of a leave request
    */
-  async updateStatus(id, { status, approverId = null, approverUserId = null, rejectionReason = '', cancellationReason = '', cancelledAt = null }) {
+  async updateStatus(id, {
+    status,
+    approverId = null,
+    approverUserId = null,
+    rejectionReason = '',
+    cancellationReason = '',
+    cancelledAt = null,
+    totalDays = undefined,
+    dateDecisions = undefined,
+  }) {
     const setClauses = ['status = $1', 'updated_at = NOW()'];
     const values = [status];
     let paramIndex = 2;
+
+    if (totalDays !== undefined && totalDays !== null) {
+      setClauses.push(`total_days = $${paramIndex++}`);
+      values.push(totalDays);
+    }
+
+    if (dateDecisions !== undefined && dateDecisions !== null) {
+      setClauses.push(`date_decisions = $${paramIndex++}::jsonb`);
+      values.push(JSON.stringify(dateDecisions));
+    }
 
     if (status === 'APPROVED' || status === 'REJECTED') {
       setClauses.push(`action_date = NOW()`);
@@ -842,10 +879,29 @@ export const leaveRepository = {
       }));
     }
 
+    const RESTRICTED_CODES = ['HL', 'AWOL', 'LOP', 'LWP', 'ML', 'PTL', 'PATL', 'SBL'];
+    const RESTRICTED_NAMES = [
+      'holiday',
+      'absent without leave',
+      'awol',
+      'leave without pay',
+      'loss of pay',
+      'lop',
+      'maternity',
+      'sabbatical',
+      'paternity',
+    ];
+
     for (const item of list) {
       if (!item.leaveTypeId || isNaN(item.days)) continue;
       const lt = typeMap.get(item.leaveTypeId);
       if (lt) {
+        const c = String(lt.code || '').trim().toUpperCase();
+        const n = String(lt.name || '').trim().toLowerCase();
+        if (RESTRICTED_CODES.includes(c) || RESTRICTED_NAMES.some((rn) => n === rn || n.includes(rn))) {
+          // Do not allow raw quota bucket allocations for restricted leave types without dates
+          continue;
+        }
         if (lt.genderEligibility === 'FEMALE' && normGender === 'MALE') continue;
         if (lt.genderEligibility === 'MALE' && normGender === 'FEMALE') continue;
       }
@@ -861,6 +917,27 @@ export const leaveRepository = {
     }
 
     return this.getLeaveBalances(employeeId, year, normGender);
+  },
+
+  /**
+   * Record balance for an assigned leave (e.g., Holiday, AWOL, LOP, Maternity, Sabbatical, Paternity)
+   * Ensures bucket allocated_days and used_days accurately reflect the assigned leave dates.
+   */
+  async recordAssignedLeaveBalance(employeeId, orgId, leaveTypeId, year, days) {
+    const assignedDays = parseFloat(days) || 0;
+    const balanceId = `lb-${employeeId}-${leaveTypeId}-${year}`;
+    const sql = `
+      INSERT INTO leave_balances (id, org_id, employee_id, leave_type_id, year, allocated_days, used_days, pending_days, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $6, 0.0, NOW())
+      ON CONFLICT (employee_id, leave_type_id, year)
+      DO UPDATE SET
+        allocated_days = GREATEST(leave_balances.allocated_days, leave_balances.used_days + $6),
+        used_days = leave_balances.used_days + $6,
+        updated_at = NOW()
+      RETURNING *;
+    `;
+    const res = await pool.query(sql, [balanceId, orgId, employeeId, leaveTypeId, year, assignedDays]);
+    return res.rows[0];
   },
 
   /**

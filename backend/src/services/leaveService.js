@@ -1,3 +1,4 @@
+import { pool } from '../config/db.js';
 import { leaveRepository } from '../repositories/leaveRepository.js';
 import { employeeRepository } from '../repositories/employeeRepository.js';
 import { workflowRepository } from '../repositories/workflowRepository.js';
@@ -59,7 +60,15 @@ const formatLocalDate = (date) => {
  * Core calculation engine for Leave Duration
  * Excludes weekends (Sunday) and active mandatory company/national holidays (6 working days: Mon-Sat).
  */
-const calculateLeaveDuration = async (orgId, startDateStr, endDateStr, isHalfDay = false, halfDayPeriod = null, allowZeroWorkingDays = false) => {
+const calculateLeaveDuration = async (
+  orgId,
+  startDateStr,
+  endDateStr,
+  isHalfDay = false,
+  halfDayPeriod = null,
+  allowZeroWorkingDays = false,
+  isRestricted = false
+) => {
   const sDate = parseLocalDate(startDateStr);
   const eDate = parseLocalDate(endDateStr);
 
@@ -138,6 +147,20 @@ const calculateLeaveDuration = async (orgId, startDateStr, endDateStr, isHalfDay
   }
 
   if (isHalfDay) {
+    if (isRestricted) {
+      return {
+        startDate: startDateStr.trim(),
+        endDate: endDateStr.trim(),
+        isHalfDay: true,
+        halfDayPeriod,
+        totalCalendarDays: 1,
+        weekendDays: weekendDaysCount,
+        holidayDays: holidayDaysCount,
+        workingDays: 0.5,
+        totalDays: 0.5,
+        holidays: holidaysEncountered,
+      };
+    }
     if (weekendDaysCount > 0) {
       if (allowZeroWorkingDays) {
         return {
@@ -194,6 +217,24 @@ const calculateLeaveDuration = async (orgId, startDateStr, endDateStr, isHalfDay
     };
   }
 
+  // If this is a restricted leave assignment (Holiday, AWOL, LOP, Sabbatical, Maternity, Paternity)
+  if (isRestricted) {
+    const effDays = Math.max(1, totalCalendarDays - weekendDaysCount || totalCalendarDays);
+    return {
+      startDate: startDateStr.trim(),
+      endDate: endDateStr.trim(),
+      isHalfDay: false,
+      halfDayPeriod: null,
+      totalCalendarDays,
+      weekendDays: weekendDaysCount,
+      holidayDays: holidayDaysCount,
+      workingDays: effDays,
+      totalDays: effDays,
+      holidays: holidaysEncountered,
+      isNonWorkingPeriod: false,
+    };
+  }
+
   if (workingDaysCount === 0) {
     if (allowZeroWorkingDays) {
       return {
@@ -230,25 +271,157 @@ const calculateLeaveDuration = async (orgId, startDateStr, endDateStr, isHalfDay
   };
 };
 
-export const RESTRICTED_LEAVE_CODES = ['SBL', 'ML', 'PTL', 'AWOL', 'LOP', 'LWP'];
+export const isUnpaidLeave = (lt) => {
+  if (!lt) return false;
+  if (lt.isPaid === false || lt.is_paid === false) {
+    const code = String(lt.code || lt.leaveTypeCode || '').trim().toUpperCase();
+    if (code === 'AWOL') return false;
+    return true;
+  }
+  const code = String(lt.code || lt.leaveTypeCode || '').trim().toUpperCase();
+  const name = String(lt.name || lt.leaveTypeName || '').trim().toLowerCase();
+  return (
+    code === 'LOP' ||
+    code === 'LWP' ||
+    name.includes('without pay') ||
+    name.includes('loss of pay') ||
+    name.includes('unpaid')
+  );
+};
+
+export const RESTRICTED_LEAVE_CODES = ['AWOL', 'ML', 'PTL', 'PATL', 'SBL'];
 export const RESTRICTED_LEAVE_NAMES = [
-  'sabbatical leave',
-  'maternity leave',
-  'paternity leave',
   'absent without leave(awol)',
   'absent without leave',
   'awol',
-  'leave without pay (lop)',
-  'leave without pay',
-  'loss of pay',
+  'maternity leave',
+  'maternity',
+  'sabbatical leave',
+  'sabbatical',
+  'paternity leave',
+  'paternity',
 ];
 
 export const isRestrictedLeaveType = (lt) => {
   if (!lt) return false;
-  const code = String(lt.code || '').trim().toUpperCase();
-  const name = String(lt.name || '').trim().toLowerCase();
+  const code = String(lt.code || lt.leaveTypeCode || '').trim().toUpperCase();
+  const name = String(lt.name || lt.leaveTypeName || '').trim().toLowerCase();
   if (RESTRICTED_LEAVE_CODES.includes(code)) return true;
   return RESTRICTED_LEAVE_NAMES.some((rn) => name === rn || name.includes(rn));
+};
+
+/**
+ * Synchronize approved/assigned leave dates to the attendance_records table
+ */
+export const syncLeaveToAttendance = async (
+  targetEmp,
+  request,
+  leaveType,
+  startDateStr,
+  endDateStr,
+  isHalfDay = false,
+  halfDayPeriod = null,
+  dateDecisions = null
+) => {
+  try {
+    if (!targetEmp) return;
+
+    const code = String(leaveType?.code || '').trim().toUpperCase();
+    let attStatus = 'ON_LEAVE';
+    if (code === 'HL') {
+      attStatus = 'HOLIDAY';
+    } else if (code === 'AWOL') {
+      attStatus = 'ABSENT';
+    } else if (code === 'LOP' || code === 'LWP') {
+      attStatus = 'ON_LEAVE';
+    } else if (isHalfDay) {
+      attStatus = 'HALF_DAY';
+    }
+
+    const totalHours = isHalfDay ? 4.00 : 0.00;
+    const notes = isHalfDay
+      ? `${leaveType?.name || 'Leave'} (${halfDayPeriod === 'FIRST_HALF' ? 'Morning Half' : 'Afternoon Half'} - Approved)`
+      : `${leaveType?.name || 'Leave'} (Approved)`;
+
+    // Collect approved and rejected dates
+    let approvedDates = [];
+    let rejectedDates = [];
+
+    if (Array.isArray(dateDecisions) && dateDecisions.length > 0) {
+      for (const item of dateDecisions) {
+        if (!item || !item.date) continue;
+        const dStr = String(item.date).trim();
+        const itemStatus = String(item.status || '').toUpperCase();
+        if (itemStatus === 'APPROVED') {
+          approvedDates.push({
+            date: dStr,
+            dayFraction: item.dayFraction || (isHalfDay ? 0.5 : 1.0),
+          });
+        } else if (itemStatus === 'REJECTED') {
+          rejectedDates.push(dStr);
+        }
+      }
+    } else {
+      const sDate = parseLocalDate(startDateStr);
+      const eDate = parseLocalDate(endDateStr);
+      if (sDate && eDate) {
+        const cur = new Date(sDate.getTime());
+        while (cur <= eDate) {
+          approvedDates.push({
+            date: formatLocalDate(cur),
+            dayFraction: isHalfDay ? 0.5 : 1.0,
+          });
+          cur.setDate(cur.getDate() + 1);
+        }
+      }
+    }
+
+    // 1. Clean up any previous attendance records for rejected dates
+    for (const rejDate of rejectedDates) {
+      await pool.query(
+        `DELETE FROM attendance_records 
+         WHERE employee_id = $1 AND attendance_date = $2::date AND source = 'LEAVE_ASSIGNMENT'`,
+        [targetEmp.id, rejDate]
+      );
+    }
+
+    // 2. Insert or update attendance records ONLY for approved dates
+    for (const appItem of approvedDates) {
+      const curStr = appItem.date;
+      const recordId = `att-lve-${targetEmp.id}-${curStr}`;
+      const itemHours = appItem.dayFraction === 0.5 ? 4.00 : totalHours;
+      const itemStatus = appItem.dayFraction === 0.5 ? 'HALF_DAY' : attStatus;
+
+      const sql = `
+        INSERT INTO attendance_records (
+          id, org_id, employee_id, attendance_date, timezone,
+          total_hours, status, notes, source, updated_at
+        ) VALUES (
+          $1, $2, $3, $4::date, 'UTC',
+          $5, $6, $7, 'LEAVE_ASSIGNMENT', NOW()
+        )
+        ON CONFLICT (employee_id, attendance_date)
+        DO UPDATE SET
+          status = EXCLUDED.status,
+          total_hours = EXCLUDED.total_hours,
+          notes = EXCLUDED.notes,
+          source = EXCLUDED.source,
+          updated_at = NOW();
+      `;
+
+      await pool.query(sql, [
+        recordId,
+        targetEmp.orgId,
+        targetEmp.id,
+        curStr,
+        itemHours,
+        itemStatus,
+        notes,
+      ]);
+    }
+  } catch (err) {
+    logger.warn('LeaveService', `Failed to sync leave to attendance: ${err.message}`);
+  }
 };
 
 export const leaveService = {
@@ -256,14 +429,100 @@ export const leaveService = {
    * Preview calculated leave duration (working days, weekends, holidays)
    */
   async calculateDuration(user, data) {
+    const emp = await resolveRequesterEmployee(user);
+    const orgId = emp?.orgId || user.orgId || 'org-1';
+
+    let isRestricted = false;
+    if (data.leaveTypeId) {
+      const lt = await leaveRepository.findLeaveTypeById(data.leaveTypeId, orgId);
+      isRestricted = isRestrictedLeaveType(lt);
+    }
+
+    // If explicit dates array is provided (e.g. 5 Oct, 8 Oct, 12 Oct)
+    if (Array.isArray(data.dates) && data.dates.length > 0) {
+      const rawDates = data.dates
+        .map((d) => String(d).trim())
+        .filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d));
+      const uniqueDates = Array.from(new Set(rawDates)).sort();
+
+      if (uniqueDates.length === 0) {
+        const error = new Error('No valid dates provided.');
+        error.statusCode = 400;
+        throw error;
+      }
+
+      const sDateStr = uniqueDates[0];
+      const eDateStr = uniqueDates[uniqueDates.length - 1];
+
+      // Fetch holidays in span
+      const holidays = await leaveRepository.findActiveHolidaysBetween(orgId, sDateStr, eDateStr);
+      const holidayMap = new Map();
+      for (const h of holidays) {
+        holidayMap.set(h.holiday_date, h);
+      }
+
+      const isHalfDay = Boolean(data.isHalfDay);
+      const dayFactor = isHalfDay ? 0.5 : 1.0;
+      let workingDays = 0;
+      let weekendDays = 0;
+      let holidayDays = 0;
+      const holidaysEncountered = [];
+      const validDates = [];
+
+      for (const dStr of uniqueDates) {
+        const dObj = parseLocalDate(dStr);
+        if (!dObj) continue;
+        const isSunday = dObj.getDay() === 0;
+        const holiday = holidayMap.get(dStr);
+
+        if (isRestricted) {
+          workingDays += dayFactor;
+          validDates.push(dStr);
+          if (holiday) {
+            holidaysEncountered.push({
+              date: dStr,
+              name: holiday.name,
+              type: holiday.holiday_type,
+              fallsOnWeekend: isSunday,
+            });
+          }
+        } else if (isSunday) {
+          weekendDays++;
+        } else if (holiday) {
+          holidayDays++;
+          holidaysEncountered.push({
+            date: dStr,
+            name: holiday.name,
+            type: holiday.holiday_type,
+            fallsOnWeekend: false,
+          });
+        } else {
+          workingDays += dayFactor;
+          validDates.push(dStr);
+        }
+      }
+
+      return {
+        startDate: sDateStr,
+        endDate: eDateStr,
+        isHalfDay,
+        halfDayPeriod: isHalfDay ? data.halfDayPeriod : undefined,
+        totalCalendarDays: uniqueDates.length,
+        weekendDays,
+        holidayDays,
+        workingDays,
+        totalDays: workingDays,
+        holidays: holidaysEncountered,
+        dates: uniqueDates,
+        validDates,
+      };
+    }
+
     if (!data.startDate || !data.endDate) {
       const error = new Error('Both startDate and endDate are required.');
       error.statusCode = 400;
       throw error;
     }
-
-    const emp = await resolveRequesterEmployee(user);
-    const orgId = emp?.orgId || user.orgId || 'org-1';
 
     return calculateLeaveDuration(
       orgId,
@@ -271,7 +530,8 @@ export const leaveService = {
       data.endDate,
       Boolean(data.isHalfDay),
       data.halfDayPeriod,
-      true // allowZeroWorkingDays for preview calculation
+      true, // allowZeroWorkingDays for preview calculation
+      isRestricted
     );
   },
 
@@ -363,38 +623,44 @@ export const leaveService = {
   },
 
   /**
-   * Apply for Leave (Employee or Manager on behalf of Direct Report)
+   * Apply / Assign Leave
    * Strictly enforces:
-   * 1. Employees cannot self-apply restricted leaves (Sabbatical, Maternity, Paternity, AWOL, LOP).
-   * 2. Managers can apply restricted leaves on behalf of direct reports.
-   * 3. Managers CANNOT apply restricted leaves for themselves.
-   * 4. Managers cannot apply leaves for employees outside their reporting hierarchy.
+   * 1. Employees CANNOT self-apply restricted leaves (Holiday, AWOL, LOP, Sabbatical, Maternity, Paternity).
+   * 2. Admin: Can assign restricted & standard leave types to ANY employee in the organization.
+   * 3. HR: Can assign restricted & standard leave types to ALL employees in the organization.
+   * 4. Manager: Can assign restricted & standard leave types ONLY to employees within their department/authorized reporting scope.
+   * 5. Assigning leave records the exact dates, auto-approves, and reflects in leave history & attendance records.
    */
   async applyLeave(user, data) {
-    const callerEmp = await resolveRequesterEmployee(user);
+    const roles = Array.isArray(user.roles) ? user.roles : [user.roleName || user.role];
+    const normRoles = roles.filter(Boolean).map((r) => normalizeRole(r));
+    const isAdmin =
+      normRoles.some((r) => ['admin', 'superadmin', 'orgadmin'].includes(r)) ||
+      (user.email || '').toLowerCase() === 'sheetalbedi@tasknera.com';
+    const isHr = normRoles.some((r) => ['hr', 'hrmanager'].includes(r));
+    const isManager = normRoles.some((r) => ['manager', 'lead', 'teamlead', 'supervisor'].includes(r));
+    const isHrAdmin = isAdmin || isHr;
+
+    let callerEmp = await resolveRequesterEmployee(user);
     if (!callerEmp) {
-      const error = new Error('No employee profile found for your user account.');
-      error.statusCode = 404;
-      throw error;
+      if (!isHrAdmin || !data.employeeId) {
+        const error = new Error('No employee profile found for your user account.');
+        error.statusCode = 404;
+        throw error;
+      }
+      callerEmp = {
+        id: null,
+        firstName: user.firstName || 'Admin',
+        lastName: user.lastName || '',
+        orgId: user.orgId || 'org-1',
+      };
     }
 
-    const roles = Array.isArray(user.roles) ? user.roles : [user.roleName || user.role];
-    const isHrAdmin = roles.some((r) =>
-      ['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin'].includes(r)
-    );
+    // Determine target employee: if employeeId is provided, check reporting hierarchy / admin scope
+    const targetEmployeeId = data.employeeId && data.employeeId.trim() ? data.employeeId.trim() : (callerEmp.id || '');
+    const isSelf = Boolean(callerEmp.id && targetEmployeeId === callerEmp.id);
 
-    // Determine target employee: if employeeId is provided and different, check reporting hierarchy
-    const targetEmployeeId = data.employeeId && data.employeeId.trim() ? data.employeeId.trim() : callerEmp.id;
-    const isSelf = targetEmployeeId === callerEmp.id;
-
-    const allRoles = (Array.isArray(user.roles) ? user.roles : [user.roleName || user.role || ''])
-      .filter(Boolean)
-      .map((r) => String(r).toLowerCase());
-    const isAdminOrCeo =
-      allRoles.some((r) => ['admin', 'superadmin', 'orgadmin'].some((adm) => r.includes(adm))) ||
-      (user.email || '').toLowerCase() === 'sheetalbedi@tasknera.com';
-
-    if (isSelf && isAdminOrCeo) {
+    if (isSelf && isAdmin) {
       const error = new Error('Access denied: Company Administrators and executive CEOs do not apply for employee leave.');
       error.statusCode = 403;
       throw error;
@@ -402,25 +668,32 @@ export const leaveService = {
 
     let targetEmp = callerEmp;
     if (!isSelf) {
+      if (!isHrAdmin && !isManager) {
+        const error = new Error('Access denied: Only Admin, HR, and Managers can assign leave to employees.');
+        error.statusCode = 403;
+        throw error;
+      }
+
       targetEmp = await employeeRepository.findById(targetEmployeeId);
       if (!targetEmp) {
         const error = new Error(`Target employee with ID '${targetEmployeeId}' not found.`);
         error.statusCode = 404;
         throw error;
       }
-      if (targetEmp.orgId !== callerEmp.orgId && !isHrAdmin) {
+      if (callerEmp.id && targetEmp.orgId !== callerEmp.orgId && !isHrAdmin) {
         const error = new Error('Access denied: Employee not found in your organization.');
         error.statusCode = 403;
         throw error;
       }
 
       // Hierarchy verification:
-      // If caller is HR/Admin -> allowed across organization.
-      // If caller is Manager -> target employee MUST report directly to caller!
-      // If caller is regular Employee -> forbidden from applying for others.
-      if (!isHrAdmin) {
-        if (targetEmp.managerId !== callerEmp.id) {
-          const error = new Error('Access denied: You can only apply leave on behalf of employees who directly report to you in your reporting hierarchy.');
+      // If caller is HR/Admin -> allowed across entire organization.
+      // If caller is Manager -> target employee MUST be in their department or directly report to them.
+      if (isManager && !isHrAdmin) {
+        const isDirectReport = callerEmp.id && targetEmp.managerId === callerEmp.id;
+        const isSameDept = callerEmp.deptId && targetEmp.deptId && targetEmp.deptId === callerEmp.deptId;
+        if (!isDirectReport && !isSameDept) {
+          const error = new Error('Access denied: Managers can assign these leave types only to employees within their department or authorized reporting scope.');
           error.statusCode = 403;
           throw error;
         }
@@ -443,11 +716,13 @@ export const leaveService = {
     }
 
     // CRITICAL SECURITY ENFORCEMENT: RESTRICTED LEAVE TYPES
-    // (Sabbatical Leave, Maternity Leave, Paternity Leave, AWOL, Leave Without Pay)
-    if (isRestrictedLeaveType(leaveType)) {
+    // (Holiday, AWOL, LOP, Maternity Leave, Sabbatical Leave, Paternity Leave)
+    // Employees cannot self-apply for these restricted leave types.
+    const isRestricted = isRestrictedLeaveType(leaveType);
+    if (isRestricted) {
       if (isSelf) {
         const error = new Error(
-          `Restricted leave policy violation: Employees and managers cannot apply for '${leaveType.name}' for themselves. This leave must be applied by your reporting manager on your behalf.`
+          `Restricted leave policy violation: Employees cannot apply for '${leaveType.name}' for themselves. This leave must be assigned with exact dates by an authorized Manager, HR, or Admin.`
         );
         error.statusCode = 403;
         throw error;
@@ -468,20 +743,115 @@ export const leaveService = {
       throw error;
     }
 
-    const startDate = data.startDate.trim();
-    const endDate = data.endDate.trim();
     const isHalfDay = Boolean(data.isHalfDay);
     const halfDayPeriod = isHalfDay ? data.halfDayPeriod : null;
+    const dayFactor = isHalfDay ? 0.5 : 1.0;
 
-    // Calculate duration with holiday, weekend and date validation
-    const calculation = await calculateLeaveDuration(
-      targetEmp.orgId,
-      startDate,
-      endDate,
-      isHalfDay,
-      halfDayPeriod
-    );
-    const totalDays = calculation.totalDays;
+    let startDate;
+    let endDate;
+    let totalDays;
+    let dateDecisions = [];
+
+    // Support explicit selected dates (e.g. 5 Oct, 8 Oct, 12 Oct)
+    if (Array.isArray(data.dates) && data.dates.length > 0) {
+      const rawDates = data.dates
+        .map((d) => String(d).trim())
+        .filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d));
+      const sortedDates = Array.from(new Set(rawDates)).sort();
+
+      if (sortedDates.length === 0) {
+        const error = new Error('No valid dates provided in the selected dates list.');
+        error.statusCode = 400;
+        throw error;
+      }
+
+      startDate = sortedDates[0];
+      endDate = sortedDates[sortedDates.length - 1];
+
+      // Fetch official holidays
+      const holidays = await leaveRepository.findActiveHolidaysBetween(targetEmp.orgId, startDate, endDate);
+      const holidaySet = new Set(holidays.map((h) => h.holiday_date));
+
+      for (const dStr of sortedDates) {
+        const dObj = parseLocalDate(dStr);
+        if (!dObj) continue;
+        const isSunday = dObj.getDay() === 0;
+        const isHoliday = holidaySet.has(dStr);
+
+        if (!isRestricted && (isSunday || isHoliday)) {
+          // If employee specifically selected a Sunday or holiday on standard leave, warn or skip
+          continue;
+        }
+
+        dateDecisions.push({
+          date: dStr,
+          status: 'PENDING',
+          dayFraction: dayFactor,
+          reason: '',
+        });
+      }
+
+      if (dateDecisions.length === 0) {
+        const error = new Error('None of the selected dates are working business days (Mon–Sat excluding holidays).');
+        error.statusCode = 400;
+        throw error;
+      }
+
+      totalDays = dateDecisions.length * dayFactor;
+    } else {
+      if (!data.startDate || !data.endDate) {
+        const error = new Error('Start date and end date are required.');
+        error.statusCode = 400;
+        throw error;
+      }
+
+      startDate = data.startDate.trim();
+      endDate = data.endDate.trim();
+
+      // Calculate duration with holiday, weekend and date validation
+      const calculation = await calculateLeaveDuration(
+        targetEmp.orgId,
+        startDate,
+        endDate,
+        isHalfDay,
+        halfDayPeriod,
+        false,
+        isRestricted
+      );
+      totalDays = calculation.totalDays;
+
+      // Expand date range into individual date decisions
+      const holidays = await leaveRepository.findActiveHolidaysBetween(targetEmp.orgId, startDate, endDate);
+      const holidaySet = new Set(holidays.map((h) => h.holiday_date));
+      const sDate = parseLocalDate(startDate);
+      const eDate = parseLocalDate(endDate);
+      const cur = new Date(sDate.getTime());
+
+      while (cur <= eDate) {
+        const curStr = formatLocalDate(cur);
+        const isSunday = cur.getDay() === 0;
+        const isHoliday = holidaySet.has(curStr);
+
+        if (isRestricted || (!isSunday && !isHoliday)) {
+          dateDecisions.push({
+            date: curStr,
+            status: 'PENDING',
+            dayFraction: dayFactor,
+            reason: '',
+          });
+        }
+        cur.setDate(cur.getDate() + 1);
+      }
+
+      if (dateDecisions.length === 0) {
+        dateDecisions.push({
+          date: startDate,
+          status: 'PENDING',
+          dayFraction: dayFactor,
+          reason: '',
+        });
+      }
+    }
 
     // Overlap validation for targetEmp
     const overlap = await leaveRepository.checkOverlappingLeave(targetEmp.id, startDate, endDate, isHalfDay, halfDayPeriod);
@@ -491,22 +861,59 @@ export const leaveService = {
       throw error;
     }
 
-    // Balance check for targetEmp
     const startYear = new Date(startDate).getFullYear();
-    let balances = await leaveRepository.getLeaveBalances(targetEmp.id, startYear);
-    if (balances.length === 0) {
-      balances = await leaveRepository.initializeBalancesForEmployee(targetEmp.id, targetEmp.orgId, startYear);
-    }
-    const balance = balances.find((b) => b.leaveTypeId === leaveType.id);
 
-    // If leave type is paid and quota-tracked, verify available days
-    if (balance && leaveType.isPaid && leaveType.daysPerYear > 0) {
-      if (balance.remainingDays < totalDays) {
+    // Balance validation:
+    // If self-applying on paid leave: enforce current available balance > 0 and >= totalDays
+    const isPaid = !isUnpaidLeave(leaveType) && Boolean(leaveType.isPaid);
+    if (isSelf && isPaid) {
+      let balances = await leaveRepository.getLeaveBalances(targetEmp.id, startYear);
+      if (balances.length === 0) {
+        balances = await leaveRepository.initializeBalancesForEmployee(targetEmp.id, targetEmp.orgId, startYear);
+      }
+      const balance = balances.find(
+        (b) =>
+          b.leaveTypeId === leaveType.id ||
+          (leaveType.code && b.leaveTypeCode && String(leaveType.code).toUpperCase() === String(b.leaveTypeCode).toUpperCase()) ||
+          (leaveType.name && b.leaveTypeName && String(leaveType.name).toLowerCase() === String(b.leaveTypeName).toLowerCase())
+      );
+      const remDays = balance ? (parseFloat(balance.remainingDays) || 0) : 0;
+      if (remDays <= 0) {
+        const error = new Error(`Selected leave type '${leaveType.name}' is not available because your current available leave balance is 0.`);
+        error.statusCode = 400;
+        throw error;
+      }
+      if (remDays < totalDays) {
+        const error = new Error(`Insufficient leave balance. You have ${remDays} days remaining for ${leaveType.name}, but requested ${totalDays} days.`);
+        error.statusCode = 400;
+        throw error;
+      }
+    } else if (!isRestricted && leaveType.isPaid && leaveType.daysPerYear > 0) {
+      let balances = await leaveRepository.getLeaveBalances(targetEmp.id, startYear);
+      if (balances.length === 0) {
+        balances = await leaveRepository.initializeBalancesForEmployee(targetEmp.id, targetEmp.orgId, startYear);
+      }
+      const balance = balances.find((b) => b.leaveTypeId === leaveType.id);
+      if (balance && balance.remainingDays < totalDays) {
         const error = new Error(`Insufficient leave balance. Employee has ${balance.remainingDays} days remaining for ${leaveType.name}, but requested ${totalDays} days.`);
         error.statusCode = 400;
         throw error;
       }
     }
+
+    // When assigned by authorized Admin/HR/Manager (!isSelf), it is directly APPROVED and recorded
+    const isDirectAssignment = !isSelf;
+    const initialStatus = isDirectAssignment ? 'APPROVED' : 'PENDING';
+
+    // Update date decisions initial status if directly assigned
+    if (isDirectAssignment) {
+      dateDecisions = dateDecisions.map((d) => ({ ...d, status: 'APPROVED' }));
+    }
+
+    const assignerRole = isAdmin ? 'Admin' : isHr ? 'HR' : 'Manager';
+    const reasonText = isSelf
+      ? data.reason
+      : `[Assigned by ${assignerRole}: ${callerEmp.firstName} ${callerEmp.lastName}] ${data.reason || 'Assigned leave'}`;
 
     // Create the leave request
     const request = await leaveRepository.createLeaveRequest({
@@ -518,37 +925,66 @@ export const leaveService = {
       isHalfDay,
       halfDayPeriod,
       totalDays,
-      reason: isSelf
-        ? data.reason
-        : `[Applied by Manager: ${callerEmp.firstName} ${callerEmp.lastName}] ${data.reason}`,
+      status: initialStatus,
+      approverId: isDirectAssignment ? (callerEmp.id || null) : null,
+      approverUserId: isDirectAssignment ? user.id : null,
+      reason: reasonText,
+      dateDecisions,
     });
 
-    // Update pending balance
-    if (balance) {
-      await leaveRepository.adjustBalance(targetEmp.id, leaveType.id, startYear, { pendingDelta: totalDays });
+    if (isDirectAssignment) {
+      // 1. Update balances for assigned leave accurately without creating incorrect balances
+      if (isRestricted || ['HL', 'AWOL', 'LOP', 'LWP'].includes(String(leaveType.code).toUpperCase())) {
+        await leaveRepository.recordAssignedLeaveBalance(
+          targetEmp.id,
+          targetEmp.orgId,
+          leaveType.id,
+          startYear,
+          totalDays
+        );
+      } else {
+        await leaveRepository.adjustBalance(targetEmp.id, leaveType.id, startYear, { usedDelta: totalDays });
+      }
+
+      // 2. Reflect assigned dates in attendance records
+      await syncLeaveToAttendance(
+        targetEmp,
+        request,
+        leaveType,
+        startDate,
+        endDate,
+        isHalfDay,
+        halfDayPeriod,
+        dateDecisions
+      );
+    } else {
+      // Employee self-applying leave: record pending balance only for paid leaves
+      if (isPaid) {
+        await leaveRepository.adjustBalance(targetEmp.id, leaveType.id, startYear, { pendingDelta: totalDays });
+      }
     }
 
-    // Initialize Phase 6 approval workflow tracking instance
+    // Initialize approval workflow tracking instance
     try {
       await workflowRepository.createWorkflowInstance(
         {
           orgId: targetEmp.orgId,
           entityType: 'LEAVE_REQUEST',
           entityId: request.id,
-          workflowType: 'EMPLOYEE_MANAGER_HR',
-          currentStage: 'MANAGER_REVIEW',
-          currentStatus: 'PENDING',
+          workflowType: isDirectAssignment ? 'DIRECT_ASSIGNMENT' : 'EMPLOYEE_MANAGER_HR',
+          currentStage: isDirectAssignment ? 'COMPLETED' : 'MANAGER_REVIEW',
+          currentStatus: initialStatus,
           requesterId: targetEmp.id,
           managerId: targetEmp.managerId || null,
         },
         {
-          stage: isSelf ? 'EMPLOYEE_SUBMISSION' : 'MANAGER_SUBMISSION',
+          stage: isDirectAssignment ? 'ASSIGNMENT' : 'EMPLOYEE_SUBMISSION',
           actorUserId: user.id,
-          actorRole: user.roleName || (isSelf ? 'Employee' : 'Manager'),
-          action: 'SUBMIT',
+          actorRole: user.roleName || (isSelf ? 'Employee' : assignerRole),
+          action: isDirectAssignment ? 'ASSIGN' : 'SUBMIT',
           fromStatus: 'PENDING',
-          toStatus: 'PENDING',
-          comments: data.reason || (isSelf ? 'Leave request submitted.' : `Leave applied by reporting manager on employee's behalf.`),
+          toStatus: initialStatus,
+          comments: reasonText,
         }
       );
     } catch (wfErr) {
@@ -573,9 +1009,9 @@ export const leaveService = {
         await notificationService.createNotification({
           orgId: targetEmp.orgId,
           userId: targetEmp.userId,
-          eventType: 'LEAVE_APPLIED_BY_MANAGER',
-          title: `${leaveType.name} Applied by Manager`,
-          message: `${callerEmp.firstName} ${callerEmp.lastName} has applied ${leaveType.name} on your behalf from ${startDate} to ${endDate}.`,
+          eventType: 'LEAVE_ASSIGNED',
+          title: `${leaveType.name} Assigned (${startDate} to ${endDate})`,
+          message: `${callerEmp.firstName} ${callerEmp.lastName} (${assignerRole}) has assigned ${leaveType.name} (${totalDays} day${totalDays === 1 ? '' : 's'}) to you from ${startDate} to ${endDate}.`,
           entityType: 'LEAVE_REQUEST',
           entityId: request.id,
           actionUrl: '/leaves',
@@ -855,34 +1291,117 @@ export const leaveService = {
       throw error;
     }
 
-    // Transition status to APPROVED
+    // 1. Resolve date decisions list from record or reconstruct from range
+    let currentDecisions = Array.isArray(record.dateDecisions) && record.dateDecisions.length > 0
+      ? [...record.dateDecisions]
+      : [];
+
+    if (currentDecisions.length === 0) {
+      const s = parseLocalDate(record.startDate);
+      const e = parseLocalDate(record.endDate);
+      if (s && e) {
+        const cur = new Date(s.getTime());
+        while (cur <= e) {
+          const curStr = formatLocalDate(cur);
+          if (cur.getDay() !== 0) { // skip Sunday
+            currentDecisions.push({
+              date: curStr,
+              status: 'PENDING',
+              dayFraction: record.isHalfDay ? 0.5 : 1.0,
+              reason: '',
+            });
+          }
+          cur.setDate(cur.getDate() + 1);
+        }
+      }
+      if (currentDecisions.length === 0) {
+        currentDecisions.push({
+          date: record.startDate,
+          status: 'PENDING',
+          dayFraction: record.isHalfDay ? 0.5 : record.totalDays,
+          reason: '',
+        });
+      }
+    }
+
+    // 2. Evaluate approver decisions per date
+    let updatedDecisions = [];
+    if (Array.isArray(options.dateDecisions) && options.dateDecisions.length > 0) {
+      const decisionMap = new Map();
+      for (const d of options.dateDecisions) {
+        if (d && d.date) {
+          decisionMap.set(String(d.date).trim(), d);
+        }
+      }
+
+      updatedDecisions = currentDecisions.map((item) => {
+        const decision = decisionMap.get(item.date);
+        if (decision) {
+          const dStatus = String(decision.status).trim().toUpperCase();
+          return {
+            ...item,
+            status: dStatus === 'REJECTED' ? 'REJECTED' : 'APPROVED',
+            reason: decision.reason || item.reason || '',
+          };
+        }
+        return {
+          ...item,
+          status: 'APPROVED',
+        };
+      });
+    } else {
+      // Default: approve all dates
+      updatedDecisions = currentDecisions.map((item) => ({
+        ...item,
+        status: 'APPROVED',
+      }));
+    }
+
+    const approvedItems = updatedDecisions.filter((d) => d.status === 'APPROVED');
+    const rejectedItems = updatedDecisions.filter((d) => d.status === 'REJECTED');
+    const approvedDays = approvedItems.reduce((sum, d) => sum + (parseFloat(d.dayFraction) || 1.0), 0);
+    const isAllRejected = approvedItems.length === 0;
+    const isPartiallyApproved = approvedItems.length > 0 && rejectedItems.length > 0;
+
+    const finalStatus = isAllRejected ? 'REJECTED' : 'APPROVED';
+    const finalTotalDays = isAllRejected ? record.totalDays : approvedDays;
+    const rejectionReasonText = isAllRejected
+      ? (options.comments || options.rejectionReason || 'All requested dates were rejected.')
+      : (isPartiallyApproved ? (options.comments || 'Some dates rejected.') : '');
+
+    // 3. Update status in database
     const updated = await leaveRepository.updateStatus(id, {
-      status: 'APPROVED',
+      status: finalStatus,
       approverId: approverEmp?.id || null,
       approverUserId: user.id,
+      totalDays: finalTotalDays,
+      dateDecisions: updatedDecisions,
+      rejectionReason: rejectionReasonText,
     });
 
-    // Move pending balance to used balance
+    // 4. Update employee balances:
+    // Release the entire pending reservation of requested days (-record.totalDays)
+    // And only add used balance for approved days (+approvedDays)
     const year = new Date(record.startDate).getFullYear();
     await leaveRepository.adjustBalance(record.employeeId, record.leaveTypeId, year, {
       pendingDelta: -record.totalDays,
-      usedDelta: record.totalDays,
+      usedDelta: isAllRejected ? 0 : approvedDays,
     });
 
-    // Advance workflow state machine if tracking instance exists and not bypassed by workflow engine
+    // 5. Advance workflow state machine
     if (!options.skipWorkflowSync) {
       try {
         const wf = await workflowRepository.findByEntity('LEAVE_REQUEST', id);
-        if (wf && wf.currentStatus !== 'APPROVED') {
+        if (wf) {
           await workflowRepository.recordAction(wf.id, {
             stage: wf.currentStage || 'MANAGER_REVIEW',
             actorUserId: user.id,
             actorRole: user.roleName || 'Approver',
-            action: 'APPROVE',
+            action: isAllRejected ? 'REJECT' : 'APPROVE',
             fromStatus: 'PENDING',
-            toStatus: 'APPROVED',
+            toStatus: finalStatus,
             nextStage: 'COMPLETED',
-            comments: options.comments || 'Leave request approved.',
+            comments: options.comments || (isAllRejected ? 'Rejected' : isPartiallyApproved ? `Partially approved ${approvedDays} of ${record.totalDays} days.` : 'Leave request approved.'),
           });
         }
       } catch (wfErr) {
@@ -890,23 +1409,62 @@ export const leaveService = {
       }
     }
 
-    // Send in-app system notification to employee
+    // 6. Reflect approved leave dates in attendance records (only approved dates, delete rejected)
+    if (!isAllRejected) {
+      try {
+        const leaveType = await leaveRepository.findLeaveTypeById(record.leaveTypeId, record.orgId);
+        const emp = await employeeRepository.findById(record.employeeId);
+        if (emp && leaveType) {
+          await syncLeaveToAttendance(
+            emp,
+            record,
+            leaveType,
+            record.startDate,
+            record.endDate,
+            record.isHalfDay,
+            record.halfDayPeriod,
+            updatedDecisions
+          );
+        }
+      } catch (syncErr) {
+        logger.warn('LeaveService', `Failed to sync approved leave to attendance: ${syncErr.message}`);
+      }
+    }
+
+    // 7. Send in-app system notification to employee detailing approved/rejected dates
     try {
       const emp = await employeeRepository.findById(record.employeeId);
       if (emp && emp.userId) {
+        let notifTitle = 'Leave Request Approved';
+        let notifMsg = `Your leave request from ${record.startDate} to ${record.endDate} has been approved (${approvedDays} day${approvedDays === 1 ? '' : 's'}).`;
+
+        if (isAllRejected) {
+          notifTitle = 'Leave Request Declined';
+          notifMsg = `All requested dates for your leave request (${record.startDate} to ${record.endDate}) were declined.`;
+        } else if (isPartiallyApproved) {
+          notifTitle = 'Leave Request Partially Approved';
+          const appDatesStr = approvedItems.map((d) => d.date).join(', ');
+          const rejDatesStr = rejectedItems.map((d) => d.date).join(', ');
+          notifMsg = `Your leave request was partially approved (${approvedDays} of ${record.totalDays} day${record.totalDays === 1 ? '' : 's'} approved). Approved: ${appDatesStr}. Rejected: ${rejDatesStr}.`;
+        }
+
+        if (options.comments) {
+          notifMsg += ` Comments: "${options.comments}"`;
+        }
+
         await notificationService.createSystemNotification({
           orgId: user.orgId,
           userId: emp.userId,
-          eventType: 'LEAVE_APPROVED',
-          title: 'Leave Request Approved',
-          message: `Your leave request from ${record.startDate} to ${record.endDate} has been approved.${options.comments ? ` Comments: "${options.comments}"` : ''}`,
+          eventType: isAllRejected ? 'LEAVE_REJECTED' : 'LEAVE_APPROVED',
+          title: notifTitle,
+          message: notifMsg,
           entityType: 'LEAVE_REQUEST',
           entityId: record.id,
           actionUrl: '/leaves',
         });
       }
     } catch (notifErr) {
-      logger.warn('LeaveService', `Failed to dispatch approval notification for leave ${id}: ${notifErr.message}`);
+      logger.warn('LeaveService', `Failed to dispatch notification for leave ${id}: ${notifErr.message}`);
     }
 
     return updated;
@@ -975,12 +1533,46 @@ export const leaveService = {
       throw error;
     }
 
+    // Mark all dates as rejected
+    let allRejectedDecisions = [];
+    if (Array.isArray(record.dateDecisions) && record.dateDecisions.length > 0) {
+      allRejectedDecisions = record.dateDecisions.map((d) => ({
+        ...d,
+        status: 'REJECTED',
+        reason: rejectionReason,
+      }));
+    } else {
+      const s = parseLocalDate(record.startDate);
+      const e = parseLocalDate(record.endDate);
+      if (s && e) {
+        const cur = new Date(s.getTime());
+        while (cur <= e) {
+          allRejectedDecisions.push({
+            date: formatLocalDate(cur),
+            status: 'REJECTED',
+            dayFraction: record.isHalfDay ? 0.5 : 1.0,
+            reason: rejectionReason,
+          });
+          cur.setDate(cur.getDate() + 1);
+        }
+      }
+      if (allRejectedDecisions.length === 0) {
+        allRejectedDecisions.push({
+          date: record.startDate,
+          status: 'REJECTED',
+          dayFraction: record.isHalfDay ? 0.5 : record.totalDays,
+          reason: rejectionReason,
+        });
+      }
+    }
+
     // Transition status to REJECTED
     const updated = await leaveRepository.updateStatus(id, {
       status: 'REJECTED',
       approverId: approverEmp?.id || null,
       approverUserId: user.id,
       rejectionReason,
+      dateDecisions: allRejectedDecisions,
     });
 
     // Release pending balance

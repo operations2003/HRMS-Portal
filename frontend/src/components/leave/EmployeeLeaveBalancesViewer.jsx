@@ -24,8 +24,9 @@ import { Avatar } from '../common/Avatar.jsx';
 import { Badge } from '../common/Badge.jsx';
 import { Button } from '../common/Button.jsx';
 import { LoadingSpinner } from '../common/LoadingSpinner.jsx';
+import { ApplyLeaveModal } from './ApplyLeaveModal.jsx';
 
-export const EmployeeLeaveBalancesViewer = () => {
+export const EmployeeLeaveBalancesViewer = ({ onAssignLeave }) => {
   const toast = useToast();
   const currentYear = new Date().getFullYear();
 
@@ -34,6 +35,19 @@ export const EmployeeLeaveBalancesViewer = () => {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [loadingEmployees, setLoadingEmployees] = useState(true);
+
+  // Local fallback assign modal state
+  const [localAssignEmpId, setLocalAssignEmpId] = useState(null);
+  const [isLocalModalOpen, setIsLocalModalOpen] = useState(false);
+
+  const handleTriggerAssign = (empId) => {
+    if (onAssignLeave) {
+      onAssignLeave(empId);
+    } else {
+      setLocalAssignEmpId(empId);
+      setIsLocalModalOpen(true);
+    }
+  };
 
   // Single employee balances
   const [employeeBalances, setEmployeeBalances] = useState([]);
@@ -336,8 +350,8 @@ export const EmployeeLeaveBalancesViewer = () => {
               </div>
             </div>
 
-            {/* Total Balance Pill */}
-            <div className="flex items-center gap-4 self-start md:self-center">
+            {/* Total Balance Pill & Assign Leave Action */}
+            <div className="flex items-center gap-4 self-start md:self-center flex-wrap">
               <div className="text-right">
                 <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
                   Total Remaining Leave
@@ -356,6 +370,15 @@ export const EmployeeLeaveBalancesViewer = () => {
                   {totalAllocated.toFixed(1)} Days
                 </span>
               </div>
+              <Button
+                variant="primary"
+                size="sm"
+                icon={CalendarDays}
+                onClick={() => handleTriggerAssign(selectedEmployee.id)}
+                className="shadow-sm font-bold"
+              >
+                Assign Leave
+              </Button>
             </div>
           </div>
         )}
@@ -586,16 +609,28 @@ export const EmployeeLeaveBalancesViewer = () => {
                       </td>
 
                       <td className="p-3 text-right whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            selectEmployeeAndScroll(item.id);
-                          }}
-                          className="px-2.5 py-1 text-xs font-bold text-brand-600 hover:text-brand-700 bg-brand-50 hover:bg-brand-100 dark:bg-brand-950/60 dark:hover:bg-brand-900 rounded-lg transition cursor-pointer"
-                        >
-                          Inspect Buckets ➔
-                        </button>
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleTriggerAssign(item.id);
+                            }}
+                            className="px-2.5 py-1 text-xs font-semibold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900 rounded-lg transition cursor-pointer"
+                          >
+                            Assign Leave
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              selectEmployeeAndScroll(item.id);
+                            }}
+                            className="px-2.5 py-1 text-xs font-bold text-brand-600 hover:text-brand-700 bg-brand-50 hover:bg-brand-100 dark:bg-brand-950/60 dark:hover:bg-brand-900 rounded-lg transition cursor-pointer"
+                          >
+                            Inspect Buckets ➔
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -605,6 +640,22 @@ export const EmployeeLeaveBalancesViewer = () => {
           </div>
         )}
       </div>
+
+      {/* Fallback Local ApplyLeaveModal if used standalone */}
+      {!onAssignLeave && isLocalModalOpen && (
+        <ApplyLeaveModal
+          isOpen={isLocalModalOpen}
+          onClose={() => {
+            setIsLocalModalOpen(false);
+            setLocalAssignEmpId(null);
+          }}
+          onSuccess={() => {
+            if (selectedEmployeeId) fetchEmployeeBalances(selectedEmployeeId, selectedYear);
+            fetchAllBalances(selectedYear);
+          }}
+          initialEmployeeId={localAssignEmpId}
+        />
+      )}
     </div>
   );
 };
