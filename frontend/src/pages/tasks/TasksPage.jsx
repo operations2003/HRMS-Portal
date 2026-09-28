@@ -64,7 +64,7 @@ export const TasksPage = () => {
 
   const [tasks, setTasks] = useState([]);
   const [employees, setEmployees] = useState([]);
-  const [activeTab, setActiveTab] = useState('board'); // 'board' | 'assignments' | 'performance'
+  const [activeTab, setActiveTab] = useState('performance'); // 'performance' | 'board' | 'assignments'
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState('kanban'); // 'kanban' | 'list'
   const [search, setSearch] = useState('');
@@ -299,6 +299,19 @@ export const TasksPage = () => {
       <div className="flex items-center gap-6 sm:gap-8 border-b border-slate-200 dark:border-slate-800 pb-px overflow-x-auto">
         <button
           type="button"
+          onClick={() => setActiveTab('performance')}
+          className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === 'performance'
+              ? 'border-brand-500 text-brand-600 dark:text-brand-400'
+              : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+          }`}
+        >
+          <TrendingUp className="w-4 h-4" />
+          My Performance
+        </button>
+
+        <button
+          type="button"
           onClick={() => setActiveTab('board')}
           className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
             activeTab === 'board'
@@ -327,19 +340,6 @@ export const TasksPage = () => {
             Who's Assigning to Whom
           </button>
         )}
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('performance')}
-          className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === 'performance'
-              ? 'border-brand-500 text-brand-600 dark:text-brand-400'
-              : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-          }`}
-        >
-          <TrendingUp className="w-4 h-4" />
-          My Performance
-        </button>
       </div>
 
       {activeTab === 'performance' ? (
