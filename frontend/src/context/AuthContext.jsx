@@ -95,11 +95,18 @@ export const AuthProvider = ({ children }) => {
     const userRoleStr = (user.roleName || user.role?.name || user.role || '').toLowerCase().trim();
     if (['admin', 'superadmin', 'orgadmin'].includes(userRoleStr)) return true;
 
-    // Role must be HR
-    const isHr = ['hr', 'hrmanager', 'hr_manager'].includes(userRoleStr);
-    if (!isHr) return false;
+    // Any role with L&D or Training in title
+    if (
+      userRoleStr.includes('ld') ||
+      userRoleStr.includes('l&d') ||
+      userRoleStr.includes('learning') ||
+      userRoleStr.includes('training') ||
+      userRoleStr.includes('trainer')
+    ) {
+      return true;
+    }
 
-    // Department must be Learning & Development
+    // Personnel in Learning & Development department
     const deptStr = (
       user.departmentName ||
       user.department?.name ||
@@ -112,7 +119,9 @@ export const AuthProvider = ({ children }) => {
     return (
       deptStr === 'learning & development' ||
       deptStr === 'learning and development' ||
-      deptStr === 'l&d' ||
+      deptStr.includes('learning') ||
+      deptStr.includes('l&d') ||
+      deptStr === 'ld' ||
       deptStr === 'dept-ld'
     );
   };

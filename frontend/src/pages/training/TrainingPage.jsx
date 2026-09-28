@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Clock,
   UserCheck,
+  UserPlus,
   X,
   ExternalLink,
   Edit2,
@@ -27,6 +28,8 @@ import { useToast } from '../../context/ToastContext.jsx';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
 import { Badge } from '../../components/common/Badge.jsx';
 import { Button } from '../../components/common/Button.jsx';
+import { AssignCourseModal } from '../../components/training/AssignCourseModal.jsx';
+import { CourseProgressModal } from '../../components/training/CourseProgressModal.jsx';
 
 export const TrainingPage = () => {
   const { user, canManageTraining } = useAuth();
@@ -43,6 +46,9 @@ export const TrainingPage = () => {
   const [courseSearch, setCourseSearch] = useState('');
   const [courseCategoryFilter, setCourseCategoryFilter] = useState('ALL');
   const [enrollmentViewMode, setEnrollmentViewMode] = useState('ALL'); // 'ALL' | 'MINE' for managers
+  const [enrollmentSearch, setEnrollmentSearch] = useState('');
+  const [enrollmentCourseFilter, setEnrollmentCourseFilter] = useState('ALL');
+  const [enrollmentStatusFilter, setEnrollmentStatusFilter] = useState('ALL');
 
   // Course Create / Edit Modal
   const [showCourseModal, setShowCourseModal] = useState(false);
@@ -58,12 +64,15 @@ export const TrainingPage = () => {
   });
   const [savingCourse, setSavingCourse] = useState(false);
 
+  // Assign Course Modal (L&D Authority)
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [assignCourseTarget, setAssignCourseTarget] = useState(null);
+  const [preselectedAssignEmpId, setPreselectedAssignEmpId] = useState(null);
+
   // Course Progress / Completion Matrix Modal
   const [selectedProgressCourse, setSelectedProgressCourse] = useState(null);
   const [progressData, setProgressData] = useState(null);
   const [loadingProgress, setLoadingProgress] = useState(false);
-  const [progressStatusFilter, setProgressStatusFilter] = useState('ALL');
-  const [progressSearch, setProgressSearch] = useState('');
 
   // Load Data
   const loadData = useCallback(async () => {
@@ -183,8 +192,6 @@ export const TrainingPage = () => {
   const handleOpenProgressModal = async (course) => {
     setSelectedProgressCourse(course);
     setLoadingProgress(true);
-    setProgressStatusFilter('ALL');
-    setProgressSearch('');
     try {
       const res = await trainingService.getCourseProgress(course.id);
       setProgressData(res.data);
@@ -193,6 +200,21 @@ export const TrainingPage = () => {
       setSelectedProgressCourse(null);
     } finally {
       setLoadingProgress(false);
+    }
+  };
+
+  // Open Assign Course Modal
+  const handleOpenAssignModal = (course = null, employeeId = null) => {
+    setAssignCourseTarget(course);
+    setPreselectedAssignEmpId(employeeId);
+    setShowAssignModal(true);
+  };
+
+  // Callback when assignment completes
+  const handleAssignmentSuccess = () => {
+    loadData();
+    if (selectedProgressCourse) {
+      handleOpenProgressModal(selectedProgressCourse);
     }
   };
 
@@ -217,6 +239,9 @@ export const TrainingPage = () => {
       });
       toast.success(nextProgress === 100 ? 'Training marked as completed!' : `Progress updated to ${nextProgress}%`);
       loadData();
+      if (selectedProgressCourse) {
+        handleOpenProgressModal(selectedProgressCourse);
+      }
     } catch (err) {
       toast.error('Failed to update progress.');
     }
@@ -233,23 +258,20 @@ export const TrainingPage = () => {
     });
   }, [courses, courseSearch, courseCategoryFilter]);
 
-  // Filtered Progress Matrix
-  const filteredProgressEmployees = useMemo(() => {
-    if (!progressData?.employees) return [];
-    return progressData.employees.filter((emp) => {
-      const matchesStatus =
-        progressStatusFilter === 'ALL' || emp.completionStatus === progressStatusFilter;
-      const term = progressSearch.toLowerCase();
-      const matchesSearch =
-        !term ||
-        emp.firstName?.toLowerCase().includes(term) ||
-        emp.lastName?.toLowerCase().includes(term) ||
-        emp.employeeCode?.toLowerCase().includes(term) ||
-        emp.departmentName?.toLowerCase().includes(term) ||
-        emp.designationTitle?.toLowerCase().includes(term);
-      return matchesStatus && matchesSearch;
+  // Filtered Enrollments for Enrollments Tab
+  const filteredEnrollments = useMemo(() => {
+    return enrollments.filter((enr) => {
+      const matchesCourse = enrollmentCourseFilter === 'ALL' || enr.course_id === enrollmentCourseFilter;
+      const matchesStatus = enrollmentStatusFilter === 'ALL' || enr.status === enrollmentStatusFilter;
+      const term = enrollmentSearch.toLowerCase().trim();
+      const fullName = `${enr.first_name || ''} ${enr.last_name || ''}`.toLowerCase();
+      const code = (enr.employee_code || '').toLowerCase();
+      const title = (enr.course_title || '').toLowerCase();
+      const dept = (enr.department_name || '').toLowerCase();
+      const matchesSearch = !term || fullName.includes(term) || code.includes(term) || title.includes(term) || dept.includes(term);
+      return matchesCourse && matchesStatus && matchesSearch;
     });
-  }, [progressData, progressStatusFilter, progressSearch]);
+  }, [enrollments, enrollmentCourseFilter, enrollmentStatusFilter, enrollmentSearch]);
 
   // Check which courses user is enrolled in
   const enrolledCourseIds = useMemo(() => {
@@ -278,11 +300,22 @@ export const TrainingPage = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          {isTrainingManager && activeTab === 'courses' && (
-            <Button onClick={handleOpenCreateModal} icon={Plus}>
-              New Course
-            </Button>
+        <div className="flex items-center gap-2.5">
+          {isTrainingManager && (
+            <>
+              <Button
+                variant="outline"
+                onClick={() => handleOpenAssignModal(null)}
+                icon={UserPlus}
+              >
+                Assign Course
+              </Button>
+              {activeTab === 'courses' && (
+                <Button onClick={handleOpenCreateModal} icon={Plus}>
+                  New Course
+                </Button>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -393,19 +426,30 @@ export const TrainingPage = () => {
                     </div>
                   </div>
 
-                  {/* Actions Section */}
+                    {/* Actions Section */}
                   <div className="pt-3 border-t border-slate-100 space-y-2.5">
                     {/* Training Manager Admin Actions */}
                     {isTrainingManager && (
                       <div className="flex items-center justify-between gap-1 pt-1 bg-slate-50 p-2 rounded-lg border border-slate-200/60">
-                        <button
-                          onClick={() => handleOpenProgressModal(c)}
-                          className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600 hover:text-indigo-800 px-2 py-1 rounded hover:bg-indigo-50"
-                          title="View all employees' completion data"
-                        >
-                          <BarChart3 className="w-3.5 h-3.5" />
-                          Track Progress
-                        </button>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => handleOpenProgressModal(c)}
+                            className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600 hover:text-indigo-800 px-2 py-1 rounded hover:bg-indigo-50 transition"
+                            title="View all employees' completion data"
+                          >
+                            <BarChart3 className="w-3.5 h-3.5" />
+                            Track Progress
+                          </button>
+
+                          <button
+                            onClick={() => handleOpenAssignModal(c)}
+                            className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-1 rounded transition border border-emerald-200/60"
+                            title="Assign this course to employees or departments"
+                          >
+                            <UserPlus className="w-3.5 h-3.5" />
+                            Assign
+                          </button>
+                        </div>
 
                         <div className="flex items-center gap-1">
                           <button
@@ -481,42 +525,85 @@ export const TrainingPage = () => {
       ) : (
         /* ENROLLMENTS */
         <div className="space-y-4">
-          {/* Training Manager View Mode Switch */}
-          {isTrainingManager && (
-            <div className="flex items-center justify-between bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-              <span className="text-xs font-bold text-slate-700">Display View:</span>
-              <div className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50">
-                <button
-                  onClick={() => setEnrollmentViewMode('ALL')}
-                  className={`px-3 py-1 text-xs font-semibold rounded-md transition ${
-                    enrollmentViewMode === 'ALL'
-                      ? 'bg-white text-indigo-600 shadow-sm font-bold'
-                      : 'text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  All Staff Enrollments
-                </button>
-                <button
-                  onClick={() => setEnrollmentViewMode('MINE')}
-                  className={`px-3 py-1 text-xs font-semibold rounded-md transition ${
-                    enrollmentViewMode === 'MINE'
-                      ? 'bg-white text-indigo-600 shadow-sm font-bold'
-                      : 'text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  My Own Enrollments
-                </button>
+          {/* Controls Bar */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm">
+            {isTrainingManager ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-700">Display View:</span>
+                <div className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50">
+                  <button
+                    onClick={() => setEnrollmentViewMode('ALL')}
+                    className={`px-3 py-1 text-xs font-semibold rounded-md transition ${
+                      enrollmentViewMode === 'ALL'
+                        ? 'bg-white text-indigo-600 shadow-sm font-bold'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    All Staff Enrollments
+                  </button>
+                  <button
+                    onClick={() => setEnrollmentViewMode('MINE')}
+                    className={`px-3 py-1 text-xs font-semibold rounded-md transition ${
+                      enrollmentViewMode === 'MINE'
+                        ? 'bg-white text-indigo-600 shadow-sm font-bold'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    My Own Enrollments
+                  </button>
+                </div>
               </div>
+            ) : (
+              <span className="text-xs font-bold text-slate-700">My Enrolled Trainings & Progress</span>
+            )}
+
+            {/* Search and Filters */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="relative min-w-[200px]">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Search course or employee..."
+                  value={enrollmentSearch}
+                  onChange={(e) => setEnrollmentSearch(e.target.value)}
+                  className="w-full text-xs pl-8 pr-3 py-1.5 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 bg-white"
+                />
+              </div>
+
+              <select
+                value={enrollmentCourseFilter}
+                onChange={(e) => setEnrollmentCourseFilter(e.target.value)}
+                className="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 focus:outline-none focus:border-indigo-500"
+              >
+                <option value="ALL">All Courses</option>
+                {courses.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.title}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={enrollmentStatusFilter}
+                onChange={(e) => setEnrollmentStatusFilter(e.target.value)}
+                className="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 focus:outline-none focus:border-indigo-500"
+              >
+                <option value="ALL">All Statuses</option>
+                <option value="COMPLETED">Completed</option>
+                <option value="IN_PROGRESS">In Progress</option>
+                <option value="ENROLLED">Enrolled (Not Started)</option>
+              </select>
             </div>
-          )}
+          </div>
 
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
             <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 text-slate-500 uppercase text-[10px] tracking-wider border-b border-slate-200">
+              <thead className="bg-slate-50 text-slate-500 uppercase text-[10px] tracking-wider border-b border-slate-200 font-bold">
                 <tr>
                   <th className="p-3.5">Course</th>
                   <th className="p-3.5">Category</th>
                   <th className="p-3.5">Employee</th>
+                  <th className="p-3.5">Assignment</th>
                   <th className="p-3.5">Course Material</th>
                   <th className="p-3.5">Progress</th>
                   <th className="p-3.5">Status</th>
@@ -524,15 +611,36 @@ export const TrainingPage = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {enrollments.map((enr) => (
+                {filteredEnrollments.map((enr) => (
                   <tr key={enr.id} className="hover:bg-slate-50/80 transition">
-                    <td className="p-3.5 font-bold text-slate-800">{enr.course_title}</td>
+                    <td className="p-3.5">
+                      <span className="font-bold text-slate-800 block">{enr.course_title}</span>
+                      <span className="text-[10px] text-slate-400">
+                        {enr.duration_hours ? `${enr.duration_hours} hr(s)` : ''}
+                      </span>
+                    </td>
                     <td className="p-3.5 text-slate-500">{enr.course_category}</td>
                     <td className="p-3.5">
                       <span className="font-semibold text-slate-700 block">
                         {enr.first_name} {enr.last_name}
                       </span>
-                      <span className="text-[10px] text-slate-400">{enr.employee_code}</span>
+                      <span className="text-[10px] text-slate-400">
+                        {enr.employee_code} • {enr.department_name || '-'}
+                      </span>
+                    </td>
+                    <td className="p-3.5">
+                      <span className="text-[10px] font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded block w-fit">
+                        {enr.enrollment_type || 'OPTIONAL'}
+                      </span>
+                      {enr.assigned_by_name ? (
+                        <span className="text-[10px] text-indigo-600 block mt-0.5 truncate max-w-[130px]">
+                          By {enr.assigned_by_name}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-slate-400 block mt-0.5 italic">
+                          Self-enrolled
+                        </span>
+                      )}
                     </td>
                     <td className="p-3.5">
                       {enr.training_link ? (
@@ -594,10 +702,10 @@ export const TrainingPage = () => {
                   </tr>
                 ))}
 
-                {enrollments.length === 0 && (
+                {filteredEnrollments.length === 0 && (
                   <tr>
-                    <td colSpan="7" className="py-12 text-center text-slate-400">
-                      No enrollments found. Enroll in a course from the Course Catalogue!
+                    <td colSpan="8" className="py-12 text-center text-slate-400">
+                      No enrollments found matching the criteria.
                     </td>
                   </tr>
                 )}
@@ -608,180 +716,27 @@ export const TrainingPage = () => {
       )}
 
       {/* COURSE COMPLETION MATRIX / PROGRESS MODAL (Training Managers only) */}
-      {selectedProgressCourse && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden">
-            {/* Modal Header */}
-            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-base font-bold text-slate-800">
-                    Course Completion Tracker: {selectedProgressCourse.title}
-                  </h3>
-                  <Badge variant={selectedProgressCourse.is_mandatory ? 'danger' : 'info'}>
-                    {selectedProgressCourse.is_mandatory ? 'Mandatory' : 'Optional'}
-                  </Badge>
-                </div>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Real-time completion metrics across all active employees in the organization
-                </p>
-              </div>
-              <button
-                onClick={() => setSelectedProgressCourse(null)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <CourseProgressModal
+        isOpen={!!selectedProgressCourse}
+        onClose={() => setSelectedProgressCourse(null)}
+        course={selectedProgressCourse}
+        progressData={progressData}
+        loading={loadingProgress}
+        onAssignCourse={(courseToAssign, empId) => {
+          handleOpenAssignModal(courseToAssign, empId);
+        }}
+        onUpdateProgress={handleUpdateProgress}
+      />
 
-            {/* Modal Body */}
-            <div className="p-5 space-y-4 overflow-y-auto flex-1">
-              {loadingProgress ? (
-                <LoadingSpinner message="Calculating completion statistics..." />
-              ) : progressData ? (
-                <>
-                  {/* Summary Metric Cards */}
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                    <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase block">Total Staff</span>
-                      <span className="text-lg font-bold text-slate-800">{progressData.summary?.totalEmployees || 0}</span>
-                    </div>
-                    <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-200">
-                      <span className="text-[10px] font-bold text-emerald-600 uppercase block">Completed</span>
-                      <span className="text-lg font-bold text-emerald-700">
-                        {progressData.summary?.completedCount || 0} ({progressData.summary?.completionRate || 0}%)
-                      </span>
-                    </div>
-                    <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
-                      <span className="text-[10px] font-bold text-blue-600 uppercase block">In Progress</span>
-                      <span className="text-lg font-bold text-blue-700">{progressData.summary?.inProgressCount || 0}</span>
-                    </div>
-                    <div className="bg-amber-50 p-3 rounded-lg border border-amber-200">
-                      <span className="text-[10px] font-bold text-amber-600 uppercase block">Enrolled Only</span>
-                      <span className="text-lg font-bold text-amber-700">{progressData.summary?.enrolledCount || 0}</span>
-                    </div>
-                    <div className="bg-rose-50 p-3 rounded-lg border border-rose-200">
-                      <span className="text-[10px] font-bold text-rose-600 uppercase block">Not Enrolled</span>
-                      <span className="text-lg font-bold text-rose-700">{progressData.summary?.notEnrolledCount || 0}</span>
-                    </div>
-                  </div>
-
-                  {/* Filter & Search Bar */}
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
-                    <div className="relative flex-1 max-w-sm">
-                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                      <input
-                        type="text"
-                        placeholder="Search by employee name, code, dept..."
-                        value={progressSearch}
-                        onChange={(e) => setProgressSearch(e.target.value)}
-                        className="w-full text-xs pl-8 pr-3 py-1.5 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500"
-                      />
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-slate-500 font-medium">Status:</span>
-                      <select
-                        value={progressStatusFilter}
-                        onChange={(e) => setProgressStatusFilter(e.target.value)}
-                        className="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 focus:outline-none focus:border-indigo-500"
-                      >
-                        <option value="ALL">All Employees ({progressData.employees?.length || 0})</option>
-                        <option value="COMPLETED">Completed ({progressData.summary?.completedCount || 0})</option>
-                        <option value="IN_PROGRESS">In Progress ({progressData.summary?.inProgressCount || 0})</option>
-                        <option value="ENROLLED">Enrolled, Not Started ({progressData.summary?.enrolledCount || 0})</option>
-                        <option value="NOT_ENROLLED">Not Enrolled ({progressData.summary?.notEnrolledCount || 0})</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Employee Table */}
-                  <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-slate-50 text-slate-500 uppercase text-[10px] tracking-wider border-b border-slate-200">
-                        <tr>
-                          <th className="p-3">Employee</th>
-                          <th className="p-3">Department</th>
-                          <th className="p-3">Designation</th>
-                          <th className="p-3">Status</th>
-                          <th className="p-3">Progress</th>
-                          <th className="p-3 text-right">Completion Date</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {filteredProgressEmployees.map((emp) => (
-                          <tr key={emp.employeeId} className="hover:bg-slate-50/70 transition">
-                            <td className="p-3">
-                              <span className="font-bold text-slate-800 block">
-                                {emp.firstName} {emp.lastName}
-                              </span>
-                              <span className="text-[10px] text-slate-400">{emp.employeeCode}</span>
-                            </td>
-                            <td className="p-3 text-slate-600 font-medium">
-                              {emp.departmentName || '-'}
-                            </td>
-                            <td className="p-3 text-slate-500">
-                              {emp.designationTitle || '-'}
-                            </td>
-                            <td className="p-3">
-                              <Badge
-                                variant={
-                                  emp.completionStatus === 'COMPLETED'
-                                    ? 'success'
-                                    : emp.completionStatus === 'IN_PROGRESS'
-                                    ? 'info'
-                                    : emp.completionStatus === 'ENROLLED'
-                                    ? 'warning'
-                                    : 'neutral'
-                                }
-                              >
-                                {emp.completionStatus === 'NOT_ENROLLED' ? 'NOT ENROLLED' : emp.completionStatus}
-                              </Badge>
-                            </td>
-                            <td className="p-3 min-w-[120px]">
-                              <div className="flex items-center gap-2">
-                                <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
-                                  <div
-                                    className={`h-1.5 rounded-full ${
-                                      emp.completionStatus === 'COMPLETED' ? 'bg-emerald-500' : 'bg-indigo-600'
-                                    }`}
-                                    style={{ width: `${emp.progressPercentage}%` }}
-                                  />
-                                </div>
-                                <span className="text-[10px] font-semibold text-slate-600 min-w-[28px]">
-                                  {emp.progressPercentage}%
-                                </span>
-                              </div>
-                            </td>
-                            <td className="p-3 text-right text-slate-500 font-mono text-[11px]">
-                              {emp.completedAt ? new Date(emp.completedAt).toLocaleDateString() : '-'}
-                            </td>
-                          </tr>
-                        ))}
-
-                        {filteredProgressEmployees.length === 0 && (
-                          <tr>
-                            <td colSpan="6" className="py-8 text-center text-slate-400">
-                              No employees found matching the filter criteria.
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </>
-              ) : null}
-            </div>
-
-            {/* Modal Footer */}
-            <div className="p-4 border-t border-slate-100 flex justify-end bg-slate-50/50">
-              <Button variant="neutral" onClick={() => setSelectedProgressCourse(null)}>
-                Close
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ASSIGN COURSE MODAL (L&D Authority) */}
+      <AssignCourseModal
+        isOpen={showAssignModal}
+        onClose={() => setShowAssignModal(false)}
+        course={assignCourseTarget}
+        courses={courses}
+        preselectedEmployeeId={preselectedAssignEmpId}
+        onAssignmentSuccess={handleAssignmentSuccess}
+      />
 
       {/* CREATE / EDIT COURSE MODAL */}
       {showCourseModal && (

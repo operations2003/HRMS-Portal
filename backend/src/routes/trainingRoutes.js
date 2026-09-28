@@ -19,6 +19,8 @@ router.patch('/courses/:id/publish', authorizeTrainingManager, trainingControlle
 router.patch('/courses/:id/unpublish', authorizeTrainingManager, trainingController.unpublishCourse);
 router.delete('/courses/:id', authorizeTrainingManager, trainingController.deleteCourse);
 router.get('/courses/:id/progress', authorizeTrainingManager, trainingController.getCourseCompletionMatrix);
+router.post('/courses/:id/assign', authorizeTrainingManager, trainingController.assignCourse);
+router.post('/assign', authorizeTrainingManager, trainingController.assignCourse);
 
 // Enrollments
 // Training Managers see all progress data; other staff only see their own enrollments

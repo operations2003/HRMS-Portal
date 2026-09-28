@@ -148,11 +148,47 @@ export const trainingController = {
   },
 
   /**
+   * POST /api/v1/training/courses/:id/assign
+   * POST /api/v1/training/assign
+   * L&D / Training Managers assign course to one or more employees, department, or org-wide
+   */
+  async assignCourse(req, res, next) {
+    try {
+      const orgId = req.user.orgId || 'org-1';
+      const courseId = req.params.id || req.body.courseId;
+      if (!courseId) {
+        return sendError(res, 'Course ID is required for assignment.', 400);
+      }
+      const result = await trainingService.assignCourse(orgId, req.user, { ...req.body, courseId });
+      return sendSuccess(res, result.message, result, null, 201);
+    } catch (error) {
+      if (error.statusCode) return sendError(res, error.message, error.statusCode);
+      next(error);
+    }
+  },
+
+  /**
    * POST /api/v1/training/enrollments
    */
   async enroll(req, res, next) {
     try {
       const orgId = req.user.orgId || 'org-1';
+      const isManager = canManageTraining(req.user);
+
+      // If assigning to multiple or department or org-wide
+      if (req.body.employeeIds || req.body.departmentId || req.body.targetAll) {
+        if (!isManager) {
+          return sendError(res, 'Access denied: Only L&D department personnel and Administrators can assign courses in bulk.', 403);
+        }
+        const result = await trainingService.assignCourse(orgId, req.user, req.body);
+        return sendSuccess(res, result.message, result, null, 201);
+      }
+
+      // If assigning to someone else
+      if (req.body.employeeId && req.body.employeeId !== req.user.employeeId && !isManager) {
+        return sendError(res, 'Access denied: Only L&D personnel can assign courses to other employees.', 403);
+      }
+
       const enrollment = await trainingService.enroll(orgId, req.user, req.body);
       return sendSuccess(res, 'Course enrollment recorded.', enrollment, null, 201);
     } catch (error) {

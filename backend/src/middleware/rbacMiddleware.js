@@ -84,25 +84,37 @@ export const canManageTraining = (user) => {
     return true;
   }
 
-  const isHr = normRole === 'hr' || normRole === 'hrmanager';
-  if (!isHr) return false;
+  // Any role with L&D or Training in title
+  if (
+    normRole.includes('ld') ||
+    normRole.includes('l&d') ||
+    normRole.includes('learning') ||
+    normRole.includes('training') ||
+    normRole.includes('trainer')
+  ) {
+    return true;
+  }
 
+  // Any personnel in the Learning & Development department
   const deptName = (user.departmentName || user.department?.name || user.deptName || '').toLowerCase().trim();
   const deptCode = (user.departmentCode || user.department?.code || user.deptCode || '').toLowerCase().trim();
   const deptId = (user.deptId || '').toLowerCase().trim();
 
-  return (
+  const isLdDept = (
     deptName === 'learning & development' ||
     deptName === 'learning and development' ||
     deptName.includes('learning') ||
+    deptName.includes('l&d') ||
     deptCode === 'l&d' ||
     deptCode === 'ld' ||
     deptId === 'dept-ld'
   );
+
+  return isLdDept;
 };
 
 /**
- * Middleware ensuring user is ADMIN or (HR AND Learning & Development Department)
+ * Middleware ensuring user is ADMIN or from the Learning & Development (L&D) Department
  */
 export const authorizeTrainingManager = (req, res, next) => {
   if (!req.user) {
@@ -115,8 +127,9 @@ export const authorizeTrainingManager = (req, res, next) => {
 
   return sendError(
     res,
-    'Access Forbidden: Only Administrators and HR personnel in the Learning & Development department can manage training programs.',
+    'Access Forbidden: Only Administrators and personnel in the Learning & Development department can manage and assign training programs.',
     403
   );
 };
+
 

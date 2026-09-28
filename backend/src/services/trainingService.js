@@ -205,9 +205,11 @@ export const trainingService = {
         ce.progress_percentage,
         ce.completion_date,
         ce.enrollment_type,
+        ce.assigned_by,
         ce.certificate_url,
         ce.feedback_rating,
         ce.feedback_comments,
+        ce.created_at AS assigned_at,
         CASE
           WHEN ce.status = 'COMPLETED' OR ce.progress_percentage = 100 THEN 'COMPLETED'
           WHEN ce.status = 'IN_PROGRESS' OR (ce.progress_percentage > 0 AND ce.progress_percentage < 100) THEN 'IN_PROGRESS'
@@ -235,20 +237,173 @@ export const trainingService = {
     const inProgressCount = res.rows.filter(r => r.progress_status === 'IN_PROGRESS').length;
     const enrolledNotStartedCount = res.rows.filter(r => r.progress_status === 'ENROLLED').length;
     const notEnrolledCount = res.rows.filter(r => r.progress_status === 'NOT_ENROLLED').length;
+    const enrolledCount = totalEmployees - notEnrolledCount;
     const notCompletedCount = totalEmployees - completedCount;
+    const completionRate = enrolledCount > 0 ? Math.round((completedCount / enrolledCount) * 100) : 0;
+    const overallRate = totalEmployees > 0 ? Math.round((completedCount / totalEmployees) * 100) : 0;
+
+    const stats = {
+      totalEmployees,
+      enrolledCount,
+      completedCount,
+      inProgressCount,
+      enrolledNotStartedCount,
+      notEnrolledCount,
+      notCompletedCount,
+      completionRate,
+      overallRate,
+    };
+
+    const formattedEmployees = res.rows.map(r => ({
+      ...r,
+      employeeId: r.employee_id,
+      employeeCode: r.employee_code,
+      firstName: r.first_name,
+      lastName: r.last_name,
+      email: r.email,
+      departmentName: r.department_name,
+      designationTitle: r.designation_name,
+      enrollmentId: r.enrollment_id,
+      status: r.enrollment_status,
+      enrollmentStatus: r.enrollment_status,
+      progressPercentage: Number(r.progress_percentage || 0),
+      completionDate: r.completion_date,
+      completedAt: r.completion_date,
+      enrollmentType: r.enrollment_type,
+      completionStatus: r.progress_status,
+      progressStatus: r.progress_status,
+      assignedBy: r.assigned_by,
+      assignedAt: r.assigned_at,
+    }));
 
     return {
       course,
-      stats: {
-        totalEmployees,
-        completedCount,
-        inProgressCount,
-        enrolledNotStartedCount,
-        notEnrolledCount,
-        notCompletedCount,
-        completionRate: totalEmployees > 0 ? Math.round((completedCount / totalEmployees) * 100) : 0,
+      stats,
+      summary: stats, // alias for frontend compatibility
+      employees: formattedEmployees,
+    };
+  },
+
+  /**
+   * Assign course to employee(s), department, or company-wide (L&D / Training Managers)
+   */
+  async assignCourse(orgId, currentUser, payload) {
+    const { courseId, employeeIds, employeeId, departmentId, departmentIds, targetAll, enrollmentType = 'MANDATORY', notes } = payload;
+
+    // Verify course exists
+    const courseRes = await query('SELECT * FROM courses WHERE id = $1 AND org_id = $2;', [courseId, orgId]);
+    if (courseRes.rows.length === 0) {
+      const err = new Error('Course not found.');
+      err.statusCode = 404;
+      throw err;
+    }
+    const course = courseRes.rows[0];
+
+    // Determine target employees
+    let employeesToAssign = [];
+
+    if (targetAll === true || targetAll === 'true') {
+      const res = await query(
+        `SELECT e.id, e.user_id, e.first_name, e.last_name, e.email 
+         FROM employees e 
+         WHERE e.org_id = $1 AND e.status = 'Active';`,
+        [orgId]
+      );
+      employeesToAssign = res.rows;
+    } else if (departmentId || (departmentIds && departmentIds.length > 0)) {
+      const deptList = departmentIds && Array.isArray(departmentIds) && departmentIds.length > 0 
+        ? departmentIds 
+        : [departmentId];
+      const res = await query(
+        `SELECT e.id, e.user_id, e.first_name, e.last_name, e.email 
+         FROM employees e 
+         WHERE e.org_id = $1 AND e.dept_id = ANY($2::varchar[]) AND e.status = 'Active';`,
+        [orgId, deptList]
+      );
+      employeesToAssign = res.rows;
+    } else if (employeeIds && Array.isArray(employeeIds) && employeeIds.length > 0) {
+      const res = await query(
+        `SELECT e.id, e.user_id, e.first_name, e.last_name, e.email 
+         FROM employees e 
+         WHERE e.org_id = $1 AND e.id = ANY($2::varchar[]) AND e.status = 'Active';`,
+        [orgId, employeeIds]
+      );
+      employeesToAssign = res.rows;
+    } else if (employeeId) {
+      const res = await query(
+        `SELECT e.id, e.user_id, e.first_name, e.last_name, e.email 
+         FROM employees e 
+         WHERE e.org_id = $1 AND e.id = $2 AND e.status = 'Active';`,
+        [orgId, employeeId]
+      );
+      employeesToAssign = res.rows;
+    } else {
+      const err = new Error('Please select at least one employee, department, or choose all company employees.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    if (employeesToAssign.length === 0) {
+      const err = new Error('No active employees found matching the assignment criteria.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const assignedResults = [];
+    const validEnrollmentType = ['MANDATORY', 'OPTIONAL', 'NOMINATED'].includes(enrollmentType)
+      ? enrollmentType
+      : 'MANDATORY';
+
+    for (const emp of employeesToAssign) {
+      const enrId = `enr-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      const res = await query(
+        `INSERT INTO course_enrollments (
+          id, org_id, course_id, employee_id, assigned_by, enrollment_type,
+          status, progress_percentage, created_at, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, 'ENROLLED', 0, NOW(), NOW())
+        ON CONFLICT (course_id, employee_id) DO UPDATE 
+        SET enrollment_type = EXCLUDED.enrollment_type,
+            assigned_by = EXCLUDED.assigned_by,
+            updated_at = NOW()
+        RETURNING *;`,
+        [enrId, orgId, courseId, emp.id, currentUser.id, validEnrollmentType]
+      );
+      assignedResults.push(res.rows[0]);
+
+      // Notify employee
+      if (emp.user_id) {
+        await notificationService.createNotification({
+          orgId,
+          userId: emp.user_id,
+          eventType: 'TRAINING_ASSIGNED',
+          title: `L&D Course Assigned: ${course.title}`,
+          message: `The Learning & Development department has assigned you "${course.title}" (${validEnrollmentType}).`,
+          entityType: 'COURSE',
+          entityId: courseId,
+        }).catch(() => {});
+      }
+    }
+
+    await adminService.logAction({
+      orgId,
+      actorUserId: currentUser.id,
+      actorRole: currentUser.roleName,
+      targetType: 'COURSE_ASSIGNMENT',
+      targetId: courseId,
+      action: 'ASSIGN_COURSE',
+      details: {
+        courseTitle: course.title,
+        assignedCount: employeesToAssign.length,
+        enrollmentType: validEnrollmentType,
       },
-      employees: res.rows,
+    }).catch(() => {});
+
+    return {
+      message: `Course "${course.title}" successfully assigned to ${employeesToAssign.length} employee(s).`,
+      assignedCount: employeesToAssign.length,
+      courseId,
+      courseTitle: course.title,
+      enrollments: assignedResults,
     };
   },
 
@@ -361,11 +516,13 @@ export const trainingService = {
              c.category AS course_category, c.duration_hours, c.is_mandatory,
              c.training_link, c.status AS course_status,
              e.first_name, e.last_name, e.employee_code, e.email,
-             d.name AS department_name
+             d.name AS department_name,
+             TRIM(CONCAT(u.first_name, ' ', u.last_name)) AS assigned_by_name
       FROM course_enrollments ce
       JOIN courses c ON ce.course_id = c.id
       JOIN employees e ON ce.employee_id = e.id
       LEFT JOIN departments d ON e.dept_id = d.id
+      LEFT JOIN users u ON ce.assigned_by = u.id
       WHERE ce.org_id = $1
     `;
     const params = [orgId];
