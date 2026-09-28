@@ -45,10 +45,26 @@ export const TasksPage = () => {
 
   // Task assigners and reviewers: Admin, HR, and Manager only
   const canAssign = hasRole(['Admin', 'SuperAdmin', 'OrgAdmin', 'HR', 'HRManager', 'Manager']);
+  const isAdmin = hasRole(['Admin', 'SuperAdmin', 'OrgAdmin']) || isCeoOrAdmin(user);
+
+  const formatDueDate = (dateStr) => {
+    if (!dateStr) return '';
+    try {
+      const clean = String(dateStr).includes('T') ? String(dateStr).split('T')[0] : String(dateStr);
+      const parts = clean.split('-');
+      if (parts.length === 3) {
+        const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+        return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+      }
+      return clean;
+    } catch {
+      return String(dateStr).split('T')[0];
+    }
+  };
 
   const [tasks, setTasks] = useState([]);
   const [employees, setEmployees] = useState([]);
-  const [activeTab, setActiveTab] = useState('assignments'); // 'assignments' | 'board' | 'performance'
+  const [activeTab, setActiveTab] = useState('board'); // 'board' | 'assignments' | 'performance'
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState('kanban'); // 'kanban' | 'list'
   const [search, setSearch] = useState('');
@@ -56,7 +72,7 @@ export const TasksPage = () => {
   const [priorityFilter, setPriorityFilter] = useState('');
   const [creatorFilter, setCreatorFilter] = useState('');
   const [assigneeFilter, setAssigneeFilter] = useState('');
-  const [scopeFilter, setScopeFilter] = useState('all'); // 'all' | 'mine'
+  const [scopeFilter, setScopeFilter] = useState(canAssign ? 'all' : 'mine'); // 'all' | 'mine'
 
   // Modals
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -83,21 +99,27 @@ export const TasksPage = () => {
   const fetchTasks = useCallback(async () => {
     setLoading(true);
     try {
+      const effectiveScope = !canAssign ? 'mine' : scopeFilter;
       const res = await taskService.getTasks({
         search,
         status: statusFilter,
         priority: priorityFilter,
         creatorId: creatorFilter || undefined,
-        assigneeId: assigneeFilter || undefined,
-        scope: scopeFilter,
+        assigneeId: !canAssign ? user?.employeeId : (assigneeFilter || undefined),
+        scope: effectiveScope,
       });
-      setTasks(res.data || []);
+      const rawTasks = res.data || [];
+      // Guarantee privacy: Regular employees strictly only view their own tasks
+      const safeTasks = !canAssign && user?.employeeId
+        ? rawTasks.filter((t) => t.assignee_id === user.employeeId || t.creator_id === user.employeeId)
+        : rawTasks;
+      setTasks(safeTasks);
     } catch (err) {
       toast.error(err.message || 'Failed to fetch tasks.');
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter, priorityFilter, creatorFilter, assigneeFilter, scopeFilter, toast]);
+  }, [search, statusFilter, priorityFilter, creatorFilter, assigneeFilter, scopeFilter, canAssign, user?.employeeId, toast]);
 
   useEffect(() => {
     fetchTasks();
@@ -277,22 +299,6 @@ export const TasksPage = () => {
       <div className="flex items-center gap-6 sm:gap-8 border-b border-slate-200 dark:border-slate-800 pb-px overflow-x-auto">
         <button
           type="button"
-          onClick={() => setActiveTab('assignments')}
-          className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === 'assignments'
-              ? 'border-brand-500 text-brand-600 dark:text-brand-400'
-              : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-          }`}
-        >
-          <ArrowRightLeft className="w-4 h-4 text-brand-500" />
-          Who's Assigning to Whom
-          <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-brand-50 dark:bg-brand-950/70 text-brand-600 dark:text-brand-400 border border-brand-200 dark:border-brand-800">
-            {tasks.length}
-          </span>
-        </button>
-
-        <button
-          type="button"
           onClick={() => setActiveTab('board')}
           className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
             activeTab === 'board'
@@ -302,7 +308,25 @@ export const TasksPage = () => {
         >
           <Kanban className="w-4 h-4" />
           Task Board & Pipeline
+          <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-brand-50 dark:bg-brand-950/70 text-brand-600 dark:text-brand-400 border border-brand-200 dark:border-brand-800">
+            {tasks.length}
+          </span>
         </button>
+
+        {isAdmin && (
+          <button
+            type="button"
+            onClick={() => setActiveTab('assignments')}
+            className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'assignments'
+                ? 'border-brand-500 text-brand-600 dark:text-brand-400'
+                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+          >
+            <ArrowRightLeft className="w-4 h-4 text-brand-500" />
+            Who's Assigning to Whom
+          </button>
+        )}
 
         <button
           type="button"
@@ -320,7 +344,7 @@ export const TasksPage = () => {
 
       {activeTab === 'performance' ? (
         <MyPerformanceSection />
-      ) : activeTab === 'assignments' ? (
+      ) : activeTab === 'assignments' && isAdmin ? (
         <TaskAssignmentsSection
           tasks={tasks}
           currentUser={user}
@@ -397,20 +421,27 @@ export const TasksPage = () => {
               </div>
 
               {/* Scope filter */}
-              <select
-                value={scopeFilter}
-                onChange={(e) => setScopeFilter(e.target.value)}
-                className="text-xs border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-brand-500"
-              >
-                <option value="all">All Organization Tasks</option>
-                <option value="mine">My Tasks Only</option>
-              </select>
+              {canAssign ? (
+                <select
+                  value={scopeFilter}
+                  onChange={(e) => setScopeFilter(e.target.value)}
+                  className="text-xs border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-brand-500 cursor-pointer"
+                >
+                  <option value="all">All Organization Tasks</option>
+                  <option value="mine">My Tasks Only</option>
+                </select>
+              ) : (
+                <span className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-brand-50 dark:bg-brand-950/70 text-brand-700 dark:text-brand-300 border border-brand-200 dark:border-brand-800 flex items-center gap-1.5">
+                  <User className="w-3.5 h-3.5 text-brand-500" />
+                  My Tasks Only
+                </span>
+              )}
 
               {/* Assigner filter */}
               <select
                 value={creatorFilter}
                 onChange={(e) => setCreatorFilter(e.target.value)}
-                className="text-xs border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                className="text-xs border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-brand-500 cursor-pointer"
               >
                 <option value="">All Assigners</option>
                 {uniqueAssigners.map((a) => (
@@ -420,19 +451,21 @@ export const TasksPage = () => {
                 ))}
               </select>
 
-              {/* Assignee filter */}
-              <select
-                value={assigneeFilter}
-                onChange={(e) => setAssigneeFilter(e.target.value)}
-                className="text-xs border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-brand-500"
-              >
-                <option value="">All Assignees</option>
-                {uniqueAssignees.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    To: {a.name}
-                  </option>
-                ))}
-              </select>
+              {/* Assignee filter (Admin / Manager only) */}
+              {canAssign && (
+                <select
+                  value={assigneeFilter}
+                  onChange={(e) => setAssigneeFilter(e.target.value)}
+                  className="text-xs border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-brand-500 cursor-pointer"
+                >
+                  <option value="">All Assignees</option>
+                  {uniqueAssignees.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      To: {a.name}
+                    </option>
+                  ))}
+                </select>
+              )}
 
               <select
                 value={statusFilter}
@@ -532,15 +565,15 @@ export const TasksPage = () => {
                       )}
 
                       {/* Delegation Flow: Who assigned to Whom */}
-                      <div className="bg-slate-50/80 dark:bg-slate-800/60 p-2 rounded-lg border border-slate-100 dark:border-slate-700/60 flex items-center justify-between text-[10px] gap-1.5">
-                        <div className="flex items-center gap-1 min-w-0" title={`Assigned by ${t.creator_first || ''} ${t.creator_last || ''}`}>
-                          <span className="text-[9px] uppercase font-bold text-slate-400 shrink-0">By:</span>
-                          <span className="font-semibold text-slate-700 dark:text-slate-300 truncate">{t.creator_first || 'Admin'}</span>
+                      <div className="bg-slate-50 dark:bg-slate-800/80 px-3 py-2 rounded-xl border border-slate-200/80 dark:border-slate-700/70 flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-1.5 min-w-0" title={`Assigned by ${t.creator_first || ''} ${t.creator_last || ''}`}>
+                          <span className="text-[10px] uppercase font-bold text-slate-400 shrink-0">BY:</span>
+                          <span className="font-bold text-slate-800 dark:text-slate-200 truncate">{t.creator_first || 'Admin'}</span>
                         </div>
-                        <ArrowRight className="w-3 h-3 text-brand-500 shrink-0" />
-                        <div className="flex items-center gap-1 min-w-0 text-right justify-end" title={`Assigned to ${t.assignee_first || ''} ${t.assignee_last || ''}`}>
-                          <span className="text-[9px] uppercase font-bold text-slate-400 shrink-0">To:</span>
-                          <span className="font-bold text-slate-900 dark:text-white truncate">{t.assignee_first || 'Unassigned'}</span>
+                        <ArrowRight className="w-3.5 h-3.5 text-brand-500 shrink-0 mx-2" />
+                        <div className="flex items-center gap-1.5 min-w-0 text-right justify-end" title={`Assigned to ${t.assignee_first || ''} ${t.assignee_last || ''}`}>
+                          <span className="text-[10px] uppercase font-bold text-slate-400 shrink-0">TO:</span>
+                          <span className="font-bold text-slate-900 dark:text-white truncate">{t.assignee_first || 'Team'}</span>
                         </div>
                       </div>
 
@@ -550,12 +583,12 @@ export const TasksPage = () => {
                         </span>
                         {t.due_date && (
                           <div
-                            className={`flex items-center gap-1 ${
-                              t.is_overdue ? 'text-rose-600 font-bold' : 'text-slate-400'
+                            className={`flex items-center gap-1 shrink-0 ${
+                              t.is_overdue ? 'text-rose-600 font-bold' : 'text-slate-500 dark:text-slate-400'
                             }`}
                           >
                             <Calendar className="w-3 h-3" />
-                            <span>{t.due_date}</span>
+                            <span>{formatDueDate(t.due_date)}</span>
                           </div>
                         )}
                       </div>
@@ -660,7 +693,7 @@ export const TasksPage = () => {
                   <td className="p-3.5">{getPriorityBadge(t.priority)}</td>
                   <td className="p-3.5">
                     <span className={t.is_overdue ? 'text-rose-600 font-bold' : 'text-slate-500'}>
-                      {t.due_date || 'N/A'}
+                      {t.due_date ? formatDueDate(t.due_date) : 'N/A'}
                     </span>
                   </td>
                   <td className="p-3.5 text-right">

@@ -54,7 +54,7 @@ export const taskController = {
       const { id } = req.params;
       const { subtasks } = req.body;
       const orgId = req.user.orgId || 'org-1';
-      const updated = await taskService.updateSubtasks(id, orgId, subtasks);
+      const updated = await taskService.updateSubtasks(id, orgId, subtasks, req.user);
       return sendSuccess(res, 'Subtasks updated.', updated);
     } catch (error) {
       if (error.statusCode) return sendError(res, error.message, error.statusCode);

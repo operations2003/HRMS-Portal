@@ -33,12 +33,25 @@ export const taskService = {
     `;
     const params = [orgId];
 
-    // Filter by scope if requested (e.g. 'mine' shows personal tasks, while 'all' offers organizational transparency)
-    if (filters.scope === 'mine' && currentUser.employeeId) {
-      params.push(currentUser.employeeId);
+    const normRole = (currentUser.roleName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const isPrivileged = ['superadmin', 'admin', 'orgadmin', 'hr', 'hrmanager'].includes(normRole);
+    const isManager = ['manager', 'teamlead', 'lead', 'supervisor'].includes(normRole);
+
+    let empId = currentUser.employeeId;
+    if (!empId && currentUser.id) {
+      const eRes = await query('SELECT id FROM employees WHERE user_id = $1 AND org_id = $2;', [currentUser.id, orgId]);
+      if (eRes.rows[0]) empId = eRes.rows[0].id;
+    }
+
+    // Strict access control: Regular employees can ONLY see their own tasks (never everyone's tasks)
+    if (!isPrivileged && !isManager) {
+      params.push(empId || 'unmatched-emp-id');
       sql += ` AND (t.assignee_id = $${params.length} OR t.creator_id = $${params.length})`;
-    } else if (filters.scope === 'team' && currentUser.employeeId) {
-      params.push(currentUser.employeeId);
+    } else if (filters.scope === 'mine' && empId) {
+      params.push(empId);
+      sql += ` AND (t.assignee_id = $${params.length} OR t.creator_id = $${params.length})`;
+    } else if ((filters.scope === 'team' || (isManager && !isPrivileged && filters.scope !== 'all')) && empId) {
+      params.push(empId);
       sql += ` AND (t.assignee_id = $${params.length} OR t.creator_id = $${params.length} OR a.manager_id = $${params.length})`;
     }
 
@@ -153,9 +166,37 @@ export const taskService = {
   },
 
   /**
+   * Enforce task access authorization (Regular employees can only access their own tasks)
+   */
+  async verifyTaskAccess(taskId, orgId, currentUser) {
+    const normRole = (currentUser.roleName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const isPrivileged = ['superadmin', 'admin', 'orgadmin', 'hr', 'hrmanager'].includes(normRole);
+    const isManager = ['manager', 'teamlead', 'lead', 'supervisor'].includes(normRole);
+    if (isPrivileged || isManager) return;
+
+    let empId = currentUser.employeeId;
+    if (!empId && currentUser.id) {
+      const eRes = await query('SELECT id FROM employees WHERE user_id = $1 AND org_id = $2;', [currentUser.id, orgId]);
+      if (eRes.rows[0]) empId = eRes.rows[0].id;
+    }
+
+    const checkRes = await query(
+      'SELECT id FROM work_tasks WHERE id = $1 AND org_id = $2 AND (assignee_id = $3 OR creator_id = $3);',
+      [taskId, orgId, empId]
+    );
+    if (checkRes.rows.length === 0) {
+      const err = new Error('Access denied: You can only access your own assigned tasks.');
+      err.statusCode = 403;
+      throw err;
+    }
+  },
+
+  /**
    * Update task status (e.g. from Kanban drag or status dropdown)
    */
   async updateStatus(taskId, orgId, currentUser, status) {
+    await this.verifyTaskAccess(taskId, orgId, currentUser);
+
     const validStatuses = ['TODO', 'IN_PROGRESS', 'BLOCKED', 'COMPLETED', 'CANCELLED'];
     if (!validStatuses.includes(status)) {
       const err = new Error(`Invalid status '${status}'. Must be one of ${validStatuses.join(', ')}.`);
@@ -184,6 +225,8 @@ export const taskService = {
    * Add comment to task
    */
   async addComment(taskId, orgId, currentUser, text) {
+    await this.verifyTaskAccess(taskId, orgId, currentUser);
+
     const taskRes = await query('SELECT comments FROM work_tasks WHERE id = $1 AND org_id = $2;', [taskId, orgId]);
     if (taskRes.rows.length === 0) {
       const err = new Error('Task not found.');
@@ -214,7 +257,10 @@ export const taskService = {
   /**
    * Toggle subtask completion
    */
-  async updateSubtasks(taskId, orgId, subtasks) {
+  async updateSubtasks(taskId, orgId, subtasks, currentUser) {
+    if (currentUser) {
+      await this.verifyTaskAccess(taskId, orgId, currentUser);
+    }
     const res = await query(
       `UPDATE work_tasks 
        SET subtasks = $1, updated_at = NOW() 

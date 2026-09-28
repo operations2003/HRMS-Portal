@@ -35,7 +35,7 @@ export const TaskAssignmentsSection = ({
   const [selectedAssignee, setSelectedAssignee] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('');
-  const [scopeFilter, setScopeFilter] = useState('all'); // 'all' | 'mine'
+  const [scopeFilter, setScopeFilter] = useState(canAssign ? 'all' : 'mine'); // 'all' | 'mine'
   const [groupingView, setGroupingView] = useState('by_assigner'); // 'by_assigner' | 'by_assignee' | 'ledger' | 'pairs'
   const [expandedGroups, setExpandedGroups] = useState({});
 
@@ -77,7 +77,13 @@ export const TaskAssignmentsSection = ({
   // Filter tasks based on search and filters
   const filteredTasks = useMemo(() => {
     return tasks.filter((t) => {
-      // Scope filter
+      // For standard employees, strictly enforce visibility of their own tasks only
+      if (!canAssign && currentUser?.employeeId) {
+        const isMine = t.assignee_id === currentUser.employeeId || t.creator_id === currentUser.employeeId;
+        if (!isMine) return false;
+      }
+
+      // Scope filter for assigners/managers
       if (scopeFilter === 'mine' && currentUser?.employeeId) {
         const isMine = t.assignee_id === currentUser.employeeId || t.creator_id === currentUser.employeeId;
         if (!isMine) return false;
@@ -273,35 +279,44 @@ export const TaskAssignmentsSection = ({
               Who Is Assigning Tasks to Whom
             </h2>
             <p className="text-sm text-indigo-200 leading-relaxed">
-              Complete organizational visibility into who creates and assigns tasks, delegation workflows, and active task ownership across all departments and team members.
+              {canAssign
+                ? 'Complete organizational visibility into who creates and assigns tasks, delegation workflows, and active task ownership across all departments and team members.'
+                : 'Track who assigned tasks to you, review deadlines, and monitor your delivery progress.'}
             </p>
           </div>
 
           {/* Quick Scope Switcher */}
-          <div className="flex items-center gap-2 bg-white/10 p-1.5 rounded-xl backdrop-blur-md border border-white/10 self-start lg:self-auto">
-            <button
-              type="button"
-              onClick={() => setScopeFilter('all')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                scopeFilter === 'all'
-                  ? 'bg-white text-slate-900 shadow-md'
-                  : 'text-indigo-100 hover:text-white hover:bg-white/10'
-              }`}
-            >
-              All Org Tasks ({tasks.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setScopeFilter('mine')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                scopeFilter === 'mine'
-                  ? 'bg-white text-slate-900 shadow-md'
-                  : 'text-indigo-100 hover:text-white hover:bg-white/10'
-              }`}
-            >
-              My Involvements
-            </button>
-          </div>
+          {canAssign ? (
+            <div className="flex items-center gap-2 bg-white/10 p-1.5 rounded-xl backdrop-blur-md border border-white/10 self-start lg:self-auto">
+              <button
+                type="button"
+                onClick={() => setScopeFilter('all')}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  scopeFilter === 'all'
+                    ? 'bg-white text-slate-900 shadow-md'
+                    : 'text-indigo-100 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                All Org Tasks ({tasks.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setScopeFilter('mine')}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  scopeFilter === 'mine'
+                    ? 'bg-white text-slate-900 shadow-md'
+                    : 'text-indigo-100 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                My Involvements
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 bg-white/10 px-3.5 py-2 rounded-xl backdrop-blur-md border border-white/10 text-white text-xs font-bold self-start lg:self-auto">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              My Tasks & Delegations
+            </div>
+          )}
         </div>
 
         {/* Metric Badges */}
@@ -453,19 +468,21 @@ export const TaskAssignmentsSection = ({
             ))}
           </select>
 
-          {/* Assigned To Dropdown */}
-          <select
-            value={selectedAssignee}
-            onChange={(e) => setSelectedAssignee(e.target.value)}
-            className="text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-brand-500"
-          >
-            <option value="">All Assignees (Assigned To)</option>
-            {assigneesList.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name} ({a.designation})
-              </option>
-            ))}
-          </select>
+          {/* Assigned To Dropdown (Assigners / Managers only) */}
+          {canAssign && (
+            <select
+              value={selectedAssignee}
+              onChange={(e) => setSelectedAssignee(e.target.value)}
+              className="text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            >
+              <option value="">All Assignees (Assigned To)</option>
+              {assigneesList.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name} ({a.designation})
+                </option>
+              ))}
+            </select>
+          )}
 
           {/* Status Dropdown */}
           <select
