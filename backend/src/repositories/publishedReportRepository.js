@@ -122,7 +122,7 @@ export const publishedReportRepository = {
           ($2::VARCHAR IS NOT NULL AND employee_user_id = $2)
           OR ($3::VARCHAR IS NOT NULL AND employee_id = $3)
         )
-      ORDER BY last_sent_at DESC;
+      ORDER BY COALESCE(review_date, last_sent_at::date) DESC, last_sent_at DESC, created_at DESC;
     `;
     const { rows } = await pool.query(query, [orgId, userId || null, employeeId || null]);
     return rows.map(mapRow);
@@ -135,7 +135,7 @@ export const publishedReportRepository = {
     const query = `
       SELECT * FROM published_performance_reports
       WHERE org_id = $1 AND employee_id = $2 AND department = $3
-      ORDER BY last_sent_at DESC
+      ORDER BY COALESCE(review_date, last_sent_at::date) DESC, last_sent_at DESC
       LIMIT 1;
     `;
     const { rows } = await pool.query(query, [orgId, employeeId, department]);
@@ -187,7 +187,7 @@ export const publishedReportRepository = {
       query += ` AND ppr.employee_id = $${params.length}`;
     }
 
-    query += ` ORDER BY ppr.last_sent_at DESC;`;
+    query += ` ORDER BY COALESCE(ppr.review_date, ppr.last_sent_at::date) DESC, ppr.last_sent_at DESC;`;
 
     const { rows } = await pool.query(query, params);
     return rows.map((r) => ({

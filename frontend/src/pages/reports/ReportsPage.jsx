@@ -264,7 +264,7 @@ export const ReportsPage = () => {
       action5: false,
       action6: false,
     },
-    ceoName: "Sheetal Ma'am",
+    ceoName: "Sheetal Bedi (CEO)",
     ceoDate: '2026-09-16',
   });
 
@@ -310,7 +310,7 @@ export const ReportsPage = () => {
       action5: false,
       action6: true,
     },
-    ceoName: "Sheetal Ma'am",
+    ceoName: "Sheetal Bedi (CEO)",
     ceoDate: '2026-09-16',
   });
 
@@ -356,7 +356,7 @@ export const ReportsPage = () => {
       action5: false,
       action6: false,
     },
-    ceoName: "Sheetal Ma'am",
+    ceoName: "Sheetal Bedi (CEO)",
     ceoDate: '2026-09-16',
   });
 
@@ -390,12 +390,47 @@ export const ReportsPage = () => {
     });
   }, [employees]);
 
+  // Helper to parse review period end timestamp for robust chronological sorting
+  const parseReviewPeriodEnd = (periodStr, reviewDate, lastSentAt) => {
+    if (periodStr && typeof periodStr === 'string') {
+      const parts = periodStr.split(/[-–—to]/);
+      const endPart = (parts[parts.length - 1] || '').trim();
+      const match = endPart.match(/(\d{1,2})[\/\.-](\d{1,2})[\/\.-](\d{2,4})/);
+      if (match) {
+        let day = parseInt(match[1], 10);
+        let month = parseInt(match[2], 10) - 1;
+        let year = parseInt(match[3], 10);
+        if (year < 100) year += 2000;
+        const d = new Date(year, month, day);
+        if (!isNaN(d.getTime())) return d.getTime();
+      }
+    }
+    if (reviewDate) {
+      const d = new Date(reviewDate);
+      if (!isNaN(d.getTime())) return d.getTime();
+    }
+    if (lastSentAt) {
+      const d = new Date(lastSentAt);
+      if (!isNaN(d.getTime())) return d.getTime();
+    }
+    return 0;
+  };
+
   // Helper to load reports for logged in user (My Performance view)
   const loadMyReports = async () => {
     try {
       setLoadingMyReports(true);
       const res = await performanceReportService.getMyReports();
-      const items = res?.items || res?.data?.items || (Array.isArray(res) ? res : []);
+      let items = res?.items || res?.data?.items || (Array.isArray(res) ? res : []);
+      // Sort so that the latest / last review period of the candidate is strictly first
+      items = [...items].sort((a, b) => {
+        const timeA = parseReviewPeriodEnd(a.reviewPeriod || a.reportData?.reviewPeriod, a.reviewDate, a.lastSentAt || a.createdAt);
+        const timeB = parseReviewPeriodEnd(b.reviewPeriod || b.reportData?.reviewPeriod, b.reviewDate, b.lastSentAt || b.createdAt);
+        if (timeB !== timeA) return timeB - timeA;
+        const sentA = a.lastSentAt ? new Date(a.lastSentAt).getTime() : 0;
+        const sentB = b.lastSentAt ? new Date(b.lastSentAt).getTime() : 0;
+        return sentB - sentA;
+      });
       setMyReports(items);
       if (items.length > 0) {
         setActiveMyReportIdx(0);
@@ -644,6 +679,15 @@ export const ReportsPage = () => {
     ? (myReports[activeMyReportIdx] || myReports[0] || null)
     : null;
 
+  const cleanCeoName = (name) => {
+    if (!name || typeof name !== 'string') return 'Sheetal Bedi (CEO)';
+    const trimmed = name.trim();
+    if (trimmed.includes('Jamdar') || trimmed === "Sheetal Ma'am" || trimmed === 'Sheetal') {
+      return 'Sheetal Bedi (CEO)';
+    }
+    return trimmed;
+  };
+
   // Helper to parse individual report data safely
   const parseReportData = (report) => {
     if (!report) return {};
@@ -669,7 +713,7 @@ export const ReportsPage = () => {
       goals: Array.isArray(raw?.goals) ? raw.goals : [],
       training: Array.isArray(raw?.training) ? raw.training : [],
       actions: raw?.actions && typeof raw.actions === 'object' ? raw.actions : {},
-      ceoName: raw?.ceoName || "Sheetal Jamdar (CEO)",
+      ceoName: cleanCeoName(raw?.ceoName || report.ceoName),
       ceoDate: raw?.ceoDate || report.reviewDate || '',
       achievements: raw?.achievements || '',
       improvements: raw?.improvements || '',
@@ -872,7 +916,7 @@ export const ReportsPage = () => {
       { Property: 'Areas for Development', Value: targetData.improvements },
       { Property: 'Employee Comments', Value: targetData.employeeComments },
       { Property: 'Manager Comments', Value: targetData.managerComments },
-      { Property: 'Authorized Signatory', Value: targetData.ceoName || "Sheetal Jamdar (CEO)" },
+      { Property: 'Authorized Signatory', Value: cleanCeoName(targetData.ceoName) },
       { Property: 'Authorization Date', Value: targetData.ceoDate || targetData.reviewDate },
     ];
 
@@ -2056,7 +2100,7 @@ export const ReportsPage = () => {
                         <div className="flex items-center justify-between">
                           <span>Authorized by:</span>
                           <span className="font-semibold text-slate-700 dark:text-slate-300">
-                            {parsed.ceoName || "Sheetal Jamdar (CEO)"}
+                            {cleanCeoName(parsed.ceoName)}
                           </span>
                         </div>
                       </div>
@@ -3205,7 +3249,7 @@ export const ReportsPage = () => {
                       </div>
                       <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
                         <span className="text-[11px] font-semibold text-slate-400 block">Authorized Signatory</span>
-                        <span className="text-sm font-bold text-slate-900 dark:text-white block mt-0.5">{parsed.ceoName || "Sheetal Jamdar (CEO)"}</span>
+                        <span className="text-sm font-bold text-slate-900 dark:text-white block mt-0.5">{cleanCeoName(parsed.ceoName)}</span>
                       </div>
                     </div>
 

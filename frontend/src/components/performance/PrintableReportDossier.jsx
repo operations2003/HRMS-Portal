@@ -802,7 +802,7 @@ export const PrintableReportDossier = forwardRef(({ department, data: rawData, a
                   </span>
                 </div>
                 <div style={{ fontSize: '13.5px', fontWeight: 900, color: '#0f172a', lineHeight: 1.2 }}>
-                  {data.ceoName || "Sheetal Ma'am"}
+                  {data.ceoName && data.ceoName !== "Sheetal Ma'am" && !data.ceoName.includes('Jamdar') ? data.ceoName : "Sheetal Bedi"}
                 </div>
                 <div style={{ fontSize: '9px', fontWeight: 600, color: '#475569', marginTop: '2px' }}>
                   Chief Executive Officer • Executive Leadership Approval

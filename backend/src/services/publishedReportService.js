@@ -94,7 +94,7 @@ export const publishedReportService = {
           userId: employeeUserId,
           eventType: 'GENERAL_ALERT',
           title: 'Official Performance Appraisal Report Published',
-          message: `Your performance appraisal report for ${reviewPeriod || 'the review cycle'} has been finalized and authorized by ${reportData.ceoName || "Sheetal Ma'am"}. Average Rating: ${Number(averageScore).toFixed(1)}/5.0 (${overallRating}). You can view and download your signed report in Performance Reports.`,
+          message: `Your performance appraisal report for ${reviewPeriod || 'the review cycle'} has been finalized and authorized by ${reportData.ceoName || "Sheetal Bedi"}. Average Rating: ${Number(averageScore).toFixed(1)}/5.0 (${overallRating}). You can view and download your signed report in Performance Reports.`,
           entityType: 'PERFORMANCE_REPORT',
           entityId: saved.id,
           actionUrl: '/reports',
