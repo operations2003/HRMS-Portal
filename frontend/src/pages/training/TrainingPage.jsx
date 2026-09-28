@@ -386,23 +386,10 @@ export const TrainingPage = () => {
                       {c.description || 'Comprehensive training curriculum designed to elevate core workplace capabilities.'}
                     </p>
 
-                    {/* Metadata & Training Link */}
-                    <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
-                      <div className="flex items-center gap-1.5 font-medium">
-                        <Clock className="w-3.5 h-3.5 text-slate-400" />
-                        <span>{c.duration_hours} hr(s)</span>
-                      </div>
-                      {c.training_link && (
-                        <a
-                          href={c.training_link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800 font-semibold text-xs"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" />
-                          Training Material
-                        </a>
-                      )}
+                    {/* Metadata */}
+                    <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium pt-1">
+                      <Clock className="w-3.5 h-3.5 text-slate-400" />
+                      <span>{c.duration_hours} hr(s)</span>
                     </div>
                   </div>
 
