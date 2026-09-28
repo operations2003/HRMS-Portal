@@ -703,8 +703,14 @@ export const exitService = {
     }
 
     const effectiveLwd = clearData.approvedLastWorkingDay || clearData.lastWorkingDay || exit.approvedLastWorkingDay || exit.requestedLastWorkingDay;
-    const isWaived = Boolean(clearData.waived);
-    const remarks = (clearData.remarks || '').trim() || (isWaived ? 'Notice period waived by HR.' : 'Notice period completed and cleared by HR.');
+    const isNotApplicable = Boolean(clearData.notApplicable) || (clearData.resolutionType === 'NOT_APPLICABLE');
+    const isWaived = Boolean(clearData.waived) || (clearData.resolutionType === 'WAIVED');
+    const defaultRemarks = isNotApplicable
+      ? 'Notice period marked as not applicable by HR.'
+      : isWaived
+      ? 'Notice period waived by HR.'
+      : 'Notice period completed and cleared by HR.';
+    const remarks = (clearData.remarks || '').trim() || defaultRemarks;
 
     // 1. Advance exit request to EXIT_PROCESSING with CLEARANCE_IN_PROGRESS stage
     const updated = await exitRepository.update(id, {
