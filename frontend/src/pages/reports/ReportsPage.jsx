@@ -930,17 +930,11 @@ export const ReportsPage = () => {
 
     showToast(`Rendering official ${deptTitle.replace('_', ' ')} executive review PDF...`, 'loading', 0);
 
-    const originalScrollX = window.scrollX || window.pageXOffset || 0;
-    const originalScrollY = window.scrollY || window.pageYOffset || 0;
-
     try {
       // 1. Ensure all fonts and typographic assets are fully loaded and rendered
       if (document.fonts && document.fonts.ready) {
         await document.fonts.ready;
       }
-
-      // Temporarily reset window scroll so canvas origin maps exactly to (0,0)
-      window.scrollTo(0, 0);
 
       // Allow DOM layout and subpixel rasterization to stabilize with the targeted report
       await new Promise((resolve) => setTimeout(resolve, 200));
@@ -970,15 +964,17 @@ export const ReportsPage = () => {
           backgroundColor: '#ffffff',
           imageTimeout: 15000,
           removeContainer: true,
+          scrollX: 0,
+          scrollY: 0,
           onclone: (clonedDoc) => {
             const dossierRoot = clonedDoc.getElementById('pdf-dossier-export-root');
             if (dossierRoot) {
-              dossierRoot.style.position = 'static';
+              dossierRoot.style.position = 'absolute';
+              dossierRoot.style.left = '0';
+              dossierRoot.style.top = '0';
               dossierRoot.style.display = 'block';
               dossierRoot.style.visibility = 'visible';
               dossierRoot.style.opacity = '1';
-              dossierRoot.style.left = '0';
-              dossierRoot.style.top = '0';
               dossierRoot.style.zIndex = '999999';
             }
           },
@@ -999,7 +995,6 @@ export const ReportsPage = () => {
       console.error('PDF export error:', err);
       showToast('Error exporting PDF. Please try again.', 'error');
     } finally {
-      window.scrollTo(originalScrollX, originalScrollY);
       setIsGeneratingPdf(false);
       setDownloadingReportId(null);
     }
@@ -3121,15 +3116,15 @@ export const ReportsPage = () => {
       {/* Dedicated Clean Offscreen PDF Dossier Container */}
       <div
         id="pdf-dossier-export-root"
-        className="pointer-events-none overflow-visible print:hidden"
+        className="pointer-events-none overflow-hidden print:hidden"
         style={{
           position: 'fixed',
           top: 0,
-          left: isGeneratingPdf ? 0 : '-9999px',
+          left: '-15000px',
           width: '794px',
           minWidth: '794px',
           maxWidth: '794px',
-          zIndex: isGeneratingPdf ? 99999 : -50,
+          zIndex: -9999,
           opacity: 1,
           backgroundColor: '#ffffff',
         }}
