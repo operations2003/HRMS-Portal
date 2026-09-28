@@ -673,6 +673,75 @@ export const exitService = {
     return updated;
   },
 
+  async clearNoticePeriod(currentUser, id, clearData = {}) {
+    const exit = await exitRepository.findById(id);
+    if (!exit) {
+      const err = new Error(`Exit request '${id}' not found.`);
+      err.statusCode = 404;
+      throw err;
+    }
+
+    if (exit.orgId !== currentUser.orgId) {
+      const err = new Error('Access denied.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    // Self-approval barrier for HR
+    const emp = await this.resolveEmployee(currentUser);
+    if (emp && emp.id === exit.employeeId) {
+      const err = new Error('Self-approval violation: You cannot clear your own notice period.');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    const validStatuses = ['APPROVED', 'NOTICE_PERIOD', 'UNDER_REVIEW', 'SUBMITTED', 'EXIT_PROCESSING'];
+    if (!validStatuses.includes(exit.status)) {
+      const err = new Error(`Cannot clear notice period: Exit request is currently in '${exit.status}' status.`);
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const effectiveLwd = clearData.approvedLastWorkingDay || clearData.lastWorkingDay || exit.approvedLastWorkingDay || exit.requestedLastWorkingDay;
+    const isWaived = Boolean(clearData.waived);
+    const remarks = (clearData.remarks || '').trim() || (isWaived ? 'Notice period waived by HR.' : 'Notice period completed and cleared by HR.');
+
+    // 1. Advance exit request to EXIT_PROCESSING with CLEARANCE_IN_PROGRESS stage
+    const updated = await exitRepository.update(id, {
+      status: 'EXIT_PROCESSING',
+      currentStage: 'CLEARANCE_IN_PROGRESS',
+      approvedLastWorkingDay: effectiveLwd,
+      hrComments: exit.hrComments ? `${exit.hrComments}\n[Notice Period Cleared]: ${remarks}` : `[Notice Period Cleared]: ${remarks}`,
+    });
+
+    // 2. Update employee_offboardings
+    await exitRepository.upsertOffboarding({
+      orgId: currentUser.orgId,
+      exitRequestId: id,
+      employeeId: exit.employeeId,
+      lastWorkingDay: effectiveLwd,
+      offboardingStatus: 'CLEARANCES_PENDING',
+      notes: remarks,
+    });
+
+    // 3. Log workflow action
+    const wf = await workflowRepository.findByEntity('EXIT_REQUEST', id);
+    if (wf) {
+      await workflowRepository.recordAction(wf.id, {
+        stage: 'CLEARANCE_IN_PROGRESS',
+        actorUserId: currentUser.id,
+        actorRole: currentUser.roleName || 'HR',
+        action: 'APPROVE',
+        fromStatus: exit.status,
+        toStatus: 'EXIT_PROCESSING',
+        nextStage: 'CLEARANCE_IN_PROGRESS',
+        comments: remarks,
+      });
+    }
+
+    return this.getExitById(currentUser, id);
+  },
+
   // =========================================================================
   // 5. Departmental Clearance Tasks
   // =========================================================================

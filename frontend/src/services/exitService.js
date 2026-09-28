@@ -122,6 +122,14 @@ export const exitService = {
   },
 
   /**
+   * Clear or waive employee notice period and advance to checklist / clearance phase
+   */
+  async clearNoticePeriod(id, data = {}) {
+    const res = await http.post(`/v1/exit/requests/${id}/clear-notice-period`, data);
+    return res.data;
+  },
+
+  /**
    * Get departmental clearances checklist
    */
   async getClearances(id) {

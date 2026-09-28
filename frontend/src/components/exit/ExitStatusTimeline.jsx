@@ -12,7 +12,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 
-export const ExitStatusTimeline = ({ status, currentStage, offboarding = null }) => {
+export const ExitStatusTimeline = ({ status, currentStage, offboarding = null, clearances = [] }) => {
   const isWithdrawn = status === 'WITHDRAWN';
   const isRejected = status === 'REJECTED';
 
@@ -104,20 +104,41 @@ export const ExitStatusTimeline = ({ status, currentStage, offboarding = null })
   let activeIndex = 1;
   const s = (status || '').toUpperCase();
   const c = (currentStage || '').toUpperCase();
-  const accessRevoked = offboarding?.accessRemovalStatus === 'DEPROVISIONED';
-  const fnfSettled = offboarding?.fnfSummary?.paymentStatus === 'DISBURSED';
+  const accessRevoked =
+    offboarding?.accessRemovalStatus === 'DEPROVISIONED' ||
+    offboarding?.accessRemovalStatus === 'REVOKED';
+  const fnfSettled =
+    offboarding?.fnfSummary?.paymentStatus === 'DISBURSED' ||
+    offboarding?.fnf?.paymentStatus === 'DISBURSED' ||
+    offboarding?.paymentStatus === 'DISBURSED';
 
-  if (s === 'SUBMITTED' || c === 'MANAGER_REVIEW') {
+  const totalTasks = clearances?.length || 0;
+  const clearedTasks =
+    clearances?.filter((t) =>
+      ['CLEARED', 'COMPLETED', 'WAIVED'].includes((t.status || '').toUpperCase())
+    )?.length || 0;
+  const allClearancesCleared = totalTasks > 0 && clearedTasks === totalTasks;
+
+  if (s === 'SUBMITTED' || c === 'MANAGER_REVIEW' || c === 'EMPLOYEE_SUBMISSION') {
     activeIndex = 1;
   } else if (s === 'UNDER_REVIEW' || c === 'HR_REVIEW') {
     activeIndex = 2;
   } else if (s === 'APPROVED' || s === 'NOTICE_PERIOD') {
+    // Stage 3: Active Notice Period
     activeIndex = 3;
-  } else if (c === 'CLEARANCE_IN_PROGRESS') {
-    activeIndex = 4;
-  } else if (s === 'EXIT_PROCESSING') {
-    if (accessRevoked) activeIndex = 7;
-    else activeIndex = 5;
+  } else if (s === 'EXIT_PROCESSING' || c === 'CLEARANCE_IN_PROGRESS') {
+    // Notice period cleared! Move forward to Checklist (Stage 4) or Clearance (Stage 5)
+    if (
+      allClearancesCleared ||
+      offboarding?.clearanceStatus === 'CLEARED' ||
+      offboarding?.clearanceStatus === 'WAIVED'
+    ) {
+      activeIndex = 5;
+    } else if (clearedTasks > 0) {
+      activeIndex = 5; // Clearances sign-offs underway
+    } else {
+      activeIndex = 4; // Checklist assigned & active
+    }
   } else if (s === 'COMPLETED' || c === 'COMPLETED') {
     activeIndex = 8;
   }

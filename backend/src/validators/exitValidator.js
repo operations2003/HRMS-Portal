@@ -213,3 +213,12 @@ export const validateOffboardingUpdate = (body) => {
 
   return errors;
 };
+
+export const validateClearNoticePeriod = (body) => {
+  const errors = [];
+  if (body.approvedLastWorkingDay && !dateRegex.test(String(body.approvedLastWorkingDay).trim())) {
+    errors.push('Effective last working day must be in YYYY-MM-DD format.');
+  }
+  return errors;
+};
+

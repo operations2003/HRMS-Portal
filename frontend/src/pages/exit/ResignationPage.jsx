@@ -332,21 +332,23 @@ export const ResignationPage = () => {
     },
     {
       header: 'Actions',
+      className: 'text-center',
+      cellClassName: 'text-center',
       render: (row) => {
         const isSelf =
           (user?.employeeId && row.employeeId === user.employeeId) ||
           (user?.id && row.employee?.userId === user.id);
 
         return (
-          <div className="flex items-center gap-1.5 justify-end">
+          <div className="flex items-center gap-1.5 justify-center">
             <Button
               variant="ghost"
               size="sm"
               icon={Eye}
               onClick={() => setInspectingDossierId(row.id)}
-              title="Inspect Dossier"
+              title="Inspect Details"
             >
-              Dossier
+              Details
             </Button>
 
             {isSelf ? (
@@ -460,7 +462,12 @@ export const ResignationPage = () => {
           ) : hasActiveExit ? (
             <>
               {/* Lifecycle Progression Timeline */}
-              <ExitStatusTimeline status={myExit.status} currentStage={myExit.currentStage} />
+              <ExitStatusTimeline
+                status={myExit.status}
+                currentStage={myExit.currentStage}
+                offboarding={myExit.offboarding}
+                clearances={myExit.clearances}
+              />
 
               {/* Countdown Banner if Notice Period Active */}
               {getRemainingDays() !== null && (
@@ -778,6 +785,10 @@ export const ResignationPage = () => {
           onClose={() => setInspectingDossierId(null)}
           exitId={inspectingDossierId}
           canManage={isHrOrAdmin}
+          onSuccess={() => {
+            loadOrgExits();
+            loadMyExit();
+          }}
           onOpenFnF={(record) => {
             setInspectingDossierId(null);
             // Can be managed from offboarding

@@ -17,6 +17,7 @@ import { Badge } from '../common/Badge.jsx';
 import { ExitStatusTimeline } from './ExitStatusTimeline.jsx';
 import { ClearanceChecklistTable } from './ClearanceChecklistTable.jsx';
 import { FnFStatementDocument } from './FnFStatementDocument.jsx';
+import { ClearNoticePeriodModal } from './ClearNoticePeriodModal.jsx';
 import { exitService } from '../../services/exitService.js';
 
 export const ExitDossierDetailModal = ({
@@ -26,11 +27,13 @@ export const ExitDossierDetailModal = ({
   canManage = false,
   onOpenFnF,
   onOpenDeprovision,
+  onSuccess,
 }) => {
   const [dossier, setDossier] = useState(null);
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'clearances' | 'fnf' | 'audit'
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showClearNoticeModal, setShowClearNoticeModal] = useState(false);
 
   const fetchDossier = async () => {
     if (!exitId) return;
@@ -93,7 +96,45 @@ export const ExitDossierDetailModal = ({
         {/* Tab 1: Overview */}
         {activeTab === 'overview' && (
           <div className="space-y-4">
-            <ExitStatusTimeline status={dossier?.status} currentStage={dossier?.currentStage} />
+            <ExitStatusTimeline
+              status={dossier?.status}
+              currentStage={dossier?.currentStage}
+              offboarding={dossier?.offboarding}
+              clearances={dossier?.clearances}
+            />
+
+            {/* Active Notice Period Banner & Action */}
+            {canManage && ['APPROVED', 'NOTICE_PERIOD'].includes(dossier?.status) && (
+              <div className="p-4 bg-gradient-to-r from-brand-50/90 via-indigo-50/80 to-purple-50/70 border border-brand-200/80 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-brand-600 text-white flex items-center justify-center shrink-0 shadow-sm shadow-brand-600/30">
+                    <Calendar className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                        Phase 3: Active Notice Period
+                      </span>
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-brand-100 text-brand-700">
+                        {dossier?.noticePeriodDays ?? 30} Days
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-600 mt-0.5">
+                      The employee is currently serving notice. Clear or waive the notice period to unlock and advance to the Checklist & Clearances phase.
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  icon={CheckCircle2}
+                  className="shrink-0 font-semibold"
+                  onClick={() => setShowClearNoticeModal(true)}
+                >
+                  Clear Notice Period
+                </Button>
+              </div>
+            )}
 
             {/* Employee & Resignation Info Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -182,6 +223,16 @@ export const ExitDossierDetailModal = ({
             {/* Quick Actions for HR/Admin */}
             {canManage && (
               <div className="flex items-center justify-end gap-2 pt-2">
+                {['APPROVED', 'NOTICE_PERIOD'].includes(dossier?.status) && (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    icon={CheckCircle2}
+                    onClick={() => setShowClearNoticeModal(true)}
+                  >
+                    Clear Notice Period
+                  </Button>
+                )}
                 <Button
                   variant="secondary"
                   size="sm"
@@ -275,6 +326,19 @@ export const ExitDossierDetailModal = ({
           </div>
         )}
       </div>
+
+      {/* Clear Notice Period Modal */}
+      {showClearNoticeModal && (
+        <ClearNoticePeriodModal
+          isOpen={showClearNoticeModal}
+          onClose={() => setShowClearNoticeModal(false)}
+          onSuccess={() => {
+            fetchDossier();
+            onSuccess?.();
+          }}
+          record={dossier}
+        />
+      )}
     </Modal>
   );
 };

@@ -120,6 +120,19 @@ export const exitController = {
   },
 
   /**
+   * POST /api/v1/exit/requests/:id/clear-notice-period
+   */
+  async clearNoticePeriod(req, res, next) {
+    try {
+      const updated = await exitService.clearNoticePeriod(req.user, req.params.id, req.body);
+      return sendSuccess(res, 'Notice period cleared and advanced to checklist & clearance phase.', updated);
+    } catch (err) {
+      if (err.statusCode) return sendError(res, err.message, err.statusCode);
+      next(err);
+    }
+  },
+
+  /**
    * GET /api/v1/exit/requests/:id/clearances
    */
   async getClearances(req, res, next) {

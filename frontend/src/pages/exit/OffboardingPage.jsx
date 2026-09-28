@@ -38,6 +38,7 @@ import { HRExitApprovalModal } from '../../components/exit/HRExitApprovalModal.j
 import { FnFSettlementModal } from '../../components/exit/FnFSettlementModal.jsx';
 import { AccessDeprovisionModal } from '../../components/exit/AccessDeprovisionModal.jsx';
 import { AddClearanceTaskModal } from '../../components/exit/AddClearanceTaskModal.jsx';
+import { ClearNoticePeriodModal } from '../../components/exit/ClearNoticePeriodModal.jsx';
 
 export const OffboardingPage = () => {
   const { user, hasRole, hasPermission } = useAuth();
@@ -74,6 +75,7 @@ export const OffboardingPage = () => {
   const [fnfExit, setFnfExit] = useState(null);
   const [deprovisionExit, setDeprovisionExit] = useState(null);
   const [addClearanceExitId, setAddClearanceExitId] = useState(null);
+  const [clearNoticeExit, setClearNoticeExit] = useState(null);
 
   const fetchStats = async () => {
     if (!isHrOrAdmin) return;
@@ -326,16 +328,18 @@ export const OffboardingPage = () => {
     },
     {
       header: 'Actions',
+      className: 'text-center',
+      cellClassName: 'text-center',
       render: (row) => (
-        <div className="flex items-center gap-1.5 justify-end">
+        <div className="flex items-center gap-1.5 justify-center">
           <Button
             variant="ghost"
             size="sm"
             icon={Eye}
             onClick={() => setViewingExitId(row.id)}
-            title="Inspect Lifecycle & Dossier"
+            title="Inspect Details"
           >
-            Dossier
+            Details
           </Button>
 
           {isHrOrAdmin && ['SUBMITTED', 'UNDER_REVIEW'].includes(row.status) && (
@@ -346,6 +350,19 @@ export const OffboardingPage = () => {
               onClick={() => setActionExit(row)}
             >
               HR Action
+            </Button>
+          )}
+
+          {isHrOrAdmin && ['APPROVED', 'NOTICE_PERIOD'].includes(row.status) && (
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={CheckCircle2}
+              className="text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 border-emerald-200 font-semibold"
+              onClick={() => setClearNoticeExit(row)}
+              title="Clear Notice Period & Advance to Next Phase"
+            >
+              Clear Notice
             </Button>
           )}
 
@@ -614,6 +631,22 @@ export const OffboardingPage = () => {
           canManage={isHrOrAdmin}
           onOpenFnF={(record) => setFnfExit(record)}
           onOpenDeprovision={(record) => setDeprovisionExit(record)}
+          onSuccess={() => {
+            fetchStats();
+            fetchExits(pagination.page);
+          }}
+        />
+      )}
+
+      {clearNoticeExit && (
+        <ClearNoticePeriodModal
+          isOpen={!!clearNoticeExit}
+          onClose={() => setClearNoticeExit(null)}
+          onSuccess={() => {
+            fetchStats();
+            fetchExits(pagination.page);
+          }}
+          record={clearNoticeExit}
         />
       )}
 

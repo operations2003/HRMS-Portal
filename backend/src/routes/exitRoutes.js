@@ -13,6 +13,7 @@ import {
   validateFnfSettlement,
   validateAccessRemoval,
   validateOffboardingUpdate,
+  validateClearNoticePeriod,
 } from '../validators/exitValidator.js';
 
 const router = Router();
@@ -97,6 +98,14 @@ router.post(
   authorize(['exit:admin']),
   validate(validateHrReject),
   exitController.hrReject
+);
+
+router.post(
+  '/requests/:id/clear-notice-period',
+  requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']),
+  authorize(['exit:admin']),
+  validate(validateClearNoticePeriod),
+  exitController.clearNoticePeriod
 );
 
 // =========================================================================
