@@ -108,6 +108,8 @@ export const ClearanceChecklistTable = ({
   // Metrics
   const safeClearances = Array.isArray(clearances)
     ? clearances
+    : Array.isArray(clearances?.items)
+    ? clearances.items
     : Array.isArray(clearances?.clearances)
     ? clearances.clearances
     : [];

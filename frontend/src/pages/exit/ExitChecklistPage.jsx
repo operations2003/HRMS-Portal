@@ -62,7 +62,16 @@ export const ExitChecklistPage = () => {
       setMyExit(data);
       if (data?.id) {
         const clRes = await exitService.getClearances(data.id);
-        setMyClearances(Array.isArray(clRes) ? clRes : clRes.clearances || []);
+        const items = Array.isArray(clRes)
+          ? clRes
+          : Array.isArray(clRes?.items)
+          ? clRes.items
+          : Array.isArray(clRes?.clearances)
+          ? clRes.clearances
+          : Array.isArray(data?.clearances)
+          ? data.clearances
+          : [];
+        setMyClearances(items);
       }
     } catch {
       setMyExit(null);
@@ -110,7 +119,16 @@ export const ExitChecklistPage = () => {
         exitService.getClearances(exitId),
       ]);
       setSelectedExit(dossier);
-      setSelectedClearances(Array.isArray(clRes) ? clRes : clRes.clearances || []);
+      const items = Array.isArray(clRes)
+        ? clRes
+        : Array.isArray(clRes?.items)
+        ? clRes.items
+        : Array.isArray(clRes?.clearances)
+        ? clRes.clearances
+        : Array.isArray(dossier?.clearances)
+        ? dossier.clearances
+        : [];
+      setSelectedClearances(items);
     } catch (err) {
       toast.error('Failed to fetch clearance tasks for selected exit.');
     } finally {
