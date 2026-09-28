@@ -862,4 +862,47 @@ export const leaveRepository = {
 
     return this.getLeaveBalances(employeeId, year, normGender);
   },
+
+  /**
+   * Fetch all employees' leave balances overview for Admin & HR
+   */
+  async getAllEmployeeLeaveBalances(orgId, year = new Date().getFullYear()) {
+    const sql = `
+      SELECT
+        e.id,
+        e.employee_code,
+        e.first_name,
+        e.last_name,
+        e.email,
+        e.gender,
+        e.avatar_url,
+        d.name AS department_name,
+        desig.title AS designation_title,
+        COALESCE(
+          json_agg(
+            json_build_object(
+              'id', lb.id,
+              'leaveTypeId', lb.leave_type_id,
+              'leaveTypeName', lt.name,
+              'leaveTypeCode', lt.code,
+              'allocatedDays', COALESCE(lb.allocated_days, 0)::float,
+              'usedDays', COALESCE(lb.used_days, 0)::float,
+              'pendingDays', COALESCE(lb.pending_days, 0)::float,
+              'remainingDays', COALESCE(lb.remaining_days, 0)::float
+            ) ORDER BY lt.name
+          ) FILTER (WHERE lb.id IS NOT NULL),
+          '[]'::json
+        ) AS balances
+      FROM employees e
+      LEFT JOIN departments d ON e.dept_id = d.id
+      LEFT JOIN designations desig ON e.desig_id = desig.id
+      LEFT JOIN leave_balances lb ON lb.employee_id = e.id AND lb.year = $2
+      LEFT JOIN leave_types lt ON lt.id = lb.leave_type_id AND lt.status = 'Active'
+      WHERE e.org_id = $1 AND (e.status IS NULL OR UPPER(e.status) != 'TERMINATED')
+      GROUP BY e.id, d.name, desig.title
+      ORDER BY e.first_name ASC, e.last_name ASC;
+    `;
+    const res = await pool.query(sql, [orgId, year]);
+    return res.rows;
+  },
 };

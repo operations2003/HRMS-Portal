@@ -19,6 +19,7 @@ import {
   Info,
   ShieldCheck,
   Check,
+  PieChart,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
@@ -26,6 +27,7 @@ import { leaveService } from '../../services/leaveService.js';
 import { managerService } from '../../services/managerService.js';
 import { ApplyLeaveModal } from '../../components/leave/ApplyLeaveModal.jsx';
 import { LeaveBalanceCards } from '../../components/leave/LeaveBalanceCards.jsx';
+import { EmployeeLeaveBalancesViewer } from '../../components/leave/EmployeeLeaveBalancesViewer.jsx';
 import { ApproveLeaveModal } from '../../components/leave/ApproveLeaveModal.jsx';
 import { RejectLeaveModal } from '../../components/leave/RejectLeaveModal.jsx';
 import { Avatar } from '../../components/common/Avatar.jsx';
@@ -46,16 +48,21 @@ export const LeaveManagementPage = () => {
 
   const normRole = (user?.roleName || '').toLowerCase();
   const isAdminOrCeo = ['admin', 'superadmin', 'orgadmin'].some(r => normRole.includes(r)) || user?.email === 'sheetalbedi@tasknera.com';
+  const isHrOrAdmin = hasRole(['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin']) || isAdminOrCeo;
 
   const canApply = hasPermission('leave:write') && !isAdminOrCeo;
   const canApprove = hasPermission('leave:approve') || hasRole(['Manager', 'HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin']);
   const canViewTeam = hasRole(['Manager', 'HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin']);
   const canManageTypes = hasRole(['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin']);
 
-  // Active Tab: 'my' | 'team' (synced with ?tab= query param)
+  // Active Tab: 'my' | 'team' | 'balances' (synced with ?tab= query param)
   const tabParam = searchParams.get('tab');
   const [activeTab, setActiveTab] = useState(
-    isAdminOrCeo ? 'team' : ((tabParam === 'team' || tabParam === 'approvals') && canViewTeam ? 'team' : 'my')
+    tabParam === 'balances' && isHrOrAdmin
+      ? 'balances'
+      : isAdminOrCeo
+      ? 'team'
+      : ((tabParam === 'team' || tabParam === 'approvals') && canViewTeam ? 'team' : 'my')
   );
 
   // Leave data
@@ -766,7 +773,7 @@ export const LeaveManagementPage = () => {
             <button
               type="button"
               onClick={() => handleTabChange('team')}
-              className={`pb-4 px-1 border-b-2 font-semibold text-sm transition-colors flex items-center gap-2 ${
+              className={`pb-4 px-1 border-b-2 font-semibold text-sm transition-colors flex items-center gap-2 cursor-pointer ${
                 activeTab === 'team'
                   ? 'border-brand-500 text-brand-600 font-bold'
                   : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
@@ -781,10 +788,29 @@ export const LeaveManagementPage = () => {
               )}
             </button>
           )}
+
+          {isHrOrAdmin && (
+            <button
+              type="button"
+              onClick={() => handleTabChange('balances')}
+              className={`pb-4 px-1 border-b-2 font-semibold text-sm transition-colors flex items-center gap-2 cursor-pointer ${
+                activeTab === 'balances'
+                  ? 'border-brand-500 text-brand-600 font-bold'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              <PieChart className="w-4 h-4 text-brand-600" />
+              <span>Employee Leave Balances</span>
+            </button>
+          )}
         </nav>
       </div>
 
-      {/* When on My Tab: Show Personal Leave Balances Display */}
+      {activeTab === 'balances' && isHrOrAdmin ? (
+        <EmployeeLeaveBalancesViewer />
+      ) : (
+        <>
+          {/* When on My Tab: Show Personal Leave Balances Display */}
       {activeTab === 'my' && !isAdminOrCeo && (
         <LeaveBalanceCards
           balances={leaveBalances}
@@ -1001,6 +1027,8 @@ export const LeaveManagementPage = () => {
         pagination={pagination}
         onPageChange={(p) => fetchRecords(p)}
       />
+      </>
+      )}
 
       {/* Apply Leave Modal */}
       <ApplyLeaveModal

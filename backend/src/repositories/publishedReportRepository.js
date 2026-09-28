@@ -63,60 +63,7 @@ export const publishedReportRepository = {
     overallRating,
     reportData,
   }) {
-    // Check if an existing report exists for this employee and department
-    const existingQuery = `
-      SELECT * FROM published_performance_reports
-      WHERE org_id = $1 AND employee_id = $2 AND department = $3
-      ORDER BY created_at DESC
-      LIMIT 1;
-    `;
-    const existingRes = await pool.query(existingQuery, [orgId, employeeId, department]);
-
-    if (existingRes.rows.length > 0) {
-      const existing = existingRes.rows[0];
-      const updateQuery = `
-        UPDATE published_performance_reports
-        SET
-          employee_user_id = COALESCE($1, employee_user_id),
-          sender_id = $2,
-          sender_user_id = $3,
-          employee_name = $4,
-          employee_code = $5,
-          designation = $6,
-          review_period = $7,
-          review_date = $8,
-          review_cycle = $9,
-          average_score = $10,
-          overall_rating = $11,
-          report_data = $12,
-          sent_count = sent_count + 1,
-          status = 'DELIVERED',
-          deleted_by_user_at = NULL,
-          last_sent_at = NOW(),
-          updated_at = NOW()
-        WHERE id = $13
-        RETURNING *;
-      `;
-      const updateValues = [
-        employeeUserId,
-        senderId,
-        senderUserId,
-        employeeName,
-        employeeCode || '',
-        designation || '',
-        reviewPeriod || '',
-        reviewDate || new Date().toISOString().split('T')[0],
-        reviewCycle || 'Quarterly Review',
-        averageScore || 0,
-        overallRating || 'Meets Expectations',
-        JSON.stringify(reportData),
-        existing.id,
-      ];
-      const { rows } = await pool.query(updateQuery, updateValues);
-      return mapRow(rows[0]);
-    }
-
-    // Insert new published report
+    // Always create a new report record so each appraisal sent by admin/HR is preserved independently
     const newId = `prep-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
     const insertQuery = `
       INSERT INTO published_performance_reports (

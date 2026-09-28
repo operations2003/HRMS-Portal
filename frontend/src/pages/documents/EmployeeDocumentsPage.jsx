@@ -49,8 +49,8 @@ export const EmployeeDocumentsPage = () => {
       hasPermission('employee:read') ||
       hasRole(['Employee', 'Manager']));
 
-  // Tab: 'all' | 'directory' | 'my'
-  const [activeTab, setActiveTab] = useState(canManageDocuments ? 'all' : 'my');
+  // Tab: 'directory' | 'all' | 'my'
+  const [activeTab, setActiveTab] = useState(canManageDocuments ? 'directory' : 'my');
 
   // Documents state
   const [myDocuments, setMyDocuments] = useState([]);
@@ -267,6 +267,18 @@ export const EmployeeDocumentsPage = () => {
         <div className="flex items-center">
           <div className="bg-slate-200/70 p-1.5 rounded-2xl flex items-center gap-1.5 shadow-inner">
             <button
+              onClick={() => setActiveTab('directory')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer ${
+                activeTab === 'directory'
+                  ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-900/5'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+              }`}
+            >
+              <Users className="w-4 h-4 text-indigo-600" />
+              <span>By Employee</span>
+            </button>
+
+            <button
               onClick={() => setActiveTab('all')}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer ${
                 activeTab === 'all'
@@ -285,18 +297,6 @@ export const EmployeeDocumentsPage = () => {
               >
                 {allDocuments.length}
               </span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('directory')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer ${
-                activeTab === 'directory'
-                  ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-900/5'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-              }`}
-            >
-              <Users className="w-4 h-4 text-indigo-600" />
-              <span>By Employee</span>
             </button>
 
             <button
@@ -632,7 +632,7 @@ export const EmployeeDocumentsPage = () => {
                 >
                   {filteredEmployees.map((emp) => (
                     <option key={emp.id} value={emp.id}>
-                      {emp.firstName} {emp.lastName} ({emp.employeeNumber || emp.id})
+                      {emp.firstName} {emp.lastName} ({emp.employeeCode || emp.employeeNumber || emp.id})
                     </option>
                   ))}
                 </select>

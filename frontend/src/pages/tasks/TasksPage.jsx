@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   CheckSquare,
   Plus,
@@ -12,13 +12,17 @@ import {
   CheckCircle2,
   Calendar,
   User,
+  Users,
   Tag,
   X,
   TrendingUp,
   Star,
   RotateCcw,
+  ArrowRight,
+  ArrowRightLeft,
 } from 'lucide-react';
 import { MyPerformanceSection } from '../../components/tasks/MyPerformanceSection.jsx';
+import { TaskAssignmentsSection } from '../../components/tasks/TaskAssignmentsSection.jsx';
 import { taskService } from '../../services/taskService.js';
 import { employeeService } from '../../services/employeeService.js';
 import { useAuth } from '../../context/AuthContext.jsx';
@@ -44,12 +48,15 @@ export const TasksPage = () => {
 
   const [tasks, setTasks] = useState([]);
   const [employees, setEmployees] = useState([]);
-  const [activeTab, setActiveTab] = useState('performance'); // 'performance' | 'board'
+  const [activeTab, setActiveTab] = useState('assignments'); // 'assignments' | 'board' | 'performance'
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState('kanban'); // 'kanban' | 'list'
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('');
+  const [creatorFilter, setCreatorFilter] = useState('');
+  const [assigneeFilter, setAssigneeFilter] = useState('');
+  const [scopeFilter, setScopeFilter] = useState('all'); // 'all' | 'mine'
 
   // Modals
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -80,6 +87,9 @@ export const TasksPage = () => {
         search,
         status: statusFilter,
         priority: priorityFilter,
+        creatorId: creatorFilter || undefined,
+        assigneeId: assigneeFilter || undefined,
+        scope: scopeFilter,
       });
       setTasks(res.data || []);
     } catch (err) {
@@ -87,7 +97,7 @@ export const TasksPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter, priorityFilter, toast]);
+  }, [search, statusFilter, priorityFilter, creatorFilter, assigneeFilter, scopeFilter, toast]);
 
   useEffect(() => {
     fetchTasks();
@@ -100,6 +110,26 @@ export const TasksPage = () => {
       setEmployees(filterNonCeoEmployees(list));
     }).catch(() => {});
   }, []);
+
+  const uniqueAssigners = useMemo(() => {
+    const map = new Map();
+    tasks.forEach((t) => {
+      if (t.creator_id && !map.has(t.creator_id)) {
+        map.set(t.creator_id, `${t.creator_first || ''} ${t.creator_last || ''}`.trim() || 'Assigner');
+      }
+    });
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  }, [tasks]);
+
+  const uniqueAssignees = useMemo(() => {
+    const map = new Map();
+    tasks.forEach((t) => {
+      if (t.assignee_id && !map.has(t.assignee_id)) {
+        map.set(t.assignee_id, `${t.assignee_first || ''} ${t.assignee_last || ''}`.trim() || 'Assignee');
+      }
+    });
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  }, [tasks]);
 
   const handleCreateTask = async (e) => {
     e.preventDefault();
@@ -244,24 +274,27 @@ export const TasksPage = () => {
   return (
     <div className="space-y-6">
       {/* Top Tab Navigation Bar */}
-      <div className="flex items-center gap-8 border-b border-slate-200 dark:border-slate-800 pb-px">
+      <div className="flex items-center gap-6 sm:gap-8 border-b border-slate-200 dark:border-slate-800 pb-px overflow-x-auto">
         <button
           type="button"
-          onClick={() => setActiveTab('performance')}
-          className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
-            activeTab === 'performance'
+          onClick={() => setActiveTab('assignments')}
+          className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === 'assignments'
               ? 'border-brand-500 text-brand-600 dark:text-brand-400'
               : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
           }`}
         >
-          <TrendingUp className="w-4 h-4" />
-          My Performance
+          <ArrowRightLeft className="w-4 h-4 text-brand-500" />
+          Who's Assigning to Whom
+          <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-brand-50 dark:bg-brand-950/70 text-brand-600 dark:text-brand-400 border border-brand-200 dark:border-brand-800">
+            {tasks.length}
+          </span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('board')}
-          className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
+          className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
             activeTab === 'board'
               ? 'border-brand-500 text-brand-600 dark:text-brand-400'
               : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
@@ -270,10 +303,30 @@ export const TasksPage = () => {
           <Kanban className="w-4 h-4" />
           Task Board & Pipeline
         </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('performance')}
+          className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === 'performance'
+              ? 'border-brand-500 text-brand-600 dark:text-brand-400'
+              : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+          }`}
+        >
+          <TrendingUp className="w-4 h-4" />
+          My Performance
+        </button>
       </div>
 
       {activeTab === 'performance' ? (
         <MyPerformanceSection />
+      ) : activeTab === 'assignments' ? (
+        <TaskAssignmentsSection
+          tasks={tasks}
+          currentUser={user}
+          canAssign={canAssign}
+          onSelectTask={(t) => setSelectedTask(t)}
+        />
       ) : (
         <>
           {/* Header */}
@@ -321,58 +374,96 @@ export const TasksPage = () => {
                 </button>
               </div>
 
-          {canAssign && (
-            <Button onClick={() => setShowCreateModal(true)} icon={Plus}>
-              Create Task
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-3 flex-1 min-w-[280px]">
-          <div className="relative flex-1 max-w-xs">
-            <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search tasks..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 text-xs rounded-lg border border-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-            />
+              {canAssign && (
+                <Button onClick={() => setShowCreateModal(true)} icon={Plus}>
+                  Create Task
+                </Button>
+              )}
+            </div>
           </div>
 
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="text-xs border border-slate-300 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-          >
-            <option value="">All Statuses</option>
-            <option value="TODO">To Do</option>
-            <option value="IN_PROGRESS">In Progress</option>
-            <option value="BLOCKED">Blocked</option>
-            <option value="COMPLETED">Completed</option>
-            <option value="CANCELLED">Cancelled</option>
-          </select>
+          {/* Filters */}
+          <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-wrap items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-3 flex-1 min-w-[280px]">
+              <div className="relative flex-1 max-w-xs">
+                <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search tasks..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full pl-9 pr-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-brand-500"
+                />
+              </div>
 
-          <select
-            value={priorityFilter}
-            onChange={(e) => setPriorityFilter(e.target.value)}
-            className="text-xs border border-slate-300 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-          >
-            <option value="">All Priorities</option>
-            <option value="URGENT">Urgent</option>
-            <option value="HIGH">High</option>
-            <option value="MEDIUM">Medium</option>
-            <option value="LOW">Low</option>
-          </select>
-        </div>
+              {/* Scope filter */}
+              <select
+                value={scopeFilter}
+                onChange={(e) => setScopeFilter(e.target.value)}
+                className="text-xs border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              >
+                <option value="all">All Organization Tasks</option>
+                <option value="mine">My Tasks Only</option>
+              </select>
 
-        <span className="text-xs font-semibold text-slate-500">
-          Showing {tasks.length} task(s)
-        </span>
-      </div>
+              {/* Assigner filter */}
+              <select
+                value={creatorFilter}
+                onChange={(e) => setCreatorFilter(e.target.value)}
+                className="text-xs border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              >
+                <option value="">All Assigners</option>
+                {uniqueAssigners.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    By: {a.name}
+                  </option>
+                ))}
+              </select>
+
+              {/* Assignee filter */}
+              <select
+                value={assigneeFilter}
+                onChange={(e) => setAssigneeFilter(e.target.value)}
+                className="text-xs border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              >
+                <option value="">All Assignees</option>
+                {uniqueAssignees.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    To: {a.name}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="text-xs border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              >
+                <option value="">All Statuses</option>
+                <option value="TODO">To Do</option>
+                <option value="IN_PROGRESS">In Progress</option>
+                <option value="BLOCKED">Blocked</option>
+                <option value="COMPLETED">Completed</option>
+                <option value="CANCELLED">Cancelled</option>
+              </select>
+
+              <select
+                value={priorityFilter}
+                onChange={(e) => setPriorityFilter(e.target.value)}
+                className="text-xs border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              >
+                <option value="">All Priorities</option>
+                <option value="URGENT">Urgent</option>
+                <option value="HIGH">High</option>
+                <option value="MEDIUM">Medium</option>
+                <option value="LOW">Low</option>
+              </select>
+            </div>
+
+            <span className="text-xs font-semibold text-slate-500">
+              Showing {tasks.length} task(s)
+            </span>
+          </div>
 
       {/* Main View */}
       {loading ? (
@@ -440,11 +531,23 @@ export const TasksPage = () => {
                         </div>
                       )}
 
-                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-500">
-                        <div className="flex items-center gap-1">
-                          <User className="w-3 h-3 text-slate-400" />
-                          <span>{t.assignee_first || 'Unassigned'}</span>
+                      {/* Delegation Flow: Who assigned to Whom */}
+                      <div className="bg-slate-50/80 dark:bg-slate-800/60 p-2 rounded-lg border border-slate-100 dark:border-slate-700/60 flex items-center justify-between text-[10px] gap-1.5">
+                        <div className="flex items-center gap-1 min-w-0" title={`Assigned by ${t.creator_first || ''} ${t.creator_last || ''}`}>
+                          <span className="text-[9px] uppercase font-bold text-slate-400 shrink-0">By:</span>
+                          <span className="font-semibold text-slate-700 dark:text-slate-300 truncate">{t.creator_first || 'Admin'}</span>
                         </div>
+                        <ArrowRight className="w-3 h-3 text-brand-500 shrink-0" />
+                        <div className="flex items-center gap-1 min-w-0 text-right justify-end" title={`Assigned to ${t.assignee_first || ''} ${t.assignee_last || ''}`}>
+                          <span className="text-[9px] uppercase font-bold text-slate-400 shrink-0">To:</span>
+                          <span className="font-bold text-slate-900 dark:text-white truncate">{t.assignee_first || 'Unassigned'}</span>
+                        </div>
+                      </div>
+
+                      <div className="pt-2 border-t border-slate-100 dark:border-slate-700/60 flex items-center justify-between text-[10px] text-slate-500">
+                        <span className="text-[10px] text-slate-400 truncate max-w-[120px]">
+                          {t.assignee_designation || t.department_name || 'Deliverable'}
+                        </span>
                         {t.due_date && (
                           <div
                             className={`flex items-center gap-1 ${
@@ -471,31 +574,62 @@ export const TasksPage = () => {
         </div>
       ) : (
         /* LIST VIEW */
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
           <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 text-slate-500 uppercase text-[10px] tracking-wider border-b border-slate-200">
+            <thead className="bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-200 dark:border-slate-800">
               <tr>
                 <th className="p-3.5">Task</th>
+                <th className="p-3.5">Assigned By</th>
+                <th className="p-3.5">Assigned To</th>
                 <th className="p-3.5">Status</th>
                 <th className="p-3.5">Rating</th>
                 <th className="p-3.5">Priority</th>
-                <th className="p-3.5">Assignee</th>
                 <th className="p-3.5">Due Date</th>
                 <th className="p-3.5 text-right">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {tasks.map((t) => (
                 <tr
                   key={t.id}
                   onClick={() => setSelectedTask(t)}
-                  className="hover:bg-slate-50/80 cursor-pointer transition"
+                  className="hover:bg-slate-50/80 dark:hover:bg-slate-800/60 cursor-pointer transition"
                 >
                   <td className="p-3.5">
-                    <span className="font-bold text-slate-800 block">{t.title}</span>
+                    <span className="font-bold text-slate-800 dark:text-white block">{t.title}</span>
                     <span className="text-[11px] text-slate-400 truncate block max-w-sm">
                       {t.description || 'No description'}
                     </span>
+                  </td>
+                  <td className="p-3.5 whitespace-nowrap">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-full bg-brand-100 text-brand-700 text-[10px] font-bold flex items-center justify-center shrink-0">
+                        {t.creator_first?.[0] || 'A'}
+                      </div>
+                      <div>
+                        <span className="font-semibold text-slate-800 dark:text-slate-200 block text-xs">
+                          {t.creator_first} {t.creator_last}
+                        </span>
+                        <span className="text-[10px] text-slate-400 block truncate max-w-[120px]">
+                          {t.creator_designation || t.creator_code || 'Delegator'}
+                        </span>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="p-3.5 whitespace-nowrap">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold flex items-center justify-center shrink-0">
+                        {t.assignee_first?.[0] || 'U'}
+                      </div>
+                      <div>
+                        <span className="font-semibold text-slate-800 dark:text-slate-200 block text-xs">
+                          {t.assignee_first} {t.assignee_last}
+                        </span>
+                        <span className="text-[10px] text-slate-400 block truncate max-w-[120px]">
+                          {t.assignee_designation || t.assignee_code || 'Assignee'}
+                        </span>
+                      </div>
+                    </div>
                   </td>
                   <td className="p-3.5">
                     <div className="flex items-center gap-1.5 flex-wrap">
@@ -520,13 +654,10 @@ export const TasksPage = () => {
                         {canAssign ? 'Rate task ▾' : 'Pending rating'}
                       </span>
                     ) : (
-                      <span className="text-slate-300">—</span>
+                      <span className="text-slate-300 dark:text-slate-600">—</span>
                     )}
                   </td>
                   <td className="p-3.5">{getPriorityBadge(t.priority)}</td>
-                  <td className="p-3.5 text-slate-600">
-                    {t.assignee_first} {t.assignee_last}
-                  </td>
                   <td className="p-3.5">
                     <span className={t.is_overdue ? 'text-rose-600 font-bold' : 'text-slate-500'}>
                       {t.due_date || 'N/A'}
@@ -678,7 +809,46 @@ export const TasksPage = () => {
             </div>
 
             <div className="overflow-y-auto space-y-4 flex-1 pr-1">
-              <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">
+              {/* Task Delegation & Ownership (Who Assigned to Whom) */}
+              <div className="p-3.5 bg-gradient-to-r from-slate-50 to-brand-50/30 dark:from-slate-800/80 dark:to-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-700/80 grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-full bg-brand-100 text-brand-700 text-xs font-bold flex items-center justify-center shrink-0">
+                    {selectedTask.creator_first?.[0] || 'A'}
+                  </div>
+                  <div>
+                    <span className="text-[9px] uppercase font-bold tracking-wider text-slate-400 block">
+                      Assigned By (Delegator)
+                    </span>
+                    <span className="text-xs font-bold text-slate-800 dark:text-white block">
+                      {selectedTask.creator_first} {selectedTask.creator_last}
+                      {selectedTask.creator_code ? ` (${selectedTask.creator_code})` : ''}
+                    </span>
+                    <span className="text-[10px] text-slate-500 block">
+                      {selectedTask.creator_designation || selectedTask.creator_dept_name || 'Leader / Creator'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2.5 sm:border-l sm:border-slate-200 sm:dark:border-slate-700 sm:pl-3">
+                  <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold flex items-center justify-center shrink-0">
+                    {selectedTask.assignee_first?.[0] || 'U'}
+                  </div>
+                  <div>
+                    <span className="text-[9px] uppercase font-bold tracking-wider text-slate-400 block">
+                      Assigned To (Task Owner)
+                    </span>
+                    <span className="text-xs font-bold text-slate-800 dark:text-white block">
+                      {selectedTask.assignee_first} {selectedTask.assignee_last}
+                      {selectedTask.assignee_code ? ` (${selectedTask.assignee_code})` : ''}
+                    </span>
+                    <span className="text-[10px] text-slate-500 block">
+                      {selectedTask.assignee_designation || selectedTask.assignee_dept_name || 'Staff / Assignee'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
                 {selectedTask.description || 'No detailed description.'}
               </p>
 

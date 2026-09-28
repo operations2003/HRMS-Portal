@@ -30,6 +30,16 @@ export const leaveService = {
   },
 
   /**
+   * Fetch leave balances overview for all employees in organization (Admin/HR)
+   * @param {number} year
+   */
+  async getAllEmployeeBalances(year) {
+    const query = year ? `?year=${year}` : '';
+    const res = await http.get(`/v1/leaves/all-balances${query}`);
+    return res.data || [];
+  },
+
+  /**
    * Fetch a specific employee's leave balances (Admin/HR)
    * @param {string} employeeId
    * @param {number} year

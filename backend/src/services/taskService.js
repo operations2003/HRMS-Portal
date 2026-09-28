@@ -10,8 +10,10 @@ export const taskService = {
   async listTasks(orgId, currentUser, filters = {}) {
     let sql = `
       SELECT t.*,
-             c.first_name AS creator_first, c.last_name AS creator_last, c.employee_code AS creator_code,
-             a.first_name AS assignee_first, a.last_name AS assignee_last, a.employee_code AS assignee_code,
+             c.first_name AS creator_first, c.last_name AS creator_last, c.employee_code AS creator_code, c.avatar_url AS creator_avatar,
+             cd.title AS creator_designation, cdept.name AS creator_dept_name,
+             a.first_name AS assignee_first, a.last_name AS assignee_last, a.employee_code AS assignee_code, a.avatar_url AS assignee_avatar,
+             ad.title AS assignee_designation, adept.name AS assignee_dept_name,
              r.first_name AS rater_first, r.last_name AS rater_last,
              d.name AS department_name,
              CASE 
@@ -20,27 +22,34 @@ export const taskService = {
              END AS is_overdue
       FROM work_tasks t
       JOIN employees c ON t.creator_id = c.id
+      LEFT JOIN designations cd ON c.desig_id = cd.id
+      LEFT JOIN departments cdept ON c.dept_id = cdept.id
       JOIN employees a ON t.assignee_id = a.id
+      LEFT JOIN designations ad ON a.desig_id = ad.id
+      LEFT JOIN departments adept ON a.dept_id = adept.id
       LEFT JOIN employees r ON t.rated_by = r.id
       LEFT JOIN departments d ON t.dept_id = d.id
       WHERE t.org_id = $1
     `;
     const params = [orgId];
 
-    // Role-based visibility: standard employees see assigned or created tasks
-    const isPrivileged = currentUser.roleName && ['admin', 'superadmin', 'orgadmin', 'hr', 'hrmanager'].includes(currentUser.roleName.toLowerCase());
-    const isManager = (currentUser.roleName || '').toLowerCase() === 'manager';
-
-    if (!isPrivileged && currentUser.employeeId) {
-      if (isManager) {
-        params.push(currentUser.employeeId);
-        sql += ` AND (t.assignee_id = $${params.length} OR t.creator_id = $${params.length} OR a.manager_id = $${params.length})`;
-      } else {
-        params.push(currentUser.employeeId);
-        sql += ` AND (t.assignee_id = $${params.length} OR t.creator_id = $${params.length})`;
-      }
+    // Filter by scope if requested (e.g. 'mine' shows personal tasks, while 'all' offers organizational transparency)
+    if (filters.scope === 'mine' && currentUser.employeeId) {
+      params.push(currentUser.employeeId);
+      sql += ` AND (t.assignee_id = $${params.length} OR t.creator_id = $${params.length})`;
+    } else if (filters.scope === 'team' && currentUser.employeeId) {
+      params.push(currentUser.employeeId);
+      sql += ` AND (t.assignee_id = $${params.length} OR t.creator_id = $${params.length} OR a.manager_id = $${params.length})`;
     }
 
+    if (filters.creatorId) {
+      params.push(filters.creatorId);
+      sql += ` AND t.creator_id = $${params.length}`;
+    }
+    if (filters.assigneeId) {
+      params.push(filters.assigneeId);
+      sql += ` AND t.assignee_id = $${params.length}`;
+    }
     if (filters.status) {
       params.push(filters.status);
       sql += ` AND t.status = $${params.length}`;
@@ -49,13 +58,18 @@ export const taskService = {
       params.push(filters.priority);
       sql += ` AND t.priority = $${params.length}`;
     }
-    if (filters.assigneeId) {
-      params.push(filters.assigneeId);
-      sql += ` AND t.assignee_id = $${params.length}`;
+    if (filters.deptId || filters.departmentId) {
+      params.push(filters.deptId || filters.departmentId);
+      sql += ` AND (t.dept_id = $${params.length} OR a.dept_id = $${params.length})`;
     }
     if (filters.search) {
       params.push(`%${filters.search.toLowerCase()}%`);
-      sql += ` AND (LOWER(t.title) LIKE $${params.length} OR LOWER(t.description) LIKE $${params.length})`;
+      sql += ` AND (
+        LOWER(t.title) LIKE $${params.length} 
+        OR LOWER(t.description) LIKE $${params.length}
+        OR LOWER(c.first_name || ' ' || c.last_name) LIKE $${params.length}
+        OR LOWER(a.first_name || ' ' || a.last_name) LIKE $${params.length}
+      )`;
     }
 
     sql += ` ORDER BY is_overdue DESC, t.due_date ASC NULLS LAST, t.created_at DESC;`;

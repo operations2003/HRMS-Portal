@@ -27,6 +27,8 @@ import {
   Eye,
   RefreshCw,
   ChevronDown,
+  X,
+  FileSpreadsheet,
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
@@ -146,6 +148,9 @@ export const ReportsPage = () => {
   const [activeMyReportIdx, setActiveMyReportIdx] = useState(0);
   const [reportToDelete, setReportToDelete] = useState(null);
   const [isDeletingReport, setIsDeletingReport] = useState(false);
+  const [downloadingReportId, setDownloadingReportId] = useState(null);
+  const [pdfCustomReport, setPdfCustomReport] = useState(null);
+  const [previewReport, setPreviewReport] = useState(null);
 
   // Dynamic employee roster per department
   const [employees, setEmployees] = useState([]);
@@ -606,6 +611,42 @@ export const ReportsPage = () => {
     ? (myReports[activeMyReportIdx] || myReports[0] || null)
     : null;
 
+  // Helper to parse individual report data safely
+  const parseReportData = (report) => {
+    if (!report) return {};
+    let raw = report.reportData;
+    if (typeof raw === 'string') {
+      try {
+        raw = JSON.parse(raw);
+      } catch {
+        raw = {};
+      }
+    }
+    return {
+      ...(raw || {}),
+      employeeName: report.employeeName || raw?.employeeName || 'Employee',
+      employeeId: report.employeeCode || report.employeeId || raw?.employeeId || '',
+      designation: report.designation || raw?.designation || '',
+      reviewPeriod: report.reviewPeriod || raw?.reviewPeriod || '',
+      reviewDate: report.reviewDate || raw?.reviewDate || '',
+      reviewCycle: report.reviewCycle || raw?.reviewCycle || 'Performance Appraisal',
+      overallRating: report.overallRating || raw?.overallRating || 'Meets Expectations',
+      averageScore: report.averageScore || raw?.averageScore || 0,
+      competencies: Array.isArray(raw?.competencies) ? raw.competencies : [],
+      goals: Array.isArray(raw?.goals) ? raw.goals : [],
+      training: Array.isArray(raw?.training) ? raw.training : [],
+      actions: raw?.actions && typeof raw.actions === 'object' ? raw.actions : {},
+      ceoName: raw?.ceoName || "Sheetal Jamdar (CEO)",
+      ceoDate: raw?.ceoDate || report.reviewDate || '',
+      achievements: raw?.achievements || '',
+      improvements: raw?.improvements || '',
+      employeeComments: raw?.employeeComments || '',
+      managerComments: raw?.managerComments || '',
+      manager: raw?.manager || '',
+      ldExecutive: raw?.ldExecutive || '',
+    };
+  };
+
   const parsedActiveReportData = useMemo(() => {
     if (!activeMyReport) return null;
     let data = activeMyReport.reportData;
@@ -712,40 +753,46 @@ export const ReportsPage = () => {
     }
   };
 
-  // Export to Excel
-  const handleDownloadExcel = () => {
-    const deptTitle = effectiveDepartment === 'operations' ? 'Operations' : effectiveDepartment === 'it' ? 'IT' : 'Talent Acquisition';
-    const empName = effectiveData.employeeName || 'Employee';
+  // Export to Excel (supports individual reports or active form)
+  const handleDownloadExcel = (customReport = null) => {
+    const targetReport = customReport || activeMyReport;
+    const targetData = customReport ? parseReportData(customReport) : effectiveData;
+    const targetDept = customReport ? (customReport.department || 'operations') : effectiveDepartment;
+    const targetAvg = customReport ? (Number(customReport.averageScore || 0).toFixed(2)) : effectiveAverageScore;
+
+    const deptTitle = targetDept === 'operations' ? 'Operations' : targetDept === 'it' ? 'IT' : 'Talent Acquisition';
+    const empName = targetData.employeeName || 'Employee';
 
     showToast(`Generating ${deptTitle} Excel review...`, 'loading', 1500);
 
     const summaryData = [
       { Property: 'Department', Value: deptTitle },
       { Property: 'Employee Name', Value: empName },
-      { Property: 'Employee ID', Value: effectiveData.employeeId },
-      { Property: 'Designation', Value: effectiveData.designation },
-      { Property: 'Reporting Manager', Value: effectiveData.manager },
-      { Property: 'Review Date', Value: effectiveData.reviewDate },
-      { Property: 'Review Period', Value: effectiveData.reviewPeriod },
-      { Property: 'L&D Executive', Value: effectiveData.ldExecutive },
-      { Property: 'Average Score', Value: `${effectiveAverageScore} / 5.0` },
-      { Property: 'Overall Determination', Value: effectiveData.overallRating },
-      { Property: 'Major Accomplishments', Value: effectiveData.achievements },
-      { Property: 'Areas for Development', Value: effectiveData.improvements },
-      { Property: 'Employee Comments', Value: effectiveData.employeeComments },
-      { Property: 'Manager Comments', Value: effectiveData.managerComments },
-      { Property: 'Authorized Signatory', Value: effectiveData.ceoName },
-      { Property: 'Authorization Date', Value: effectiveData.ceoDate },
+      { Property: 'Employee ID', Value: targetData.employeeId },
+      { Property: 'Designation', Value: targetData.designation },
+      { Property: 'Reporting Manager', Value: targetData.manager },
+      { Property: 'Review Date', Value: targetData.reviewDate },
+      { Property: 'Review Period', Value: targetData.reviewPeriod },
+      { Property: 'Review Cycle', Value: targetReport?.reviewCycle || targetData.reviewCycle || 'Performance Appraisal' },
+      { Property: 'L&D Executive', Value: targetData.ldExecutive },
+      { Property: 'Average Score', Value: `${targetAvg} / 5.0` },
+      { Property: 'Overall Determination', Value: targetData.overallRating },
+      { Property: 'Major Accomplishments', Value: targetData.achievements },
+      { Property: 'Areas for Development', Value: targetData.improvements },
+      { Property: 'Employee Comments', Value: targetData.employeeComments },
+      { Property: 'Manager Comments', Value: targetData.managerComments },
+      { Property: 'Authorized Signatory', Value: targetData.ceoName || "Sheetal Jamdar (CEO)" },
+      { Property: 'Authorization Date', Value: targetData.ceoDate || targetData.reviewDate },
     ];
 
-    const competencyData = (effectiveData.competencies || []).map((c, i) => ({
+    const competencyData = (targetData.competencies || []).map((c, i) => ({
       '#': i + 1,
       'Performance Competency Area': c.area,
       'Rating (1-5)': c.score,
       'Comments / Observations': c.comment,
     }));
 
-    const goalsData = (effectiveData.goals || []).map((g, i) => ({
+    const goalsData = (targetData.goals || []).map((g, i) => ({
       '#': i + 1,
       'Goal Objective': g.goal,
       'Target / Key Result': g.target,
@@ -753,7 +800,7 @@ export const ReportsPage = () => {
       Status: g.status,
     }));
 
-    const trainingData = (effectiveData.training || []).map((t, i) => ({
+    const trainingData = (targetData.training || []).map((t, i) => ({
       '#': i + 1,
       'Skill Area': t.skill,
       'Recommended Training': t.training,
@@ -771,14 +818,24 @@ export const ReportsPage = () => {
     showToast('Excel report downloaded successfully!', 'success');
   };
 
-  // High-Resolution Multi-Page Executive PDF Generation
-  const handleDownloadPdf = async () => {
-    if (!printDossierRef.current) return;
+  // High-Resolution Multi-Page Executive PDF Generation (supports downloading any delivered report or active form)
+  const handleDownloadPdf = async (customReport = null) => {
+    const targetReport = customReport || activeMyReport;
+    const targetData = customReport ? parseReportData(customReport) : effectiveData;
+    const targetDept = customReport ? (customReport.department || 'operations') : effectiveDepartment;
+    const targetAvg = customReport ? (Number(customReport.averageScore || 0).toFixed(2)) : effectiveAverageScore;
+
+    setPdfCustomReport({
+      department: targetDept,
+      data: targetData,
+      averageScore: targetAvg,
+    });
+    setDownloadingReportId(customReport?.id || 'active');
     setIsGeneratingPdf(true);
 
-    const deptTitle = effectiveDepartment === 'operations' ? 'Operations' : effectiveDepartment === 'it' ? 'IT' : 'Talent_Acquisition';
-    const empName = (effectiveData.employeeName || 'Employee').trim().replace(/[^a-zA-Z0-9_-]/g, '_');
-    const fileName = `${empName}_${deptTitle}_Performance_Appraisal_${effectiveData.reviewDate || '2026'}.pdf`;
+    const deptTitle = targetDept === 'operations' ? 'Operations' : targetDept === 'it' ? 'IT' : 'Talent_Acquisition';
+    const empName = (targetData.employeeName || 'Employee').trim().replace(/[^a-zA-Z0-9_-]/g, '_');
+    const fileName = `${empName}_${deptTitle}_Performance_Appraisal_${targetData.reviewDate || '2026'}.pdf`;
 
     showToast(`Rendering official ${deptTitle.replace('_', ' ')} executive review PDF...`, 'loading', 0);
 
@@ -794,8 +851,12 @@ export const ReportsPage = () => {
       // Temporarily reset window scroll so canvas origin maps exactly to (0,0)
       window.scrollTo(0, 0);
 
-      // Allow DOM layout and subpixel rasterization to stabilize
-      await new Promise((resolve) => setTimeout(resolve, 150));
+      // Allow DOM layout and subpixel rasterization to stabilize with the targeted report
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      if (!printDossierRef.current) {
+        throw new Error('Dossier printable element not mounted');
+      }
 
       const pageElements = printDossierRef.current.querySelectorAll('.pdf-dossier-page');
       if (!pageElements || pageElements.length === 0) {
@@ -838,6 +899,7 @@ export const ReportsPage = () => {
     } finally {
       window.scrollTo(originalScrollX, originalScrollY);
       setIsGeneratingPdf(false);
+      setDownloadingReportId(null);
     }
   };
 
@@ -1215,79 +1277,228 @@ export const ReportsPage = () => {
             </Button>
           </div>
         </div>
-      ) : (
-        <div className="space-y-6">
-          {/* Top Banner when recipient user is viewing their delivered report */}
-          {isViewingMyReport && activeMyReport && (
-            <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 dark:from-emerald-950/40 dark:via-teal-950/30 dark:to-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
-              <div className="flex items-start gap-3.5">
-                <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
-                  <CheckCircle2 className="w-5 h-5" />
+      ) : isViewingMyReport ? (
+        <div className="space-y-6 animate-in fade-in duration-300">
+          {/* Top Banner / Summary Card */}
+          <div className="bg-gradient-to-r from-slate-900 via-brand-950 to-slate-900 text-white rounded-3xl p-6 sm:p-8 relative overflow-hidden shadow-xl border border-slate-800">
+            <div className="absolute top-0 right-0 w-96 h-96 bg-brand-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
+            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="space-y-2 max-w-2xl">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                    Official Performance Records
+                  </span>
+                  <span className="text-xs text-slate-400 font-medium">
+                    {myReports.length} {myReports.length === 1 ? 'Appraisal Report' : 'Appraisal Reports'} Delivered
+                  </span>
                 </div>
-                <div>
-                  <div className="flex flex-wrap items-center gap-2 mb-1">
-                    <h4 className="text-sm font-bold text-emerald-950 dark:text-emerald-200">
-                      Official Performance Appraisal Delivered
-                    </h4>
-                    <Badge variant="success">Delivered</Badge>
-                    {activeMyReport.sentCount > 1 && (
-                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-200/60 dark:bg-emerald-800/60 text-emerald-800 dark:text-emerald-200">
-                        Updated ({activeMyReport.sentCount}x)
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-emerald-800/80 dark:text-emerald-300/80">
-                    Cycle: <span className="font-semibold">{activeMyReport.reviewCycle || 'Performance Appraisal'}</span>
-                    {activeMyReport.lastSentAt && (
-                      <> • Delivered on {new Date(activeMyReport.lastSentAt).toLocaleDateString()} at {new Date(activeMyReport.lastSentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</>
-                    )}
-                  </p>
-                </div>
+                <h2 className="font-display text-2xl sm:text-3xl font-black tracking-tight text-white">
+                  My Delivered Performance Appraisals
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                  Official evaluation records, competency calibration ratings, and career progression documentation delivered by management. Download your executive PDF report directly below.
+                </p>
               </div>
 
-              <div className="flex items-center gap-2 self-end sm:self-center">
-                {myReports.length > 1 && (
-                  <div className="relative">
-                    <select
-                      value={activeMyReportIdx}
-                      onChange={(e) => setActiveMyReportIdx(Number(e.target.value))}
-                      className="appearance-none text-xs font-semibold pl-3 pr-8 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-700 text-slate-800 dark:text-white shadow-2xs cursor-pointer focus:outline-none"
-                    >
-                      {myReports.map((r, i) => (
-                        <option key={r.id || i} value={i}>
-                          {r.reviewPeriod || `Report #${i + 1}`} ({new Date(r.lastSentAt || r.createdAt).toLocaleDateString()})
-                        </option>
-                      ))}
-                    </select>
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2.5 text-emerald-600 dark:text-emerald-400">
-                      <ChevronDown className="w-3.5 h-3.5" />
-                    </div>
-                  </div>
-                )}
-
+              <div className="flex flex-wrap items-center gap-3">
                 <Button
                   variant="outline"
                   size="sm"
-                  icon={Download}
-                  loading={isGeneratingPdf}
-                  onClick={handleDownloadPdf}
-                  className="text-xs font-semibold bg-white dark:bg-slate-800"
+                  icon={RefreshCw}
+                  loading={loadingMyReports}
+                  onClick={loadMyReports}
+                  className="text-xs font-bold bg-white/10 hover:bg-white/20 text-white border-white/20 backdrop-blur-md"
                 >
-                  Download PDF
-                </Button>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  icon={Trash2}
-                  className="text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 border-rose-200 dark:border-rose-800 bg-white dark:bg-slate-800"
-                  onClick={() => setReportToDelete(activeMyReport)}
-                >
-                  Delete Report
+                  Refresh Reports
                 </Button>
               </div>
             </div>
-          )}
+
+            {/* Quick Metrics Bar */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-6 mt-6 border-t border-white/10 relative z-10">
+              <div className="bg-white/5 backdrop-blur-xs rounded-xl p-3 border border-white/10">
+                <span className="text-[11px] font-semibold text-slate-400 block">Total Reports</span>
+                <span className="text-lg font-black text-white">{myReports.length}</span>
+              </div>
+              <div className="bg-white/5 backdrop-blur-xs rounded-xl p-3 border border-white/10">
+                <span className="text-[11px] font-semibold text-slate-400 block">Latest Rating</span>
+                <span className="text-sm font-bold text-emerald-300 truncate block">
+                  {myReports[0]?.overallRating || 'Meets Expectations'}
+                </span>
+              </div>
+              <div className="bg-white/5 backdrop-blur-xs rounded-xl p-3 border border-white/10">
+                <span className="text-[11px] font-semibold text-slate-400 block">Latest Score</span>
+                <span className="text-lg font-black text-brand-300">
+                  {myReports[0]?.averageScore ? Number(myReports[0].averageScore).toFixed(2) : '—'} <span className="text-xs font-normal text-slate-400">/ 5.0</span>
+                </span>
+              </div>
+              <div className="bg-white/5 backdrop-blur-xs rounded-xl p-3 border border-white/10">
+                <span className="text-[11px] font-semibold text-slate-400 block">Signatory</span>
+                <span className="text-xs font-bold text-slate-200 truncate block">Sheetal Jamdar (CEO)</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Reports Grid */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+                <FileText className="w-4 h-4 text-brand-600" />
+                Delivered Performance Appraisals ({myReports.length})
+              </h3>
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                Click Download PDF on any report below
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {myReports.map((report, idx) => {
+                const parsed = parseReportData(report);
+                const isLatest = idx === 0;
+                const score = Number(report.averageScore || 0).toFixed(2);
+                const isCurrentGenerating = isGeneratingPdf && downloadingReportId === report.id;
+
+                const dept = (report.department || 'operations').toLowerCase();
+                const DeptIcon = dept === 'it' ? Laptop : dept === 'ta' ? Target : Building2;
+                const deptLabel = dept === 'it' ? 'IT Team' : dept === 'ta' ? 'TA Team' : 'Operations Team';
+
+                const rating = report.overallRating || 'Meets Expectations';
+                const isExceptional = rating.toLowerCase().includes('exceptional');
+                const isExceeds = rating.toLowerCase().includes('exceed');
+                const isNeedsImp = rating.toLowerCase().includes('need') || rating.toLowerCase().includes('pip');
+
+                return (
+                  <div
+                    key={report.id || idx}
+                    className={`bg-white dark:bg-slate-900 rounded-2xl border transition-all duration-200 hover:shadow-lg flex flex-col justify-between overflow-hidden group ${
+                      isLatest
+                        ? 'border-brand-500/40 dark:border-brand-500/30 shadow-md shadow-brand-500/5 ring-1 ring-brand-500/20'
+                        : 'border-slate-200/90 dark:border-slate-800 shadow-xs'
+                    }`}
+                  >
+                    {/* Card Content */}
+                    <div className="p-5 pb-4 space-y-3.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                          <DeptIcon className="w-3.5 h-3.5 text-brand-500" />
+                          {deptLabel}
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          {isLatest && (
+                            <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-brand-100 dark:bg-brand-950/60 text-brand-700 dark:text-brand-300">
+                              Latest
+                            </span>
+                          )}
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-200/60 dark:border-emerald-800/60">
+                            <CheckCircle2 className="w-3 h-3" /> Delivered
+                          </span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <h4 className="text-base font-bold text-slate-900 dark:text-white group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
+                          {report.reviewCycle || 'Performance Appraisal'}
+                        </h4>
+                        <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 mt-1">
+                          <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                          <span>Period: <strong className="text-slate-700 dark:text-slate-200">{report.reviewPeriod || 'Evaluation Cycle'}</strong></span>
+                        </div>
+                      </div>
+
+                      {/* Score & Rating Bar */}
+                      <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-3">
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">Rating</span>
+                          <span className={`inline-block text-xs font-extrabold mt-0.5 px-2 py-0.5 rounded-md ${
+                            isExceptional
+                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                              : isExceeds
+                              ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
+                              : isNeedsImp
+                              ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+                              : 'bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300'
+                          }`}>
+                            {rating}
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">Score</span>
+                          <div className="flex items-baseline gap-0.5 justify-end">
+                            <span className="text-xl font-black text-slate-900 dark:text-white">{score}</span>
+                            <span className="text-xs text-slate-400 font-semibold">/ 5.0</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Metadata details */}
+                      <div className="space-y-1.5 pt-1 text-xs text-slate-500 dark:text-slate-400 border-t border-slate-100 dark:border-slate-800">
+                        <div className="flex items-center justify-between">
+                          <span>Delivered Date:</span>
+                          <span className="font-semibold text-slate-700 dark:text-slate-300">
+                            {report.lastSentAt ? new Date(report.lastSentAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Delivered'}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span>Authorized by:</span>
+                          <span className="font-semibold text-slate-700 dark:text-slate-300">
+                            {parsed.ceoName || "Sheetal Jamdar (CEO)"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Card Actions */}
+                    <div className="p-4 pt-3 bg-slate-50/70 dark:bg-slate-800/40 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-2">
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        icon={Download}
+                        loading={isCurrentGenerating}
+                        onClick={() => handleDownloadPdf(report)}
+                        className="w-full text-xs font-bold shadow-md shadow-brand-500/10 justify-center py-2"
+                      >
+                        {isCurrentGenerating ? 'Generating PDF...' : 'Download PDF'}
+                      </Button>
+
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          icon={Eye}
+                          onClick={() => setPreviewReport(report)}
+                          className="flex-1 text-xs font-semibold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 justify-center py-1.5"
+                        >
+                          View Details
+                        </Button>
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          icon={FileSpreadsheet}
+                          onClick={() => handleDownloadExcel(report)}
+                          title="Download Excel Spreadsheet"
+                          className="text-xs font-semibold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 px-2.5 py-1.5"
+                        />
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          icon={Trash2}
+                          title="Remove from my view"
+                          onClick={() => setReportToDelete(report)}
+                          className="text-xs font-semibold text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 border-rose-200 dark:border-rose-800 px-2.5 py-1.5 bg-white dark:bg-slate-800"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-6">
 
           {/* MAIN PERFORMANCE REVIEW REPORT */}
           <section
@@ -2234,11 +2445,169 @@ export const ReportsPage = () => {
       >
         <PrintableReportDossier
           ref={printDossierRef}
-          department={effectiveDepartment}
-          data={effectiveData}
-          averageScore={effectiveAverageScore}
+          department={pdfCustomReport ? pdfCustomReport.department : effectiveDepartment}
+          data={pdfCustomReport ? pdfCustomReport.data : effectiveData}
+          averageScore={pdfCustomReport ? pdfCustomReport.averageScore : effectiveAverageScore}
         />
       </div>
+
+      {/* Read-Only Clean Preview Modal for Delivered Appraisal */}
+      {previewReport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl max-w-3xl w-full max-h-[92vh] flex flex-col overflow-hidden">
+            {/* Modal Header */}
+            <div className="p-5 sm:p-6 pb-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-4 bg-gradient-to-r from-slate-900 via-brand-950 to-slate-900 text-white">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    Official Appraisal Record
+                  </span>
+                  <span className="text-xs text-slate-300 font-medium">
+                    {previewReport.reviewCycle || 'Performance Appraisal'}
+                  </span>
+                </div>
+                <h3 className="text-base sm:text-lg font-bold text-white">
+                  {previewReport.employeeName || 'Employee'} • Performance Review
+                </h3>
+                <p className="text-xs text-slate-300">
+                  Review Period: {previewReport.reviewPeriod || 'Evaluation'} • Delivered on {previewReport.lastSentAt ? new Date(previewReport.lastSentAt).toLocaleDateString() : 'Recent'}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  icon={Download}
+                  loading={isGeneratingPdf && downloadingReportId === previewReport.id}
+                  onClick={() => handleDownloadPdf(previewReport)}
+                  className="text-xs font-bold shrink-0"
+                >
+                  Download PDF
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewReport(null)}
+                  className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer shrink-0"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-6 overflow-y-auto">
+              {(() => {
+                const parsed = parseReportData(previewReport);
+                const score = Number(previewReport.averageScore || 0).toFixed(2);
+                return (
+                  <div className="space-y-6">
+                    {/* Top Stats */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
+                        <span className="text-[11px] font-semibold text-slate-400 block">Overall Determination</span>
+                        <span className="text-sm font-bold text-slate-900 dark:text-white block mt-0.5">{parsed.overallRating}</span>
+                      </div>
+                      <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
+                        <span className="text-[11px] font-semibold text-slate-400 block">Average Rating Score</span>
+                        <span className="text-lg font-black text-brand-600 dark:text-brand-400 block mt-0.5">{score} / 5.0</span>
+                      </div>
+                      <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
+                        <span className="text-[11px] font-semibold text-slate-400 block">Department</span>
+                        <span className="text-sm font-bold text-slate-900 dark:text-white block mt-0.5 uppercase">{previewReport.department || 'Operations'}</span>
+                      </div>
+                      <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
+                        <span className="text-[11px] font-semibold text-slate-400 block">Authorized Signatory</span>
+                        <span className="text-sm font-bold text-slate-900 dark:text-white block mt-0.5">{parsed.ceoName || "Sheetal Jamdar (CEO)"}</span>
+                      </div>
+                    </div>
+
+                    {/* Competency Ratings */}
+                    {Array.isArray(parsed.competencies) && parsed.competencies.length > 0 && (
+                      <div className="space-y-2">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                          Performance Competencies & Ratings
+                        </h4>
+                        <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden divide-y divide-slate-100 dark:divide-slate-800">
+                          {parsed.competencies.map((c, i) => (
+                            <div key={i} className="p-3 flex items-center justify-between gap-4 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                              <div className="space-y-0.5 flex-1">
+                                <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">{c.area}</span>
+                                {c.comment && <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-normal">{c.comment}</p>}
+                              </div>
+                              <div className="flex items-center gap-1 font-mono font-bold text-xs px-2.5 py-1 rounded-lg bg-brand-50 dark:bg-brand-950 text-brand-700 dark:text-brand-300 border border-brand-200 dark:border-brand-800 shrink-0">
+                                <span>{Number(c.score || 0).toFixed(1)}</span>
+                                <span className="text-[10px] text-brand-400">/ 5.0</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Accomplishments & Feedback */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {parsed.achievements && (
+                        <div className="p-4 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/40 space-y-1">
+                          <span className="text-xs font-bold text-emerald-900 dark:text-emerald-300 block">Major Accomplishments</span>
+                          <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-line">{parsed.achievements}</p>
+                        </div>
+                      )}
+                      {parsed.improvements && (
+                        <div className="p-4 rounded-xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/40 space-y-1">
+                          <span className="text-xs font-bold text-amber-900 dark:text-amber-300 block">Areas for Development</span>
+                          <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-line">{parsed.improvements}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {parsed.managerComments && (
+                      <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 space-y-1">
+                        <span className="text-xs font-bold text-slate-900 dark:text-white block">Manager Feedback & Observations</span>
+                        <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-line">{parsed.managerComments}</p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 px-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-850 flex items-center justify-between">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPreviewReport(null)}
+                className="text-xs font-semibold"
+              >
+                Close Preview
+              </Button>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  icon={FileSpreadsheet}
+                  onClick={() => handleDownloadExcel(previewReport)}
+                  className="text-xs font-semibold"
+                >
+                  Download Excel
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  icon={Download}
+                  loading={isGeneratingPdf && downloadingReportId === previewReport.id}
+                  onClick={() => handleDownloadPdf(previewReport)}
+                  className="text-xs font-bold"
+                >
+                  Download PDF
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Confirm Dialog for Recipient Deleting Report */}
       <ConfirmDialog
