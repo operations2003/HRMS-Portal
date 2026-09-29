@@ -98,7 +98,7 @@ export const FnFStatementDocument = ({
     'Employee';
   const empCode = emp.employeeCode || emp.code || fnf.employeeCode || fnf.employeeId || '—';
   const empDept = (typeof emp.department === 'object' ? emp.department?.name : emp.department) || emp.departmentName || '—';
-  const empDesig = (typeof emp.designation === 'object' ? emp.designation?.name : emp.designation) || emp.designationTitle || '—';
+  const empDesig = (typeof emp.designation === 'object' ? (emp.designation?.title || emp.designation?.name) : emp.designation) || emp.designationTitle || '—';
   const doj = emp.dateOfJoining || emp.doj;
 
   const lwd = fnf.lastWorkingDay || exitRecord?.approvedLastWorkingDay || exitRecord?.requestedLastWorkingDay;

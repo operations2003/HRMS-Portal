@@ -92,10 +92,13 @@ export const AccessDeprovisionModal = ({ isOpen, onClose, onSuccess, record }) =
           onChange={(e) => setSelectedManagerId(e.target.value)}
           options={[
             { value: '', label: 'Select Interim Manager (Optional)' },
-            ...managers.map((m) => ({
-              value: m.id,
-              label: `${m.fullName || `${m.firstName} ${m.lastName}`} (${m.empCode || m.designation || 'Staff'})`,
-            })),
+            ...managers.map((m) => {
+              const desigStr = (typeof m.designation === 'object' ? (m.designation?.title || m.designation?.name) : m.designation) || 'Staff';
+              return {
+                value: m.id,
+                label: `${m.fullName || `${m.firstName} ${m.lastName}`} (${m.empCode || desigStr})`,
+              };
+            }),
           ]}
           helperText="Any team members reporting to this employee will be transferred to the selected manager"
         />

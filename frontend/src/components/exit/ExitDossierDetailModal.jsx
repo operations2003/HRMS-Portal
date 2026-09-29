@@ -150,11 +150,15 @@ export const ExitDossierDetailModal = ({
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500">Department:</span>
-                  <span className="font-semibold text-slate-900">{emp?.department?.name || 'General'}</span>
+                  <span className="font-semibold text-slate-900">
+                    {(typeof emp?.department === 'object' ? (emp.department?.name || emp.department?.title) : emp?.department) || 'General'}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500">Designation:</span>
-                  <span className="font-semibold text-slate-900">{emp?.designation?.name || emp?.designation || 'Staff'}</span>
+                  <span className="font-semibold text-slate-900">
+                    {(typeof emp?.designation === 'object' ? (emp.designation?.title || emp.designation?.name) : emp?.designation) || 'Staff'}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500">Reporting Manager:</span>
