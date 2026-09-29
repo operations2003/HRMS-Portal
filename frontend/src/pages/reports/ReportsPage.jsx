@@ -1773,7 +1773,7 @@ export const ReportsPage = () => {
                             }}
                             className="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-950/40"
                           >
-                            New Appraisal for {emp.employeeName.split(' ')[0]}
+                            New Report for {emp.employeeName.split(' ')[0]}
                           </Button>
                         </div>
 
