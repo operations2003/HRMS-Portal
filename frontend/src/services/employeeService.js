@@ -54,4 +54,9 @@ export const employeeService = {
     const res = await http.delete(`/v1/employees/${id}`);
     return res.data;
   },
+
+  async endInternship(id, data = {}) {
+    const res = await http.post(`/v1/employees/${id}/end-internship`, data);
+    return res.data;
+  },
 };

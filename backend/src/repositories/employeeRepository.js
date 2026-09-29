@@ -102,6 +102,8 @@ const BASE_EMPLOYEE_SELECT = `
     TO_CHAR(e.probation_start_date, 'YYYY-MM-DD') AS "probationStartDate",
     TO_CHAR(e.probation_end_date, 'YYYY-MM-DD') AS "probationEndDate",
     e.probation_notes AS "probationNotes",
+    e.internship_status AS "internshipStatus",
+    TO_CHAR(e.internship_end_date, 'YYYY-MM-DD') AS "internshipEndDate",
     COALESCE(e.avatar_url, u.avatar_url) AS "avatarUrl",
     e.created_at AS "createdAt",
     e.updated_at AS "updatedAt",
@@ -545,6 +547,16 @@ export const employeeRepository = {
     if (data.probationNotes !== undefined) {
       setClauses.push(`probation_notes = $${paramIndex++}`);
       values.push(data.probationNotes ? data.probationNotes.trim() : null);
+    }
+
+    if (data.internshipStatus !== undefined) {
+      setClauses.push(`internship_status = $${paramIndex++}`);
+      values.push(data.internshipStatus);
+    }
+
+    if (data.internshipEndDate !== undefined) {
+      setClauses.push(`internship_end_date = $${paramIndex++}`);
+      values.push(data.internshipEndDate || null);
     }
 
     if (setClauses.length === 0) {

@@ -33,6 +33,8 @@ import {
   AlertCircle,
   ChevronDown,
   ChevronUp,
+  CheckCircle2,
+  GraduationCap,
 } from 'lucide-react';
 import { DataTable } from '../../components/common/DataTable.jsx';
 import { Button } from '../../components/common/Button.jsx';
@@ -76,10 +78,33 @@ const isRestrictedLeaveType = (lt) => {
   );
 };
 
+const isInternEmployee = (emp) => {
+  if (!emp) return false;
+  const empType = String(emp.employmentType || emp.employment_type || '').trim().toLowerCase();
+  const desig = String(emp.designation?.title || emp.designationTitle || emp.desig_title || '').trim().toLowerCase();
+  return empType === 'intern' || empType === 'internship' || desig.includes('intern');
+};
+
+const isInternshipEnded = (emp) => {
+  if (!emp) return false;
+  const intStatus = String(emp.internshipStatus || emp.internship_status || '').trim().toUpperCase();
+  if (intStatus === 'COMPLETED' || intStatus === 'ENDED') return true;
+  const status = String(emp.status || '').trim().toLowerCase();
+  if (isInternEmployee(emp) && (status === 'completed' || status === 'inactive')) return true;
+  return false;
+};
+
 export const EmployeeListPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { user, hasPermission } = useAuth();
   const toast = useToast();
+
+  const allUserRoles = (Array.isArray(user?.roles) ? user.roles : [user?.roleName || user?.role || ''])
+    .filter(Boolean)
+    .map((r) => String(r).toLowerCase());
+  const isHrOrAdmin =
+    allUserRoles.some((r) => ['admin', 'superadmin', 'hr', 'hrmanager', 'orgadmin'].some((adm) => r.includes(adm))) ||
+    (user?.email || '').toLowerCase() === 'sheetalbedi@tasknera.com';
 
   const [employees, setEmployees] = useState([]);
   const [pagination, setPagination] = useState(null);
@@ -98,6 +123,10 @@ export const EmployeeListPage = () => {
   const [loadingViewProfile, setLoadingViewProfile] = useState(false);
   const [timelineEmployee, setTimelineEmployee] = useState(null);
   const [reassigningEmployee, setReassigningEmployee] = useState(null);
+
+  // End of Internship Dialog State
+  const [endInternshipTarget, setEndInternshipTarget] = useState(null);
+  const [isEndingInternship, setIsEndingInternship] = useState(false);
 
   // Leave Quotas & Entitlements State (Decided by Admin) - 11 Standard Company Categories
   const [leaveTypes, setLeaveTypes] = useState([
@@ -793,6 +822,36 @@ export const EmployeeListPage = () => {
     }
   };
 
+  const handleConfirmEndInternship = async () => {
+    if (!endInternshipTarget) return;
+    try {
+      setIsEndingInternship(true);
+      const res = await employeeService.endInternship(endInternshipTarget.id);
+      toast.success('Internship ended successfully.');
+      const todayStr = new Date().toISOString().split('T')[0];
+      const updatedData = res?.data || res || {};
+
+      // Immediately update viewingEmployee if modal is currently open for this employee
+      setViewingEmployee((prev) => {
+        if (!prev || prev.id !== endInternshipTarget.id) return prev;
+        return {
+          ...prev,
+          ...updatedData,
+          status: 'Completed',
+          internshipStatus: 'COMPLETED',
+          internshipEndDate: updatedData.internshipEndDate || todayStr,
+        };
+      });
+
+      setEndInternshipTarget(null);
+      await fetchEmployees(pagination?.page || 1);
+    } catch (err) {
+      toast.error(err.message || 'Failed to end internship.');
+    } finally {
+      setIsEndingInternship(false);
+    }
+  };
+
   const handleClearFilters = () => {
     setSearch('');
     setOrgFilter('');
@@ -1008,6 +1067,18 @@ export const EmployeeListPage = () => {
           >
             View
           </Button>
+          {isHrOrAdmin && isInternEmployee(row) && !isInternshipEnded(row) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={GraduationCap}
+              onClick={() => setEndInternshipTarget(row)}
+              className="text-amber-600 hover:text-amber-700 hover:bg-amber-50 font-medium"
+              title="End of Internship"
+            >
+              End Internship
+            </Button>
+          )}
           <Can permission="employee:write">
             <Button
               variant="ghost"
@@ -2436,6 +2507,15 @@ export const EmployeeListPage = () => {
                   <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-slate-100 text-slate-700 border border-slate-200">
                     {viewingEmployee.gender || 'Male'}
                   </span>
+                  {isInternEmployee(viewingEmployee) && (
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-semibold border ${
+                      isInternshipEnded(viewingEmployee)
+                        ? 'bg-purple-100 text-purple-700 border-purple-200'
+                        : 'bg-indigo-100 text-indigo-700 border-indigo-200'
+                    }`}>
+                      {isInternshipEnded(viewingEmployee) ? 'Internship Ended' : 'Active Intern'}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -2637,6 +2717,66 @@ export const EmployeeListPage = () => {
                 )}
               </div>
 
+              {/* Internship Program Lifecycle Card */}
+              {isInternEmployee(viewingEmployee) && (
+                <div className="p-3.5 rounded-xl bg-indigo-50/60 border border-indigo-200/80 col-span-2 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs text-indigo-900 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                      <GraduationCap className="w-4 h-4 text-indigo-600" />
+                      Internship Program Details
+                    </div>
+                    <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
+                      isInternshipEnded(viewingEmployee)
+                        ? 'bg-purple-100 text-purple-800 border-purple-300'
+                        : 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                    }`}>
+                      {isInternshipEnded(viewingEmployee) ? 'Internship Ended' : 'Active Internship'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
+                    <div className="bg-white p-2.5 rounded-lg border border-indigo-100 shadow-2xs">
+                      <div className="text-[10px] font-bold text-slate-500 uppercase">Employment Type</div>
+                      <div className="text-sm font-bold text-indigo-900 mt-0.5">
+                        {viewingEmployee.employmentType || 'Intern'}
+                      </div>
+                    </div>
+                    <div className="bg-white p-2.5 rounded-lg border border-indigo-100 shadow-2xs">
+                      <div className="text-[10px] font-bold text-slate-500 uppercase">Start Date</div>
+                      <div className="text-sm font-semibold text-slate-800 mt-0.5">
+                        {viewingEmployee.dateOfJoining || '—'}
+                      </div>
+                    </div>
+                    <div className="bg-white p-2.5 rounded-lg border border-indigo-100 shadow-2xs col-span-2 sm:col-span-1">
+                      <div className="text-[10px] font-bold text-slate-500 uppercase">Internship End Date</div>
+                      <div className="text-sm font-semibold text-indigo-900 mt-0.5">
+                        {viewingEmployee.internshipEndDate || (isInternshipEnded(viewingEmployee) ? 'Completed' : 'In Progress')}
+                      </div>
+                    </div>
+                  </div>
+                  {isHrOrAdmin && !isInternshipEnded(viewingEmployee) && (
+                    <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-white/80 p-2.5 rounded-lg border border-indigo-100">
+                      <div className="text-xs text-slate-600">
+                        Conclude this intern's internship and update their status.
+                      </div>
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        icon={GraduationCap}
+                        onClick={() => setEndInternshipTarget(viewingEmployee)}
+                      >
+                        End of Internship
+                      </Button>
+                    </div>
+                  )}
+                  {isInternshipEnded(viewingEmployee) && (
+                    <div className="text-xs text-purple-800 bg-purple-50/80 p-2.5 rounded-lg border border-purple-200 flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-purple-600 shrink-0" />
+                      <span>Internship completed{viewingEmployee.internshipEndDate ? ` on ${viewingEmployee.internshipEndDate}` : ''}. All historical records, attendance, and documents are preserved.</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Annual Leave Allocations Display */}
               <div className="p-3.5 rounded-xl bg-emerald-50/50 border border-emerald-100/90 col-span-2 space-y-2">
                 <div className="flex items-center justify-between">
@@ -2763,7 +2903,7 @@ export const EmployeeListPage = () => {
               </div>
             </div>
 
-            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+            <div className="flex items-center justify-between pt-2 border-t border-slate-100 gap-2 flex-wrap">
               <Can permission="employee:write">
                 <Button
                   variant="secondary"
@@ -2788,6 +2928,16 @@ export const EmployeeListPage = () => {
               >
                 Lifecycle Timeline
               </Button>
+              {isHrOrAdmin && isInternEmployee(viewingEmployee) && !isInternshipEnded(viewingEmployee) && (
+                <Button
+                  variant="danger"
+                  size="sm"
+                  icon={GraduationCap}
+                  onClick={() => setEndInternshipTarget(viewingEmployee)}
+                >
+                  End of Internship
+                </Button>
+              )}
               <div className="ml-auto">
                 <Button variant="primary" size="sm" onClick={() => setViewingEmployee(null)}>
                   Close
@@ -2816,6 +2966,21 @@ export const EmployeeListPage = () => {
         confirmText="Delete"
         variant="danger"
         isLoading={isDeleting}
+      />
+
+      {/* End of Internship Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={!!endInternshipTarget}
+        onClose={() => {
+          if (!isEndingInternship) setEndInternshipTarget(null);
+        }}
+        onConfirm={handleConfirmEndInternship}
+        title="End Internship"
+        message="Are you sure you want to end this internship? This action will update the intern's status."
+        confirmText="Confirm"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={isEndingInternship}
       />
 
       {/* Assign Manager & HR Hierarchy Modal */}

@@ -24,6 +24,7 @@ router.get('/:id', authorize('employee:read'), employeeController.getById);
 router.get('/:id/timeline', authorize('employee:read'), employeeController.getTimeline);
 router.post('/', authorize('employee:write'), validate(validateCreateEmployee), employeeController.create);
 router.put('/:id', authorize('employee:write'), validate(validateUpdateEmployee), employeeController.update);
+router.post('/:id/end-internship', authorize('employee:write'), employeeController.endInternship);
 router.delete('/:id', authorize('employee:delete'), employeeController.delete);
 
 export default router;

@@ -158,6 +158,19 @@ export const employeeController = {
   },
 
   /**
+   * POST /api/v1/employees/:id/end-internship
+   * HR / Admin action to officially conclude an internship
+   */
+  async endInternship(req, res, next) {
+    try {
+      const updated = await employeeService.endInternship(req.params.id, req.user, req.body || {});
+      return sendSuccess(res, 'Internship ended successfully.', updated);
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  /**
    * GET /api/v1/employees/:id/timeline
    * Module 1: Comprehensive Employee Lifecycle Timeline
    */

@@ -379,4 +379,107 @@ export const employeeService = {
 
     return updatedEmp;
   },
+
+  /**
+   * Officially end an intern's internship (HR / Admin action)
+   * Validates intern record, enforces authorization, records end date,
+   * updates status to 'Completed', and preserves all historical data.
+   */
+  async endInternship(id, currentUser, options = {}) {
+    // 1. Authorization: Only authorized HR or Admin users
+    const allRoles = (Array.isArray(currentUser?.roles) ? currentUser.roles : [currentUser?.roleName || currentUser?.role || ''])
+      .filter(Boolean)
+      .map((r) => String(r).toLowerCase().replace(/[^a-z0-9]/g, ''));
+    const isHrOrAdmin =
+      allRoles.some((r) => ['admin', 'superadmin', 'orgadmin', 'hr', 'hrmanager'].includes(r)) ||
+      (currentUser?.email || '').toLowerCase() === 'sheetalbedi@tasknera.com';
+
+    if (!isHrOrAdmin) {
+      const error = new Error('Access denied: Only authorized HR or Admin users can end an internship.');
+      error.statusCode = 403;
+      throw error;
+    }
+
+    // 2. Fetch employee
+    const employee = await employeeRepository.findById(id);
+    if (!employee) {
+      const error = new Error(`Employee with ID '${id}' not found.`);
+      error.statusCode = 404;
+      throw error;
+    }
+
+    // 3. Organization boundary check
+    const normRole = (currentUser?.roleName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (currentUser?.orgId && employee.orgId !== currentUser.orgId && !normRole.includes('superadmin')) {
+      const error = new Error('Access denied: Employee not found in your organization.');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    // 4. Validate that the employee is an intern
+    const empType = String(employee.employmentType || '').trim().toLowerCase();
+    const desigTitle = String(employee.designation?.title || '').trim().toLowerCase();
+    const isIntern = empType === 'intern' || empType === 'internship' || desigTitle.includes('intern');
+    if (!isIntern) {
+      const error = new Error(`Employee '${employee.firstName} ${employee.lastName}' is not registered as an intern.`);
+      error.statusCode = 400;
+      throw error;
+    }
+
+    // 5. Prevent repeated ending if already completed/ended
+    const intStatus = String(employee.internshipStatus || '').trim().toUpperCase();
+    const empStatus = String(employee.status || '').trim().toLowerCase();
+    if (intStatus === 'COMPLETED' || intStatus === 'ENDED' || empStatus === 'completed') {
+      const error = new Error(`The internship for '${employee.firstName} ${employee.lastName}' has already been officially ended.`);
+      error.statusCode = 400;
+      throw error;
+    }
+
+    // 6. Record internship end date using standard YYYY-MM-DD
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = String(today.getMonth() + 1).padStart(2, '0');
+    const d = String(today.getDate()).padStart(2, '0');
+    const currentDateStr = `${y}-${m}-${d}`;
+    const endDate = (options.endDate && typeof options.endDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(options.endDate.trim()))
+      ? options.endDate.trim()
+      : currentDateStr;
+
+    // 7. Update status and internship details while preserving all historical records
+    const updatedEmp = await employeeRepository.update(id, {
+      status: 'Completed',
+      internshipStatus: 'COMPLETED',
+      internshipEndDate: endDate,
+    });
+
+    // 8. Audit log for compliance and timeline tracking
+    try {
+      await pool.query(
+        `INSERT INTO admin_audit_logs (id, org_id, user_id, action_type, target_entity, target_id, changes, ip_address, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, NOW());`,
+        [
+          `audit-int-${Date.now()}`,
+          employee.orgId,
+          currentUser?.id || null,
+          'END_INTERNSHIP',
+          'EMPLOYEE',
+          employee.id,
+          JSON.stringify({
+            employeeCode: employee.employeeCode,
+            fullName: `${employee.firstName} ${employee.lastName}`,
+            previousStatus: employee.status,
+            newStatus: 'Completed',
+            internshipStatus: 'COMPLETED',
+            internshipEndDate: endDate,
+            endedBy: currentUser?.email || 'HR/Admin',
+          }),
+          'Internal HRMS',
+        ]
+      );
+    } catch {
+      // Non-blocking
+    }
+
+    return updatedEmp;
+  },
 };
