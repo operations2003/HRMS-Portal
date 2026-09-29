@@ -250,6 +250,9 @@ export const exitService = {
       managerId: query.managerId || null,
       status: query.status || null,
       currentStage: query.currentStage || null,
+      exitType: query.exitType || null,
+      isTermination: query.isTermination === 'true' || query.isTermination === true,
+      search: query.search || null,
       limit: query.limit ? parseInt(query.limit, 10) : 50,
       offset: query.offset ? parseInt(query.offset, 10) : 0,
     });
@@ -1395,5 +1398,270 @@ export const exitService = {
 
   async getAdminStats(currentUser) {
     return exitRepository.getExitStats(currentUser.orgId);
+  },
+
+  // =========================================================================
+  // 12. Company Involuntary Termination Initiation
+  // =========================================================================
+
+  async terminateEmployee(currentUser, data) {
+    if (!this.isHrOrAdmin(currentUser)) {
+      const err = new Error('Access denied: Only HR and Executive Administrators can initiate company terminations.');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    const emp = await employeeRepository.findById(data.employeeId);
+    if (!emp) {
+      const err = new Error(`Employee profile with ID '${data.employeeId}' not found.`);
+      err.statusCode = 404;
+      throw err;
+    }
+
+    if (emp.orgId !== currentUser.orgId) {
+      const err = new Error('Access denied: Employee belongs to another organization.');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    // Safety Guard 1: Prevent terminating self
+    if (emp.userId && emp.userId === currentUser.id) {
+      const err = new Error('Self-termination violation: You cannot terminate your own employee account.');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    // Safety Guard 2: Prevent non-SuperAdmin from terminating SuperAdmin / OrgAdmin / Primary Admin
+    if (emp.userId) {
+      const targetUser = await userRepository.findById(emp.userId);
+      if (targetUser) {
+        const targetRole = (targetUser.roleName || '').toLowerCase();
+        const isTargetAdmin = ['superadmin', 'orgadmin', 'admin'].includes(targetRole);
+        const isCurrentSuper = ['superadmin'].includes((currentUser.roleName || '').toLowerCase());
+        if (isTargetAdmin && !isCurrentSuper) {
+          const err = new Error('Permission denied: Executive and System Administrator accounts can only be terminated by SuperAdmin.');
+          err.statusCode = 403;
+          throw err;
+        }
+      }
+    }
+
+    // Safety Guard 3: Prevent terminating already exited / terminated employees
+    if (emp.status === 'Terminated' || emp.status === 'Exited') {
+      const err = new Error(`Employee profile is already marked as '${emp.status}'.`);
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const isImmediate = data.immediate === true || String(data.timeline).toUpperCase() === 'IMMEDIATE';
+    const noticePeriodDays = isImmediate ? 0 : (data.noticePeriodDays !== undefined && data.noticePeriodDays !== null && data.noticePeriodDays !== '' ? parseInt(data.noticePeriodDays, 10) : 0);
+    const effectiveDate = data.effectiveDate || new Date().toISOString().split('T')[0];
+    const exitType = (data.exitType || 'INVOLUNTARY').toUpperCase();
+    const initialStatus = isImmediate ? 'EXIT_PROCESSING' : 'APPROVED';
+    const currentStage = 'CLEARANCE_IN_PROGRESS';
+    const reasonPrefix = data.terminationCategory ? `[${data.terminationCategory}] ` : '[INVOLUNTARY TERMINATION] ';
+    const fullReason = `${reasonPrefix}${data.reason.trim()}`;
+
+    // Check if there is already an active exit request
+    const existing = await exitRepository.findByEmployeeId(emp.id, currentUser.orgId);
+    let exitRequest;
+
+    if (existing && ['SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'NOTICE_PERIOD', 'EXIT_PROCESSING'].includes(existing.status)) {
+      exitRequest = await exitRepository.update(existing.id, {
+        exitType,
+        reason: fullReason,
+        noticePeriodDays,
+        requestedLastWorkingDay: effectiveDate,
+        approvedLastWorkingDay: effectiveDate,
+        status: initialStatus,
+        currentStage,
+        reviewedBy: currentUser.id,
+        approvedBy: currentUser.id,
+        managerFeedback: `Company termination initiated by ${currentUser.email || 'HR'}. Grounds: ${data.terminationCategory || 'Company Decision'}`,
+        managerReviewedAt: new Date().toISOString(),
+        hrReviewedAt: new Date().toISOString(),
+        hrComments: data.comments || data.hrNotes || 'Company initiated involuntary separation.',
+      });
+    } else {
+      exitRequest = await exitRepository.create({
+        orgId: currentUser.orgId,
+        employeeId: emp.id,
+        resignationDate: new Date().toISOString().split('T')[0],
+        noticePeriodDays,
+        requestedLastWorkingDay: effectiveDate,
+        approvedLastWorkingDay: effectiveDate,
+        exitType,
+        reason: fullReason,
+        comments: data.comments || data.hrNotes || 'Company initiated involuntary separation.',
+        status: initialStatus,
+        currentStage,
+        submittedBy: currentUser.id,
+      });
+
+      // Update approved_by and hr fields
+      exitRequest = await exitRepository.update(exitRequest.id, {
+        approvedBy: currentUser.id,
+        hrReviewedAt: new Date().toISOString(),
+        hrComments: data.comments || data.hrNotes || 'Company initiated involuntary separation.',
+      });
+    }
+
+    // Update Employee Status
+    const newEmpStatus = isImmediate ? 'Terminated' : 'Notice Period';
+    await employeeRepository.update(emp.id, { status: newEmpStatus });
+
+    // Initialize or update employee_offboardings
+    await exitRepository.upsertOffboarding({
+      orgId: currentUser.orgId,
+      exitRequestId: exitRequest.id,
+      employeeId: emp.id,
+      lastWorkingDay: effectiveDate,
+      offboardingStatus: 'CLEARANCES_PENDING',
+      clearanceStatus: 'PENDING',
+      accessRemovalStatus: 'ACTIVE',
+      assetStatus: 'PENDING',
+      hrCompletionStatus: 'IN_PROGRESS',
+      processedBy: currentUser.id,
+      notes: `Termination initiated by ${currentUser.email || 'HR'}. Category: ${data.terminationCategory || 'Company Decision'}`,
+    });
+
+    // Auto-provision clearance tasks if none exist yet
+    const existingClearances = await exitRepository.findClearancesByRequestId(exitRequest.id);
+    if (!existingClearances || existingClearances.length === 0) {
+      const defaultTasks = [
+        {
+          orgId: currentUser.orgId,
+          exitRequestId: exitRequest.id,
+          employeeId: emp.id,
+          checklistCategory: 'ASSETS_RETURNED',
+          departmentScope: 'IT',
+          taskTitle: 'Immediate Laptop, Mobile & Hardware Asset Handover',
+          description: 'Physical inspection and recovery of company issued hardware and accessories.',
+        },
+        {
+          orgId: currentUser.orgId,
+          exitRequestId: exitRequest.id,
+          employeeId: emp.id,
+          checklistCategory: 'IT_ACCESS',
+          departmentScope: 'IT',
+          taskTitle: 'SSO, Cloud, VPN & Email Access Deprovisioning',
+          description: 'Immediate revocation of privileged company credentials, Google Workspace / Microsoft 365, and VPN access.',
+        },
+        {
+          orgId: currentUser.orgId,
+          exitRequestId: exitRequest.id,
+          employeeId: emp.id,
+          checklistCategory: 'GENERAL',
+          departmentScope: 'ADMIN',
+          taskTitle: 'Building Access Card & ID Badge Surrender',
+          description: 'Surrender of facility entry cards, biometric access, and parking decals.',
+        },
+        {
+          orgId: currentUser.orgId,
+          exitRequestId: exitRequest.id,
+          employeeId: emp.id,
+          checklistCategory: 'FINANCE_PAYROLL',
+          departmentScope: 'FINANCE',
+          taskTitle: 'Corporate Card, Expense Claims & Severance Verification',
+          description: 'Reconciliation of corporate card expenses, pending claims, and severance calculation.',
+        },
+        {
+          orgId: currentUser.orgId,
+          exitRequestId: exitRequest.id,
+          employeeId: emp.id,
+          checklistCategory: 'HR_CLEARANCE',
+          departmentScope: 'HR',
+          taskTitle: 'Termination Documentation & Separation Agreement Sign-Off',
+          description: 'Issuance of formal termination notice, release agreement, and severance breakdown.',
+        },
+      ];
+      await exitRepository.createClearanceBatch(defaultTasks);
+    }
+
+    // Record approval workflow instance / action
+    const wfId = `wf-exit-${exitRequest.id}`;
+    const existingWf = await workflowRepository.findByEntity('EXIT_REQUEST', exitRequest.id);
+    if (!existingWf) {
+      await workflowRepository.createWorkflowInstance(
+        {
+          id: wfId,
+          orgId: currentUser.orgId,
+          entityType: 'EXIT_REQUEST',
+          entityId: exitRequest.id,
+          workflowType: 'COMPANY_TERMINATION',
+          currentStage: currentStage,
+          currentStatus: initialStatus,
+          requesterId: emp.id,
+          managerId: emp.managerId || null,
+        },
+        {
+          stage: 'HR_REVIEW',
+          actorUserId: currentUser.id,
+          actorRole: currentUser.roleName || 'HR',
+          action: 'APPROVE',
+          fromStatus: 'ACTIVE',
+          toStatus: initialStatus,
+          comments: `Company termination initiated. Grounds: ${data.terminationCategory || 'Company Decision'}`,
+        }
+      );
+    } else {
+      await workflowRepository.recordAction(existingWf.id, {
+        stage: 'HR_REVIEW',
+        actorUserId: currentUser.id,
+        actorRole: currentUser.roleName || 'HR',
+        action: 'APPROVE',
+        fromStatus: existingWf.currentStatus,
+        toStatus: initialStatus,
+        nextStage: currentStage,
+        comments: `Company termination initiated. Grounds: ${data.terminationCategory || 'Company Decision'}`,
+      });
+    }
+
+    // Severance package recording if specified
+    if (data.severanceAmount !== undefined && data.severanceAmount !== null && data.severanceAmount !== '') {
+      const severance = parseFloat(data.severanceAmount);
+      if (!isNaN(severance) && severance > 0) {
+        await exitRepository.saveFnfSettlement({
+          orgId: currentUser.orgId,
+          exitRequestId: exitRequest.id,
+          employeeId: emp.id,
+          settlementDate: new Date().toISOString().split('T')[0],
+          lastWorkingDay: effectiveDate,
+          otherAllowances: severance,
+          grossPayable: severance,
+          netSettlementAmount: severance,
+          paymentStatus: 'DRAFT',
+          approvalStatus: 'PENDING',
+          notes: `Severance package granted upon involuntary termination: ₹${severance.toLocaleString()}`,
+        });
+      }
+    }
+
+    // If immediate system access revocation requested
+    if (data.revokeAccessImmediately && emp.userId) {
+      try {
+        await this.removeAccess(currentUser, exitRequest.id, {
+          reassignManagerId: data.reassignManagerId || null,
+          comments: `Immediate credentials revocation upon company termination: ${data.reason.trim()}`,
+        });
+      } catch (revErr) {
+        logger.warn('ExitService', `Could not immediately revoke access: ${revErr.message}`);
+      }
+    }
+
+    // Notify employee of termination / separation notice
+    if (emp.userId) {
+      await notificationService
+        .notifyTerminationInitiated({
+          orgId: currentUser.orgId,
+          exitId: exitRequest.id,
+          employeeUserId: emp.userId,
+          effectiveDate,
+          terminationType: exitType,
+        })
+        .catch((e) => logger.warn('ExitService', `Notification error: ${e.message}`));
+    }
+
+    return this.getExitById(currentUser, exitRequest.id);
   },
 };

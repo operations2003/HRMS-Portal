@@ -224,4 +224,12 @@ export const exitService = {
     const res = await http.post(`/v1/exit/requests/${id}/deprovision`, data);
     return res.data;
   },
+
+  /**
+   * Initiate Company Involuntary Employee Termination
+   */
+  async terminateEmployee(data) {
+    const res = await http.post('/v1/exit/terminate', data);
+    return res.data;
+  },
 };

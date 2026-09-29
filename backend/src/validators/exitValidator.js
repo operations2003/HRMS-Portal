@@ -222,3 +222,51 @@ export const validateClearNoticePeriod = (body) => {
   return errors;
 };
 
+export const validateTermination = (body) => {
+  const errors = [];
+
+  if (!body.employeeId || typeof body.employeeId !== 'string' || !body.employeeId.trim()) {
+    errors.push('Employee ID is required.');
+  }
+
+  if (!body.effectiveDate || typeof body.effectiveDate !== 'string' || !dateRegex.test(body.effectiveDate.trim())) {
+    errors.push('Effective termination date is required in YYYY-MM-DD format.');
+  } else {
+    const d = new Date(body.effectiveDate.trim());
+    if (isNaN(d.getTime())) {
+      errors.push('Please provide a valid calendar date for effective date.');
+    }
+  }
+
+  if (!body.reason || typeof body.reason !== 'string' || !body.reason.trim()) {
+    errors.push('Termination justification/reason is required.');
+  } else if (body.reason.trim().length < 5) {
+    errors.push('Reason must be at least 5 characters long.');
+  } else if (body.reason.trim().length > 2000) {
+    errors.push('Reason must not exceed 2000 characters.');
+  }
+
+  if (body.noticePeriodDays !== undefined && body.noticePeriodDays !== null && body.noticePeriodDays !== '') {
+    const days = parseInt(body.noticePeriodDays, 10);
+    if (isNaN(days) || days < 0) {
+      errors.push('Notice period days must be a non-negative integer.');
+    }
+  }
+
+  if (body.severanceAmount !== undefined && body.severanceAmount !== null && body.severanceAmount !== '') {
+    const amt = parseFloat(body.severanceAmount);
+    if (isNaN(amt) || amt < 0) {
+      errors.push('Severance package amount must be a non-negative number.');
+    }
+  }
+
+  if (body.exitType !== undefined && body.exitType !== null && body.exitType !== '') {
+    const validTypes = ['INVOLUNTARY', 'MUTUAL', 'CONTRACT_END', 'VOLUNTARY', 'RETIREMENT'];
+    if (!validTypes.includes(body.exitType.toUpperCase())) {
+      errors.push(`Exit type must be one of: ${validTypes.join(', ')}.`);
+    }
+  }
+
+  return errors;
+};
+

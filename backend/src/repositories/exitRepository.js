@@ -214,7 +214,18 @@ export const exitRepository = {
   /**
    * 4. List exit requests with multi-tenant and manager filtering
    */
-  async findAll({ orgId, employeeId = null, managerId = null, status = null, currentStage = null, limit = 50, offset = 0 } = {}) {
+  async findAll({
+    orgId,
+    employeeId = null,
+    managerId = null,
+    status = null,
+    currentStage = null,
+    exitType = null,
+    isTermination = null,
+    search = null,
+    limit = 50,
+    offset = 0,
+  } = {}) {
     const conditions = ['er.org_id = $1'];
     const params = [orgId];
     let idx = 2;
@@ -237,6 +248,25 @@ export const exitRepository = {
     if (currentStage) {
       conditions.push(`er.current_stage = $${idx++}`);
       params.push(currentStage.toUpperCase());
+    }
+
+    if (exitType) {
+      conditions.push(`er.exit_type = $${idx++}`);
+      params.push(exitType.toUpperCase());
+    } else if (isTermination) {
+      conditions.push(`er.exit_type IN ('INVOLUNTARY', 'MUTUAL', 'CONTRACT_END')`);
+    }
+
+    if (search && search.trim()) {
+      conditions.push(`(
+        e.first_name ILIKE $${idx} OR 
+        e.last_name ILIKE $${idx} OR 
+        e.employee_code ILIKE $${idx} OR 
+        e.email ILIKE $${idx} OR
+        er.reason ILIKE $${idx}
+      )`);
+      params.push(`%${search.trim()}%`);
+      idx++;
     }
 
     const whereClause = conditions.join(' AND ');

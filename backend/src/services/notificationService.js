@@ -580,6 +580,23 @@ export const notificationService = {
       actionUrl: `/exit/${exitId}`,
     });
   },
+
+  /**
+   * 23. Event: Termination Initiated (to Employee)
+   */
+  async notifyTerminationInitiated({ orgId, exitId, employeeUserId, effectiveDate, terminationType }) {
+    if (!employeeUserId) return null;
+    return notificationRepository.create({
+      orgId,
+      userId: employeeUserId,
+      eventType: 'EXIT_APPROVED',
+      title: 'Official Employment Separation Notice',
+      message: `An official separation notice has been issued with effective date ${effectiveDate}. Please review offboarding clearances.`,
+      entityType: 'EXIT_REQUEST',
+      entityId: exitId,
+      actionUrl: `/exit/${exitId}`,
+    });
+  },
 };
 
 export default notificationService;

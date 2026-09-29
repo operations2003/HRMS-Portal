@@ -14,6 +14,7 @@ import {
   validateAccessRemoval,
   validateOffboardingUpdate,
   validateClearNoticePeriod,
+  validateTermination,
 } from '../validators/exitValidator.js';
 
 const router = Router();
@@ -106,6 +107,14 @@ router.post(
   authorize(['exit:admin']),
   validate(validateClearNoticePeriod),
   exitController.clearNoticePeriod
+);
+
+router.post(
+  '/terminate',
+  requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']),
+  authorize(['exit:admin']),
+  validate(validateTermination),
+  exitController.terminateEmployee
 );
 
 // =========================================================================

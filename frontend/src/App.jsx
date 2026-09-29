@@ -28,6 +28,7 @@ import { ResignationPage } from './pages/exit/ResignationPage.jsx';
 import { ExitChecklistPage } from './pages/exit/ExitChecklistPage.jsx';
 import { OffboardingPage } from './pages/exit/OffboardingPage.jsx';
 import { FnFSettlementPage } from './pages/exit/FnFSettlementPage.jsx';
+import { TerminationPage } from './pages/exit/TerminationPage.jsx';
 import { AdminSettingsPage } from './pages/admin/AdminSettingsPage.jsx';
 import { RolesPermissionsPage } from './pages/admin/RolesPermissionsPage.jsx';
 import { TasksPage } from './pages/tasks/TasksPage.jsx';
@@ -374,6 +375,18 @@ export const App = () => {
               <Route
                 path="fnf-settlement"
                 element={<Navigate to="/fnf" replace />}
+              />
+
+              <Route
+                path="termination"
+                element={
+                  <PermissionRoute
+                    roles={['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']}
+                    permission={['exit:admin', 'employee:read']}
+                  >
+                    <TerminationPage />
+                  </PermissionRoute>
+                }
               />
 
               {/* Exit Notification Redirects */}

@@ -300,4 +300,17 @@ export const exitController = {
       next(err);
     }
   },
+
+  /**
+   * POST /api/v1/exit/terminate
+   */
+  async terminateEmployee(req, res, next) {
+    try {
+      const exitRecord = await exitService.terminateEmployee(req.user, req.body);
+      return sendSuccess(res, 'Employee termination initiated successfully.', exitRecord, 201);
+    } catch (err) {
+      if (err.statusCode) return sendError(res, err.message, err.statusCode);
+      next(err);
+    }
+  },
 };
