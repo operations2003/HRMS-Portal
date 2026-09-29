@@ -851,8 +851,67 @@ export const attendanceService = {
     }
 
     const history = await attendanceRepository.findByEmployeeHistory(employee.id, employee.orgId, query);
+
+    // Resolve today's attendance record (or active unclosed session) for punch card
+    let todayRecord = null;
+    try {
+      const tz = employee.timezone || 'Asia/Kolkata';
+      const todayDate = new Date().toLocaleDateString('en-CA', { timeZone: tz });
+      const unclosedList = await attendanceRepository.findActiveUnclosedRecords(employee.orgId);
+      todayRecord = unclosedList.find((r) => r.employeeId === employee.id) || null;
+      if (!todayRecord) {
+        todayRecord = await attendanceRepository.findByEmployeeAndDate(employee.id, todayDate, employee.orgId);
+      }
+    } catch {
+      // Non-blocking
+    }
+
     return {
       ...history,
+      todayRecord,
+      employeeProfile: {
+        id: employee.id,
+        firstName: employee.firstName,
+        lastName: employee.lastName,
+        employeeCode: employee.employeeCode,
+        shiftTiming: employee.shiftTiming || '11:00 AM - 07:00 PM',
+      },
+    };
+  },
+
+  /**
+   * Get authenticated employee's today record and profile
+   */
+  async getMyTodayRecord(user) {
+    const employee = await resolveRequesterEmployee(user);
+    if (!employee) {
+      const error = new Error('No employee profile found for your user account.');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    // Auto-resolve any active unclosed records for this employee that exceeded cutoff
+    try {
+      const unclosed = await attendanceRepository.findActiveUnclosedRecords(employee.orgId);
+      for (const rec of unclosed) {
+        if (rec.employeeId === employee.id) {
+          await checkAndAutoLogoutRecord(rec, employee.shiftTiming);
+        }
+      }
+    } catch {
+      // Non-blocking
+    }
+
+    const tz = employee.timezone || 'Asia/Kolkata';
+    const todayDate = new Date().toLocaleDateString('en-CA', { timeZone: tz });
+    const unclosedList = await attendanceRepository.findActiveUnclosedRecords(employee.orgId);
+    let todayRecord = unclosedList.find((r) => r.employeeId === employee.id) || null;
+    if (!todayRecord) {
+      todayRecord = await attendanceRepository.findByEmployeeAndDate(employee.id, todayDate, employee.orgId);
+    }
+
+    return {
+      record: todayRecord,
       employeeProfile: {
         id: employee.id,
         firstName: employee.firstName,

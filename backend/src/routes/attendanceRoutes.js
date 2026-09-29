@@ -52,6 +52,13 @@ router.get(
   attendanceController.getMyAttendance
 );
 
+// 3a. Employee today attendance API
+router.get(
+  '/my/today',
+  authorize('attendance:read'),
+  attendanceController.getMyTodayAttendance
+);
+
 // 4. Team attendance API (HR and Admin only)
 router.get(
   '/team',

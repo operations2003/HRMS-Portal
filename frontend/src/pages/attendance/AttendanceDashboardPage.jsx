@@ -75,19 +75,46 @@ export const AttendanceDashboardPage = () => {
    */
   const fetchTodayRecord = useCallback(async () => {
     try {
-      const res = await attendanceService.getMyAttendance({ limit: 5 });
+      // 1. Try dedicated today endpoint first
+      const todayRes = await attendanceService.getMyTodayRecord();
+      if (todayRes?.employeeProfile) {
+        setEmployeeProfile(todayRes.employeeProfile);
+      }
+      if (todayRes && todayRes.todayRecord !== undefined) {
+        setTodayRecord(todayRes.todayRecord);
+        return;
+      }
+    } catch {
+      // Non-blocking fallback to getMyAttendance
+    }
+
+    try {
+      // 2. Fallback to getMyAttendance with higher limit and robust matching
+      const res = await attendanceService.getMyAttendance({ limit: 30 });
       if (res?.employeeProfile) {
         setEmployeeProfile(res.employeeProfile);
       }
+      if (res?.todayRecord) {
+        setTodayRecord(res.todayRecord);
+        return;
+      }
+
       const records = res.records || [];
       const localToday = new Date().toLocaleDateString('en-CA'); // "YYYY-MM-DD"
-      const rec =
-        records.find((r) => {
-          if (!r.attendanceDate) return false;
-          const dStr = typeof r.attendanceDate === 'string' ? r.attendanceDate.split('T')[0] : '';
-          return dStr === localToday;
-        }) || (records[0] && !records[0].checkOut ? records[0] : null);
 
+      // Prioritize active unclosed session with check-in (excluding future leaves/holidays)
+      const activeUnclosed = records.find(
+        (r) => r.checkIn && !r.checkOut && r.status !== 'ON_LEAVE' && r.status !== 'HOLIDAY'
+      );
+
+      // Then check for today's record match
+      const todayMatch = records.find((r) => {
+        if (!r.attendanceDate) return false;
+        const dStr = typeof r.attendanceDate === 'string' ? r.attendanceDate.split('T')[0] : '';
+        return dStr === localToday;
+      });
+
+      const rec = activeUnclosed || todayMatch || null;
       setTodayRecord(rec);
     } catch (err) {
       console.warn('Failed to fetch today attendance record:', err);

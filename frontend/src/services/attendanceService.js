@@ -36,6 +36,17 @@ export const attendanceService = {
   },
 
   /**
+   * Get authenticated employee's today record and profile
+   */
+  async getMyTodayRecord() {
+    const res = await http.get('/v1/attendance/my/today');
+    return {
+      todayRecord: res.data || null,
+      employeeProfile: res.meta?.employeeProfile || null,
+    };
+  },
+
+  /**
    * Get authenticated user's own attendance history with stats
    * @param {Object} params - { startDate, endDate, status, page, limit }
    */
@@ -54,6 +65,7 @@ export const attendanceService = {
       statistics: res.meta?.statistics || {},
       pagination: res.meta?.pagination || {},
       employeeProfile: res.meta?.employeeProfile || null,
+      todayRecord: res.meta?.todayRecord || null,
     };
   },
 

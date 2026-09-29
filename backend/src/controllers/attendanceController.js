@@ -81,6 +81,24 @@ export const attendanceController = {
         statistics: result.statistics,
         pagination: result.pagination,
         employeeProfile: result.employeeProfile,
+        todayRecord: result.todayRecord,
+      });
+    } catch (error) {
+      if (error.statusCode) {
+        return sendError(res, error.message, error.statusCode);
+      }
+      next(error);
+    }
+  },
+
+  /**
+   * Fetch authenticated user's today attendance record and profile
+   */
+  async getMyTodayAttendance(req, res, next) {
+    try {
+      const result = await attendanceService.getMyTodayRecord(req.user);
+      return sendSuccess(res, "Today's attendance fetched successfully.", result.record, {
+        employeeProfile: result.employeeProfile,
       });
     } catch (error) {
       if (error.statusCode) {
