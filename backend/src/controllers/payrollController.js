@@ -242,6 +242,10 @@ export const payrollController = {
         return sendError(res, 'No employee record linked to your account.', 404);
       }
 
+      if ((emp.status || '').toLowerCase() !== 'active') {
+        return sendError(res, 'Salary slip and payroll details are only available for active employees.', 403);
+      }
+
       const payrollData = payrollController.calculateSalaryBreakdown(emp);
       return sendSuccess(res, 'Payroll and salary details fetched successfully.', payrollData);
     } catch (error) {
@@ -276,6 +280,7 @@ export const payrollController = {
         LEFT JOIN users u ON e.user_id = u.id OR e.email = u.email
         LEFT JOIN roles r ON u.role_id = r.id
         WHERE ($1::text IS NULL OR e.org_id = $1)
+          AND LOWER(COALESCE(e.status, 'active')) = 'active'
           AND LOWER(COALESCE(r.name, '')) NOT IN ('admin', 'superadmin', 'orgadmin')
           AND LOWER(COALESCE(e.email, '')) != 'sheetalbedi@tasknera.com'
           AND e.id != 'emp-shubham-admin'
@@ -366,6 +371,10 @@ export const payrollController = {
       }
 
       const targetEmp = empRes.rows[0];
+
+      if ((targetEmp.status || '').toLowerCase() !== 'active') {
+        return sendError(res, 'Salary slip and payroll details are only available for active employees.', 404);
+      }
 
       const targetRole = (targetEmp.role_name || '').toLowerCase();
       const isTargetAdmin = targetRole.includes('admin') || targetEmp.email === 'sheetalbedi@tasknera.com' || targetEmp.id === 'emp-shubham-admin';
@@ -643,6 +652,10 @@ export const payrollController = {
       }
 
       const emp = empRes.rows[0];
+
+      if ((emp.status || '').toLowerCase() !== 'active') {
+        return sendError(res, 'Cannot disburse salary to an inactive or exited employee.', 400);
+      }
       const targetRole = (emp.role_name || '').toLowerCase();
       if (targetRole.includes('admin') || emp.email === 'sheetalbedi@tasknera.com') {
         return sendError(res, 'Administrators do not draw an employee salary and cannot be disbursed compensation.', 400);
@@ -717,6 +730,7 @@ export const payrollController = {
          LEFT JOIN users u ON e.user_id = u.id OR e.email = u.email
          LEFT JOIN roles r ON u.role_id = r.id
          WHERE ($1::text IS NULL OR e.org_id = $1)
+           AND LOWER(COALESCE(e.status, 'active')) = 'active'
            AND LOWER(COALESCE(r.name, '')) NOT IN ('admin', 'superadmin', 'orgadmin')
            AND LOWER(COALESCE(e.email, '')) != 'sheetalbedi@tasknera.com'
            AND e.id != 'emp-shubham-admin'

@@ -38,10 +38,12 @@ import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
 import { Alert } from '../../components/common/Alert.jsx';
 import { Modal } from '../../components/common/Modal.jsx';
 import { Input } from '../../components/common/Input.jsx';
+import { useToast } from '../../context/ToastContext.jsx';
 
 export const PayrollPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const toast = useToast();
 
   // Role detection
   const normRole = (user?.roleName || '').toLowerCase();
@@ -119,9 +121,21 @@ export const PayrollPage = () => {
       } else {
         res = await payrollService.getMyPayroll();
       }
+
+      if (res?.employee && (res.employee.status || '').toLowerCase() !== 'active') {
+        setSelectedEmpId(null);
+        setData(null);
+        setError('Salary slip and compensation profile are only available for active employees.');
+        return;
+      }
+
       setData(res);
     } catch (err) {
       console.error('Failed to load payroll details:', err);
+      if (empId) {
+        setSelectedEmpId(null);
+        setData(null);
+      }
       setError(err.message || 'Unable to load payroll and compensation details.');
     } finally {
       setLoading(false);
@@ -152,6 +166,10 @@ export const PayrollPage = () => {
 
   // Handle viewing specific employee structure from org list
   const handleViewEmployeeStructure = (emp) => {
+    if ((emp?.status || '').toLowerCase() !== 'active') {
+      toast.error('Salary slip and compensation details are only available for active employees.');
+      return;
+    }
     setSelectedEmpId(emp.id);
     setActiveTab('structure');
   };
@@ -369,9 +387,11 @@ export const PayrollPage = () => {
 
   const { employee, ctcBreakdown, bankDetails, statutoryDetails, payHistory } = data || {};
 
-  // Filtered employees in org view
+  // Filtered employees in org view (Active members only)
   const filteredEmployees = useMemo(() => {
-    const list = orgPayroll?.employees || [];
+    const list = (orgPayroll?.employees || []).filter(
+      (emp) => (emp.status || '').toLowerCase() === 'active'
+    );
     return list.filter((emp) => {
       const matchesSearch =
         !searchTerm ||
@@ -384,9 +404,11 @@ export const PayrollPage = () => {
     });
   }, [orgPayroll, searchTerm, selectedDept]);
 
-  // Unique departments for filter
+  // Unique departments for filter (Active members only)
   const departments = useMemo(() => {
-    const list = orgPayroll?.employees || [];
+    const list = (orgPayroll?.employees || []).filter(
+      (emp) => (emp.status || '').toLowerCase() === 'active'
+    );
     const set = new Set(list.map((e) => e.department).filter(Boolean));
     return Array.from(set);
   }, [orgPayroll]);
@@ -886,11 +908,13 @@ export const PayrollPage = () => {
                   <option value="">
                     {isCeoOrAdmin ? '-- Select Staff to Inspect --' : 'My Own Salary Profile'}
                   </option>
-                  {orgPayroll?.employees?.map((emp) => (
-                    <option key={emp.id} value={emp.id}>
-                      [{emp.employeeCode}] {emp.fullName} ({emp.role})
-                    </option>
-                  ))}
+                  {(orgPayroll?.employees || [])
+                    .filter((emp) => (emp.status || '').toLowerCase() === 'active')
+                    .map((emp) => (
+                      <option key={emp.id} value={emp.id}>
+                        [{emp.employeeCode}] {emp.fullName} ({emp.role})
+                      </option>
+                    ))}
                 </select>
 
                 {(isCeoOrAdmin || isHr) && employee && selectedEmpId && (
@@ -965,11 +989,13 @@ export const PayrollPage = () => {
                     Select an Employee to Inspect or Assign Salary
                   </h3>
                   <span className="text-xs text-slate-400">
-                    {orgPayroll?.employees?.length || 0} Salaried Staff Members
+                    {(orgPayroll?.employees || []).filter((emp) => (emp.status || '').toLowerCase() === 'active').length} Salaried Staff Members
                   </span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {orgPayroll?.employees?.map((emp) => (
+                  {(orgPayroll?.employees || [])
+                    .filter((emp) => (emp.status || '').toLowerCase() === 'active')
+                    .map((emp) => (
                     <div
                       key={emp.id}
                       onClick={() => handleViewEmployeeStructure(emp)}
