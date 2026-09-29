@@ -122,13 +122,6 @@ export const PayrollPage = () => {
         res = await payrollService.getMyPayroll();
       }
 
-      if (res?.employee && (res.employee.status || '').toLowerCase() !== 'active') {
-        setSelectedEmpId(null);
-        setData(null);
-        setError('Salary slip and compensation profile are only available for active employees.');
-        return;
-      }
-
       setData(res);
     } catch (err) {
       console.error('Failed to load payroll details:', err);
@@ -166,10 +159,6 @@ export const PayrollPage = () => {
 
   // Handle viewing specific employee structure from org list
   const handleViewEmployeeStructure = (emp) => {
-    if ((emp?.status || '').toLowerCase() !== 'active') {
-      toast.error('Salary slip and compensation details are only available for active employees.');
-      return;
-    }
     setSelectedEmpId(emp.id);
     setActiveTab('structure');
   };
