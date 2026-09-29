@@ -88,10 +88,10 @@ router.put(
   attendanceController.regularize
 );
 
-// 8. Add Shift Remark (Tag as OT, Mistake, or Emergency) (Employee, Manager, HR, Admin)
+// 8. Add Shift Remark (Tag as OT, Mistake, or Emergency) (HR and Admin only)
 router.put(
   '/:id/remark',
-  requireRoles(['Employee', 'Manager', 'HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin']),
+  requireRoles(['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin']),
   validate(validateShiftRemark),
   attendanceController.addShiftRemark
 );

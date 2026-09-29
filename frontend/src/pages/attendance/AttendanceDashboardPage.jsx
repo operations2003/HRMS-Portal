@@ -31,7 +31,8 @@ export const AttendanceDashboardPage = () => {
   // Role permissions: Only HR and Admin can see the whole organization's attendance
   const canViewOrg = hasRole(['HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin']);
   const canEditTiming = hasRole(['HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin', 'Manager']) || hasPermission('attendance:regularize');
-  const canRemark = true; // All authenticated roles can tag/review (employees for their own sessions, managers/HR/admin for team/org)
+  // Tagging / remark option is restricted to HR Manager and Admin only (not employees or managers)
+  const canRemark = hasRole(['HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin']);
 
   // Active view tab: Admin and HR default to 'org', Managers and Employees only have 'my'
   const [activeTab, setActiveTab] = useState(() => (canViewOrg ? 'org' : 'my'));
@@ -397,10 +398,14 @@ export const AttendanceDashboardPage = () => {
         isOpen={Boolean(selectedDetailRecord)}
         onClose={() => setSelectedDetailRecord(null)}
         record={selectedDetailRecord}
-        onAddRemark={(rec) => {
-          setSelectedDetailRecord(null);
-          setSelectedRemarkRecord(rec);
-        }}
+        onAddRemark={
+          canRemark
+            ? (rec) => {
+                setSelectedDetailRecord(null);
+                setSelectedRemarkRecord(rec);
+              }
+            : undefined
+        }
         canRemark={canRemark}
         onEditTiming={(rec) => {
           setSelectedDetailRecord(null);
@@ -409,18 +414,20 @@ export const AttendanceDashboardPage = () => {
         canEditTiming={canEditTiming}
       />
 
-      {/* Attendance Remark Modal (Emergency vs OT for 10h+ Post-Shift) */}
-      <AttendanceRemarkModal
-        isOpen={Boolean(selectedRemarkRecord)}
-        onClose={() => setSelectedRemarkRecord(null)}
-        record={selectedRemarkRecord}
-        onSuccess={(updated) => {
-          fetchTableData(pagination?.page || 1);
-          if (todayRecord && todayRecord.id === updated.id) {
-            setTodayRecord(updated);
-          }
-        }}
-      />
+      {/* Attendance Remark Modal (Emergency vs OT for 10h+ Post-Shift) - HR & Admin only */}
+      {canRemark && (
+        <AttendanceRemarkModal
+          isOpen={Boolean(selectedRemarkRecord)}
+          onClose={() => setSelectedRemarkRecord(null)}
+          record={selectedRemarkRecord}
+          onSuccess={(updated) => {
+            fetchTableData(pagination?.page || 1);
+            if (todayRecord && todayRecord.id === updated.id) {
+              setTodayRecord(updated);
+            }
+          }}
+        />
+      )}
 
       {/* Attendance Timing Adjustment Modal (for Late Arrival / Technical Issues) */}
       <EditAttendanceTimingModal

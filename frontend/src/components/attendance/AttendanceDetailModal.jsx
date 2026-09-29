@@ -271,19 +271,21 @@ export const AttendanceDetailModal = ({
                   )}
                 </div>
 
-                <Button
-                  variant={isEmergency || isOT || isMistake ? 'secondary' : 'primary'}
-                  size="sm"
-                  icon={Tag}
-                  className={
-                    !isEmergency && !isOT && !isMistake
-                      ? '!bg-amber-600 hover:!bg-amber-700 text-white !py-1 !px-2.5 !text-xs shadow-xs'
-                      : '!py-1 !px-2.5 !text-xs'
-                  }
-                  onClick={() => onAddRemark && onAddRemark(record)}
-                >
-                  {isEmergency || isOT || isMistake ? 'Change Tag' : 'Tag as OT / Mistake'}
-                </Button>
+                {canRemark && (
+                  <Button
+                    variant={isEmergency || isOT || isMistake ? 'secondary' : 'primary'}
+                    size="sm"
+                    icon={Tag}
+                    className={
+                      !isEmergency && !isOT && !isMistake
+                        ? '!bg-amber-600 hover:!bg-amber-700 text-white !py-1 !px-2.5 !text-xs shadow-xs'
+                        : '!py-1 !px-2.5 !text-xs'
+                    }
+                    onClick={() => onAddRemark && onAddRemark(record)}
+                  >
+                    {isEmergency || isOT || isMistake ? 'Change Tag' : 'Tag as OT / Mistake'}
+                  </Button>
+                )}
               </div>
 
               <div className="text-xs space-y-1.5">

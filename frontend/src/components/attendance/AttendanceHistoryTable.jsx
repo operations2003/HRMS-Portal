@@ -376,15 +376,25 @@ export const AttendanceHistoryTable = ({
                   <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 flex-wrap">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       {remarkInfo.isPending && (
-                        <button
-                          type="button"
-                          onClick={() => onAddRemark && onAddRemark(row)}
-                          title="Click to Tag as OT or Mistake"
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 hover:bg-amber-200 text-amber-800 border border-amber-300 transition-all cursor-pointer shadow-2xs"
-                        >
-                          <AlertTriangle className="w-2.5 h-2.5 text-amber-600" />
-                          Review Needed
-                        </button>
+                        canRemark ? (
+                          <button
+                            type="button"
+                            onClick={() => onAddRemark && onAddRemark(row)}
+                            title="Click to Tag as OT or Mistake"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 hover:bg-amber-200 text-amber-800 border border-amber-300 transition-all cursor-pointer shadow-2xs"
+                          >
+                            <AlertTriangle className="w-2.5 h-2.5 text-amber-600" />
+                            Review Needed
+                          </button>
+                        ) : (
+                          <span
+                            title="Session exceeded shift hours. Under HR/Admin review."
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300"
+                          >
+                            <AlertTriangle className="w-2.5 h-2.5 text-amber-600" />
+                            Review Needed
+                          </span>
+                        )
                       )}
                       {remarkInfo.isOT && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
@@ -422,7 +432,7 @@ export const AttendanceHistoryTable = ({
                           {row.status === 'LATE' ? 'Adjust Late Arrival' : 'Edit Timing'}
                         </Button>
                       )}
-                      {(remarkInfo.isPending || remarkInfo.hasRemark || ot > 0) && (
+                      {canRemark && (remarkInfo.isPending || remarkInfo.hasRemark || ot > 0) && (
                         <Button
                           variant={remarkInfo.isPending ? 'primary' : 'secondary'}
                           size="sm"
@@ -564,15 +574,25 @@ export const AttendanceHistoryTable = ({
                             </span>
                           )}
                           {remarkInfo.isPending && (
-                            <button
-                              type="button"
-                              onClick={() => onAddRemark && onAddRemark(row)}
-                              title="Session exceeded shift hours. Click to Tag as OT or Mistake"
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 hover:bg-amber-200 text-amber-800 border border-amber-300 transition-all cursor-pointer shadow-2xs"
-                            >
-                              <AlertTriangle className="w-3 h-3 text-amber-600" />
-                              Review Needed
-                            </button>
+                            canRemark ? (
+                              <button
+                                type="button"
+                                onClick={() => onAddRemark && onAddRemark(row)}
+                                title="Session exceeded shift hours. Click to Tag as OT or Mistake"
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 hover:bg-amber-200 text-amber-800 border border-amber-300 transition-all cursor-pointer shadow-2xs"
+                              >
+                                <AlertTriangle className="w-3 h-3 text-amber-600" />
+                                Review Needed
+                              </button>
+                            ) : (
+                              <span
+                                title="Session exceeded shift hours. Under HR/Admin review."
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300"
+                              >
+                                <AlertTriangle className="w-3 h-3 text-amber-600" />
+                                Review Needed
+                              </span>
+                            )
                           )}
                           {remarkInfo.isOT && (
                             <span
@@ -676,7 +696,7 @@ export const AttendanceHistoryTable = ({
                               {row.status === 'LATE' ? 'Adjust Late Arrival' : 'Edit Timing'}
                             </Button>
                           )}
-                          {(remarkInfo.isPending || remarkInfo.hasRemark || ot > 0) && (
+                          {canRemark && (remarkInfo.isPending || remarkInfo.hasRemark || ot > 0) && (
                             <Button
                               variant={remarkInfo.isPending ? 'primary' : 'secondary'}
                               size="sm"

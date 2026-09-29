@@ -1103,9 +1103,9 @@ export const attendanceService = {
     }
 
     const normRole = normalizeRole(user.roleName);
-    const allowedRoles = ['admin', 'hr', 'manager', 'superadmin', 'hrmanager', 'orgadmin', 'employee'];
+    const allowedRoles = ['admin', 'hr', 'superadmin', 'hrmanager', 'orgadmin'];
     if (!allowedRoles.includes(normRole)) {
-      const error = new Error('Access denied: Unauthorized role to submit shift remarks.');
+      const error = new Error('Access denied: Only HR managers and administrators can tag or review shift remarks.');
       error.statusCode = 403;
       throw error;
     }
@@ -1115,28 +1115,6 @@ export const attendanceService = {
       const error = new Error('Access denied: Attendance record belongs to a different organization.');
       error.statusCode = 403;
       throw error;
-    }
-
-    // Employee boundary check: can tag their own record
-    if (normRole === 'employee') {
-      const emp = await resolveRequesterEmployee(user);
-      if (!emp || emp.id !== record.employeeId) {
-        const error = new Error('Access denied: Employees can only tag their own attendance records.');
-        error.statusCode = 403;
-        throw error;
-      }
-    }
-
-    // Manager boundary check: can remark only department members or own record
-    if (normRole === 'manager') {
-      const managerEmp = await resolveRequesterEmployee(user);
-      const isOwnRecord = managerEmp && managerEmp.id === record.employeeId;
-      const isDeptMember = managerEmp && managerEmp.deptId && record.employee && record.employee.deptId === managerEmp.deptId;
-      if (!isOwnRecord && !isDeptMember) {
-        const error = new Error('Access denied: Managers can only add remarks for members in their department or their own records.');
-        error.statusCode = 403;
-        throw error;
-      }
     }
 
     const typeNormalized = (remarkType || '').trim().toUpperCase();
