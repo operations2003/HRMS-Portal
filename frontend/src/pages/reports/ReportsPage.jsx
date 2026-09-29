@@ -1424,7 +1424,7 @@ export const ReportsPage = () => {
                 : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-50'
                 }`}
             >
-              Appraisal Evaluation Form
+              Performance Review Form
             </button>
             <button
               type="button"
@@ -1623,12 +1623,12 @@ export const ReportsPage = () => {
               <div className="space-y-1">
                 <h3 className="text-base font-bold text-slate-800 dark:text-white">No Performance Reports Sent Yet</h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
-                  When you evaluate and dispatch appraisal reports from the Appraisal Evaluation Form, they will appear here neatly grouped under each employee's directory entry.
+                  When you evaluate and dispatch performance review reports from the Performance Review Form, they will appear here neatly grouped under each employee's directory entry.
                 </p>
               </div>
               <div className="pt-2">
                 <Button size="sm" variant="primary" onClick={() => setReviewerSubTab('form')}>
-                  Go to Appraisal Form
+                  Go to Review Form
                 </Button>
               </div>
             </div>
@@ -1950,11 +1950,11 @@ export const ReportsPage = () => {
                     Official Performance Records
                   </span>
                   <span className="text-xs text-slate-400 font-medium">
-                    {myReports.length} {myReports.length === 1 ? 'Appraisal Report' : 'Appraisal Reports'} Delivered
+                    {myReports.length} {myReports.length === 1 ? 'Performance Review Report' : 'Performance Review Reports'} Delivered
                   </span>
                 </div>
                 <h2 className="font-display text-2xl sm:text-3xl font-black tracking-tight text-white">
-                  My Delivered Performance Appraisals
+                  My Delivered Performance Review Reports
                 </h2>
                 <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
                   Official evaluation records, competency calibration ratings, and career progression documentation delivered by management. Download your executive PDF report directly below.
@@ -2005,7 +2005,7 @@ export const ReportsPage = () => {
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
                 <FileText className="w-4 h-4 text-brand-600" />
-                Delivered Performance Appraisals ({myReports.length})
+                Delivered Performance Review Reports ({myReports.length})
               </h3>
               <span className="text-xs text-slate-500 dark:text-slate-400">
                 Click Download PDF on any report below

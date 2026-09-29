@@ -93,13 +93,13 @@ export const publishedReportService = {
           orgId,
           userId: employeeUserId,
           eventType: 'GENERAL_ALERT',
-          title: 'Official Performance Appraisal Report Published',
-          message: `Your performance appraisal report for ${reviewPeriod || 'the review cycle'} has been finalized and authorized by ${reportData.ceoName || "Sheetal Bedi"}. Average Rating: ${Number(averageScore).toFixed(1)}/5.0 (${overallRating}). You can view and download your signed report in Performance Reports.`,
+          title: 'Official Performance Review Report Published',
+          message: `Your performance review report for ${reviewPeriod || 'the review cycle'} has been finalized and authorized by ${reportData.ceoName || "Sheetal Bedi"}. Average Rating: ${Number(averageScore).toFixed(1)}/5.0 (${overallRating}). You can view and download your signed report in Performance Reports.`,
           entityType: 'PERFORMANCE_REPORT',
           entityId: saved.id,
           actionUrl: '/reports',
         });
-        logger.info('PublishedReportService', `Dispatched appraisal notification to user ${employeeUserId} for report ${saved.id}`);
+        logger.info('PublishedReportService', `Dispatched performance review report notification to user ${employeeUserId} for report ${saved.id}`);
       } catch (notifErr) {
         logger.warn('PublishedReportService', `Failed to deliver notification to user ${employeeUserId}: ${notifErr.message}`);
       }
@@ -211,8 +211,8 @@ export const publishedReportService = {
           orgId,
           userId: updated.employeeUserId,
           eventType: 'GENERAL_ALERT',
-          title: 'Performance Appraisal Report Updated',
-          message: `Your performance appraisal report for ${updated.reviewPeriod || 'the review cycle'} has been updated by management. Rating: ${Number(updated.averageScore).toFixed(1)}/5.0 (${updated.overallRating}).`,
+          title: 'Performance Review Report Updated',
+          message: `Your performance review report for ${updated.reviewPeriod || 'the review cycle'} has been updated by management. Rating: ${Number(updated.averageScore).toFixed(1)}/5.0 (${updated.overallRating}).`,
           entityType: 'PERFORMANCE_REPORT',
           entityId: updated.id,
           actionUrl: '/reports',
