@@ -242,10 +242,6 @@ export const payrollController = {
         return sendError(res, 'No employee record linked to your account.', 404);
       }
 
-      if ((emp.status || '').toLowerCase() !== 'active') {
-        return sendError(res, 'Salary slip and payroll details are only available for active employees.', 403);
-      }
-
       const payrollData = payrollController.calculateSalaryBreakdown(emp);
       return sendSuccess(res, 'Payroll and salary details fetched successfully.', payrollData);
     } catch (error) {
@@ -371,10 +367,6 @@ export const payrollController = {
       }
 
       const targetEmp = empRes.rows[0];
-
-      if ((targetEmp.status || '').toLowerCase() !== 'active') {
-        return sendError(res, 'Salary slip and payroll details are only available for active employees.', 404);
-      }
 
       const targetRole = (targetEmp.role_name || '').toLowerCase();
       const isTargetAdmin = targetRole.includes('admin') || targetEmp.email === 'sheetalbedi@tasknera.com' || targetEmp.id === 'emp-shubham-admin';
