@@ -427,7 +427,10 @@ export const leaveRepository = {
    * Find team leaves for department manager or direct reports manager
    */
   async findTeamLeaves(deptId, orgId, { status = '', search = '', startDate = '', endDate = '', page = 1, limit = 20, managerId = null } = {}) {
-    const conditions = ['lr.org_id = $1'];
+    const conditions = [
+      'lr.org_id = $1',
+      "(e.status IS NULL OR UPPER(e.status) NOT IN ('INACTIVE', 'TERMINATED', 'EXITED', 'SUSPENDED', 'ARCHIVED'))",
+    ];
     const values = [orgId];
     let paramIndex = 2;
 
@@ -516,7 +519,10 @@ export const leaveRepository = {
    * Get real-time KPI statistics for team or organization leaves
    */
   async getTeamLeaveStats(deptId, orgId, { managerId = null } = {}) {
-    const conditions = ['lr.org_id = $1'];
+    const conditions = [
+      'lr.org_id = $1',
+      "(e.status IS NULL OR UPPER(e.status) NOT IN ('INACTIVE', 'TERMINATED', 'EXITED', 'SUSPENDED', 'ARCHIVED'))",
+    ];
     const values = [orgId];
     let paramIndex = 2;
 
@@ -569,7 +575,10 @@ export const leaveRepository = {
    * Find organization-wide leaves for HR and Admin
    */
   async findAllOrgLeaves(orgId, { status = '', deptId = '', leaveTypeId = '', search = '', startDate = '', endDate = '', page = 1, limit = 20 } = {}) {
-    const conditions = ['lr.org_id = $1'];
+    const conditions = [
+      'lr.org_id = $1',
+      "(e.status IS NULL OR UPPER(e.status) NOT IN ('INACTIVE', 'TERMINATED', 'EXITED', 'SUSPENDED', 'ARCHIVED'))",
+    ];
     const values = [orgId];
     let paramIndex = 2;
 
@@ -952,6 +961,7 @@ export const leaveRepository = {
         e.last_name,
         e.email,
         e.gender,
+        e.status,
         e.avatar_url,
         d.name AS department_name,
         desig.title AS designation_title,
@@ -973,9 +983,12 @@ export const leaveRepository = {
       FROM employees e
       LEFT JOIN departments d ON e.dept_id = d.id
       LEFT JOIN designations desig ON e.desig_id = desig.id
+      LEFT JOIN users u ON u.id = e.user_id
       LEFT JOIN leave_balances lb ON lb.employee_id = e.id AND lb.year = $2
       LEFT JOIN leave_types lt ON lt.id = lb.leave_type_id AND lt.status = 'Active'
-      WHERE e.org_id = $1 AND (e.status IS NULL OR UPPER(e.status) != 'TERMINATED')
+      WHERE e.org_id = $1 
+        AND (e.status IS NULL OR UPPER(e.status) NOT IN ('TERMINATED', 'INACTIVE', 'EXITED', 'SUSPENDED', 'ARCHIVED'))
+        AND (u.status IS NULL OR UPPER(u.status) NOT IN ('INACTIVE', 'SUSPENDED', 'TERMINATED'))
       GROUP BY e.id, d.name, desig.title
       ORDER BY e.first_name ASC, e.last_name ASC;
     `;

@@ -4,6 +4,7 @@ import { adminRepository } from '../repositories/adminRepository.js';
 import { orgRepository } from '../repositories/orgRepository.js';
 import { userService } from './userService.js';
 import { hashPassword } from '../utils/passwordUtils.js';
+import { pool } from '../config/db.js';
 
 /**
  * Remove sensitive passwordHash from user object
@@ -195,6 +196,17 @@ export const adminService = {
 
     const previousValue = { status: existing.status };
     const updated = await userRepository.update(userId, { status });
+
+    // Sync corresponding employee profile status
+    try {
+      if (status === 'Inactive') {
+        await pool.query("UPDATE employees SET status = 'Inactive', updated_at = NOW() WHERE user_id = $1;", [userId]);
+      } else if (status === 'Active') {
+        await pool.query("UPDATE employees SET status = 'Active', updated_at = NOW() WHERE user_id = $1 AND status = 'Inactive';", [userId]);
+      }
+    } catch (err) {
+      console.warn('Failed to sync employee status during user status update:', err.message);
+    }
 
     // 3. Audit log status change
     await adminRepository.recordAuditLog({

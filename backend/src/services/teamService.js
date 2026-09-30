@@ -207,9 +207,9 @@ export const teamService = {
     let members = [];
     if (targetManagerId) {
       members = await employeeRepository.findDirectReports(targetManagerId, currentUser.orgId);
-      // Filter out deprovisioned/exited team members from active manager roster unless explicitly requested
+      // Filter out inactive/deprovisioned/exited team members from active manager roster unless explicitly requested
       if (!status) {
-        members = members.filter((m) => !['exited', 'terminated'].includes((m.status || '').toLowerCase()));
+        members = members.filter((m) => !['inactive', 'exited', 'terminated', 'suspended', 'archived'].includes((m.status || '').toLowerCase()));
       }
     } else if (isHrAdmin) {
       // Organization-wide team roster
@@ -220,7 +220,10 @@ export const teamService = {
         limit: 100,
         page: 1,
       });
-      members = result.employees || [];
+      members = (result.employees || []).filter((m) => {
+        if (status) return true;
+        return !['inactive', 'exited', 'terminated', 'suspended', 'archived'].includes((m.status || '').toLowerCase());
+      });
     }
 
     // Filter search

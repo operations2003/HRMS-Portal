@@ -157,11 +157,17 @@ export const ApplyLeaveModal = ({
           } else if (Array.isArray(res?.items)) {
             list = res.items;
           }
-          setTeamMembers(list);
+
+          // Filter out inactive / terminated / exited employees
+          const activeList = list.filter((emp) => {
+            const s = (emp.status || emp.user?.status || '').toUpperCase();
+            return !['INACTIVE', 'TERMINATED', 'EXITED', 'SUSPENDED', 'ARCHIVED'].includes(s);
+          });
+          setTeamMembers(activeList);
           if (initialEmployeeId) {
             setTargetEmployeeId(initialEmployeeId);
-          } else if (isAdminOrCeo && list.length > 0 && (!targetEmployeeId || targetEmployeeId === 'SELF')) {
-            setTargetEmployeeId(list[0].id);
+          } else if (isAdminOrCeo && activeList.length > 0 && (!targetEmployeeId || targetEmployeeId === 'SELF')) {
+            setTargetEmployeeId(activeList[0].id);
           }
         })
         .catch((err) => {

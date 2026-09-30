@@ -287,7 +287,9 @@ export const managerService = {
     }
 
     if (status && status.trim()) {
-      members = members.filter((m) => m.status.toLowerCase() === status.trim().toLowerCase());
+      members = members.filter((m) => (m.status || '').toLowerCase() === status.trim().toLowerCase());
+    } else {
+      members = members.filter((m) => !['inactive', 'exited', 'terminated', 'suspended', 'archived'].includes((m.status || '').toLowerCase()));
     }
 
     return members;

@@ -67,7 +67,12 @@ export const EmployeeLeaveBalancesViewer = ({ onAssignLeave }) => {
         : Array.isArray(res)
         ? res
         : [];
-      setEmployees(list);
+      // Filter out inactive employees
+      const activeList = list.filter((emp) => {
+        const s = (emp.status || emp.user?.status || '').toUpperCase();
+        return !['INACTIVE', 'TERMINATED', 'EXITED', 'SUSPENDED', 'ARCHIVED'].includes(s);
+      });
+      setEmployees(activeList);
     } catch (err) {
       console.error('Failed to load employees for leave balance viewer:', err);
       toast.showError?.(err.message || 'Failed to load employee list.');
@@ -155,11 +160,16 @@ export const EmployeeLeaveBalancesViewer = ({ onAssignLeave }) => {
     return fromEmpList || null;
   }, [inspectingEmployeeId, employees, allBalances]);
 
-  // Filtered all balances table
+  // Filtered all balances table (excludes inactive employees)
   const filteredAllBalances = useMemo(() => {
-    if (!allTableSearch.trim()) return allBalances;
+    const activeOnly = allBalances.filter((item) => {
+      const s = (item.status || item.user_status || '').toUpperCase();
+      return !['INACTIVE', 'TERMINATED', 'EXITED', 'SUSPENDED', 'ARCHIVED'].includes(s);
+    });
+
+    if (!allTableSearch.trim()) return activeOnly;
     const q = allTableSearch.toLowerCase();
-    return allBalances.filter((item) => {
+    return activeOnly.filter((item) => {
       const name = `${item.first_name || ''} ${item.last_name || ''}`.toLowerCase();
       const code = (item.employee_code || '').toLowerCase();
       const dept = (item.department_name || '').toLowerCase();
