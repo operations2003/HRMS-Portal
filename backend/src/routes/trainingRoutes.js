@@ -4,13 +4,27 @@ import { trainingController } from '../controllers/trainingController.js';
 import { authenticate } from '../middleware/authMiddleware.js';
 import { authorizeTrainingManager } from '../middleware/rbacMiddleware.js';
 
+import { sendError } from '../utils/apiResponse.js';
+
 const router = Router();
 
 const storage = multer.memoryStorage();
-const uploadCertificateFile = multer({
+const uploadSingleCertificate = multer({
   storage,
   limits: { fileSize: 25 * 1024 * 1024 }, // 25MB
 }).single('file');
+
+const uploadCertificateFile = (req, res, next) => {
+  uploadSingleCertificate(req, res, (err) => {
+    if (err) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return sendError(res, 'Certificate file exceeds maximum limit of 25MB.', 400);
+      }
+      return sendError(res, `Certificate upload error: ${err.message}`, 400);
+    }
+    next();
+  });
+};
 
 router.use(authenticate);
 

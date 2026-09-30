@@ -759,18 +759,20 @@ export const trainingService = {
 
     // Dispatch in-app notification to the employee
     try {
-      await notificationService.createNotification({
-        orgId,
-        recipientId: emp.user_id || emp.id,
-        recipientType: 'USER',
-        title: `New Certificate Issued: ${courseTitle}`,
-        message: `Congratulations! Your certificate for "${courseTitle}" has been issued by the L&D team and is ready for download in your Learning & Development section.`,
-        eventType: 'CERTIFICATE_ISSUED',
-        actionUrl: '/performance/training?tab=certifications',
-        metadata: { certificateId: certId, courseTitle, issueDate },
-      });
-    } catch {
-      // Non-blocking notification
+      if (emp.user_id) {
+        await notificationService.createNotification({
+          orgId,
+          userId: emp.user_id,
+          title: `New Certificate Issued: ${courseTitle}`,
+          message: `Congratulations! Your certificate for "${courseTitle}" has been issued by the L&D team and is ready for download in your Learning & Development section.`,
+          eventType: 'CERTIFICATE_ISSUED',
+          entityType: 'CERTIFICATE',
+          entityId: certId,
+          actionUrl: '/performance/training?tab=certifications',
+        });
+      }
+    } catch (notifErr) {
+      console.warn('Failed to send certificate notification:', notifErr.message);
     }
 
     return res.rows[0];

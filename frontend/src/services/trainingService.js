@@ -19,9 +19,7 @@ export const trainingService = {
   getCertificates: (params) => http.get('/v1/training/certificates', { params }),
   uploadCertificate: (data) => {
     if (data instanceof FormData) {
-      return http.post('/v1/training/certificates', data, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      return http.upload('/v1/training/certificates', data);
     }
     return http.post('/v1/training/certificates', data);
   },
