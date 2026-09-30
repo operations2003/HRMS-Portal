@@ -5,25 +5,18 @@ import {
   Users,
   RefreshCw,
   PieChart,
-  CheckCircle2,
-  Clock,
-  AlertCircle,
   Calendar,
   Layers,
-  ChevronRight,
-  User,
   ShieldCheck,
-  Building,
-  Briefcase,
-  ArrowRight,
+  Eye,
 } from 'lucide-react';
 import { leaveService } from '../../services/leaveService.js';
 import { employeeService } from '../../services/employeeService.js';
 import { useToast } from '../../context/ToastContext.jsx';
 import { Avatar } from '../common/Avatar.jsx';
-import { Badge } from '../common/Badge.jsx';
 import { Button } from '../common/Button.jsx';
 import { LoadingSpinner } from '../common/LoadingSpinner.jsx';
+import { Modal } from '../common/Modal.jsx';
 import { ApplyLeaveModal } from './ApplyLeaveModal.jsx';
 
 export const EmployeeLeaveBalancesViewer = ({ onAssignLeave }) => {
@@ -32,9 +25,10 @@ export const EmployeeLeaveBalancesViewer = ({ onAssignLeave }) => {
 
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [employees, setEmployees] = useState([]);
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
   const [loadingEmployees, setLoadingEmployees] = useState(true);
+
+  // Inspected employee state (opens modal when set)
+  const [inspectingEmployeeId, setInspectingEmployeeId] = useState(null);
 
   // Local fallback assign modal state
   const [localAssignEmpId, setLocalAssignEmpId] = useState(null);
@@ -74,18 +68,15 @@ export const EmployeeLeaveBalancesViewer = ({ onAssignLeave }) => {
         ? res
         : [];
       setEmployees(list);
-      if (list.length > 0 && !selectedEmployeeId) {
-        setSelectedEmployeeId(list[0].id);
-      }
     } catch (err) {
       console.error('Failed to load employees for leave balance viewer:', err);
       toast.showError?.(err.message || 'Failed to load employee list.');
     } finally {
       setLoadingEmployees(false);
     }
-  }, [selectedEmployeeId, toast]);
+  }, [toast]);
 
-  // 2. Fetch selected employee's balances
+  // 2. Fetch selected/inspected employee's balances
   const fetchEmployeeBalances = useCallback(async (empId, year) => {
     if (!empId) return;
     try {
@@ -121,28 +112,48 @@ export const EmployeeLeaveBalancesViewer = ({ onAssignLeave }) => {
     fetchAllBalances(selectedYear);
   }, [fetchEmployees, fetchAllBalances, selectedYear]);
 
+  // When an employee is chosen for inspection, fetch their balances
   useEffect(() => {
-    if (selectedEmployeeId) {
-      fetchEmployeeBalances(selectedEmployeeId, selectedYear);
+    if (inspectingEmployeeId) {
+      fetchEmployeeBalances(inspectingEmployeeId, selectedYear);
+    } else {
+      setEmployeeBalances([]);
+      setBalancesError(null);
     }
-  }, [selectedEmployeeId, selectedYear, fetchEmployeeBalances]);
+  }, [inspectingEmployeeId, selectedYear, fetchEmployeeBalances]);
 
-  // Filtered employees for dropdown/search
-  const filteredEmployees = useMemo(() => {
-    if (!searchTerm.trim()) return employees;
-    const q = searchTerm.toLowerCase();
-    return employees.filter((emp) => {
-      const name = `${emp.firstName || ''} ${emp.lastName || ''}`.toLowerCase();
-      const code = (emp.employeeCode || emp.employeeNumber || '').toLowerCase();
-      const dept = (emp.departmentName || emp.department?.name || '').toLowerCase();
-      return name.includes(q) || code.includes(q) || dept.includes(q);
-    });
-  }, [employees, searchTerm]);
+  // Currently inspected employee object
+  const inspectedEmployee = useMemo(() => {
+    if (!inspectingEmployeeId) return null;
+    const fromEmpList = employees.find((e) => e.id === inspectingEmployeeId);
+    const fromTable = allBalances.find((item) => item.id === inspectingEmployeeId);
 
-  // Currently selected employee object
-  const selectedEmployee = useMemo(() => {
-    return employees.find((e) => e.id === selectedEmployeeId) || null;
-  }, [employees, selectedEmployeeId]);
+    if (fromEmpList && fromTable) {
+      return {
+        ...fromEmpList,
+        ...fromTable,
+        firstName: fromEmpList.firstName || fromTable.first_name,
+        lastName: fromEmpList.lastName || fromTable.last_name,
+        employeeCode: fromEmpList.employeeCode || fromEmpList.employeeNumber || fromTable.employee_code || inspectingEmployeeId,
+        designationTitle: fromEmpList.designationTitle || fromEmpList.designation?.title || fromTable.designation_title || 'Team Member',
+        departmentName: fromEmpList.departmentName || fromEmpList.department?.name || fromTable.department_name || 'Operations',
+        avatarUrl: fromEmpList.avatarUrl || fromTable.avatar_url,
+      };
+    }
+    if (fromTable) {
+      return {
+        ...fromTable,
+        id: fromTable.id,
+        firstName: fromTable.first_name,
+        lastName: fromTable.last_name,
+        employeeCode: fromTable.employee_code || inspectingEmployeeId,
+        designationTitle: fromTable.designation_title || 'Team Member',
+        departmentName: fromTable.department_name || 'Operations',
+        avatarUrl: fromTable.avatar_url,
+      };
+    }
+    return fromEmpList || null;
+  }, [inspectingEmployeeId, employees, allBalances]);
 
   // Filtered all balances table
   const filteredAllBalances = useMemo(() => {
@@ -152,25 +163,18 @@ export const EmployeeLeaveBalancesViewer = ({ onAssignLeave }) => {
       const name = `${item.first_name || ''} ${item.last_name || ''}`.toLowerCase();
       const code = (item.employee_code || '').toLowerCase();
       const dept = (item.department_name || '').toLowerCase();
-      return name.includes(q) || code.includes(q) || dept.includes(q);
+      const desig = (item.designation_title || '').toLowerCase();
+      return name.includes(q) || code.includes(q) || dept.includes(q) || desig.includes(q);
     });
   }, [allBalances, allTableSearch]);
 
-  // Compute total remaining days for selected employee
+  // Compute total remaining days for inspected employee
   const totalRemaining = useMemo(() => {
     return employeeBalances.reduce((sum, b) => sum + (parseFloat(b.remainingDays) || 0), 0);
   }, [employeeBalances]);
 
   const totalAllocated = useMemo(() => {
     return employeeBalances.reduce((sum, b) => sum + (parseFloat(b.allocatedDays) || 0), 0);
-  }, [employeeBalances]);
-
-  const totalUsed = useMemo(() => {
-    return employeeBalances.reduce((sum, b) => sum + (parseFloat(b.usedDays) || 0), 0);
-  }, [employeeBalances]);
-
-  const totalPending = useMemo(() => {
-    return employeeBalances.reduce((sum, b) => sum + (parseFloat(b.pendingDays) || 0), 0);
   }, [employeeBalances]);
 
   const getCategoryColor = (code) => {
@@ -215,9 +219,8 @@ export const EmployeeLeaveBalancesViewer = ({ onAssignLeave }) => {
     };
   };
 
-  const selectEmployeeAndScroll = (empId) => {
-    setSelectedEmployeeId(empId);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+  const handleInspectEmployee = (empId) => {
+    setInspectingEmployeeId(empId);
   };
 
   return (
@@ -235,7 +238,7 @@ export const EmployeeLeaveBalancesViewer = ({ onAssignLeave }) => {
               Employee Leave Balances & Remaining Buckets
             </h2>
             <p className="text-xs sm:text-sm text-indigo-200 leading-relaxed">
-              Select any employee across the organization to view their real-time remaining leave balances, category-wise entitlement buckets, and utilization.
+              Overview of remaining balances across all organizational employees. Click &quot;Inspect Bucket&quot; on any employee to view their category-wise leave breakdown.
             </p>
           </div>
 
@@ -261,7 +264,7 @@ export const EmployeeLeaveBalancesViewer = ({ onAssignLeave }) => {
               size="sm"
               icon={RefreshCw}
               onClick={() => {
-                if (selectedEmployeeId) fetchEmployeeBalances(selectedEmployeeId, selectedYear);
+                if (inspectingEmployeeId) fetchEmployeeBalances(inspectingEmployeeId, selectedYear);
                 fetchAllBalances(selectedYear);
               }}
               className="bg-white/10 hover:bg-white/20 text-white border-white/20 text-xs"
@@ -272,222 +275,7 @@ export const EmployeeLeaveBalancesViewer = ({ onAssignLeave }) => {
         </div>
       </div>
 
-      {/* 2. Employee Selection Toolbar */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-brand-50 dark:bg-brand-950/50 text-brand-600 flex items-center justify-center shrink-0">
-              <Users className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                Select Employee
-              </h3>
-              <p className="text-xs text-slate-500">
-                Choose an employee from the directory to inspect their leave buckets.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Quick Search */}
-            <div className="relative w-full sm:w-64">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
-              <input
-                type="text"
-                placeholder="Search employee by name/code..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all"
-              />
-            </div>
-
-            {/* Employee Dropdown */}
-            <select
-              value={selectedEmployeeId}
-              onChange={(e) => setSelectedEmployeeId(e.target.value)}
-              className="px-3.5 py-1.5 text-xs font-semibold rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500 shadow-2xs cursor-pointer max-w-xs"
-            >
-              {filteredEmployees.length === 0 ? (
-                <option value="">No matching employees</option>
-              ) : (
-                filteredEmployees.map((emp) => (
-                  <option key={emp.id} value={emp.id}>
-                    {emp.firstName} {emp.lastName} ({emp.employeeCode || emp.employeeNumber || emp.id})
-                  </option>
-                ))
-              )}
-            </select>
-          </div>
-        </div>
-
-        {/* Selected Employee Summary Card */}
-        {selectedEmployee && (
-          <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/70 dark:bg-slate-800/40 p-4 rounded-xl border border-slate-200/80 dark:border-slate-700/60">
-            <div className="flex items-center gap-3.5">
-              <Avatar
-                src={selectedEmployee.avatarUrl}
-                firstName={selectedEmployee.firstName}
-                lastName={selectedEmployee.lastName}
-                name={`${selectedEmployee.firstName || ''} ${selectedEmployee.lastName || ''}`}
-                size="md"
-                className="ring-2 ring-brand-300"
-              />
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-bold text-slate-900 dark:text-white">
-                    {selectedEmployee.firstName} {selectedEmployee.lastName}
-                  </span>
-                  <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
-                    {selectedEmployee.employeeCode || selectedEmployee.employeeNumber || selectedEmployee.id}
-                  </span>
-                </div>
-                <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-2">
-                  <span>{selectedEmployee.designationTitle || selectedEmployee.designation?.title || 'Team Member'}</span>
-                  <span>•</span>
-                  <span>{selectedEmployee.departmentName || selectedEmployee.department?.name || 'Operations'}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Total Balance Pill & Assign Leave Action */}
-            <div className="flex items-center gap-4 self-start md:self-center flex-wrap">
-              <div className="text-right">
-                <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
-                  Total Remaining Leave
-                </span>
-                <span className="text-xl font-black text-brand-600 dark:text-brand-400">
-                  {totalRemaining.toFixed(1)}{' '}
-                  <span className="text-xs font-semibold text-slate-500">Days</span>
-                </span>
-              </div>
-              <div className="h-8 w-px bg-slate-200 dark:bg-slate-700 hidden sm:block" />
-              <div className="text-right hidden sm:block">
-                <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
-                  Total Entitlement
-                </span>
-                <span className="text-sm font-bold text-slate-700 dark:text-slate-300">
-                  {totalAllocated.toFixed(1)} Days
-                </span>
-              </div>
-              <Button
-                variant="primary"
-                size="sm"
-                icon={CalendarDays}
-                onClick={() => handleTriggerAssign(selectedEmployee.id)}
-                className="shadow-sm font-bold"
-              >
-                Assign Leave
-              </Button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* 3. Category-Wise Leave Buckets Grid */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <PieChart className="w-4 h-4 text-brand-600" />
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">
-              Category-Wise Remaining Leave Buckets ({selectedYear})
-            </h3>
-          </div>
-          <span className="text-xs text-slate-500">
-            {employeeBalances.length} leave categor{employeeBalances.length === 1 ? 'y' : 'ies'} allocated
-          </span>
-        </div>
-
-        {loadingBalances ? (
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-12 text-center">
-            <LoadingSpinner message="Loading category-wise leave balances..." />
-          </div>
-        ) : balancesError ? (
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-rose-200 dark:border-rose-900 p-6 text-center text-rose-600 text-xs">
-            {balancesError}
-          </div>
-        ) : employeeBalances.length === 0 ? (
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 text-center text-slate-500 text-xs">
-            No leave entitlement allocations recorded for this employee for {selectedYear}.
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {employeeBalances.map((bal) => {
-              const theme = getCategoryColor(bal.leaveTypeCode);
-              const allocated = parseFloat(bal.allocatedDays) || 0;
-              const used = parseFloat(bal.usedDays) || 0;
-              const pending = parseFloat(bal.pendingDays) || 0;
-              const remaining = parseFloat(bal.remainingDays) || 0;
-              const usedPercent = allocated > 0 ? Math.min(100, Math.round((used / allocated) * 100)) : 0;
-
-              return (
-                <div
-                  key={bal.id || bal.leaveTypeId}
-                  className={`rounded-2xl border p-4 shadow-2xs space-y-3 bg-white dark:bg-slate-900 ${theme.border} transition hover:shadow-md`}
-                >
-                  {/* Category Header */}
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                        Category
-                      </span>
-                      <h4 className="text-xs font-bold text-slate-900 dark:text-white truncate" title={bal.leaveTypeName}>
-                        {bal.leaveTypeName}
-                      </h4>
-                    </div>
-                    <span className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-full ${theme.bg} ${theme.text} border ${theme.border}`}>
-                      {bal.leaveTypeCode || 'LEAVE'}
-                    </span>
-                  </div>
-
-                  {/* Main Remaining Bucket Highlight */}
-                  <div className={`p-3 rounded-xl ${theme.bg} border ${theme.border} text-center`}>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
-                      Remaining Balance
-                    </span>
-                    <div className="text-2xl font-black text-slate-900 dark:text-white mt-0.5">
-                      {remaining.toFixed(1)}{' '}
-                      <span className="text-xs font-semibold text-slate-500">Days</span>
-                    </div>
-                  </div>
-
-                  {/* Progress bar */}
-                  <div className="space-y-1">
-                    <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
-                      <div
-                        className={`h-full ${theme.bar} transition-all duration-300`}
-                        style={{ width: `${usedPercent}%` }}
-                      />
-                    </div>
-                    <div className="flex items-center justify-between text-[10px] text-slate-400">
-                      <span>{usedPercent}% consumed</span>
-                      <span>{allocated.toFixed(1)} total</span>
-                    </div>
-                  </div>
-
-                  {/* Breakdown footer */}
-                  <div className="grid grid-cols-3 gap-1 pt-2 border-t border-slate-100 dark:border-slate-800 text-center text-[10px]">
-                    <div className="p-1 rounded bg-slate-50 dark:bg-slate-800/50">
-                      <span className="text-slate-400 block font-medium">Allocated</span>
-                      <span className="font-bold text-slate-800 dark:text-slate-200">{allocated.toFixed(1)}</span>
-                    </div>
-                    <div className="p-1 rounded bg-slate-50 dark:bg-slate-800/50">
-                      <span className="text-slate-400 block font-medium">Used</span>
-                      <span className="font-bold text-slate-800 dark:text-slate-200">{used.toFixed(1)}</span>
-                    </div>
-                    <div className="p-1 rounded bg-slate-50 dark:bg-slate-800/50">
-                      <span className="text-slate-400 block font-medium">Pending</span>
-                      <span className="font-bold text-amber-600">{pending.toFixed(1)}</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* 4. All Employees Leave Balances Summary Table */}
+      {/* 2. All Employees Leave Balances Directory Table */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden space-y-3 p-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
           <div>
@@ -496,7 +284,7 @@ export const EmployeeLeaveBalancesViewer = ({ onAssignLeave }) => {
               All Employees Leave Balances Directory ({selectedYear})
             </h3>
             <p className="text-xs text-slate-500">
-              Overview of remaining balances across all organizational employees. Click "Inspect Buckets" on any employee to view their detailed breakdown.
+              Overview of remaining balances across all organizational employees. Click &quot;Inspect Bucket&quot; on any employee to view their detailed breakdown.
             </p>
           </div>
 
@@ -504,7 +292,7 @@ export const EmployeeLeaveBalancesViewer = ({ onAssignLeave }) => {
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
             <input
               type="text"
-              placeholder="Search table by name/dept..."
+              placeholder="Search by name, code, dept..."
               value={allTableSearch}
               onChange={(e) => setAllTableSearch(e.target.value)}
               className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-500"
@@ -542,12 +330,12 @@ export const EmployeeLeaveBalancesViewer = ({ onAssignLeave }) => {
                   const cl = bList.find((b) => (b.leaveTypeCode || '').toUpperCase() === 'CL');
                   const sl = bList.find((b) => (b.leaveTypeCode || '').toUpperCase() === 'SL');
                   const totalRem = bList.reduce((acc, b) => acc + (parseFloat(b.remainingDays) || 0), 0);
-                  const isSelected = item.id === selectedEmployeeId;
+                  const isSelected = item.id === inspectingEmployeeId;
 
                   return (
                     <tr
                       key={item.id}
-                      onClick={() => selectEmployeeAndScroll(item.id)}
+                      onClick={() => handleInspectEmployee(item.id)}
                       className={`hover:bg-slate-50/80 dark:hover:bg-slate-800/60 cursor-pointer transition ${
                         isSelected ? 'bg-brand-50/50 dark:bg-brand-950/30 font-semibold' : ''
                       }`}
@@ -624,11 +412,12 @@ export const EmployeeLeaveBalancesViewer = ({ onAssignLeave }) => {
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              selectEmployeeAndScroll(item.id);
+                              handleInspectEmployee(item.id);
                             }}
-                            className="px-2.5 py-1 text-xs font-bold text-brand-600 hover:text-brand-700 bg-brand-50 hover:bg-brand-100 dark:bg-brand-950/60 dark:hover:bg-brand-900 rounded-lg transition cursor-pointer"
+                            className="px-2.5 py-1 text-xs font-bold text-brand-600 hover:text-brand-700 bg-brand-50 hover:bg-brand-100 dark:bg-brand-950/60 dark:hover:bg-brand-900 rounded-lg transition cursor-pointer flex items-center gap-1.5"
                           >
-                            Inspect Buckets ➔
+                            <Eye className="w-3.5 h-3.5" />
+                            Inspect Bucket
                           </button>
                         </div>
                       </td>
@@ -641,6 +430,199 @@ export const EmployeeLeaveBalancesViewer = ({ onAssignLeave }) => {
         )}
       </div>
 
+      {/* 3. Inspect Category-Wise Leave Buckets Modal (Only shown for selected employee when Inspect Bucket is clicked) */}
+      <Modal
+        isOpen={Boolean(inspectingEmployeeId && inspectedEmployee)}
+        onClose={() => setInspectingEmployeeId(null)}
+        title="Inspect Leave Buckets"
+        subtitle={
+          inspectedEmployee
+            ? `Category-wise leave entitlement & real-time balance breakdown for ${inspectedEmployee.firstName || ''} ${inspectedEmployee.lastName || ''} (${inspectedEmployee.employeeCode || inspectedEmployee.id})`
+            : 'Detailed employee balance breakdown'
+        }
+        maxWidth="max-w-5xl"
+      >
+        {inspectedEmployee && (
+          <div className="space-y-6">
+            {/* Inspected Employee Header Card */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50 dark:bg-slate-800/60 p-4.5 rounded-2xl border border-slate-200 dark:border-slate-700">
+              <div className="flex items-center gap-3.5">
+                <Avatar
+                  src={inspectedEmployee.avatarUrl}
+                  firstName={inspectedEmployee.firstName}
+                  lastName={inspectedEmployee.lastName}
+                  name={`${inspectedEmployee.firstName || ''} ${inspectedEmployee.lastName || ''}`}
+                  size="lg"
+                  className="ring-2 ring-brand-400 dark:ring-brand-500 shrink-0"
+                />
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-base font-bold text-slate-900 dark:text-white">
+                      {inspectedEmployee.firstName} {inspectedEmployee.lastName}
+                    </span>
+                    <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-md bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200">
+                      {inspectedEmployee.employeeCode}
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-2 flex-wrap">
+                    <span>{inspectedEmployee.designationTitle}</span>
+                    <span>•</span>
+                    <span>{inspectedEmployee.departmentName}</span>
+                    <span>•</span>
+                    <span className="font-semibold text-brand-600 dark:text-brand-400">Year {selectedYear}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Total Balance Pill & Assign Leave Action */}
+              <div className="flex items-center gap-4 self-start md:self-center flex-wrap">
+                <div className="text-right">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
+                    Total Remaining Leave
+                  </span>
+                  <span className="text-2xl font-black text-brand-600 dark:text-brand-400">
+                    {totalRemaining.toFixed(1)}{' '}
+                    <span className="text-xs font-semibold text-slate-500">Days</span>
+                  </span>
+                </div>
+                <div className="h-9 w-px bg-slate-200 dark:bg-slate-700 hidden sm:block" />
+                <div className="text-right hidden sm:block">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
+                    Total Entitlement
+                  </span>
+                  <span className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                    {totalAllocated.toFixed(1)} Days
+                  </span>
+                </div>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  icon={CalendarDays}
+                  onClick={() => handleTriggerAssign(inspectedEmployee.id)}
+                  className="shadow-sm font-bold"
+                >
+                  Assign Leave
+                </Button>
+              </div>
+            </div>
+
+            {/* Category-Wise Buckets Grid */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <PieChart className="w-4 h-4 text-brand-600" />
+                  <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+                    Category-Wise Remaining Leave Buckets ({selectedYear})
+                  </h4>
+                </div>
+                <span className="text-xs text-slate-500">
+                  {employeeBalances.length} leave categor{employeeBalances.length === 1 ? 'y' : 'ies'} allocated
+                </span>
+              </div>
+
+              {loadingBalances ? (
+                <div className="bg-slate-50/50 dark:bg-slate-800/30 rounded-2xl border border-slate-200 dark:border-slate-800 p-12 text-center">
+                  <LoadingSpinner message="Loading category-wise leave balances..." />
+                </div>
+              ) : balancesError ? (
+                <div className="bg-rose-50 dark:bg-rose-950/30 rounded-2xl border border-rose-200 dark:border-rose-900 p-6 text-center text-rose-600 text-xs">
+                  {balancesError}
+                </div>
+              ) : employeeBalances.length === 0 ? (
+                <div className="bg-slate-50/50 dark:bg-slate-800/30 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 text-center text-slate-500 text-xs">
+                  No leave entitlement allocations recorded for this employee for {selectedYear}.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {employeeBalances.map((bal) => {
+                    const theme = getCategoryColor(bal.leaveTypeCode);
+                    const allocated = parseFloat(bal.allocatedDays) || 0;
+                    const used = parseFloat(bal.usedDays) || 0;
+                    const pending = parseFloat(bal.pendingDays) || 0;
+                    const remaining = parseFloat(bal.remainingDays) || 0;
+                    const usedPercent = allocated > 0 ? Math.min(100, Math.round((used / allocated) * 100)) : 0;
+
+                    return (
+                      <div
+                        key={bal.id || bal.leaveTypeId}
+                        className={`rounded-2xl border p-4 shadow-2xs space-y-3 bg-white dark:bg-slate-900 ${theme.border} transition hover:shadow-md`}
+                      >
+                        {/* Category Header */}
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                              Category
+                            </span>
+                            <h5 className="text-xs font-bold text-slate-900 dark:text-white truncate" title={bal.leaveTypeName}>
+                              {bal.leaveTypeName}
+                            </h5>
+                          </div>
+                          <span className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-full ${theme.bg} ${theme.text} border ${theme.border}`}>
+                            {bal.leaveTypeCode || 'LEAVE'}
+                          </span>
+                        </div>
+
+                        {/* Main Remaining Bucket Highlight */}
+                        <div className={`p-3 rounded-xl ${theme.bg} border ${theme.border} text-center`}>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                            Remaining Balance
+                          </span>
+                          <div className="text-2xl font-black text-slate-900 dark:text-white mt-0.5">
+                            {remaining.toFixed(1)}{' '}
+                            <span className="text-xs font-semibold text-slate-500">Days</span>
+                          </div>
+                        </div>
+
+                        {/* Progress bar */}
+                        <div className="space-y-1">
+                          <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                            <div
+                              className={`h-full ${theme.bar} transition-all duration-300`}
+                              style={{ width: `${usedPercent}%` }}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between text-[10px] text-slate-400">
+                            <span>{usedPercent}% consumed</span>
+                            <span>{allocated.toFixed(1)} total</span>
+                          </div>
+                        </div>
+
+                        {/* Breakdown footer */}
+                        <div className="grid grid-cols-3 gap-1 pt-2 border-t border-slate-100 dark:border-slate-800 text-center text-[10px]">
+                          <div className="p-1 rounded bg-slate-50 dark:bg-slate-800/50">
+                            <span className="text-slate-400 block font-medium">Allocated</span>
+                            <span className="font-bold text-slate-800 dark:text-slate-200">{allocated.toFixed(1)}</span>
+                          </div>
+                          <div className="p-1 rounded bg-slate-50 dark:bg-slate-800/50">
+                            <span className="text-slate-400 block font-medium">Used</span>
+                            <span className="font-bold text-slate-800 dark:text-slate-200">{used.toFixed(1)}</span>
+                          </div>
+                          <div className="p-1 rounded bg-slate-50 dark:bg-slate-800/50">
+                            <span className="text-slate-400 block font-medium">Pending</span>
+                            <span className="font-bold text-amber-600">{pending.toFixed(1)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setInspectingEmployeeId(null)}
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
       {/* Fallback Local ApplyLeaveModal if used standalone */}
       {!onAssignLeave && isLocalModalOpen && (
         <ApplyLeaveModal
@@ -650,7 +632,7 @@ export const EmployeeLeaveBalancesViewer = ({ onAssignLeave }) => {
             setLocalAssignEmpId(null);
           }}
           onSuccess={() => {
-            if (selectedEmployeeId) fetchEmployeeBalances(selectedEmployeeId, selectedYear);
+            if (inspectingEmployeeId) fetchEmployeeBalances(inspectingEmployeeId, selectedYear);
             fetchAllBalances(selectedYear);
           }}
           initialEmployeeId={localAssignEmpId}
