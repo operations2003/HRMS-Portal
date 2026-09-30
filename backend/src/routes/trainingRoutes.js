@@ -1,9 +1,16 @@
 import { Router } from 'express';
+import multer from 'multer';
 import { trainingController } from '../controllers/trainingController.js';
 import { authenticate } from '../middleware/authMiddleware.js';
 import { authorizeTrainingManager } from '../middleware/rbacMiddleware.js';
 
 const router = Router();
+
+const storage = multer.memoryStorage();
+const uploadCertificateFile = multer({
+  storage,
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB
+}).single('file');
 
 router.use(authenticate);
 
@@ -35,5 +42,11 @@ router.patch('/enrollments/:id', trainingController.updateProgress);
 // Skills
 router.get('/skills', trainingController.getSkillMatrix);
 router.post('/skills', trainingController.upsertSkill);
+
+// Certificates
+// Staff see their own certificates; Training Managers see all
+router.get('/certificates', trainingController.listCertificates);
+router.post('/certificates', authorizeTrainingManager, uploadCertificateFile, trainingController.issueCertificate);
+router.delete('/certificates/:id', authorizeTrainingManager, trainingController.deleteCertificate);
 
 export default router;

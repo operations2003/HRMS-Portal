@@ -1,6 +1,7 @@
 import { query } from '../config/db.js';
 import { adminService } from './adminService.js';
 import { notificationService } from './notificationService.js';
+import { cloudinaryService } from './cloudinaryService.js';
 
 export const trainingService = {
   /**
@@ -590,5 +591,203 @@ export const trainingService = {
     );
 
     return res.rows[0];
+  },
+
+  /**
+   * List issued certificates
+   * - Training managers see all certificates across organization
+   * - Standard staff only see certificates issued to them
+   */
+  async listCertificates(orgId, filters = {}, isTrainingManager = false, currentEmployeeId = null) {
+    let sql = `
+      SELECT tc.*, e.email AS employee_email, e.avatar_url AS employee_avatar
+      FROM training_certificates tc
+      LEFT JOIN employees e ON tc.employee_id = e.id
+      WHERE tc.org_id = $1
+    `;
+    const params = [orgId];
+
+    if (!isTrainingManager) {
+      params.push(currentEmployeeId || '__none__');
+      sql += ` AND tc.employee_id = $${params.length}`;
+    } else if (filters.employeeId) {
+      params.push(filters.employeeId);
+      sql += ` AND tc.employee_id = $${params.length}`;
+    }
+
+    if (filters.search) {
+      params.push(`%${filters.search.toLowerCase()}%`);
+      sql += ` AND (
+        LOWER(tc.employee_name) LIKE $${params.length} 
+        OR LOWER(tc.course_title) LIKE $${params.length}
+        OR LOWER(COALESCE(tc.employee_code, '')) LIKE $${params.length}
+      )`;
+    }
+
+    sql += ` ORDER BY tc.issue_date DESC, tc.created_at DESC;`;
+    const res = await query(sql, params);
+    return res.rows;
+  },
+
+  /**
+   * Upload and issue a certificate to a particular employee
+   */
+  async issueCertificate(orgId, currentUser, file, payload) {
+    const employeeId = payload.employeeId;
+    if (!employeeId) {
+      const err = new Error('Please select an employee.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const courseTitle = (payload.courseTitle || payload.course_title || payload.title || '').trim();
+    if (!courseTitle) {
+      const err = new Error('Course or certification title is required.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    // Lookup employee details
+    const empRes = await query(
+      `SELECT e.id, e.first_name, e.last_name, e.employee_code, e.email, e.user_id, d.name AS department_name
+       FROM employees e
+       LEFT JOIN departments d ON e.dept_id = d.id
+       WHERE e.id = $1 AND e.org_id = $2;`,
+      [employeeId, orgId]
+    );
+
+    if (empRes.rows.length === 0) {
+      const err = new Error('Employee not found.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const emp = empRes.rows[0];
+    const employeeName = `${emp.first_name || ''} ${emp.last_name || ''}`.trim() || emp.email;
+
+    // Handle Certificate File
+    let certificateUrl = payload.certificateUrl || payload.certificate_url || '';
+    let fileName = payload.fileName || payload.file_name || `${employeeName}_certificate`;
+    let fileSize = payload.fileSize || payload.file_size || '';
+    let fileType = payload.fileType || payload.file_type || 'application/pdf';
+
+    if (file) {
+      fileName = file.originalname || fileName;
+      fileType = file.mimetype || fileType;
+      const bytes = file.size || (file.buffer ? file.buffer.length : 0);
+      fileSize = bytes > 1048576 
+        ? `${(bytes / 1048576).toFixed(1)} MB` 
+        : `${(bytes / 1024).toFixed(0)} KB`;
+
+      // Try uploading to Cloudinary
+      let uploadedToCloud = false;
+      try {
+        if (file.buffer) {
+          const cRes = await cloudinaryService.upload(file.buffer, {
+            folder: 'hrms-portal/certificates',
+            filename: file.originalname || `${employeeName}_certificate`,
+            mimeType: file.mimetype,
+          });
+          if (cRes?.secureUrl) {
+            certificateUrl = cRes.secureUrl;
+            uploadedToCloud = true;
+          }
+        }
+      } catch (cloudErr) {
+        console.warn('Cloudinary certificate upload notice:', cloudErr.message);
+      }
+
+      // If Cloudinary wasn't used or failed, fallback to base64 Data URL
+      if (!uploadedToCloud && file.buffer) {
+        certificateUrl = `data:${file.mimetype || 'application/pdf'};base64,${file.buffer.toString('base64')}`;
+      }
+    }
+
+    if (!certificateUrl) {
+      const err = new Error('Certificate file is required. Please upload a certificate document or image.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const certId = `cert-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const issueDate = payload.issueDate || payload.issue_date || new Date().toISOString().split('T')[0];
+    const courseId = payload.courseId || payload.course_id || null;
+    const notes = payload.notes || '';
+    const issuedByName = `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim() || 'L&D Team';
+
+    const insertSql = `
+      INSERT INTO training_certificates (
+        id, org_id, employee_id, employee_name, employee_code, department,
+        course_id, course_title, issue_date, certificate_url, file_name, file_size, file_type,
+        notes, issued_by_user_id, issued_by_name, created_at, updated_at
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6,
+        $7, $8, $9, $10, $11, $12, $13,
+        $14, $15, $16, NOW(), NOW()
+      )
+      RETURNING *;
+    `;
+
+    const res = await query(insertSql, [
+      certId,
+      orgId,
+      employeeId,
+      employeeName,
+      emp.employee_code || '',
+      emp.department_name || '',
+      courseId,
+      courseTitle,
+      issueDate,
+      certificateUrl,
+      fileName,
+      fileSize,
+      fileType,
+      notes,
+      currentUser.id,
+      issuedByName,
+    ]);
+
+    // If an enrollment exists for this course & employee, mark completed and set certificate_url
+    if (courseId) {
+      await query(
+        `UPDATE course_enrollments
+         SET status = 'COMPLETED', progress_percentage = 100, completion_date = $1, certificate_url = $2, updated_at = NOW()
+         WHERE course_id = $3 AND employee_id = $4 AND org_id = $5;`,
+        [issueDate, certificateUrl, courseId, employeeId, orgId]
+      ).catch(() => {});
+    }
+
+    // Dispatch in-app notification to the employee
+    try {
+      await notificationService.createNotification({
+        orgId,
+        recipientId: emp.user_id || emp.id,
+        recipientType: 'USER',
+        title: `New Certificate Issued: ${courseTitle}`,
+        message: `Congratulations! Your certificate for "${courseTitle}" has been issued by the L&D team and is ready for download in your Learning & Development section.`,
+        eventType: 'CERTIFICATE_ISSUED',
+        actionUrl: '/performance/training?tab=certifications',
+        metadata: { certificateId: certId, courseTitle, issueDate },
+      });
+    } catch {
+      // Non-blocking notification
+    }
+
+    return res.rows[0];
+  },
+
+  /**
+   * Delete certificate
+   */
+  async deleteCertificate(certId, orgId) {
+    const existing = await query('SELECT * FROM training_certificates WHERE id = $1 AND org_id = $2;', [certId, orgId]);
+    if (existing.rows.length === 0) {
+      const err = new Error('Certificate not found.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    await query('DELETE FROM training_certificates WHERE id = $1 AND org_id = $2;', [certId, orgId]);
+    return { success: true, message: 'Certificate deleted successfully.' };
   },
 };

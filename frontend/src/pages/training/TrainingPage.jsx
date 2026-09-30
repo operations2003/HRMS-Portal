@@ -21,6 +21,7 @@ import {
   AlertCircle,
   ShieldCheck,
   PlayCircle,
+  Award,
 } from 'lucide-react';
 import { trainingService } from '../../services/trainingService.js';
 import { useAuth } from '../../context/AuthContext.jsx';
@@ -30,6 +31,7 @@ import { Badge } from '../../components/common/Badge.jsx';
 import { Button } from '../../components/common/Button.jsx';
 import { AssignCourseModal } from '../../components/training/AssignCourseModal.jsx';
 import { CourseProgressModal } from '../../components/training/CourseProgressModal.jsx';
+import { CertificationsSection } from '../../components/training/CertificationsSection.jsx';
 
 export const TrainingPage = () => {
   const { user, canManageTraining } = useAuth();
@@ -344,6 +346,17 @@ export const TrainingPage = () => {
           <Clock className="w-4 h-4" />
           {isTrainingManager ? 'Trainings & Enrollments' : 'My Learning & Enrollments'}
         </button>
+        <button
+          onClick={() => setActiveTab('certifications')}
+          className={`pb-3 text-xs font-bold border-b-2 flex items-center gap-2 transition ${
+            activeTab === 'certifications'
+              ? 'border-indigo-600 text-indigo-600'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          <Award className="w-4 h-4" />
+          {isTrainingManager ? 'Certifications' : 'My Certificates'}
+        </button>
       </div>
 
       {/* Main Content */}
@@ -522,7 +535,7 @@ export const TrainingPage = () => {
             )}
           </div>
         </div>
-      ) : (
+      ) : activeTab === 'my-trainings' ? (
         /* ENROLLMENTS */
         <div className="space-y-4">
           {/* Controls Bar */}
@@ -713,6 +726,9 @@ export const TrainingPage = () => {
             </table>
           </div>
         </div>
+      ) : (
+        /* CERTIFICATIONS SECTION */
+        <CertificationsSection courses={courses} />
       )}
 
       {/* COURSE COMPLETION MATRIX / PROGRESS MODAL (Training Managers only) */}

@@ -240,4 +240,56 @@ export const trainingController = {
       next(error);
     }
   },
+
+  /**
+   * GET /api/v1/training/certificates
+   */
+  async listCertificates(req, res, next) {
+    try {
+      const orgId = req.user.orgId || 'org-1';
+      const isManager = canManageTraining(req.user);
+      const certificates = await trainingService.listCertificates(
+        orgId,
+        req.query,
+        isManager,
+        req.user.employeeId
+      );
+      return sendSuccess(res, 'Certificates retrieved.', certificates);
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  /**
+   * POST /api/v1/training/certificates
+   */
+  async issueCertificate(req, res, next) {
+    try {
+      const orgId = req.user.orgId || 'org-1';
+      const certificate = await trainingService.issueCertificate(
+        orgId,
+        req.user,
+        req.file || null,
+        req.body
+      );
+      return sendSuccess(res, 'Certificate issued and sent successfully.', certificate, null, 201);
+    } catch (error) {
+      if (error.statusCode) return sendError(res, error.message, error.statusCode);
+      next(error);
+    }
+  },
+
+  /**
+   * DELETE /api/v1/training/certificates/:id
+   */
+  async deleteCertificate(req, res, next) {
+    try {
+      const orgId = req.user.orgId || 'org-1';
+      const result = await trainingService.deleteCertificate(req.params.id, orgId);
+      return sendSuccess(res, 'Certificate removed successfully.', result);
+    } catch (error) {
+      if (error.statusCode) return sendError(res, error.message, error.statusCode);
+      next(error);
+    }
+  },
 };
