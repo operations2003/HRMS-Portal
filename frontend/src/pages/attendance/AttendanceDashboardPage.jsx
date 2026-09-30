@@ -28,13 +28,13 @@ export const AttendanceDashboardPage = () => {
   const { user, hasRole, hasPermission } = useAuth();
   const toast = useToast();
 
-  // Role permissions: Only HR and Admin can see the whole organization's attendance
-  const canViewOrg = hasRole(['HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin']);
+  // Role permissions: HR, Admin, and Manager can see the whole organization's attendance
+  const canViewOrg = hasRole(['HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin', 'Manager']);
   const canEditTiming = hasRole(['HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin', 'Manager']) || hasPermission('attendance:regularize');
-  // Tagging / remark option is restricted to HR Manager and Admin only (not employees or managers)
-  const canRemark = hasRole(['HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin']);
+  // Tagging / remark option is authorized for HR Manager, Admin, and Manager
+  const canRemark = hasRole(['HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin', 'Manager']);
 
-  // Active view tab: Admin and HR default to 'org', Managers and Employees only have 'my'
+  // Active view tab: Admin, HR, and Manager default to 'org', regular Employees have 'my'
   const [activeTab, setActiveTab] = useState(() => (canViewOrg ? 'org' : 'my'));
 
   // Today's attendance state for punch card
@@ -307,7 +307,7 @@ export const AttendanceDashboardPage = () => {
         </div>
       </div>
 
-      {/* Tabs Navigation for HR / Admin */}
+      {/* Tabs Navigation for HR / Admin / Manager */}
       {canViewOrg && (
         <div className="border-b border-slate-200 dark:border-slate-800">
           <nav className="-mb-px flex space-x-6">
@@ -441,7 +441,7 @@ export const AttendanceDashboardPage = () => {
         canEditTiming={canEditTiming}
       />
 
-      {/* Attendance Remark Modal (Emergency vs OT for 10h+ Post-Shift) - HR & Admin only */}
+      {/* Attendance Remark Modal (Emergency vs OT for 10h+ Post-Shift) - HR, Admin & Manager */}
       {canRemark && (
         <AttendanceRemarkModal
           isOpen={Boolean(selectedRemarkRecord)}

@@ -1007,12 +1007,12 @@ export const attendanceService = {
   },
 
   /**
-   * Get organization attendance analytics (trend & distribution) for HR & Admin
+   * Get organization attendance analytics (trend & distribution) for HR, Admin & Manager
    */
   async getOrgAnalytics(user, query = {}) {
     const normRole = normalizeRole(user.roleName);
-    if (!['admin', 'superadmin', 'hr', 'hrmanager', 'orgadmin'].includes(normRole)) {
-      const error = new Error('Access denied: Requires HR or Admin authorization.');
+    if (!['admin', 'superadmin', 'hr', 'hrmanager', 'orgadmin', 'manager'].includes(normRole)) {
+      const error = new Error('Access denied: Requires HR, Admin, or Manager authorization.');
       error.statusCode = 403;
       throw error;
     }
@@ -1024,12 +1024,12 @@ export const attendanceService = {
   },
 
   /**
-   * Get organization-wide attendance for HR & Admin
+   * Get organization-wide attendance for HR, Admin & Manager
    */
   async getOrgAttendance(user, query = {}) {
     const normRole = normalizeRole(user.roleName);
-    if (!['admin', 'superadmin', 'hr', 'hrmanager', 'orgadmin'].includes(normRole)) {
-      const error = new Error('Access denied: Requires HR or Admin authorization.');
+    if (!['admin', 'superadmin', 'hr', 'hrmanager', 'orgadmin', 'manager'].includes(normRole)) {
+      const error = new Error('Access denied: Requires HR, Admin, or Manager authorization.');
       error.statusCode = 403;
       throw error;
     }
@@ -1162,9 +1162,9 @@ export const attendanceService = {
     }
 
     const normRole = normalizeRole(user.roleName);
-    const allowedRoles = ['admin', 'hr', 'superadmin', 'hrmanager', 'orgadmin'];
+    const allowedRoles = ['admin', 'hr', 'superadmin', 'hrmanager', 'orgadmin', 'manager'];
     if (!allowedRoles.includes(normRole)) {
-      const error = new Error('Access denied: Only HR managers and administrators can tag or review shift remarks.');
+      const error = new Error('Access denied: Only HR managers, administrators, and managers can tag or review shift remarks.');
       error.statusCode = 403;
       throw error;
     }

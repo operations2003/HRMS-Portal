@@ -27,6 +27,11 @@ export const permissions = [
   // Users & RBAC
   { id: 'perm-10', name: 'View Users', code: 'user:read', module: 'user', description: 'View system user accounts' },
   { id: 'perm-11', name: 'Manage Users', code: 'user:write', module: 'user', description: 'Create and update user accounts and roles' },
+
+  // Attendance
+  { id: 'perm-12', name: 'View Attendance', code: 'attendance:read', module: 'attendance', description: 'View attendance logs and organization records' },
+  { id: 'perm-13', name: 'Record Attendance', code: 'attendance:write', module: 'attendance', description: 'Punch in/out and manage breaks' },
+  { id: 'perm-14', name: 'Regularize Attendance', code: 'attendance:regularize', module: 'attendance', description: 'Regularize and adjust attendance' },
 ];
 
 export const roles = [
@@ -40,6 +45,7 @@ export const roles = [
       'employee:read', 'employee:write', 'employee:delete',
       'dept:read', 'dept:write',
       'user:read', 'user:write',
+      'attendance:read', 'attendance:write', 'attendance:regularize',
     ],
   },
   {
@@ -52,6 +58,7 @@ export const roles = [
       'employee:read', 'employee:write',
       'dept:read', 'dept:write',
       'user:read',
+      'attendance:read', 'attendance:write', 'attendance:regularize',
     ],
   },
   {
@@ -62,6 +69,9 @@ export const roles = [
       'dashboard:read',
       'employee:read',
       'dept:read',
+      'attendance:read',
+      'attendance:write',
+      'attendance:regularize',
     ],
   },
   {
@@ -71,6 +81,8 @@ export const roles = [
     permissions: [
       'dashboard:read',
       'employee:read',
+      'attendance:read',
+      'attendance:write',
     ],
   },
 ];
