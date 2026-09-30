@@ -903,7 +903,7 @@ export const ReportsPage = () => {
         improvements: '',
         employeeComments: '',
         managerComments: '',
-        competencies: prev.competencies.map((c) => ({ ...c, score: 3.0, comment: '' })),
+        competencies: (prev.competencies || []).map((c) => ({ ...c, score: 0, comment: '' })),
         goals: [{ goal: '', target: '', deadline: '', status: 'Planned' }],
         training: [{ skill: '', training: '', priority: 'Medium' }],
         overallRating: 'Meets Expectations',
@@ -2553,14 +2553,14 @@ export const ReportsPage = () => {
                             <div className="flex items-center gap-1.5">
                               <input
                                 type="number"
-                                min="1"
+                                min="0"
                                 max="5"
                                 step="0.5"
-                                value={comp.score}
+                                value={comp.score ?? 0}
                                 readOnly={isViewingMyReport}
                                 onChange={(e) => {
                                   if (isViewingMyReport) return;
-                                  const val = parseFloat(e.target.value) || 1;
+                                  const val = e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0);
                                   setCurrentData((p) => ({
                                     ...p,
                                     competencies: p.competencies.map((c, i) => (i === idx ? { ...c, score: val } : c)),
