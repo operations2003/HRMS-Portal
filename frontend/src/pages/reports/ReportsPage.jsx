@@ -227,45 +227,42 @@ export const ReportsPage = () => {
     department: 'Operations Team',
     designation: '',
     manager: '',
-    reviewDate: '2026-09-15',
-    reviewPeriod: '01/01/2026 – 31/08/2026',
+    reviewDate: new Date().toISOString().split('T')[0],
+    reviewPeriod: '',
     ldExecutive: 'Swati Batabyal',
     reviewCycle: 'Quarterly Review',
     competencies: [
-      { area: 'Quality of Work (Accuracy)', score: 4.5, comment: 'High degree of accuracy in order processing and audits.' },
-      { area: 'Productivity', score: 4.0, comment: 'Consistently completes 15% above the daily dispatch benchmark.' },
-      { area: 'Meeting Deadlines (TAT)', score: 4.0, comment: 'Strict adherence to SLA Turn-Around-Time.' },
-      { area: 'Communication', score: 4.5, comment: 'Clear status updates to warehouse coordinators and clients.' },
-      { area: 'Teamwork', score: 5.0, comment: 'Always ready to step in during peak logistics surges.' },
-      { area: 'Process / SOP Understanding', score: 4.0, comment: 'Sound knowledge of operational checklists and safety protocols.' },
-      { area: 'Attendance & Punctuality', score: 4.5, comment: 'Flawless attendance record with zero unplanned leaves.' },
-      { area: 'Initiative & Ownership', score: 4.0, comment: 'Introduced a digital reconciliation sheet that saved 3 hours weekly.' },
-      { area: 'Issue Resolution & Follow-up', score: 3.5, comment: 'Good troubleshooting; can improve on documenting post-incident logs.' },
+      { area: 'Quality of Work (Accuracy)', score: 0, comment: '' },
+      { area: 'Productivity', score: 0, comment: '' },
+      { area: 'Meeting Deadlines (TAT)', score: 0, comment: '' },
+      { area: 'Communication', score: 0, comment: '' },
+      { area: 'Teamwork', score: 0, comment: '' },
+      { area: 'Process / SOP Understanding', score: 0, comment: '' },
+      { area: 'Attendance & Punctuality', score: 0, comment: '' },
+      { area: 'Initiative & Ownership', score: 0, comment: '' },
+      { area: 'Issue Resolution & Follow-up', score: 0, comment: '' },
     ],
-    achievements: `• Successfully streamlined the dispatch verification pipeline, achieving 99.4% error-free fulfillment rate.\n• Spearheaded inventory reconciliation across 3 warehouse zones without downtime.\n• Mentored 2 junior operations trainees on compliance SOPs and inventory tracking.`,
-    improvements: `1. Enhance proactive escalation on supplier shipment delays before SLA impact.\n2. Advance data visualization skills (Excel dashboarding & inventory analytics).\n3. Formulate root cause analysis (RCA) logs for vendor discrepancy tickets.`,
+    achievements: '',
+    improvements: '',
     goals: [
-      { goal: 'Zero Misrouting Campaign', target: 'Maintain dispatch error rate under 0.2%', deadline: '2026-10-31', status: 'Planned' },
-      { goal: 'Warehouse Automation Integration', target: 'Complete pilot run of RFID handheld scanner rollout', deadline: '2026-11-15', status: 'In Progress' },
-      { goal: 'SOP Refresh & Audit', target: 'Update returns handling SOP and train cross-docking team', deadline: '2026-12-05', status: 'Planned' },
+      { goal: '', target: '', deadline: '', status: 'Planned' },
     ],
     training: [
-      { skill: 'Advanced Excel & Operations Analytics', training: 'PivotTables, Power BI, and Supply Chain Dashboards', priority: 'High' },
-      { skill: 'Lean Six Sigma / 5S Methodology', training: 'Yellow Belt Process Optimization Workshop', priority: 'Medium' },
+      { skill: '', training: '', priority: 'Medium' },
     ],
-    employeeComments: 'I appreciate the team support during the quarterly distribution peak. Looking forward to attending the operational analytics training to further streamline our fulfillment reports.',
-    managerComments: 'Pooja is a reliable and proactive pillar of our operations squad. Her execution efficiency is admirable. With advanced dashboard training, she can take over independent shift leadership.',
-    overallRating: 'Exceeds Expectations',
+    employeeComments: '',
+    managerComments: '',
+    overallRating: 'Meets Expectations',
     actions: {
       action1: true,
-      action2: true,
+      action2: false,
       action3: false,
       action4: true,
       action5: false,
       action6: false,
     },
     ceoName: "Sheetal Bedi (CEO)",
-    ceoDate: '2026-09-16',
+    ceoDate: new Date().toISOString().split('T')[0],
   });
 
   // 2. IT FORM STATE
@@ -275,78 +272,31 @@ export const ReportsPage = () => {
     department: 'IT Team',
     designation: '',
     manager: '',
-    reviewDate: '2026-09-14',
-    reviewPeriod: '30/08/2026 – 12/09/2026',
+    reviewDate: new Date().toISOString().split('T')[0],
+    reviewPeriod: '',
     ldExecutive: 'Swati Batabyal',
     reviewCycle: 'Bi-Weekly Review',
     competencies: [
-      { area: 'Quality of Portal / Application', score: 3.0, comment: 'Code architecture is good; need stricter UI polish.' },
-      { area: 'Productivity & Output Volume', score: 4.0, comment: 'Consistent commit history and active feature delivery.' },
-      { area: 'Meeting Deadlines & Timelines', score: 2.0, comment: 'Delays experienced in sprint deliverables. Needs proactive flagging.' },
-      { area: 'Communication & Updates', score: 5.0, comment: 'Excellent daily standup participation and proactive clarity.' },
-      { area: 'Teamwork & Collaboration', score: 5.0, comment: 'Great peer synergy and helpful attitude with teammates.' },
-      { area: 'Portal & System Understanding', score: 4.5, comment: 'Quick grasp of database schemas and backend integrations.' },
-      { area: 'Attendance & Punctuality', score: 3.5, comment: 'Generally on time; 1 ad-hoc log recorded.' },
-      { area: 'Initiative & Ownership', score: 5.0, comment: 'Took complete charge of the ATS evaluator module unprompted.' },
-      { area: 'Post-Launch Bugs & Stability', score: 2.0, comment: 'ATS application required 3 hotfixes immediately after release.' },
+      { area: 'Quality of Portal / Application', score: 0, comment: '' },
+      { area: 'Productivity & Output Volume', score: 0, comment: '' },
+      { area: 'Meeting Deadlines & Timelines', score: 0, comment: '' },
+      { area: 'Communication & Updates', score: 0, comment: '' },
+      { area: 'Teamwork & Collaboration', score: 0, comment: '' },
+      { area: 'Portal & System Understanding', score: 0, comment: '' },
+      { area: 'Attendance & Punctuality', score: 0, comment: '' },
+      { area: 'Initiative & Ownership', score: 0, comment: '' },
+      { area: 'Post-Launch Bugs & Stability', score: 0, comment: '' },
     ],
-    achievements: `• Achieved milestone target and launched the ATS evaluator module ahead of quarterly showcase.\n• Demonstrated strong technical ownership with the engineering team, reducing backlog tickets by 30%.`,
-    improvements: `1. Meet committed sprint deadlines consistently by breaking complex stories into manageable micro-tasks.\n2. Implement pre-deployment test cases and rigorous QA before production portal release to cut post-launch defects.\n3. Continually synchronize dependencies across cross-functional squad members.`,
+    achievements: '',
+    improvements: '',
     goals: [
-      { goal: 'HRMS Core Upgrade', target: 'Complete employee leave and attendance module APIs', deadline: '2026-09-25', status: 'In Progress' },
-      { goal: 'Zero Critical Bug Policy', target: 'Unit test coverage > 80% for ATS evaluation backend', deadline: '2026-10-05', status: 'Planned' },
+      { goal: '', target: '', deadline: '', status: 'Planned' },
     ],
     training: [
-      { skill: 'Automated Testing & QA', training: 'Jest & Cypress End-to-End Testing Workshop', priority: 'High' },
+      { skill: '', training: '', priority: 'Medium' },
     ],
-    employeeComments: 'I am actively prioritizing QA testing cycles to prevent regression bugs in upcoming releases. Grateful for the mentorship provided by the senior engineering lead.',
-    managerComments: 'Ajay displays tremendous initiative and technical potential. Sharpening automated test discipline and timeline management will quickly elevate him to full engineering contributor level.',
-    overallRating: 'Meets Expectations',
-    actions: {
-      action1: true,
-      action2: false,
-      action3: false,
-      action4: true,
-      action5: false,
-      action6: true,
-    },
-    ceoName: "Sheetal Bedi (CEO)",
-    ceoDate: '2026-09-16',
-  });
-
-  // 3. TA FORM STATE
-  const [taData, setTaData] = useState({
-    employeeName: '',
-    employeeId: '',
-    department: 'TA Team',
-    designation: '',
-    manager: '',
-    reviewDate: '2026-09-14',
-    reviewPeriod: '30/08/2026 – 12/09/2026',
-    ldExecutive: 'Swati Batabyal',
-    reviewCycle: 'Bi-Weekly Review',
-    competencies: [
-      { area: 'Quality of CVs', score: 3.0, comment: 'Good candidate background screening & relevance.' },
-      { area: 'Productivity (TL)', score: 4.5, comment: 'Consistent daily sourcing output and screening throughput.' },
-      { area: 'Meeting Deadlines', score: 2.0, comment: 'Need tighter adherence to hiring turnaround SLAs.' },
-      { area: 'Communication (TL)', score: 3.0, comment: 'Clear candidate communication; need stakeholder updates.' },
-      { area: 'Teamwork (TL)', score: 4.5, comment: 'Strong pod collaboration and active mentorship.' },
-      { area: 'Recruitment Understanding', score: 4.0, comment: 'Solid role comprehension and multi-channel search strategy.' },
-      { area: 'Attendance & Punctuality', score: 3.0, comment: 'Reliable attendance and daily meeting punctuality.' },
-      { area: 'Initiative & Ownership', score: 5.0, comment: 'Proactive problem solving in talent pipeline bottlenecks.' },
-      { area: 'Candidate Submission', score: 2.0, comment: 'Candidate submission velocity needs acceleration.' },
-    ],
-    achievements: 'Achieved target ATS score of 90+ and closed 4 critical senior openings within SLA.',
-    improvements: 'Increase your LinkedIn connections.\nUse company resources to get more leads to achieve the targeted number.',
-    goals: [
-      { goal: '10 Candidate Submissions', target: '6 Candidate Submissions qualified per week', deadline: '2026-09-19', status: 'Planned' },
-      { goal: 'Tech Sourcing Expansion', target: 'Source 30 qualified fullstack engineers for pipeline', deadline: '2026-09-30', status: 'Planned' },
-    ],
-    training: [
-      { skill: 'Advanced Boolean & AI Sourcing', training: 'AI-Powered Talent Sourcing & Headhunting Masterclass', priority: 'High' },
-    ],
-    employeeComments: 'Working on expanding sourcing channels and leveraging referral networks to hit the increased quarterly hiring quota.',
-    managerComments: 'Harsh has given a good performance as a recruiter. Although he has exceptional skills, we need him to improve his communication skills and leadership skills in order to get the work done smoothly — he needs to achieve targets more consistently going forward. Please work on deadlines and maintain your tracker on time; improve time management and task allocation as given.',
+    employeeComments: '',
+    managerComments: '',
     overallRating: 'Meets Expectations',
     actions: {
       action1: true,
@@ -357,7 +307,52 @@ export const ReportsPage = () => {
       action6: false,
     },
     ceoName: "Sheetal Bedi (CEO)",
-    ceoDate: '2026-09-16',
+    ceoDate: new Date().toISOString().split('T')[0],
+  });
+
+  // 3. TA FORM STATE
+  const [taData, setTaData] = useState({
+    employeeName: '',
+    employeeId: '',
+    department: 'TA Team',
+    designation: '',
+    manager: '',
+    reviewDate: new Date().toISOString().split('T')[0],
+    reviewPeriod: '',
+    ldExecutive: 'Swati Batabyal',
+    reviewCycle: 'Bi-Weekly Review',
+    competencies: [
+      { area: 'Quality of CVs', score: 0, comment: '' },
+      { area: 'Productivity (TL)', score: 0, comment: '' },
+      { area: 'Meeting Deadlines', score: 0, comment: '' },
+      { area: 'Communication (TL)', score: 0, comment: '' },
+      { area: 'Teamwork (TL)', score: 0, comment: '' },
+      { area: 'Recruitment Understanding', score: 0, comment: '' },
+      { area: 'Attendance & Punctuality', score: 0, comment: '' },
+      { area: 'Initiative & Ownership', score: 0, comment: '' },
+      { area: 'Candidate Submission', score: 0, comment: '' },
+    ],
+    achievements: '',
+    improvements: '',
+    goals: [
+      { goal: '', target: '', deadline: '', status: 'Planned' },
+    ],
+    training: [
+      { skill: '', training: '', priority: 'Medium' },
+    ],
+    employeeComments: '',
+    managerComments: '',
+    overallRating: 'Meets Expectations',
+    actions: {
+      action1: true,
+      action2: false,
+      action3: false,
+      action4: true,
+      action5: false,
+      action6: false,
+    },
+    ceoName: "Sheetal Bedi (CEO)",
+    ceoDate: new Date().toISOString().split('T')[0],
   });
 
   const showToast = (msg, type = 'info', duration = 3000) => {
@@ -367,12 +362,18 @@ export const ReportsPage = () => {
     }
   };
 
+  // Helper to safely update a specific department slice without relying on stale closure
+  const setDeptData = (targetDept, updater) => {
+    const d = (targetDept || department || 'operations').toLowerCase();
+    if (d === 'it') setItData(updater);
+    else if (d === 'ta') setTaData(updater);
+    else setOpsData(updater);
+  };
+
   // Active form data selector
   const currentData = department === 'operations' ? opsData : department === 'it' ? itData : taData;
   const setCurrentData = (updater) => {
-    if (department === 'operations') setOpsData(updater);
-    else if (department === 'it') setItData(updater);
-    else setTaData(updater);
+    setDeptData(department, updater);
   };
 
   // Filter employees for active department tab using real API employees (excluding Admin accounts)
@@ -472,8 +473,11 @@ export const ReportsPage = () => {
   }, [department, viewMode, canReviewOthers]);
 
   // Handle employee selection from combobox in Section 01
-  const handleSelectEmployee = async (empId) => {
+  const handleSelectEmployee = async (empId, isNew = false) => {
     setSelectedEmployeeId(empId);
+    if (isNew) {
+      setEditingReport(null);
+    }
     const selectedEmp = employees.find(
       (e) => String(e.id || e._id) === String(empId)
     );
@@ -525,6 +529,29 @@ export const ReportsPage = () => {
           : '') ||
         '';
 
+      if (isNew) {
+        // Create clean form for new review
+        setDeptData(activeD, (prev) => ({
+          ...prev,
+          employeeName: fullName,
+          employeeId: code,
+          department: dept,
+          designation: desig,
+          ...(mgr ? { manager: mgr } : {}),
+          reviewDate: new Date().toISOString().split('T')[0],
+          reviewPeriod: '',
+          achievements: '',
+          improvements: '',
+          managerComments: '',
+          employeeComments: '',
+          competencies: (prev.competencies || []).map((c) => ({ ...c, score: 0, comment: '' })),
+          goals: [{ goal: '', target: '', deadline: '', status: 'Planned' }],
+          training: [{ skill: '', training: '', priority: 'Medium' }],
+        }));
+        showToast(`Started new clean evaluation form for ${fullName}.`, 'info');
+        return;
+      }
+
       // Check delivery status for this employee
       try {
         setLoadingStatus(true);
@@ -533,14 +560,15 @@ export const ReportsPage = () => {
         setEmpReportStatus(st || null);
 
         if (st && st.reportData) {
-          setCurrentData({
+          const loadedData = {
             ...st.reportData,
             employeeName: fullName,
             employeeId: code,
             department: dept,
             designation: desig,
             ...(mgr ? { manager: mgr } : {}),
-          });
+          };
+          setDeptData(activeD, loadedData);
           showToast(`Selected ${fullName}. Loaded previous evaluation (Sent: ${st.sentCount || 1}x).`, 'info');
           return;
         }
@@ -550,7 +578,7 @@ export const ReportsPage = () => {
         setLoadingStatus(false);
       }
 
-      setCurrentData((prev) => ({
+      setDeptData(activeD, (prev) => ({
         ...prev,
         employeeName: fullName || prev.employeeName,
         employeeId: code || prev.employeeId,
@@ -727,21 +755,23 @@ export const ReportsPage = () => {
   // Start editing a sent report
   const handleStartEditReport = (report) => {
     if (!report) return;
+    const targetDept = (report.department || 'operations').toLowerCase();
     setEditingReport(report);
     setSelectedEmployeeId(report.employeeId);
-    setDepartment(report.department || 'operations');
+    setDepartment(targetDept);
 
     const parsed = parseReportData(report);
-    setCurrentData({
+    const updatedData = {
       ...parsed,
       employeeName: report.employeeName || parsed.employeeName,
       employeeId: report.employeeCode || report.employeeId || parsed.employeeId,
-      department: report.department || parsed.department,
+      department: targetDept,
       designation: report.designation || parsed.designation,
       reviewPeriod: report.reviewPeriod || parsed.reviewPeriod,
       reviewDate: report.reviewDate || parsed.reviewDate,
       reviewCycle: report.reviewCycle || parsed.reviewCycle,
-    });
+    };
+    setDeptData(targetDept, updatedData);
     setEmpReportStatus(report);
     setReviewerSubTab('form');
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -799,23 +829,26 @@ export const ReportsPage = () => {
     ? (activeMyReport.department || department || 'operations')
     : (department || 'operations');
 
-  const baseFallbackData = currentData || opsData || {};
-
   const effectiveData = useMemo(() => {
-    const raw = isViewingMyReport && activeMyReport && parsedActiveReportData
-      ? parsedActiveReportData
-      : baseFallbackData;
-
-    return {
-      ...baseFallbackData,
-      ...(raw || {}),
-      competencies: Array.isArray(raw?.competencies) ? raw.competencies : (baseFallbackData.competencies || []),
-      goals: Array.isArray(raw?.goals) ? raw.goals : (baseFallbackData.goals || []),
-      training: Array.isArray(raw?.training) ? raw.training : (baseFallbackData.training || []),
-      actions: raw?.actions && typeof raw.actions === 'object' ? raw.actions : (baseFallbackData.actions || {}),
-      overallRating: raw?.overallRating || baseFallbackData.overallRating || 'Meets Expectations',
-    };
-  }, [isViewingMyReport, activeMyReport, parsedActiveReportData, baseFallbackData]);
+    if (isViewingMyReport && activeMyReport && parsedActiveReportData) {
+      return {
+        ...parsedActiveReportData,
+        employeeName: activeMyReport.employeeName || parsedActiveReportData.employeeName || '',
+        employeeId: activeMyReport.employeeCode || activeMyReport.employeeId || parsedActiveReportData.employeeId || '',
+        department: activeMyReport.department || parsedActiveReportData.department || '',
+        designation: activeMyReport.designation || parsedActiveReportData.designation || '',
+        reviewPeriod: activeMyReport.reviewPeriod || parsedActiveReportData.reviewPeriod || '',
+        reviewDate: activeMyReport.reviewDate || parsedActiveReportData.reviewDate || '',
+        reviewCycle: activeMyReport.reviewCycle || parsedActiveReportData.reviewCycle || '',
+        competencies: Array.isArray(parsedActiveReportData.competencies) ? parsedActiveReportData.competencies : [],
+        goals: Array.isArray(parsedActiveReportData.goals) ? parsedActiveReportData.goals : [],
+        training: Array.isArray(parsedActiveReportData.training) ? parsedActiveReportData.training : [],
+        actions: parsedActiveReportData.actions && typeof parsedActiveReportData.actions === 'object' ? parsedActiveReportData.actions : {},
+        overallRating: activeMyReport.overallRating || parsedActiveReportData.overallRating || 'Meets Expectations',
+      };
+    }
+    return currentData;
+  }, [isViewingMyReport, activeMyReport, parsedActiveReportData, currentData]);
 
   const effectiveAverageScore = useMemo(() => {
     if (isViewingMyReport && activeMyReport?.averageScore) {
@@ -1767,7 +1800,7 @@ export const ReportsPage = () => {
                             icon={Plus}
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleSelectEmployee(emp.employeeId);
+                              handleSelectEmployee(emp.employeeId, true);
                               setDepartment(emp.department || 'operations');
                               setReviewerSubTab('form');
                             }}
