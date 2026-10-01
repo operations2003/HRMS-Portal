@@ -8,11 +8,6 @@ const mapDailyReportRow = (row) => {
     employeeId: row.employee_id,
     reportDate: row.report_date ? (row.report_date instanceof Date ? row.report_date.toISOString().split('T')[0] : String(row.report_date).split('T')[0]) : null,
     workSummary: row.work_summary,
-    tasksCompleted: row.tasks_completed || '',
-    blockers: row.blockers || '',
-    planForTomorrow: row.plan_for_tomorrow || '',
-    hoursWorked: parseFloat(row.hours_worked) || 8.0,
-    moodOrStatus: row.mood_or_status || 'PRODUCTIVE',
     status: row.status || 'SUBMITTED',
     managerFeedback: row.manager_feedback || null,
     reviewedBy: row.reviewed_by || null,
@@ -50,11 +45,6 @@ const BASE_REPORT_SELECT = `
     r.employee_id,
     TO_CHAR(r.report_date, 'YYYY-MM-DD') AS report_date,
     r.work_summary,
-    r.tasks_completed,
-    r.blockers,
-    r.plan_for_tomorrow,
-    r.hours_worked,
-    r.mood_or_status,
     r.status,
     r.manager_feedback,
     r.reviewed_by,
@@ -112,16 +102,10 @@ export const dailyReportRepository = {
 
     const sql = `
       INSERT INTO daily_work_reports (
-        id, org_id, employee_id, report_date, work_summary, tasks_completed,
-        blockers, plan_for_tomorrow, hours_worked, mood_or_status, status, updated_at
-      ) VALUES ($1, $2, $3, $4::date, $5, $6, $7, $8, $9, $10, $11, NOW())
+        id, org_id, employee_id, report_date, work_summary, status, updated_at
+      ) VALUES ($1, $2, $3, $4::date, $5, $6, NOW())
       ON CONFLICT (employee_id, report_date) DO UPDATE SET
         work_summary = EXCLUDED.work_summary,
-        tasks_completed = EXCLUDED.tasks_completed,
-        blockers = EXCLUDED.blockers,
-        plan_for_tomorrow = EXCLUDED.plan_for_tomorrow,
-        hours_worked = EXCLUDED.hours_worked,
-        mood_or_status = EXCLUDED.mood_or_status,
         status = EXCLUDED.status,
         updated_at = NOW()
       RETURNING id;
@@ -133,11 +117,6 @@ export const dailyReportRepository = {
       data.employeeId,
       reportDate,
       data.workSummary,
-      data.tasksCompleted || '',
-      data.blockers || '',
-      data.planForTomorrow || '',
-      parseFloat(data.hoursWorked) || 8.0,
-      data.moodOrStatus || 'PRODUCTIVE',
       data.status || 'SUBMITTED',
     ];
 
@@ -241,10 +220,6 @@ export const dailyReportRepository = {
       values.push(status.toUpperCase());
     }
 
-    if (hasBlocker) {
-      conditions.push(`NULLIF(TRIM(r.blockers), '') IS NOT NULL AND LOWER(TRIM(r.blockers)) != 'none'`);
-    }
-
     if (search) {
       const q = `%${search.toLowerCase()}%`;
       conditions.push(`(
@@ -332,8 +307,7 @@ export const dailyReportRepository = {
     const reportMetricsSql = `
       SELECT
         COUNT(r.id)::int AS "submittedCount",
-        COUNT(r.id) FILTER (WHERE r.status = 'ACKNOWLEDGED')::int AS "acknowledgedCount",
-        COUNT(r.id) FILTER (WHERE NULLIF(TRIM(r.blockers), '') IS NOT NULL AND LOWER(TRIM(r.blockers)) != 'none')::int AS "blockersCount"
+        COUNT(r.id) FILTER (WHERE r.status = 'ACKNOWLEDGED')::int AS "acknowledgedCount"
       FROM daily_work_reports r
       JOIN employees e ON e.id = r.employee_id
       WHERE ${reportConditions.join(' AND ')};
@@ -350,7 +324,6 @@ export const dailyReportRepository = {
       submittedCount,
       pendingCount,
       acknowledgedCount: row.acknowledgedCount || 0,
-      blockersCount: row.blockersCount || 0,
       complianceRate,
     };
   },

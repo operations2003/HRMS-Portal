@@ -50,11 +50,6 @@ export const dailyReportService = {
       employeeId: employee.id,
       reportDate,
       workSummary: data.workSummary.trim(),
-      tasksCompleted: data.tasksCompleted ? data.tasksCompleted.trim() : '',
-      blockers: data.blockers ? data.blockers.trim() : '',
-      planForTomorrow: data.planForTomorrow ? data.planForTomorrow.trim() : '',
-      hoursWorked: parseFloat(data.hoursWorked) || 8.0,
-      moodOrStatus: data.moodOrStatus || 'PRODUCTIVE',
       status: 'SUBMITTED',
     });
 
@@ -92,7 +87,7 @@ export const dailyReportService = {
   /**
    * Get employee's report for today
    */
-  async getMyTodayReport(user) {
+  async getMyTodayReport(user, query = {}) {
     const employee = await resolveRequesterEmployee(user);
     if (!employee) {
       const err = new Error('No employee profile found for your account.');
@@ -100,7 +95,7 @@ export const dailyReportService = {
       throw err;
     }
 
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = query.date || new Date().toISOString().split('T')[0];
     const report = await dailyReportRepository.findByEmployeeAndDate(employee.id, todayStr, employee.orgId);
     return {
       todayDate: todayStr,
@@ -163,7 +158,6 @@ export const dailyReportService = {
       endDate: query.endDate || '',
       status: query.status || '',
       search: query.search || '',
-      hasBlocker: query.hasBlocker === 'true' || query.hasBlocker === true,
       page: query.page || 1,
       limit: query.limit || 20,
     });

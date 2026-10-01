@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useToast } from "../../context/ToastContext.jsx";
 import { Button } from "../../components/common/Button.jsx";
@@ -209,7 +209,8 @@ export const DailyReportPage = () => {
   const fetchToday = useCallback(async () => {
     setLoadingToday(true);
     try {
-      const data = await apiFetch(`${API_BASE}/daily-reports/my/today`);
+      const todayDate = new Date().toLocaleDateString("en-CA");
+      const data = await apiFetch(`${API_BASE}/daily-reports/my/today?date=${todayDate}`);
       const r = data.data?.report || null;
       setTodayReport(r);
       if (r) setForm({ workSummary: r.workSummary || "" });
@@ -243,8 +244,15 @@ export const DailyReportPage = () => {
     if (!form.workSummary.trim()) { addToast("Work summary is required.", "error"); return; }
     setSubmitting(true);
     try {
-      await apiFetch(`${API_BASE}/daily-reports`, { method: "POST", body: JSON.stringify(form) });
-      addToast("Daily report submitted successfully!", "success");
+      const todayDate = new Date().toLocaleDateString("en-CA");
+      await apiFetch(`${API_BASE}/daily-reports`, { 
+        method: "POST", 
+        body: JSON.stringify({
+          workSummary: form.workSummary.trim(),
+          reportDate: todayReport?.reportDate || todayDate,
+        }) 
+      });
+      addToast(todayReport ? "Daily report updated successfully!" : "Daily report submitted successfully!", "success");
       fetchToday(); fetchMyHistory();
     } catch (e) { addToast(e.message || "Failed to submit report.", "error"); } finally { setSubmitting(false); }
   };
