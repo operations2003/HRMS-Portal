@@ -28,6 +28,7 @@ import {
   Clock,
   BookOpen,
   ChevronDown,
+  PenLine,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { TaskNeraLogo } from '../components/common/TaskNeraLogo.jsx';
@@ -89,6 +90,12 @@ export const Sidebar = ({ isOpen, onClose }) => {
           path: '/tasks',
           icon: CheckSquare,
           permission: ['task:read', 'employee:read'],
+        },
+        {
+          name: 'Daily Work Reports',
+          path: '/daily-reports',
+          icon: PenLine,
+          permission: ['employee:read'],
         },
         {
           name: 'Learning & Development',
