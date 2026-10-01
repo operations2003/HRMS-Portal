@@ -25,6 +25,7 @@ import {
   X,
   FileCheck,
   Coffee,
+  Umbrella,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
@@ -44,6 +45,7 @@ import { AssignManagerModal } from '../../components/team/AssignManagerModal.jsx
 import { ApprovalActionModal } from '../../components/approvals/ApprovalActionModal.jsx';
 import { AttendanceDetailModal } from '../../components/attendance/AttendanceDetailModal.jsx';
 import { EditAttendanceTimingModal } from '../../components/attendance/EditAttendanceTimingModal.jsx';
+import { ConvertAbsenceToLeaveModal } from '../../components/attendance/ConvertAbsenceToLeaveModal.jsx';
 import { attendanceService } from '../../services/attendanceService.js';
 import { Avatar } from '../../components/common/Avatar.jsx';
 
@@ -84,6 +86,7 @@ export const TeamManagementPage = () => {
   const [approvalAction, setApprovalAction] = useState({ isOpen: false, item: null, type: 'APPROVE' });
   const [selectedAttendanceDetail, setSelectedAttendanceDetail] = useState(null);
   const [selectedEditTimingRecord, setSelectedEditTimingRecord] = useState(null);
+  const [selectedConvertRecord, setSelectedConvertRecord] = useState(null);
 
   // Team Documents State
   const [teamDocuments, setTeamDocuments] = useState([]);
@@ -259,6 +262,41 @@ export const TeamManagementPage = () => {
         shiftTiming: row.shiftTiming || '11:00 AM - 07:00 PM',
       },
     });
+  };
+
+  const handleOpenConvertAbsence = async (row) => {
+    try {
+      let recordId = row.attendance?.id;
+      const targetDate = selectedDate || new Date().toISOString().split('T')[0];
+      if (!recordId) {
+        await attendanceService.syncDailyAbsences({ date: targetDate });
+        const res = await attendanceService.getOrgAttendance({
+          date: targetDate,
+          search: row.employeeCode || row.employee_code || row.fullName || row.firstName,
+        });
+        const match = res.records?.find((r) => r.employeeId === (row.employeeId || row.id));
+        if (match) recordId = match.id;
+      }
+
+      if (recordId) {
+        setSelectedConvertRecord({
+          id: recordId,
+          attendanceDate: targetDate,
+          employee: {
+            id: row.employeeId || row.id,
+            fullName: row.fullName || `${row.firstName || ''} ${row.lastName || ''}`.trim(),
+            employeeCode: row.employeeCode || row.employee_code,
+            roleName: row.roleName || row.role || 'Employee',
+            departmentName: (typeof row.department === 'object' ? row.department?.name : row.department) || '',
+            avatarUrl: row.avatarUrl,
+          },
+        });
+      } else {
+        toast.error('Unable to locate an attendance record for this employee on this date.');
+      }
+    } catch (err) {
+      toast.error(err.message || 'Failed to prepare absence record.');
+    }
   };
 
   // Role Gate: Regular employees cannot see manager team controls
@@ -579,6 +617,26 @@ export const TeamManagementPage = () => {
       className: 'text-right',
       render: (row) => (
         <div className="flex items-center justify-end gap-1.5">
+          {((row.attendance?.status === 'ABSENT') || (!row.attendance?.punchIn && !row.attendance?.checkIn && row.attendance?.status !== 'ON_LEAVE')) && (() => {
+            const userRole = (user?.role || user?.roleName || '').toLowerCase();
+            const isAdmin = ['admin', 'superadmin', 'orgadmin'].includes(userRole);
+            if (isAdmin) return true;
+            const targetRole = (row.roleName || row.role || 'Employee').toLowerCase();
+            const isTargetHrOrManager = ['manager', 'lead', 'teamlead', 'supervisor', 'hr', 'hrmanager'].some((r) => targetRole.includes(r));
+            if (isTargetHrOrManager) return false;
+            return ['manager', 'lead', 'teamlead', 'supervisor', 'hr', 'hrmanager'].some((r) => userRole.includes(r));
+          })() && (
+            <Button
+              size="sm"
+              variant="primary"
+              icon={Umbrella}
+              className="!bg-brand-600 hover:!bg-brand-700 text-white !py-1 !px-2.5 !text-xs font-semibold shadow-xs"
+              onClick={() => handleOpenConvertAbsence(row)}
+              title="Convert this absence into an approved leave and deduct from bucket"
+            >
+              Convert to Leave
+            </Button>
+          )}
           {row.attendance && (
             <Button
               size="sm"
@@ -1354,6 +1412,15 @@ export const TeamManagementPage = () => {
         isOpen={Boolean(selectedEditTimingRecord)}
         onClose={() => setSelectedEditTimingRecord(null)}
         record={selectedEditTimingRecord}
+        onSuccess={() => {
+          loadTabData();
+        }}
+      />
+
+      <ConvertAbsenceToLeaveModal
+        isOpen={Boolean(selectedConvertRecord)}
+        onClose={() => setSelectedConvertRecord(null)}
+        record={selectedConvertRecord}
         onSuccess={() => {
           loadTabData();
         }}

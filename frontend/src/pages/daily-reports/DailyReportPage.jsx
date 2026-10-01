@@ -11,19 +11,7 @@ import {
   Filter, PenLine, ThumbsUp,
 } from "lucide-react";
 
-const API_BASE = "/api/v1";
-
-const getAuthHeaders = () => {
-  const token = localStorage.getItem("authToken") || sessionStorage.getItem("authToken");
-  return { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) };
-};
-
-const apiFetch = async (url, opts = {}) => {
-  const res = await fetch(url, { headers: getAuthHeaders(), ...opts });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
-  return data;
-};
+import { dailyReportService } from "../../services/dailyReportService.js";
 
 const fmtDate = (d) => {
   if (!d) return "-";
@@ -210,8 +198,8 @@ export const DailyReportPage = () => {
     setLoadingToday(true);
     try {
       const todayDate = new Date().toLocaleDateString("en-CA");
-      const data = await apiFetch(`${API_BASE}/daily-reports/my/today?date=${todayDate}`);
-      const r = data.data?.report || null;
+      const res = await dailyReportService.getMyTodayReport(todayDate);
+      const r = res.data?.report || res.report || null;
       setTodayReport(r);
       if (r) setForm({ workSummary: r.workSummary || "" });
     } catch { /* no report yet */ } finally { setLoadingToday(false); }
@@ -219,25 +207,35 @@ export const DailyReportPage = () => {
 
   const fetchMyHistory = useCallback(async () => {
     setLoadingMy(true);
-    try { const data = await apiFetch(`${API_BASE}/daily-reports/my?limit=20`); setMyReports(data.data || []); }
-    catch { addToast("Failed to load report history.", "error"); } finally { setLoadingMy(false); }
+    try {
+      const res = await dailyReportService.getMyReports({ limit: 20 });
+      setMyReports(res.data || []);
+    } catch {
+      addToast("Failed to load report history.", "error");
+    } finally {
+      setLoadingMy(false);
+    }
   }, [addToast]);
 
   const fetchTeam = useCallback(async (page = 1) => {
     setLoadingTeam(true);
     try {
-      const params = new URLSearchParams({ page, limit: TEAM_PAGE_SIZE });
-      if (teamFilters.search) params.set("search", teamFilters.search);
-      if (teamFilters.date) params.set("date", teamFilters.date);
-      if (teamFilters.status) params.set("status", teamFilters.status);
+      const params = { page, limit: TEAM_PAGE_SIZE };
+      if (teamFilters.search) params.search = teamFilters.search;
+      if (teamFilters.date) params.date = teamFilters.date;
+      if (teamFilters.status) params.status = teamFilters.status;
       const [teamData, sumData] = await Promise.all([
-        apiFetch(`${API_BASE}/daily-reports/team?${params}`),
-        apiFetch(`${API_BASE}/daily-reports/summary${teamFilters.date ? `?date=${teamFilters.date}` : ""}`),
+        dailyReportService.getTeamReports(params),
+        dailyReportService.getSummary(teamFilters.date),
       ]);
       setTeamReports(teamData.data || []);
       setTeamTotal(teamData.meta?.pagination?.total || 0);
       setSummary(sumData.data || null);
-    } catch { addToast("Failed to load team reports.", "error"); } finally { setLoadingTeam(false); }
+    } catch {
+      addToast("Failed to load team reports.", "error");
+    } finally {
+      setLoadingTeam(false);
+    }
   }, [teamFilters, addToast]);
 
   const handleSubmit = async () => {
@@ -245,20 +243,21 @@ export const DailyReportPage = () => {
     setSubmitting(true);
     try {
       const todayDate = new Date().toLocaleDateString("en-CA");
-      await apiFetch(`${API_BASE}/daily-reports`, { 
-        method: "POST", 
-        body: JSON.stringify({
-          workSummary: form.workSummary.trim(),
-          reportDate: todayReport?.reportDate || todayDate,
-        }) 
+      await dailyReportService.submitReport({
+        workSummary: form.workSummary.trim(),
+        reportDate: todayReport?.reportDate || todayDate,
       });
       addToast(todayReport ? "Daily report updated successfully!" : "Daily report submitted successfully!", "success");
       fetchToday(); fetchMyHistory();
-    } catch (e) { addToast(e.message || "Failed to submit report.", "error"); } finally { setSubmitting(false); }
+    } catch (e) {
+      addToast(e.message || "Failed to submit report.", "error");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleFeedback = async (id, feedbackText) => {
-    await apiFetch(`${API_BASE}/daily-reports/${id}/feedback`, { method: "POST", body: JSON.stringify({ feedback: feedbackText }) });
+    await dailyReportService.addFeedback(id, feedbackText);
     fetchTeam(teamPage);
   };
 

@@ -1,6 +1,8 @@
 import { attendanceRepository } from '../repositories/attendanceRepository.js';
 import { employeeRepository } from '../repositories/employeeRepository.js';
 import { userRepository } from '../repositories/userRepository.js';
+import { leaveRepository } from '../repositories/leaveRepository.js';
+import { pool } from '../config/db.js';
 import { notificationService } from './notificationService.js';
 import { logger } from '../utils/logger.js';
 
@@ -1072,6 +1074,14 @@ export const attendanceService = {
     // Automatically resolve stale sessions before returning team view
     await autoCheckoutStaleRecords(user.orgId);
 
+    // Sync daily absences for target date
+    const targetDate = query.date || query.startDate || new Date().toISOString().split('T')[0];
+    try {
+      await attendanceRepository.syncDailyAbsences(user.orgId, targetDate);
+    } catch (absErr) {
+      logger.warn('AttendanceService', `Failed to sync daily absences for team: ${absErr.message}`);
+    }
+
     return attendanceRepository.findTeamAttendance(deptId, user.orgId, query);
   },
 
@@ -1105,6 +1115,14 @@ export const attendanceService = {
 
     // Automatically resolve stale sessions across organization before returning view
     await autoCheckoutStaleRecords(user.orgId);
+
+    // Sync daily absences for target date
+    const targetDate = query.date || query.startDate || new Date().toISOString().split('T')[0];
+    try {
+      await attendanceRepository.syncDailyAbsences(user.orgId, targetDate);
+    } catch (absErr) {
+      logger.warn('AttendanceService', `Failed to sync daily absences: ${absErr.message}`);
+    }
 
     const [attendanceData, summary] = await Promise.all([
       attendanceRepository.findAllOrgAttendance(user.orgId, query),
@@ -1307,6 +1325,259 @@ export const attendanceService = {
     });
 
     return updatedRecord;
+  },
+
+  /**
+   * Manually or automatically trigger daily absence sync for an org and date
+   */
+  async syncDailyAbsences(user, data = {}) {
+    const targetDate = data.date || new Date().toISOString().split('T')[0];
+    const orgId = user.orgId || 'org-1';
+    const count = await attendanceRepository.syncDailyAbsences(orgId, targetDate);
+    return {
+      date: targetDate,
+      markedAbsentCount: count,
+      message: `Successfully synchronized absences for ${targetDate}. ${count} record(s) marked absent.`,
+    };
+  },
+
+  /**
+   * Fetch leave options & balances for converting an absent attendance record
+   * Enforces role & hierarchy authorization:
+   * - HR/Manager absence: only Admin can view/convert
+   * - Employee absence: respective Manager, respective HR, or Admin
+   */
+  async getAbsentLeaveOptions(user, attendanceId) {
+    const record = await attendanceRepository.findById(attendanceId);
+    if (!record) {
+      const err = new Error('Attendance record not found.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    if (record.status !== 'ABSENT') {
+      const err = new Error(`Attendance record is marked as '${record.status}'. Only records with status 'ABSENT' can be converted to leave.`);
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const targetEmp = await employeeRepository.findById(record.employeeId);
+    if (!targetEmp) {
+      const err = new Error('Employee profile not found.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const callerEmp = await resolveRequesterEmployee(user);
+    const callerRole = normalizeRole(user.roleName);
+    const isAdmin = ['admin', 'superadmin', 'orgadmin'].includes(callerRole);
+    const targetRole = normalizeRole(targetEmp.roleName);
+    const isTargetHrOrManager = ['manager', 'lead', 'teamlead', 'supervisor', 'hr', 'hrmanager'].includes(targetRole);
+
+    let isAuthorized = false;
+    if (isAdmin) {
+      isAuthorized = true;
+    } else if (isTargetHrOrManager) {
+      // Only Admin can convert HR and Manager absences
+      isAuthorized = false;
+    } else {
+      // Target is regular Employee
+      const isManagerOfEmp = ['manager', 'lead', 'teamlead', 'supervisor'].some(r => callerRole.includes(r)) &&
+        (targetEmp.managerId === callerEmp?.id || targetEmp.deptId === callerEmp?.deptId);
+      const isHrOfEmp = ['hr', 'hrmanager'].includes(callerRole) &&
+        (targetEmp.hrId === callerEmp?.id || targetEmp.orgId === user.orgId);
+      isAuthorized = isManagerOfEmp || isHrOfEmp;
+    }
+
+    if (!isAuthorized) {
+      const err = new Error(
+        isTargetHrOrManager
+          ? 'Access denied: Only Admins can convert absences for HR and Managers into leave.'
+          : 'Access denied: Only the employee\'s respective Manager, assigned HR, or an Admin can convert this absence to leave.'
+      );
+      err.statusCode = 403;
+      throw err;
+    }
+
+    const year = new Date(record.attendanceDate).getFullYear();
+    const balances = await leaveRepository.getLeaveBalances(targetEmp.id, year, targetEmp.gender);
+    const allTypes = await leaveRepository.findLeaveTypes(targetEmp.orgId);
+
+    return {
+      attendance: record,
+      employee: {
+        id: targetEmp.id,
+        fullName: `${targetEmp.firstName || ''} ${targetEmp.lastName || ''}`.trim(),
+        employeeCode: targetEmp.employeeCode,
+        roleName: targetEmp.roleName || 'Employee',
+        departmentName: targetEmp.department?.name || '',
+        avatarUrl: targetEmp.avatarUrl,
+      },
+      attendanceDate: record.attendanceDate,
+      balances,
+      leaveTypes: allTypes,
+      canConvert: true,
+    };
+  },
+
+  /**
+   * Convert an ABSENT record into an approved Leave Category and deduct from leave bucket
+   */
+  async convertAbsenceToLeave(user, attendanceId, data = {}) {
+    const record = await attendanceRepository.findById(attendanceId);
+    if (!record) {
+      const err = new Error('Attendance record not found.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    if (record.status !== 'ABSENT') {
+      const err = new Error(`Attendance record is marked as '${record.status}'. Only records with status 'ABSENT' can be converted to leave.`);
+      err.statusCode = 400;
+      throw err;
+    }
+
+    if (!data.leaveTypeId) {
+      const err = new Error('Please select a leave category to convert the absence into.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const targetEmp = await employeeRepository.findById(record.employeeId);
+    if (!targetEmp) {
+      const err = new Error('Employee profile not found.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const callerEmp = await resolveRequesterEmployee(user);
+    const callerRole = normalizeRole(user.roleName);
+    const isAdmin = ['admin', 'superadmin', 'orgadmin'].includes(callerRole);
+    const targetRole = normalizeRole(targetEmp.roleName);
+    const isTargetHrOrManager = ['manager', 'lead', 'teamlead', 'supervisor', 'hr', 'hrmanager'].includes(targetRole);
+
+    let isAuthorized = false;
+    if (isAdmin) {
+      isAuthorized = true;
+    } else if (isTargetHrOrManager) {
+      isAuthorized = false;
+    } else {
+      const isManagerOfEmp = ['manager', 'lead', 'teamlead', 'supervisor'].some(r => callerRole.includes(r)) &&
+        (targetEmp.managerId === callerEmp?.id || targetEmp.deptId === callerEmp?.deptId);
+      const isHrOfEmp = ['hr', 'hrmanager'].includes(callerRole) &&
+        (targetEmp.hrId === callerEmp?.id || targetEmp.orgId === user.orgId);
+      isAuthorized = isManagerOfEmp || isHrOfEmp;
+    }
+
+    if (!isAuthorized) {
+      const err = new Error(
+        isTargetHrOrManager
+          ? 'Access denied: Only Admins can convert absences for HR and Managers into leave.'
+          : 'Access denied: Only the employee\'s respective Manager, assigned HR, or an Admin can convert this absence to leave.'
+      );
+      err.statusCode = 403;
+      throw err;
+    }
+
+    const leaveType = await leaveRepository.findLeaveTypeById(data.leaveTypeId, targetEmp.orgId);
+    if (!leaveType) {
+      const err = new Error('Selected leave category does not exist or is inactive.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const year = new Date(record.attendanceDate).getFullYear();
+    const assignerRoleLabel = isAdmin ? 'Admin' : (['hr', 'hrmanager'].includes(callerRole) ? 'HR' : 'Manager');
+    const callerName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Admin/Manager';
+    const reasonText = `[Absence converted by ${assignerRoleLabel}: ${callerName}] ${data.reason || 'Converted from absence to ' + leaveType.name}`;
+
+    // 1. Create approved leave request
+    const leaveReq = await leaveRepository.createLeaveRequest({
+      orgId: targetEmp.orgId,
+      employeeId: targetEmp.id,
+      leaveTypeId: leaveType.id,
+      startDate: record.attendanceDate,
+      endDate: record.attendanceDate,
+      isHalfDay: false,
+      halfDayPeriod: null,
+      totalDays: 1.0,
+      status: 'APPROVED',
+      approverId: callerEmp?.id || null,
+      approverUserId: user.id,
+      reason: reasonText,
+      dateDecisions: [{ date: record.attendanceDate, status: 'APPROVED', dayFraction: 1.0 }],
+    });
+
+    // 2. Deduct from employee leave bucket (used_days += 1)
+    const isRestricted = ['HL', 'AWOL', 'LOP', 'LWP'].includes(String(leaveType.code).toUpperCase()) || !leaveType.isPaid;
+    if (isRestricted) {
+      await leaveRepository.recordAssignedLeaveBalance(
+        targetEmp.id,
+        targetEmp.orgId,
+        leaveType.id,
+        year,
+        1.0
+      );
+    } else {
+      const balRes = await pool.query(
+        'SELECT id, allocated_days, used_days FROM leave_balances WHERE employee_id = $1 AND leave_type_id = $2 AND year = $3',
+        [targetEmp.id, leaveType.id, year]
+      );
+      if (balRes.rows.length === 0) {
+        const balId = `lb-${targetEmp.id}-${leaveType.id}-${year}`;
+        const defaultAlloc = parseFloat(leaveType.daysPerYear) || 0.0;
+        await pool.query(
+          `INSERT INTO leave_balances (id, org_id, employee_id, leave_type_id, year, allocated_days, used_days, pending_days, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, 1.0, 0.0, NOW())
+           ON CONFLICT (employee_id, leave_type_id, year)
+           DO UPDATE SET used_days = leave_balances.used_days + 1.0, updated_at = NOW();`,
+          [balId, targetEmp.orgId, targetEmp.id, leaveType.id, year, defaultAlloc]
+        );
+      } else {
+        await leaveRepository.adjustBalance(targetEmp.id, leaveType.id, year, { usedDelta: 1.0 });
+      }
+    }
+
+    // 3. Update attendance record status to ON_LEAVE
+    const noteMsg = `Converted to ${leaveType.name} by ${callerName} (${assignerRoleLabel})${data.reason ? ': ' + data.reason.trim() : ''}`;
+    await pool.query(
+      `UPDATE attendance_records
+       SET status = 'ON_LEAVE',
+           notes = $1,
+           is_regularized = TRUE,
+           regularization_reason = $2,
+           regularized_by = $3,
+           regularized_at = NOW(),
+           updated_at = NOW()
+       WHERE id = $4`,
+      [noteMsg, data.reason || `Absence converted to ${leaveType.name}`, user.id, record.id]
+    );
+
+    // 4. Send notification to employee
+    if (targetEmp.userId) {
+      try {
+        await notificationService.createNotification({
+          orgId: targetEmp.orgId,
+          userId: targetEmp.userId,
+          eventType: 'LEAVE_STATUS',
+          title: 'Absence Converted to Leave',
+          message: `Your absence on ${record.attendanceDate} has been recorded as ${leaveType.name} by ${callerName}. 1 day deducted from bucket.`,
+          entityType: 'LEAVE_REQUEST',
+          entityId: leaveReq.id,
+          actionUrl: '/leaves',
+        });
+      } catch (notifErr) {
+        logger.warn('AttendanceService', `Failed to send leave notification: ${notifErr.message}`);
+      }
+    }
+
+    const updatedRecord = await attendanceRepository.findById(record.id);
+    return {
+      record: updatedRecord,
+      leaveRequestId: leaveReq.id,
+      leaveType: leaveType.name,
+      message: `Absence converted to ${leaveType.name} and deducted from bucket successfully.`,
+    };
   },
 };
 

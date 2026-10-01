@@ -208,5 +208,53 @@ export const attendanceController = {
       next(error);
     }
   },
+
+  /**
+   * GET /api/v1/attendance/:id/absent-leave-options
+   * Get leave category options and employee bucket balances for converting an absence
+   */
+  async getAbsentLeaveOptions(req, res, next) {
+    try {
+      const result = await attendanceService.getAbsentLeaveOptions(req.user, req.params.id);
+      return sendSuccess(res, 'Absent leave options fetched successfully.', result, 200);
+    } catch (error) {
+      if (error.statusCode) {
+        return sendError(res, error.message, error.statusCode);
+      }
+      next(error);
+    }
+  },
+
+  /**
+   * POST /api/v1/attendance/:id/convert-to-leave
+   * Convert an ABSENT attendance record to an approved leave and deduct from bucket
+   */
+  async convertAbsenceToLeave(req, res, next) {
+    try {
+      const result = await attendanceService.convertAbsenceToLeave(req.user, req.params.id, req.body);
+      return sendSuccess(res, result.message || 'Absence converted to leave successfully.', result, 200);
+    } catch (error) {
+      if (error.statusCode) {
+        return sendError(res, error.message, error.statusCode);
+      }
+      next(error);
+    }
+  },
+
+  /**
+   * POST /api/v1/attendance/sync-absences
+   * Run daily cutoff to mark employees who haven't logged in as ABSENT
+   */
+  async syncDailyAbsences(req, res, next) {
+    try {
+      const result = await attendanceService.syncDailyAbsences(req.user, req.body);
+      return sendSuccess(res, result.message, result, 200);
+    } catch (error) {
+      if (error.statusCode) {
+        return sendError(res, error.message, error.statusCode);
+      }
+      next(error);
+    }
+  },
 };
 

@@ -158,5 +158,33 @@ export const attendanceService = {
     const res = await http.put(`/v1/attendance/${id}/remark`, data);
     return res.data;
   },
+
+  /**
+   * Fetch leave options & bucket balances for converting an absent attendance record
+   * @param {string} id
+   */
+  async getAbsentLeaveOptions(id) {
+    const res = await http.get(`/v1/attendance/${id}/absent-leave-options`);
+    return res.data;
+  },
+
+  /**
+   * Convert an ABSENT attendance record to an approved leave and deduct from bucket
+   * @param {string} id
+   * @param {Object} data - { leaveTypeId: string, reason?: string }
+   */
+  async convertAbsenceToLeave(id, data) {
+    const res = await http.post(`/v1/attendance/${id}/convert-to-leave`, data);
+    return res.data;
+  },
+
+  /**
+   * Synchronize daily absences (mark employees who didn't log in as ABSENT)
+   * @param {Object} data - { date?: string }
+   */
+  async syncDailyAbsences(data = {}) {
+    const res = await http.post('/v1/attendance/sync-absences', data);
+    return res.data;
+  },
 };
 

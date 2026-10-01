@@ -38,12 +38,16 @@ const mapAttendanceRow = (row) => {
           employeeCode: row.emp_code,
           firstName: row.emp_first_name,
           lastName: row.emp_last_name,
+          fullName: `${row.emp_first_name || ''} ${row.emp_last_name || ''}`.trim(),
           email: row.emp_email,
           deptId: row.emp_dept_id,
           departmentName: row.dept_name || '',
           designationTitle: row.desig_title || '',
           shiftTiming: row.emp_shift_timing || '11:00 AM - 07:00 PM',
           avatarUrl: row.emp_avatar_url || null,
+          managerId: row.emp_manager_id || null,
+          hrId: row.emp_hr_id || null,
+          roleName: row.emp_role_name || 'Employee',
         }
       : null,
     // Regularizer information if available
@@ -93,6 +97,9 @@ const BASE_ATTENDANCE_SELECT = `
     e.dept_id AS emp_dept_id,
     e.shift_timing AS emp_shift_timing,
     e.avatar_url AS emp_avatar_url,
+    e.manager_id AS emp_manager_id,
+    e.hr_id AS emp_hr_id,
+    r.name AS emp_role_name,
     d.name AS dept_name,
     ds.title AS desig_title,
     u.id AS reg_user_id,
@@ -105,6 +112,8 @@ const BASE_ATTENDANCE_SELECT = `
   LEFT JOIN departments d ON d.id = e.dept_id
   LEFT JOIN designations ds ON ds.id = e.desig_id
   LEFT JOIN users u ON u.id = a.regularized_by
+  LEFT JOIN users eu ON eu.id = e.user_id
+  LEFT JOIN roles r ON r.id = eu.role_id
 `;
 
 export const attendanceRepository = {
@@ -636,6 +645,62 @@ export const attendanceRepository = {
         totalPages: Math.ceil(total / limitNum) || 1,
       },
     };
+  },
+
+  /**
+   * Automatically marks active employees who have not logged in as ABSENT for a specific date.
+   * Excludes employees who are on approved leave or if the date is an organization holiday.
+   */
+  async syncDailyAbsences(orgId, targetDate = new Date().toISOString().split('T')[0]) {
+    const sql = `
+      INSERT INTO attendance_records (
+        id, org_id, employee_id, attendance_date, timezone,
+        check_in, check_out, total_hours, status,
+        source, notes, created_at, updated_at
+      )
+      SELECT
+        'att-abs-' || e.id || '-' || $2,
+        e.org_id,
+        e.id,
+        $2::date,
+        'Asia/Kolkata',
+        NULL,
+        NULL,
+        0.00,
+        'ABSENT',
+        'SYSTEM_ABSENCE_CUTOFF',
+        'Auto-marked Absent: Did not log in for the day',
+        NOW(),
+        NOW()
+      FROM employees e
+      WHERE e.org_id = $1
+        AND e.status = 'Active'
+        -- Exclude employees who already have an attendance record for this date
+        AND NOT EXISTS (
+          SELECT 1 FROM attendance_records a
+          WHERE a.employee_id = e.id AND a.attendance_date = $2::date
+        )
+        -- Exclude employees who have an approved leave for this date
+        AND NOT EXISTS (
+          SELECT 1 FROM leave_requests lr
+          WHERE lr.employee_id = e.id
+            AND lr.status = 'APPROVED'
+            AND lr.start_date <= $2::date
+            AND lr.end_date >= $2::date
+        )
+        -- Exclude if target date is an active organization holiday
+        AND NOT EXISTS (
+          SELECT 1 FROM holidays h
+          WHERE h.org_id = $1
+            AND h.status = 'Active'
+            AND h.is_optional = FALSE
+            AND h.holiday_date = $2::date
+        )
+      ON CONFLICT (employee_id, attendance_date) DO NOTHING
+      RETURNING id;
+    `;
+    const res = await pool.query(sql, [orgId, targetDate]);
+    return res.rowCount || 0;
   },
 
   /**

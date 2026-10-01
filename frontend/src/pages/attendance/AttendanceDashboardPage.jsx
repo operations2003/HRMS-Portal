@@ -19,6 +19,7 @@ import { AttendanceHistoryTable } from '../../components/attendance/AttendanceHi
 import { AttendanceDetailModal } from '../../components/attendance/AttendanceDetailModal.jsx';
 import { AttendanceRemarkModal } from '../../components/attendance/AttendanceRemarkModal.jsx';
 import { EditAttendanceTimingModal } from '../../components/attendance/EditAttendanceTimingModal.jsx';
+import { ConvertAbsenceToLeaveModal } from '../../components/attendance/ConvertAbsenceToLeaveModal.jsx';
 import { AttendanceAnalyticsSection } from '../../components/attendance/AttendanceAnalyticsSection.jsx';
 import { Button } from '../../components/common/Button.jsx';
 import { Alert } from '../../components/common/Alert.jsx';
@@ -46,6 +47,8 @@ export const AttendanceDashboardPage = () => {
   const [punchError, setPunchError] = useState(null);
   const [selectedRemarkRecord, setSelectedRemarkRecord] = useState(null);
   const [selectedEditTimingRecord, setSelectedEditTimingRecord] = useState(null);
+  const [selectedConvertRecord, setSelectedConvertRecord] = useState(null);
+  const [isSyncingAbsences, setIsSyncingAbsences] = useState(false);
 
   // History & Metrics state
   const [records, setRecords] = useState([]);
@@ -414,6 +417,8 @@ export const AttendanceDashboardPage = () => {
         canEditTiming={canEditTiming}
         showEmployeeCol={activeTab !== 'my'}
         showSearch={activeTab === 'org'}
+        onConvertAbsence={(rec) => setSelectedConvertRecord(rec)}
+        currentUser={user}
         filters={filters}
         onFilterChange={handleFilterChange}
         onResetFilters={handleResetFilters}
@@ -439,6 +444,17 @@ export const AttendanceDashboardPage = () => {
           setSelectedEditTimingRecord(rec);
         }}
         canEditTiming={canEditTiming}
+      />
+
+      {/* Convert Absence to Leave Modal */}
+      <ConvertAbsenceToLeaveModal
+        isOpen={Boolean(selectedConvertRecord)}
+        onClose={() => setSelectedConvertRecord(null)}
+        record={selectedConvertRecord}
+        onSuccess={() => {
+          fetchTableData(pagination?.page || 1);
+          fetchTodayRecord();
+        }}
       />
 
       {/* Attendance Remark Modal (Emergency vs OT for 10h+ Post-Shift) - HR, Admin & Manager */}

@@ -103,5 +103,26 @@ router.put(
   attendanceController.addShiftRemark
 );
 
+// 9. Synchronize daily absences (mark employees who didn't log in as ABSENT)
+router.post(
+  '/sync-absences',
+  requireRoles(['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin', 'Manager']),
+  attendanceController.syncDailyAbsences
+);
+
+// 10. Get leave options & balances for converting an absent record
+router.get(
+  '/:id/absent-leave-options',
+  requireRoles(['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin', 'Manager']),
+  attendanceController.getAbsentLeaveOptions
+);
+
+// 11. Convert an absent attendance record into an approved leave and deduct from bucket
+router.post(
+  '/:id/convert-to-leave',
+  requireRoles(['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin', 'Manager']),
+  attendanceController.convertAbsenceToLeave
+);
+
 export default router;
 

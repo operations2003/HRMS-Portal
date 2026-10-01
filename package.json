@@ -12,7 +12,12 @@
     "start": "npm --prefix backend run start",
     "start:backend": "npm --prefix backend run start"
   },
-  "keywords": ["hrms", "employee-management", "organization-management", "rbac"],
-  "author": "Shubham & Ajay",
+  "keywords": [
+    "hrms",
+    "employee-management",
+    "organization-management",
+    "rbac"
+  ],
+  "author": "Shubham,Ajay and Sakshi",
   "license": "MIT"
 }

@@ -20,6 +20,7 @@ import {
   Zap,
   ShieldCheck,
   Tag,
+  Umbrella,
 } from 'lucide-react';
 import { Badge } from '../common/Badge.jsx';
 import { Button } from '../common/Button.jsx';
@@ -41,6 +42,8 @@ export const AttendanceHistoryTable = ({
   canEditTiming = false,
   onAddRemark,
   canRemark = false,
+  onConvertAbsence,
+  currentUser = null,
   showEmployeeCol = false,
   filters = {},
   onFilterChange,
@@ -717,6 +720,32 @@ export const AttendanceHistoryTable = ({
                       {/* Actions */}
                       <td className="px-6 py-4 whitespace-nowrap text-right">
                         <div className="flex items-center justify-end gap-1.5">
+                          {row.status === 'ABSENT' && onConvertAbsence && (() => {
+                            if (!currentUser) return true;
+                            const userRole = (currentUser.role || currentUser.roleName || '').toLowerCase();
+                            const isAdmin = ['admin', 'superadmin', 'orgadmin'].includes(userRole);
+                            if (isAdmin) return true;
+
+                            const rowEmp = row.employee || {};
+                            const targetRole = (rowEmp.roleName || row.roleName || row.role || 'Employee').toLowerCase();
+                            const isTargetHrOrManager = ['manager', 'lead', 'teamlead', 'supervisor', 'hr', 'hrmanager'].some((r) => targetRole.includes(r));
+                            if (isTargetHrOrManager) return false;
+
+                            const isManager = ['manager', 'lead', 'teamlead', 'supervisor'].some((r) => userRole.includes(r));
+                            const isHr = ['hr', 'hrmanager'].includes(userRole);
+                            return isManager || isHr;
+                          })() && (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              icon={Umbrella}
+                              className="!bg-brand-600 hover:!bg-brand-700 text-white !py-1 !px-2.5 !text-xs font-semibold shadow-xs"
+                              onClick={() => onConvertAbsence && onConvertAbsence(row)}
+                              title="Put this absence in a leave category and update their leave bucket"
+                            >
+                              Convert to Leave
+                            </Button>
+                          )}
                           {canEdit && (
                             <Button
                               variant={row.status === 'LATE' ? 'primary' : 'secondary'}
