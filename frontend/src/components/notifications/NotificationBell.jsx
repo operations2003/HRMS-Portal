@@ -23,6 +23,7 @@ import {
   FileCheck,
   UserPlus,
   LogOut,
+  Coffee,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
@@ -81,21 +82,27 @@ export const resolveNotificationRoute = (notif, userRole = '') => {
     return '/tasks';
   }
 
-  // 4. Attendance, Shift, Timings & Punching
+  // 4. Attendance, Shift, Timings, Punching & Breaks
   if (
     ent === 'ATTENDANCE' ||
     ent === 'ATTENDANCE_RECORD' ||
+    ent === 'ATTENDANCE_BREAK' ||
     type.includes('ATTENDANCE') ||
     type.includes('PUNCH') ||
     type.includes('SHIFT') ||
+    type.includes('BREAK') ||
     combined.includes('attendance') ||
     combined.includes('punch') ||
+    combined.includes('break') ||
     combined.includes('late arrival') ||
     combined.includes('shift timing') ||
     combined.includes('regulariz') ||
     combined.includes('check-in') ||
     combined.includes('check-out')
   ) {
+    if (normRole === 'manager' && (type.includes('BREAK') || combined.includes('break') || combined.includes('team member'))) {
+      return '/team';
+    }
     return '/attendance';
   }
 
@@ -268,6 +275,24 @@ export const getNotificationIcon = (
     { eventType, title, entityType, message },
     userRole
   );
+
+  const typeStr = (eventType || '').toUpperCase();
+  const entStr = (entityType || '').toUpperCase();
+  const titleStr = (title || '').toLowerCase();
+  const msgStr = (message || '').toLowerCase();
+  const isBreak =
+    entStr.includes('BREAK') ||
+    typeStr.includes('BREAK') ||
+    titleStr.includes('break') ||
+    msgStr.includes('break');
+
+  if (isBreak) {
+    return {
+      icon: Coffee,
+      color: 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-400/30',
+      route,
+    };
+  }
 
   if (route.startsWith('/training')) {
     return {

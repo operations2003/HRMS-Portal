@@ -497,8 +497,12 @@ export const teamService = {
     }
 
     if (status && status.trim()) {
-      whereConditions.push(`a.status = $${pIdx++}`);
-      params.push(status.trim().toUpperCase());
+      if (status.trim().toUpperCase() === 'ON_BREAK') {
+        whereConditions.push('a.is_on_break = TRUE');
+      } else {
+        whereConditions.push(`a.status = $${pIdx++}`);
+        params.push(status.trim().toUpperCase());
+      }
     }
 
     const query = `
@@ -517,6 +521,10 @@ export const teamService = {
         a.check_out AS "punchOut",
         a.total_hours AS "totalHours",
         a.overtime_hours AS "overtimeHours",
+        a.is_on_break AS "isOnBreak",
+        a.current_break_start AS "currentBreakStart",
+        a.break_duration_minutes AS "breakDurationMinutes",
+        a.break_history AS "breakHistory",
         (CASE WHEN a.status = 'LATE' THEN true ELSE false END) AS "isLate"
       FROM employees e
       LEFT JOIN departments d ON e.dept_id = d.id
@@ -543,6 +551,10 @@ export const teamService = {
             totalHours: parseFloat(r.totalHours) || 0,
             overtimeHours: parseFloat(r.overtimeHours) || 0,
             isLate: !!r.isLate,
+            isOnBreak: Boolean(r.isOnBreak),
+            currentBreakStart: r.currentBreakStart ? new Date(r.currentBreakStart).toISOString() : null,
+            breakDurationMinutes: parseInt(r.breakDurationMinutes, 10) || 0,
+            breakHistory: Array.isArray(r.breakHistory) ? r.breakHistory : [],
           }
         : {
             status: 'ABSENT',
@@ -551,6 +563,10 @@ export const teamService = {
             totalHours: 0,
             overtimeHours: 0,
             isLate: false,
+            isOnBreak: false,
+            currentBreakStart: null,
+            breakDurationMinutes: 0,
+            breakHistory: [],
           },
     }));
   },
@@ -571,6 +587,7 @@ export const teamService = {
           halfDayCount: 0,
           onLeaveCount: 0,
           absentCount: 0,
+          onBreakCount: 0,
           totalHoursWorked: 0,
           attendanceRate: 0,
         };
@@ -603,6 +620,7 @@ export const teamService = {
         COUNT(a.id) FILTER (WHERE a.status = 'HALF_DAY')::int AS "halfDayCount",
         COUNT(a.id) FILTER (WHERE a.status = 'ON_LEAVE')::int AS "onLeaveCount",
         COUNT(a.id) FILTER (WHERE a.status = 'ABSENT')::int AS "absentCount",
+        COUNT(a.id) FILTER (WHERE a.is_on_break = TRUE)::int AS "onBreakCount",
         COALESCE(SUM(a.total_hours), 0)::numeric AS "totalHours"
       FROM attendance_records a
       JOIN employees e ON a.employee_id = e.id
@@ -614,6 +632,7 @@ export const teamService = {
     const presentCount = row.presentCount || 0;
     const lateCount = row.lateCount || 0;
     const halfDayCount = row.halfDayCount || 0;
+    const onBreakCount = row.onBreakCount || 0;
 
     return {
       dateRange: { startDate: start, endDate: end },
@@ -623,6 +642,7 @@ export const teamService = {
       halfDayCount,
       onLeaveCount: row.onLeaveCount || 0,
       absentCount: row.absentCount || 0,
+      onBreakCount,
       totalHoursWorked: parseFloat(row.totalHours) || 0,
       attendanceRate:
         totalRecords > 0

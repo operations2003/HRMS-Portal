@@ -104,6 +104,7 @@ export const AttendanceHistoryTable = ({
 
   const statusFilterOptions = [
     { value: '', label: 'All Statuses' },
+    { value: 'ON_BREAK', label: '☕ Currently On Break' },
     { value: 'PRESENT', label: 'Present' },
     { value: 'LATE', label: 'Late Arrival' },
     { value: 'HALF_DAY', label: 'Half Day' },
@@ -300,8 +301,26 @@ export const AttendanceHistoryTable = ({
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       {getStatusBadge(row.status)}
+                      {row.isOnBreak && (
+                        <span
+                          title="Employee is currently on an active break (Shift Paused)"
+                          className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 ring-1 ring-amber-400/30 text-[10px] font-bold inline-flex items-center gap-1 animate-pulse"
+                        >
+                          <Coffee className="w-2.5 h-2.5 text-amber-600 shrink-0" />
+                          On Break
+                        </span>
+                      )}
+                      {row.breakDurationMinutes > 0 && !row.isOnBreak && (
+                        <span
+                          title={`Total break duration: ${row.breakDurationMinutes} mins`}
+                          className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-medium inline-flex items-center gap-1"
+                        >
+                          <Coffee className="w-2.5 h-2.5 text-slate-500 shrink-0" />
+                          {row.breakDurationMinutes}m break
+                        </span>
+                      )}
                       {row.isRegularized && (
                         <span
                           title={`Timing adjusted: ${row.regularizationReason || 'Adjusted by HR/Manager'}`}
@@ -564,6 +583,24 @@ export const AttendanceHistoryTable = ({
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-2 flex-wrap">
                           {getStatusBadge(row.status)}
+                          {row.isOnBreak && (
+                            <span
+                              title="Employee is currently on an active break (Shift Paused)"
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-300 ring-1 ring-amber-400/30 animate-pulse shadow-2xs"
+                            >
+                              <Coffee className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                              On Break
+                            </span>
+                          )}
+                          {row.breakDurationMinutes > 0 && !row.isOnBreak && (
+                            <span
+                              title={`Total break duration: ${row.breakDurationMinutes} mins`}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-700 border border-slate-200"
+                            >
+                              <Coffee className="w-3 h-3 text-slate-500 shrink-0" />
+                              {row.breakDurationMinutes}m break
+                            </span>
+                          )}
                           {row.isRegularized && (
                             <span
                               title={`Timing adjusted: ${row.regularizationReason || 'Adjusted by HR/Manager'}`}

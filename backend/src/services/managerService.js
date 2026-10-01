@@ -148,7 +148,8 @@ export const managerService = {
           COUNT(e.id) FILTER (WHERE LOWER(e.status) = 'active')::int AS "activeMembers",
           COUNT(e.id) FILTER (WHERE LOWER(e.status) = 'on leave')::int AS "onLeaveToday",
           COUNT(DISTINCT a.id) FILTER (WHERE a.status IN ('PRESENT', 'HALF_DAY'))::int AS "presentToday",
-          COUNT(DISTINCT a.id) FILTER (WHERE a.status = 'LATE')::int AS "lateToday"
+          COUNT(DISTINCT a.id) FILTER (WHERE a.status = 'LATE')::int AS "lateToday",
+          COUNT(DISTINCT a.id) FILTER (WHERE a.is_on_break = TRUE)::int AS "onBreakToday"
         FROM employees e
         LEFT JOIN attendance_records a 
           ON a.employee_id = e.id 
@@ -160,6 +161,7 @@ export const managerService = {
       const totalMembers = row.totalMembers || 0;
       const presentToday = row.presentToday || 0;
       const lateToday = row.lateToday || 0;
+      const onBreakToday = row.onBreakToday || 0;
 
       // On leave today based on approved leave requests spanning today
       const leaveTodayRes = await pool.query(
@@ -178,6 +180,7 @@ export const managerService = {
         onLeaveToday,
         presentToday,
         lateToday,
+        onBreakToday,
         absentToday: Math.max(0, totalMembers - presentToday - lateToday - onLeaveToday),
       };
 
@@ -468,16 +471,20 @@ export const managerService = {
         a.check_out AS "punchOut",
         a.total_hours AS "totalHours",
         a.overtime_hours AS "overtimeHours",
+        a.is_on_break AS "isOnBreak",
+        a.current_break_start AS "currentBreakStart",
+        a.break_duration_minutes AS "breakDurationMinutes",
+        a.break_history AS "breakHistory",
         (CASE WHEN a.status = 'LATE' THEN true ELSE false END) AS "isLate"
       FROM employees e
       LEFT JOIN departments d ON e.dept_id = d.id
       LEFT JOIN designations ds ON e.desig_id = ds.id
       LEFT JOIN attendance_records a ON a.employee_id = e.id AND a.attendance_date = $2
       WHERE e.manager_id = $1 AND e.org_id = $3
-      ${status ? 'AND a.status = $4' : ''}
+      ${status ? (status.toUpperCase() === 'ON_BREAK' ? 'AND a.is_on_break = TRUE' : 'AND a.status = $4') : ''}
       ORDER BY e.first_name ASC, e.last_name ASC;
     `;
-    const params = status
+    const params = status && status.toUpperCase() !== 'ON_BREAK'
       ? [targetManagerId, queryDate, currentUser.orgId, status.toUpperCase()]
       : [targetManagerId, queryDate, currentUser.orgId];
 
@@ -500,6 +507,10 @@ export const managerService = {
             totalHours: parseFloat(r.totalHours) || 0,
             overtimeHours: parseFloat(r.overtimeHours) || 0,
             isLate: !!r.isLate,
+            isOnBreak: Boolean(r.isOnBreak),
+            currentBreakStart: r.currentBreakStart ? new Date(r.currentBreakStart).toISOString() : null,
+            breakDurationMinutes: parseInt(r.breakDurationMinutes, 10) || 0,
+            breakHistory: Array.isArray(r.breakHistory) ? r.breakHistory : [],
           }
         : {
             status: 'ABSENT',
@@ -508,6 +519,10 @@ export const managerService = {
             totalHours: 0,
             overtimeHours: 0,
             isLate: false,
+            isOnBreak: false,
+            currentBreakStart: null,
+            breakDurationMinutes: 0,
+            breakHistory: [],
           },
     }));
   },
@@ -544,6 +559,7 @@ export const managerService = {
         COUNT(a.id) FILTER (WHERE a.status = 'HALF_DAY')::int AS "halfDayCount",
         COUNT(a.id) FILTER (WHERE a.status = 'ON_LEAVE')::int AS "onLeaveCount",
         COUNT(a.id) FILTER (WHERE a.status = 'ABSENT')::int AS "absentCount",
+        COUNT(a.id) FILTER (WHERE a.is_on_break = TRUE)::int AS "onBreakCount",
         COALESCE(SUM(a.total_hours), 0)::numeric AS "totalHours"
       FROM attendance_records a
       JOIN employees e ON a.employee_id = e.id
@@ -556,16 +572,23 @@ export const managerService = {
     const presentCount = row.presentCount || 0;
     const lateCount = row.lateCount || 0;
     const halfDayCount = row.halfDayCount || 0;
+    const onBreakCount = row.onBreakCount || 0;
 
     return {
       dateRange: { startDate: start, endDate: end },
+      totalScheduledDays: totalRecords,
       totalRecords,
       presentCount,
       lateCount,
       halfDayCount,
       onLeaveCount: row.onLeaveCount || 0,
       absentCount: row.absentCount || 0,
+      onBreakCount,
       totalHoursWorked: parseFloat(row.totalHours) || 0,
+      overallAttendanceRate:
+        totalRecords > 0
+          ? parseFloat((((presentCount + lateCount + halfDayCount) / totalRecords) * 100).toFixed(1))
+          : 0.0,
       attendanceRate:
         totalRecords > 0
           ? parseFloat((((presentCount + lateCount + halfDayCount) / totalRecords) * 100).toFixed(1))

@@ -350,8 +350,12 @@ export const attendanceRepository = {
     }
 
     if (status) {
-      conditions.push(`UPPER(a.status) = UPPER($${paramIndex++})`);
-      values.push(status);
+      if (status.toUpperCase() === 'ON_BREAK') {
+        conditions.push('a.is_on_break = TRUE');
+      } else {
+        conditions.push(`UPPER(a.status) = UPPER($${paramIndex++})`);
+        values.push(status);
+      }
     }
 
     const whereClause = `WHERE ${conditions.join(' AND ')}`;
@@ -481,8 +485,12 @@ export const attendanceRepository = {
     }
 
     if (status) {
-      conditions.push(`UPPER(a.status) = UPPER($${paramIndex++})`);
-      values.push(status);
+      if (status.toUpperCase() === 'ON_BREAK') {
+        conditions.push('a.is_on_break = TRUE');
+      } else {
+        conditions.push(`UPPER(a.status) = UPPER($${paramIndex++})`);
+        values.push(status);
+      }
     }
 
     if (search) {
@@ -561,8 +569,12 @@ export const attendanceRepository = {
     }
 
     if (status) {
-      conditions.push(`UPPER(a.status) = UPPER($${paramIndex++})`);
-      values.push(status);
+      if (status.toUpperCase() === 'ON_BREAK') {
+        conditions.push('a.is_on_break = TRUE');
+      } else {
+        conditions.push(`UPPER(a.status) = UPPER($${paramIndex++})`);
+        values.push(status);
+      }
     }
 
     if (search) {
@@ -628,6 +640,7 @@ export const attendanceRepository = {
         COUNT(a.id) FILTER (WHERE a.status = 'LATE')::int AS "lateCount",
         COUNT(a.id) FILTER (WHERE a.status = 'ON_LEAVE')::int AS "onLeaveCount",
         COUNT(a.id) FILTER (WHERE a.status = 'ABSENT')::int AS "absentCount",
+        COUNT(a.id) FILTER (WHERE a.is_on_break = TRUE)::int AS "onBreakCount",
         COUNT(a.id)::int AS "totalMarked"
       FROM attendance_records a
       WHERE a.org_id = $1 AND a.attendance_date = $2::date;
@@ -641,6 +654,7 @@ export const attendanceRepository = {
     const halfDayCount = row.halfDayCount || 0;
     const onLeaveCount = row.onLeaveCount || 0;
     const lateCount = row.lateCount || 0;
+    const onBreakCount = row.onBreakCount || 0;
 
     // Remaining active employees who haven't marked attendance yet
     const pendingCount = Math.max(0, totalEmployees - totalMarked);
@@ -653,6 +667,7 @@ export const attendanceRepository = {
       lateCount,
       onLeaveCount,
       absentCount: row.absentCount || 0,
+      onBreakCount,
       pendingCount,
       attendanceRate: totalEmployees > 0 ? parseFloat((((presentCount + halfDayCount) / totalEmployees) * 100).toFixed(1)) : 0.0,
     };

@@ -1,5 +1,8 @@
 import { attendanceRepository } from '../repositories/attendanceRepository.js';
 import { employeeRepository } from '../repositories/employeeRepository.js';
+import { userRepository } from '../repositories/userRepository.js';
+import { notificationService } from './notificationService.js';
+import { logger } from '../utils/logger.js';
 
 const normalizeRole = (r) => (r || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -758,10 +761,43 @@ export const attendanceService = {
       throw error;
     }
 
-    return attendanceRepository.update(existing.id, {
+    const updated = await attendanceRepository.update(existing.id, {
       isOnBreak: true,
       currentBreakStart: new Date(),
     });
+
+    // Notify Manager, HR, and Admin that employee is now on break
+    try {
+      let managerUserId = null;
+      if (targetEmployee.managerId) {
+        const mgrEmp = await employeeRepository.findById(targetEmployee.managerId);
+        if (mgrEmp?.userId) {
+          managerUserId = mgrEmp.userId;
+        } else if (mgrEmp?.email) {
+          const mgrUser = await userRepository.findByEmail(mgrEmp.email);
+          if (mgrUser) managerUserId = mgrUser.id;
+        }
+      }
+
+      const empName = `${targetEmployee.firstName || ''} ${targetEmployee.lastName || ''}`.trim() || targetEmployee.name || user.firstName || 'Employee';
+      const empCode = targetEmployee.employeeCode || '';
+      const deptName = targetEmployee.departmentName || targetEmployee.department?.name || '';
+
+      await notificationService.notifyBreakStarted({
+        orgId: targetEmployee.orgId || user.orgId || 'org-1',
+        employeeId: targetEmployee.id,
+        employeeName: empName,
+        employeeCode: empCode,
+        departmentName: deptName,
+        managerUserId,
+        requesterUserId: user.id,
+        breakStartTime: new Date(),
+      });
+    } catch (notifErr) {
+      logger.warn('AttendanceService', `Failed to dispatch break notification: ${notifErr.message}`);
+    }
+
+    return updated;
   },
 
   /**
@@ -819,12 +855,45 @@ export const attendanceService = {
     );
     const totalBreakMinutes = Math.round(totalBreakSeconds / 60);
 
-    return attendanceRepository.update(existing.id, {
+    const updated = await attendanceRepository.update(existing.id, {
       isOnBreak: false,
       currentBreakStart: null,
       breakDurationMinutes: totalBreakMinutes,
       breakHistory,
     });
+
+    // Notify Manager, HR, and Admin that employee has resumed from break
+    try {
+      let managerUserId = null;
+      if (targetEmployee.managerId) {
+        const mgrEmp = await employeeRepository.findById(targetEmployee.managerId);
+        if (mgrEmp?.userId) {
+          managerUserId = mgrEmp.userId;
+        } else if (mgrEmp?.email) {
+          const mgrUser = await userRepository.findByEmail(mgrEmp.email);
+          if (mgrUser) managerUserId = mgrUser.id;
+        }
+      }
+
+      const empName = `${targetEmployee.firstName || ''} ${targetEmployee.lastName || ''}`.trim() || targetEmployee.name || user.firstName || 'Employee';
+      const empCode = targetEmployee.employeeCode || '';
+      const deptName = targetEmployee.departmentName || targetEmployee.department?.name || '';
+
+      await notificationService.notifyBreakEnded({
+        orgId: targetEmployee.orgId || user.orgId || 'org-1',
+        employeeId: targetEmployee.id,
+        employeeName: empName,
+        employeeCode: empCode,
+        departmentName: deptName,
+        managerUserId,
+        requesterUserId: user.id,
+        breakDurationMinutes: elapsedMinutes,
+      });
+    } catch (notifErr) {
+      logger.warn('AttendanceService', `Failed to dispatch resume break notification: ${notifErr.message}`);
+    }
+
+    return updated;
   },
 
   /**

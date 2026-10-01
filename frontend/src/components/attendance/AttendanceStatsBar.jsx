@@ -8,6 +8,7 @@ import {
   Users,
   UserX,
   FileCheck,
+  Coffee,
 } from 'lucide-react';
 
 export const AttendanceStatsBar = ({ statistics = {}, summary = {}, isOrgView = false }) => {
@@ -21,6 +22,15 @@ export const AttendanceStatsBar = ({ statistics = {}, summary = {}, isOrgView = 
         color: 'text-emerald-600',
         bgLight: 'bg-emerald-50',
         border: 'border-emerald-200/70',
+      },
+      {
+        title: 'Currently On Break',
+        value: summary.onBreakCount || 0,
+        subtext: (summary.onBreakCount || 0) > 0 ? 'Staff on active pause/break' : 'No staff currently on break',
+        icon: Coffee,
+        color: 'text-amber-600',
+        bgLight: 'bg-amber-50',
+        border: 'border-amber-300/80 ring-1 ring-amber-400/20',
       },
       {
         title: 'Late Arrivals',
@@ -52,7 +62,7 @@ export const AttendanceStatsBar = ({ statistics = {}, summary = {}, isOrgView = 
     ];
 
     return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {orgCards.map((card, idx) => {
           const Icon = card.icon;
           return (

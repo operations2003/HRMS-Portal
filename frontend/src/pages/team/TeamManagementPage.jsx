@@ -24,6 +24,7 @@ import {
   Check,
   X,
   FileCheck,
+  Coffee,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
@@ -532,22 +533,44 @@ export const TeamManagementPage = () => {
     {
       header: 'Status',
       render: (row) => {
+        const isOnBreak = Boolean(row.attendance?.isOnBreak || row.isOnBreak);
+        const breakDuration = row.attendance?.breakDurationMinutes || row.breakDurationMinutes || 0;
         const status = (row.attendance?.status || row.status || 'ABSENT').toUpperCase();
         return (
-          <Badge
-            variant={
-              status === 'PRESENT'
-                ? 'success'
-                : status === 'LATE'
-                ? 'warning'
-                : status === 'HALF_DAY'
-                ? 'info'
-                : 'danger'
-            }
-            size="sm"
-          >
-            {status}
-          </Badge>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <Badge
+              variant={
+                status === 'PRESENT'
+                  ? 'success'
+                  : status === 'LATE'
+                  ? 'warning'
+                  : status === 'HALF_DAY'
+                  ? 'info'
+                  : 'danger'
+              }
+              size="sm"
+            >
+              {status}
+            </Badge>
+            {isOnBreak && (
+              <span
+                title="Employee is currently on break (Shift Paused)"
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300 ring-1 ring-amber-400/30 animate-pulse shadow-2xs"
+              >
+                <Coffee className="w-3 h-3 text-amber-600 shrink-0" />
+                On Break
+              </span>
+            )}
+            {breakDuration > 0 && !isOnBreak && (
+              <span
+                title={`Total break duration: ${breakDuration} mins`}
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200"
+              >
+                <Coffee className="w-2.5 h-2.5 text-slate-500 shrink-0" />
+                {breakDuration}m
+              </span>
+            )}
+          </div>
         );
       },
     },
@@ -966,7 +989,7 @@ export const TeamManagementPage = () => {
       {activeTab === 'attendance' && (
         <div className="space-y-4">
           {/* Attendance Summary Banner */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             <div className="p-3.5 bg-white border border-slate-200/80 rounded-2xl shadow-xs">
               <span className="text-[10px] uppercase font-bold text-slate-500 block">Total Team</span>
               <span className="text-xl font-bold text-slate-900 mt-0.5 block">
@@ -978,6 +1001,16 @@ export const TeamManagementPage = () => {
               <span className="text-[10px] uppercase font-bold text-emerald-700 block">Present On-Time</span>
               <span className="text-xl font-bold text-emerald-900 mt-0.5 block">
                 {attendanceSummary.presentCount ?? safeAttendance.filter((a) => a.attendance?.status === 'PRESENT').length}
+              </span>
+            </div>
+
+            <div className="p-3.5 bg-amber-50/70 border border-amber-200 rounded-2xl shadow-xs ring-1 ring-amber-400/20">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] uppercase font-bold text-amber-800 block">On Break</span>
+                <Coffee className="w-3.5 h-3.5 text-amber-600" />
+              </div>
+              <span className="text-xl font-bold text-amber-900 mt-0.5 block">
+                {attendanceSummary.onBreakCount ?? safeAttendance.filter((a) => a.attendance?.isOnBreak).length}
               </span>
             </div>
 
@@ -1021,6 +1054,7 @@ export const TeamManagementPage = () => {
                 className="px-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-white text-slate-700 focus:outline-none"
               >
                 <option value="">All Attendance Statuses</option>
+                <option value="ON_BREAK">☕ On Break</option>
                 <option value="PRESENT">Present</option>
                 <option value="LATE">Late Arrival</option>
                 <option value="HALF_DAY">Half Day</option>

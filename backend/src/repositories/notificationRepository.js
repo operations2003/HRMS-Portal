@@ -66,8 +66,20 @@ export const notificationRepository = {
           RETURNING *;
         `;
         const values = [notifId, n.orgId, n.userId, n.eventType, n.title, n.message, n.entityType, n.entityId, n.actionUrl || ''];
-        const { rows } = await client.query(query, values);
-        created.push(mapNotificationRow(rows[0]));
+        let row;
+        try {
+          const { rows } = await client.query(query, values);
+          row = rows[0];
+        } catch (itemErr) {
+          if (itemErr.constraint === 'notifications_event_type_check') {
+            values[3] = 'GENERAL_ALERT';
+            const { rows } = await client.query(query, values);
+            row = rows[0];
+          } else {
+            throw itemErr;
+          }
+        }
+        if (row) created.push(mapNotificationRow(row));
       }
       await client.query('COMMIT');
       return created;

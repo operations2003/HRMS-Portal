@@ -16,9 +16,9 @@ import {
   ShieldCheck,
   Calendar,
   Layers,
-  ChevronRight,
   UserCheck,
   Check,
+  Coffee,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
@@ -145,6 +145,7 @@ export const ManagerDashboardPage = () => {
   const presentToday = teamSummary.presentToday || 0;
   const lateToday = teamSummary.lateToday || 0;
   const onLeaveToday = teamSummary.onLeaveToday || 0;
+  const onBreakToday = teamSummary.onBreakToday || 0;
   const absentToday = teamSummary.absentToday || 0;
   const attendanceRate = quickStats.attendanceRate ?? (totalMembers > 0 ? Math.round(((presentToday + lateToday) / totalMembers) * 100) : 100);
 
@@ -362,10 +363,17 @@ export const ManagerDashboardPage = () => {
             </div>
 
             {/* Attendance Mini Metric Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
               <div className="p-3 bg-emerald-50/60 border border-emerald-100 rounded-xl text-center">
                 <span className="text-[10px] uppercase font-bold text-emerald-700 block">On Time</span>
                 <span className="text-lg font-bold text-emerald-900">{presentToday}</span>
+              </div>
+              <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-xl text-center ring-1 ring-amber-400/20">
+                <div className="flex items-center justify-center gap-1">
+                  <span className="text-[10px] uppercase font-bold text-amber-800">On Break</span>
+                  <Coffee className="w-3 h-3 text-amber-600" />
+                </div>
+                <span className="text-lg font-bold text-amber-900 mt-0.5 block">{onBreakToday}</span>
               </div>
               <div className="p-3 bg-amber-50/60 border border-amber-100 rounded-xl text-center">
                 <span className="text-[10px] uppercase font-bold text-amber-700 block">Late Check-in</span>
