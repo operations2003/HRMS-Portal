@@ -646,6 +646,7 @@ export const EmployeeLeaveBalancesViewer = ({ onAssignLeave }) => {
             fetchAllBalances(selectedYear);
           }}
           initialEmployeeId={localAssignEmpId}
+          isAssignMode={true}
         />
       )}
     </div>

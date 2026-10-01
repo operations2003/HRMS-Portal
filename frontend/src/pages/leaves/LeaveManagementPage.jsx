@@ -91,6 +91,7 @@ export const LeaveManagementPage = () => {
   // Modals state
   const [isApplyModalOpen, setIsApplyModalOpen] = useState(false);
   const [assignEmployeeId, setAssignEmployeeId] = useState(null);
+  const [isAssignMode, setIsAssignMode] = useState(false);
   const [selectedDetailRecord, setSelectedDetailRecord] = useState(null);
   const [approvingRecord, setApprovingRecord] = useState(null);
   const [rejectingRecord, setRejectingRecord] = useState(null);
@@ -243,8 +244,12 @@ export const LeaveManagementPage = () => {
   }, [fetchRecords]);
 
   // Handle successful application
-  const handleApplySuccess = () => {
-    toast.success('Leave application submitted successfully! Status: PENDING.');
+  const handleApplySuccess = (newRecord) => {
+    if (newRecord?.status === 'APPROVED') {
+      toast.success('Leave assigned and approved successfully!');
+    } else {
+      toast.success('Leave application submitted successfully! Status: PENDING.');
+    }
     fetchMetadata();
     fetchRecords(1);
     fetchTeamStats();
@@ -752,6 +757,7 @@ export const LeaveManagementPage = () => {
               icon={ShieldCheck}
               onClick={() => {
                 setAssignEmployeeId(null);
+                setIsAssignMode(true);
                 setIsApplyModalOpen(true);
               }}
               className="shadow-md shadow-brand-500/20"
@@ -767,6 +773,7 @@ export const LeaveManagementPage = () => {
               icon={ShieldCheck}
               onClick={() => {
                 setAssignEmployeeId(null);
+                setIsAssignMode(true);
                 setIsApplyModalOpen(true);
               }}
               className="border-brand-200 bg-brand-50/70 text-brand-700 hover:bg-brand-100"
@@ -782,6 +789,7 @@ export const LeaveManagementPage = () => {
               icon={Plus}
               onClick={() => {
                 setAssignEmployeeId('SELF');
+                setIsAssignMode(false);
                 setIsApplyModalOpen(true);
               }}
               className={isHrOrAdmin ? '' : 'shadow-md shadow-brand-500/20'}
@@ -851,6 +859,7 @@ export const LeaveManagementPage = () => {
         <EmployeeLeaveBalancesViewer
           onAssignLeave={(empId) => {
             setAssignEmployeeId(empId);
+            setIsAssignMode(true);
             setIsApplyModalOpen(true);
           }}
         />
@@ -862,7 +871,11 @@ export const LeaveManagementPage = () => {
           balances={leaveBalances}
           isLoading={loadingBalances}
           error={balanceError}
-          onApplyClick={() => setIsApplyModalOpen(true)}
+          onApplyClick={() => {
+            setAssignEmployeeId('SELF');
+            setIsAssignMode(false);
+            setIsApplyModalOpen(true);
+          }}
           canApply={canApply}
         />
       )}
@@ -1082,11 +1095,13 @@ export const LeaveManagementPage = () => {
         onClose={() => {
           setIsApplyModalOpen(false);
           setAssignEmployeeId(null);
+          setIsAssignMode(false);
         }}
         onSuccess={handleApplySuccess}
         leaveTypes={leaveTypes}
         leaveBalances={leaveBalances}
         initialEmployeeId={assignEmployeeId}
+        isAssignMode={isAssignMode}
       />
 
       {/* Manager Approve Leave Modal */}

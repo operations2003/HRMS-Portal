@@ -13,6 +13,7 @@ import {
   Sunset,
   Users,
   ShieldCheck,
+  Loader2,
 } from 'lucide-react';
 import { Modal } from '../common/Modal.jsx';
 import { Button } from '../common/Button.jsx';
@@ -122,60 +123,127 @@ export const ApplyLeaveModal = ({
   leaveTypes = [],
   leaveBalances = [],
   initialEmployeeId = null,
+  isAssignMode: explicitAssignMode = null,
 }) => {
   const { user, hasRole } = useAuth();
-  const normRole = (user?.roleName || '').toLowerCase();
+  const normRole = (user?.roleName || user?.role?.name || user?.role || '').toLowerCase();
   const isAdminOrCeo = ['admin', 'superadmin', 'orgadmin'].some(r => normRole.includes(r)) || user?.email === 'sheetalbedi@tasknera.com';
   const isHr = ['hr', 'hrmanager'].some(r => normRole.includes(r)) || hasRole(['HR', 'HRManager']);
   const isHrOrAdmin = isHr || isAdminOrCeo || hasRole(['Admin', 'SuperAdmin', 'OrgAdmin']);
   const isManager = ['manager', 'lead', 'teamlead', 'supervisor'].some(r => normRole.includes(r)) || hasRole(['Manager', 'Lead', 'TeamLead', 'Supervisor']);
   const canApplyForTeam = isHrOrAdmin || isManager;
+
+  // Determine whether this modal is in Assign Leave mode or Apply Leave (self) mode
+  const isAssignMode = explicitAssignMode !== null
+    ? explicitAssignMode
+    : (isAdminOrCeo || (Boolean(initialEmployeeId) && initialEmployeeId !== 'SELF'));
   
   const [targetEmployeeId, setTargetEmployeeId] = useState(
-    initialEmployeeId || (isAdminOrCeo ? '' : 'SELF')
+    initialEmployeeId || (isAssignMode ? '' : 'SELF')
   );
   const [teamMembers, setTeamMembers] = useState([]);
   const [loadingTeam, setLoadingTeam] = useState(false);
+  const [teamLoadError, setTeamLoadError] = useState(null);
 
-  // Fetch employees: Admin & HR can assign to ALL employees in the org; Managers can assign to their team/department
-  useEffect(() => {
-    if (isOpen && canApplyForTeam) {
+  // Target employee leave balances (fetched dynamically when assigning leave to an employee)
+  const [targetBalances, setTargetBalances] = useState([]);
+  const [loadingTargetBalances, setLoadingTargetBalances] = useState(false);
+
+  // Fetch employees: Admin & HR can assign to ALL employees in the org; Managers can assign to their team
+  const fetchTeamMembers = async () => {
+    if (!canApplyForTeam && !isAssignMode) return;
+    try {
       setLoadingTeam(true);
+      setTeamLoadError(null);
       const loader = isHrOrAdmin
         ? employeeService.listEmployees({ limit: 300 })
         : managerService.getTeam();
 
-      loader
-        .then((res) => {
-          let list = [];
-          if (Array.isArray(res)) {
-            list = res;
-          } else if (Array.isArray(res?.employees)) {
-            list = res.employees;
-          } else if (Array.isArray(res?.data)) {
-            list = res.data;
-          } else if (Array.isArray(res?.items)) {
-            list = res.items;
-          }
+      const res = await loader;
+      let list = [];
+      if (Array.isArray(res)) {
+        list = res;
+      } else if (Array.isArray(res?.employees)) {
+        list = res.employees;
+      } else if (Array.isArray(res?.data)) {
+        list = res.data;
+      } else if (Array.isArray(res?.items)) {
+        list = res.items;
+      }
 
-          // Filter out inactive / terminated / exited employees
-          const activeList = list.filter((emp) => {
-            const s = (emp.status || emp.user?.status || '').toUpperCase();
-            return !['INACTIVE', 'TERMINATED', 'EXITED', 'SUSPENDED', 'ARCHIVED'].includes(s);
-          });
-          setTeamMembers(activeList);
-          if (initialEmployeeId) {
-            setTargetEmployeeId(initialEmployeeId);
-          } else if (isAdminOrCeo && activeList.length > 0 && (!targetEmployeeId || targetEmployeeId === 'SELF')) {
-            setTargetEmployeeId(activeList[0].id);
+      // Filter out inactive / terminated / exited employees
+      let activeList = list.filter((emp) => {
+        const s = (emp.status || emp.user?.status || '').toUpperCase();
+        return !['INACTIVE', 'TERMINATED', 'EXITED', 'SUSPENDED', 'ARCHIVED'].includes(s);
+      });
+
+      // Exclude Admin from self-assigning leave (company admins don't take employee leave)
+      if (isAdminOrCeo && user?.email) {
+        activeList = activeList.filter((emp) => {
+          const empEmail = (emp.email || '').toLowerCase();
+          const userEmail = (user.email || '').toLowerCase();
+          return empEmail !== userEmail && emp.id !== 'emp-shubham-admin';
+        });
+      }
+
+      setTeamMembers(activeList);
+
+      // Pre-select employee if assigned or default to first eligible
+      if (initialEmployeeId && initialEmployeeId !== 'SELF') {
+        setTargetEmployeeId(initialEmployeeId);
+      } else if (isAssignMode && activeList.length > 0) {
+        setTargetEmployeeId((prev) => {
+          if (prev && prev !== 'SELF' && activeList.some((m) => m.id === prev)) {
+            return prev;
+          }
+          return activeList[0].id;
+        });
+      }
+    } catch (err) {
+      console.warn('Could not load employees for leave assignment:', err);
+      setTeamLoadError(err.message || 'Failed to load employee list.');
+    } finally {
+      setLoadingTeam(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen && (canApplyForTeam || isAssignMode)) {
+      fetchTeamMembers();
+    }
+  }, [isOpen, canApplyForTeam, isAssignMode, isHrOrAdmin, isAdminOrCeo, initialEmployeeId]);
+
+  // Fetch balances for selected target employee when in Assign Mode
+  useEffect(() => {
+    let isMounted = true;
+    if (isOpen && targetEmployeeId && targetEmployeeId !== 'SELF') {
+      setLoadingTargetBalances(true);
+      leaveService
+        .getEmployeeBalances(targetEmployeeId, new Date().getFullYear())
+        .then((res) => {
+          if (isMounted) {
+            setTargetBalances(Array.isArray(res) ? res : []);
           }
         })
         .catch((err) => {
-          console.warn('Could not load employees for leave assignment:', err);
+          console.warn('Could not load balances for employee:', err);
+          if (isMounted) setTargetBalances([]);
         })
-        .finally(() => setLoadingTeam(false));
+        .finally(() => {
+          if (isMounted) setLoadingTargetBalances(false);
+        });
+    } else {
+      setTargetBalances([]);
     }
-  }, [isOpen, canApplyForTeam, isHrOrAdmin, isAdminOrCeo, initialEmployeeId]);
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, targetEmployeeId]);
+
+  // Active balances to show (target employee balances for assignment, personal balances for self-apply)
+  const activeBalances = (targetEmployeeId && targetEmployeeId !== 'SELF')
+    ? targetBalances
+    : leaveBalances;
 
   const selectedMember = teamMembers.find((m) => m.id === targetEmployeeId);
   const userGender = String(user?.gender || user?.employee?.gender || '').toUpperCase();
@@ -207,7 +275,7 @@ export const ApplyLeaveModal = ({
     }
 
     // When applying for SELF:
-    if (targetEmployeeId === 'SELF') {
+    if (targetEmployeeId === 'SELF' && !isAssignMode) {
       // Restricted unauthorized leaves (AWOL, Sabbatical) cannot be self-applied
       if (code === 'AWOL' || name.includes('awol') || code === 'SBL' || name.includes('sabbatical')) {
         return false;
@@ -219,14 +287,12 @@ export const ApplyLeaveModal = ({
       }
 
       // Paid Leave Types: strictly check remaining balance
-      // Rule 1: balance > 0 -> allowed to apply
-      // Rule 2: balance === 0 -> NOT available/selectable
-      // Rule 3: applies independently to every leave type
-      const remaining = getRemainingBalance(lt, leaveBalances);
+      const remaining = getRemainingBalance(lt, activeBalances);
       return remaining > 0;
     }
 
     // When assigning for another team member (Admin/HR/Manager):
+    // ALL leave types (PL, CL, SL, Holiday, Half Day, AWOL, LOP, Sabbatical, Maternity, Paternity) are assignable
     return true;
   });
 
@@ -251,36 +317,17 @@ export const ApplyLeaveModal = ({
   const [durationPreview, setDurationPreview] = useState(null);
   const [isCalculating, setIsCalculating] = useState(false);
 
-  // Reset or switch category if targetEmployeeId changes, leave balances change, or on open
+  // Initialize form state when modal opens
   useEffect(() => {
     if (isOpen) {
       const defaultWorkingDay = getNextWorkingDay();
-      const currentValid = effectiveLeaveTypes.some((t) => t.id === formData.leaveTypeId);
-      const defaultType = currentValid ? formData.leaveTypeId : (effectiveLeaveTypes[0]?.id || '');
-
-      setFormData((prev) => ({
-        ...prev,
-        leaveTypeId: defaultType,
-        startDate: prev.startDate || defaultWorkingDay,
-        endDate: prev.endDate || defaultWorkingDay,
-      }));
-      setFormErrors({});
-      setApiError(null);
-    }
-  }, [isOpen, targetEmployeeId, effectiveLeaveTypes.length, leaveBalances]);
-
-  // Initialize form on initial modal open
-  useEffect(() => {
-    if (isOpen) {
-      const defaultType = effectiveLeaveTypes[0]?.id || '';
-      const defaultWorkingDay = getNextWorkingDay();
-      const initialTarget = initialEmployeeId || (isAdminOrCeo ? (teamMembers[0]?.id || '') : 'SELF');
+      const initialTarget = initialEmployeeId || (isAssignMode ? (teamMembers[0]?.id || '') : 'SELF');
       setTargetEmployeeId(initialTarget);
       setSelectionMode('range');
       setSelectedDates([defaultWorkingDay]);
       setSpecificDateInput(defaultWorkingDay);
       setFormData({
-        leaveTypeId: defaultType,
+        leaveTypeId: effectiveLeaveTypes[0]?.id || '',
         startDate: defaultWorkingDay,
         endDate: defaultWorkingDay,
         isHalfDay: false,
@@ -291,7 +338,20 @@ export const ApplyLeaveModal = ({
       setApiError(null);
       setDurationPreview(null);
     }
-  }, [isOpen, initialEmployeeId]);
+  }, [isOpen, initialEmployeeId, isAssignMode]);
+
+  // Adjust selected leave category if targetEmployeeId or category eligibility changes
+  useEffect(() => {
+    if (isOpen && effectiveLeaveTypes.length > 0) {
+      const currentValid = effectiveLeaveTypes.some((t) => t.id === formData.leaveTypeId);
+      if (!currentValid) {
+        setFormData((prev) => ({
+          ...prev,
+          leaveTypeId: effectiveLeaveTypes[0]?.id || '',
+        }));
+      }
+    }
+  }, [isOpen, targetEmployeeId, effectiveLeaveTypes.length]);
 
   // Handle live duration calculation from backend when dates change
   useEffect(() => {
@@ -363,7 +423,7 @@ export const ApplyLeaveModal = ({
   ]);
 
   const selectedTypeObj = effectiveLeaveTypes.find((t) => t.id === formData.leaveTypeId);
-  const selectedBalanceObj = leaveBalances.find((b) => {
+  const selectedBalanceObj = activeBalances.find((b) => {
     if (b.leaveTypeId === formData.leaveTypeId || b.id === formData.leaveTypeId) return true;
     if (selectedTypeObj) {
       const targetCode = String(selectedTypeObj.code || '').trim().toUpperCase();
@@ -380,10 +440,16 @@ export const ApplyLeaveModal = ({
   const validateForm = () => {
     const errs = {};
 
+    if (isAssignMode || targetEmployeeId !== 'SELF') {
+      if (!targetEmployeeId || targetEmployeeId === 'SELF') {
+        errs.employeeId = 'Please select an employee to assign leave to.';
+      }
+    }
+
     if (!formData.leaveTypeId) {
       errs.leaveTypeId = 'Please select a leave category.';
     } else if (targetEmployeeId === 'SELF' && selectedTypeObj && !isUnpaidLeave(selectedTypeObj)) {
-      const rem = getRemainingBalance(selectedTypeObj, leaveBalances);
+      const rem = getRemainingBalance(selectedTypeObj, activeBalances);
       if (rem <= 0) {
         errs.leaveTypeId = `Selected leave type '${selectedTypeObj.name}' is not available because your current available balance is 0.`;
       }
@@ -481,7 +547,12 @@ export const ApplyLeaveModal = ({
         payload.endDate = formData.isHalfDay ? formData.startDate : formData.endDate;
       }
 
-      if (targetEmployeeId && targetEmployeeId !== 'SELF') {
+      if (isAssignMode || (targetEmployeeId && targetEmployeeId !== 'SELF')) {
+        if (!targetEmployeeId || targetEmployeeId === 'SELF') {
+          setFormErrors((prev) => ({ ...prev, employeeId: 'Please select an employee to assign leave to.' }));
+          setIsSubmitting(false);
+          return;
+        }
         payload.employeeId = targetEmployeeId;
       }
 
@@ -509,9 +580,9 @@ export const ApplyLeaveModal = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={targetEmployeeId !== 'SELF' ? 'Assign Leave' : 'Apply for Leave'}
+      title={isAssignMode || targetEmployeeId !== 'SELF' ? 'Assign Leave' : 'Apply for Leave'}
       subtitle={
-        targetEmployeeId !== 'SELF'
+        isAssignMode || targetEmployeeId !== 'SELF'
           ? (isHrOrAdmin
             ? 'Assign exact leave dates for an employee across the organization'
             : 'Assign exact leave dates for reporting team member')
@@ -528,40 +599,76 @@ export const ApplyLeaveModal = ({
         )}
 
         {/* Apply Leave For (Manager / Admin / HR selector) */}
-        {canApplyForTeam && teamMembers.length > 0 && (
-          <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1.5">
-            <label className="block text-xs font-semibold text-slate-700 flex items-center justify-between">
-              <span className="flex items-center gap-1.5">
+        {(canApplyForTeam || isAssignMode) && (
+          <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-bold text-slate-800 flex items-center gap-1.5">
                 <Users className="w-3.5 h-3.5 text-brand-600" />
-                Select Employee <span className="text-rose-500">*</span>
-              </span>
-              {targetEmployeeId !== 'SELF' && (
-                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-brand-700 bg-brand-50 px-2 py-0.5 rounded border border-brand-200">
+                <span>Select Target Employee</span>
+                <span className="text-rose-500">*</span>
+              </label>
+              {targetEmployeeId && targetEmployeeId !== 'SELF' && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-700 bg-brand-50 px-2 py-0.5 rounded border border-brand-200">
                   <ShieldCheck className="w-3 h-3 text-brand-600" />
-                  {isHrOrAdmin ? 'Admin / HR Assignment' : 'Manager Scope Assignment'}
+                  {isHrOrAdmin ? 'Admin / HR Assignment' : 'Manager Team Scope'}
                 </span>
               )}
-            </label>
-            <Select
-              value={targetEmployeeId}
-              onChange={(e) => setTargetEmployeeId(e.target.value)}
-              options={[
-                ...(!isAdminOrCeo ? [{ value: 'SELF', label: `Self (${user?.firstName || 'My Account'}) - Standard Leaves` }] : []),
-                ...teamMembers.map((m) => ({
-                  value: m.id,
-                  label: `${m.firstName} ${m.lastName} (${m.employeeCode || m.employeeNumber || m.designation?.title || 'Employee'})`,
-                })),
-              ]}
-            />
+            </div>
+
+            {loadingTeam ? (
+              <div className="flex items-center gap-2 py-2.5 px-3 text-xs text-slate-600 bg-white border border-slate-200 rounded-lg">
+                <Loader2 className="w-4 h-4 text-brand-600 animate-spin" />
+                <span>Loading active employee directory...</span>
+              </div>
+            ) : teamLoadError ? (
+              <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-700 flex items-center justify-between">
+                <span>{teamLoadError}</span>
+                <button
+                  type="button"
+                  onClick={fetchTeamMembers}
+                  className="underline font-bold hover:text-rose-800 cursor-pointer ml-2"
+                >
+                  Retry
+                </button>
+              </div>
+            ) : teamMembers.length === 0 ? (
+              <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-700">
+                No active employees found to assign leave.
+              </div>
+            ) : (
+              <Select
+                value={targetEmployeeId}
+                onChange={(e) => {
+                  setTargetEmployeeId(e.target.value);
+                  setFormErrors((prev) => ({ ...prev, employeeId: undefined }));
+                }}
+                error={formErrors.employeeId}
+                options={[
+                  ...(isAssignMode
+                    ? [{ value: '', label: '-- Select an Employee to Assign Leave --' }]
+                    : (!isAdminOrCeo ? [{ value: 'SELF', label: `Self (${user?.firstName || 'My Account'}) - Standard Leaves` }] : [])),
+                  ...teamMembers.map((m) => ({
+                    value: m.id,
+                    label: `${m.firstName} ${m.lastName} (${m.employeeCode || m.employeeNumber || m.designation?.title || 'Employee'}${m.department?.name ? ` • ${m.department.name}` : ''})`,
+                  })),
+                ]}
+              />
+            )}
+
             {targetEmployeeId === 'SELF' ? (
               <p className="text-[11px] text-slate-500">
                 Note: AWOL, Maternity, Sabbatical, and Paternity leaves must be assigned with exact dates by Admin, HR, or your Manager.
               </p>
-            ) : (
-              <p className="text-[11px] text-emerald-700 font-medium">
-                {isHrOrAdmin ? 'As Admin/HR' : 'As Manager'}, you can assign both standard and restricted leaves (Holiday, AWOL, LOP, Maternity, Sabbatical, Paternity) with exact dates.
-              </p>
-            )}
+            ) : targetEmployeeId ? (
+              <div className="flex items-center justify-between text-[11px] text-emerald-700">
+                <span className="font-medium">
+                  {isHrOrAdmin ? 'As Admin/HR' : 'As Manager'}, assigning leave automatically records it directly as Approved.
+                </span>
+                {loadingTargetBalances && (
+                  <span className="text-slate-400 italic">Refreshing balances...</span>
+                )}
+              </div>
+            ) : null}
           </div>
         )}
 
@@ -852,8 +959,8 @@ export const ApplyLeaveModal = ({
             disabled={isSubmitting || durationPreview?.isNonWorkingPeriod || durationPreview?.totalDays === 0}
           >
             {isSubmitting
-              ? (targetEmployeeId !== 'SELF' ? 'Assigning Leave...' : 'Submitting Application...')
-              : (targetEmployeeId !== 'SELF' ? 'Assign Leave' : 'Submit Leave Request')}
+              ? (isAssignMode || targetEmployeeId !== 'SELF' ? 'Assigning Leave...' : 'Submitting Application...')
+              : (isAssignMode || targetEmployeeId !== 'SELF' ? 'Assign Leave' : 'Submit Leave Request')}
           </Button>
         </div>
       </form>
