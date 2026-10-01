@@ -327,13 +327,40 @@ export const syncLeaveToAttendance = async (
     if (!targetEmp) return;
 
     const code = String(leaveType?.code || '').trim().toUpperCase();
+    
+    // For LWP/LOP, do not sync to attendance - these will be processed later as unpaid leave
+    // Also clean up any existing attendance records for this leave period
+    if (code === 'LOP' || code === 'LWP') {
+      logger.info('LeaveService', `Cleaning up and skipping attendance sync for LWP/LOP leave type for employee ${targetEmp.id}`);
+      
+      // Remove any attendance records that may have been created for this LWP leave
+      const sDate = parseLocalDate(startDateStr);
+      const eDate = parseLocalDate(endDateStr);
+      if (sDate && eDate) {
+        await pool.query(
+          `DELETE FROM attendance_records 
+           WHERE employee_id = $1 
+             AND attendance_date BETWEEN $2::date AND $3::date 
+             AND source = 'LEAVE_ASSIGNMENT'
+             AND notes ILIKE '%Leave Without Pay%'`,
+          [targetEmp.id, startDateStr, endDateStr]
+        );
+      }
+      
+      return; // Don't create attendance records for unpaid leaves
+    }
+    
+    // For LWP/LOP, do not sync to attendance - these will be processed later as unpaid leave
+    if (code === 'LOP' || code === 'LWP') {
+      logger.info('LeaveService', `Skipping attendance sync for LWP/LOP leave type for employee ${targetEmp.id}`);
+      return; // Don't create attendance records for unpaid leaves
+    }
+    
     let attStatus = 'ON_LEAVE';
     if (code === 'HL') {
       attStatus = 'HOLIDAY';
     } else if (code === 'AWOL') {
       attStatus = 'ABSENT';
-    } else if (code === 'LOP' || code === 'LWP') {
-      attStatus = 'ON_LEAVE';
     } else if (isHalfDay) {
       attStatus = 'HALF_DAY';
     }

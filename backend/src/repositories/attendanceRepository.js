@@ -333,9 +333,14 @@ export const attendanceRepository = {
 
   /**
    * Find employee's own attendance history with date filtering and pagination
+   * Excludes leave-based records (source = 'LEAVE_ASSIGNMENT') to show only actual attendance
    */
   async findByEmployeeHistory(employeeId, orgId, { startDate = '', endDate = '', status = '', page = 1, limit = 20 } = {}) {
-    const conditions = ['a.employee_id = $1', 'a.org_id = $2'];
+    const conditions = [
+      'a.employee_id = $1',
+      'a.org_id = $2',
+      "(a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT')" // Exclude leave-based attendance records
+    ];
     const values = [employeeId, orgId];
     let paramIndex = 3;
 
@@ -459,9 +464,13 @@ export const attendanceRepository = {
 
   /**
    * Find team attendance for a Manager (scoped by department)
+   * Excludes leave-based records (source = 'LEAVE_ASSIGNMENT') to show only actual attendance
    */
   async findTeamAttendance(deptId, orgId, { date = '', startDate = '', endDate = '', status = '', search = '', page = 1, limit = 20 } = {}) {
-    const conditions = ['a.org_id = $1'];
+    const conditions = [
+      'a.org_id = $1',
+      "(a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT')" // Exclude leave-based attendance records
+    ];
     const values = [orgId];
     let paramIndex = 2;
 
@@ -543,9 +552,13 @@ export const attendanceRepository = {
 
   /**
    * Find organization-wide attendance records for HR & Admin
+   * Excludes leave-based records (source = 'LEAVE_ASSIGNMENT') to show only actual attendance
    */
   async findAllOrgAttendance(orgId, { date = '', startDate = '', endDate = '', deptId = '', status = '', search = '', page = 1, limit = 20 } = {}) {
-    const conditions = ['a.org_id = $1'];
+    const conditions = [
+      'a.org_id = $1',
+      "(a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT')" // Exclude leave-based attendance records
+    ];
     const values = [orgId];
     let paramIndex = 2;
 
@@ -627,21 +640,29 @@ export const attendanceRepository = {
 
   /**
    * Aggregates organization-wide daily summary statistics
+   * Excludes leave-based attendance records from present/absent counts
+   * onLeaveCount should come from leave_requests, not attendance_records
    */
   async getDailySummary(orgId, date = null) {
     const targetDate = date || new Date().toISOString().split('T')[0];
 
     // Query active employee count and attendance summary for the day
+    // Exclude leave-based records (source = 'LEAVE_ASSIGNMENT') from attendance counts
     const summarySql = `
       SELECT
         (SELECT COUNT(*)::int FROM employees WHERE org_id = $1 AND status = 'Active') AS "totalEmployees",
-        COUNT(a.id) FILTER (WHERE a.status IN ('PRESENT', 'LATE'))::int AS "presentCount",
-        COUNT(a.id) FILTER (WHERE a.status = 'HALF_DAY')::int AS "halfDayCount",
-        COUNT(a.id) FILTER (WHERE a.status = 'LATE')::int AS "lateCount",
-        COUNT(a.id) FILTER (WHERE a.status = 'ON_LEAVE')::int AS "onLeaveCount",
-        COUNT(a.id) FILTER (WHERE a.status = 'ABSENT')::int AS "absentCount",
-        COUNT(a.id) FILTER (WHERE a.is_on_break = TRUE)::int AS "onBreakCount",
-        COUNT(a.id)::int AS "totalMarked"
+        COUNT(a.id) FILTER (WHERE a.status IN ('PRESENT', 'LATE') AND (a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT'))::int AS "presentCount",
+        COUNT(a.id) FILTER (WHERE a.status = 'HALF_DAY' AND (a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT'))::int AS "halfDayCount",
+        COUNT(a.id) FILTER (WHERE a.status = 'LATE' AND (a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT'))::int AS "lateCount",
+        (SELECT COUNT(DISTINCT lr.employee_id)::int 
+         FROM leave_requests lr 
+         WHERE lr.org_id = $1 
+           AND lr.status = 'APPROVED' 
+           AND lr.start_date <= $2::date 
+           AND lr.end_date >= $2::date) AS "onLeaveCount",
+        COUNT(a.id) FILTER (WHERE a.status = 'ABSENT' AND (a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT'))::int AS "absentCount",
+        COUNT(a.id) FILTER (WHERE a.is_on_break = TRUE AND (a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT'))::int AS "onBreakCount",
+        COUNT(a.id) FILTER (WHERE (a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT'))::int AS "totalMarked"
       FROM attendance_records a
       WHERE a.org_id = $1 AND a.attendance_date = $2::date;
     `;
@@ -704,15 +725,25 @@ export const attendanceRepository = {
     const totalEmployees = empCountRes.rows[0]?.totalEmployees || 0;
 
     // 3. Status Distribution for Today
+    // Exclude leave-based attendance records (source = 'LEAVE_ASSIGNMENT')
+    // Get onLeaveCount from leave_requests instead
     const statusSql = `
       SELECT
-        COUNT(a.id) FILTER (WHERE a.status = 'PRESENT' AND a.status != 'LATE' AND (a.notes IS NULL OR a.notes NOT ILIKE '%LATE%'))::int AS "onTimeCount",
-        COUNT(a.id) FILTER (WHERE a.status = 'LATE' OR a.notes ILIKE '%LATE%')::int AS "lateCount",
-        COUNT(a.id) FILTER (WHERE a.status = 'ABSENT')::int AS "absentCount",
-        COUNT(a.id) FILTER (WHERE a.status = 'HALF_DAY')::int AS "halfDayCount",
-        COUNT(a.id) FILTER (WHERE a.status = 'ON_LEAVE')::int AS "onLeaveCount",
-        COUNT(a.id)::int AS "markedCount",
-        COALESCE(SUM(a.total_hours), 0)::numeric AS "totalHoursToday"
+        COUNT(a.id) FILTER (WHERE a.status = 'PRESENT' AND a.status != 'LATE' AND (a.notes IS NULL OR a.notes NOT ILIKE '%LATE%') AND (a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT'))::int AS "onTimeCount",
+        COUNT(a.id) FILTER (WHERE (a.status = 'LATE' OR a.notes ILIKE '%LATE%') AND (a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT'))::int AS "lateCount",
+        COUNT(a.id) FILTER (WHERE a.status = 'ABSENT' AND (a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT'))::int AS "absentCount",
+        COUNT(a.id) FILTER (WHERE a.status = 'HALF_DAY' AND (a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT'))::int AS "halfDayCount",
+        (SELECT COUNT(DISTINCT lr.employee_id)::int 
+         FROM leave_requests lr 
+         JOIN employees e2 ON e2.id = lr.employee_id
+         WHERE lr.org_id = $1 
+           AND lr.status = 'APPROVED' 
+           AND lr.start_date <= $2::date 
+           AND lr.end_date >= $2::date
+           AND ($3 = '' OR e2.dept_id = $3)
+           AND ($4 = '' OR e2.shift_timing ILIKE '%' || $4 || '%')) AS "onLeaveCount",
+        COUNT(a.id) FILTER (WHERE (a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT'))::int AS "markedCount",
+        COALESCE(SUM(a.total_hours) FILTER (WHERE (a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT')), 0)::numeric AS "totalHoursToday"
       FROM attendance_records a
       JOIN employees e ON e.id = a.employee_id
       WHERE a.org_id = $1 AND a.attendance_date = $2::date
@@ -750,10 +781,10 @@ export const attendanceRepository = {
         SELECT
           TO_CHAR(a.attendance_date, 'Dy') AS "dayLabel",
           a.attendance_date::text AS "date",
-          COUNT(a.id) FILTER (WHERE a.status = 'PRESENT' AND a.status != 'LATE' AND (a.notes IS NULL OR a.notes NOT ILIKE '%LATE%'))::int AS "present",
-          COUNT(a.id) FILTER (WHERE a.status = 'LATE' OR a.notes ILIKE '%LATE%')::int AS "late",
-          COUNT(a.id) FILTER (WHERE a.status = 'ABSENT')::int AS "absent",
-          COALESCE(SUM(a.total_hours), 0)::numeric AS "totalHours"
+          COUNT(a.id) FILTER (WHERE a.status = 'PRESENT' AND a.status != 'LATE' AND (a.notes IS NULL OR a.notes NOT ILIKE '%LATE%') AND (a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT'))::int AS "present",
+          COUNT(a.id) FILTER (WHERE (a.status = 'LATE' OR a.notes ILIKE '%LATE%') AND (a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT'))::int AS "late",
+          COUNT(a.id) FILTER (WHERE a.status = 'ABSENT' AND (a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT'))::int AS "absent",
+          COALESCE(SUM(a.total_hours) FILTER (WHERE (a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT')), 0)::numeric AS "totalHours"
         FROM attendance_records a
         JOIN employees e ON e.id = a.employee_id
         WHERE a.org_id = $1
@@ -788,9 +819,9 @@ export const attendanceRepository = {
       const hourlyQuery = `
         SELECT
           TO_CHAR(a.check_in, 'HH12 AM') AS "hourLabel",
-          COUNT(a.id) FILTER (WHERE a.status = 'PRESENT' AND a.status != 'LATE' AND (a.notes IS NULL OR a.notes NOT ILIKE '%LATE%'))::int AS "present",
-          COUNT(a.id) FILTER (WHERE a.status = 'LATE' OR a.notes ILIKE '%LATE%')::int AS "late",
-          COUNT(a.id) FILTER (WHERE a.status = 'ABSENT')::int AS "absent"
+          COUNT(a.id) FILTER (WHERE a.status = 'PRESENT' AND a.status != 'LATE' AND (a.notes IS NULL OR a.notes NOT ILIKE '%LATE%') AND (a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT'))::int AS "present",
+          COUNT(a.id) FILTER (WHERE (a.status = 'LATE' OR a.notes ILIKE '%LATE%') AND (a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT'))::int AS "late",
+          COUNT(a.id) FILTER (WHERE a.status = 'ABSENT' AND (a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT'))::int AS "absent"
         FROM attendance_records a
         JOIN employees e ON e.id = a.employee_id
         WHERE a.org_id = $1 AND a.attendance_date = $2::date AND a.check_in IS NOT NULL
@@ -819,10 +850,10 @@ export const attendanceRepository = {
       const monthlyQuery = `
         SELECT
           'Week ' || TO_CHAR(a.attendance_date, 'W') AS "weekLabel",
-          COUNT(a.id) FILTER (WHERE a.status = 'PRESENT' AND a.status != 'LATE' AND (a.notes IS NULL OR a.notes NOT ILIKE '%LATE%'))::int AS "present",
-          COUNT(a.id) FILTER (WHERE a.status = 'LATE' OR a.notes ILIKE '%LATE%')::int AS "late",
-          COUNT(a.id) FILTER (WHERE a.status = 'ABSENT')::int AS "absent",
-          COALESCE(SUM(a.total_hours), 0)::numeric AS "totalHours"
+          COUNT(a.id) FILTER (WHERE a.status = 'PRESENT' AND a.status != 'LATE' AND (a.notes IS NULL OR a.notes NOT ILIKE '%LATE%') AND (a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT'))::int AS "present",
+          COUNT(a.id) FILTER (WHERE (a.status = 'LATE' OR a.notes ILIKE '%LATE%') AND (a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT'))::int AS "late",
+          COUNT(a.id) FILTER (WHERE a.status = 'ABSENT' AND (a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT'))::int AS "absent",
+          COALESCE(SUM(a.total_hours) FILTER (WHERE (a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT')), 0)::numeric AS "totalHours"
         FROM attendance_records a
         JOIN employees e ON e.id = a.employee_id
         WHERE a.org_id = $1
@@ -851,9 +882,9 @@ export const attendanceRepository = {
         SELECT
           TO_CHAR(a.attendance_date, 'Mon') AS "monthLabel",
           EXTRACT(MONTH FROM a.attendance_date)::int AS "monthNum",
-          COUNT(a.id) FILTER (WHERE a.status = 'PRESENT' AND a.status != 'LATE' AND (a.notes IS NULL OR a.notes NOT ILIKE '%LATE%'))::int AS "present",
-          COUNT(a.id) FILTER (WHERE a.status = 'LATE' OR a.notes ILIKE '%LATE%')::int AS "late",
-          COUNT(a.id) FILTER (WHERE a.status = 'ABSENT')::int AS "absent"
+          COUNT(a.id) FILTER (WHERE a.status = 'PRESENT' AND a.status != 'LATE' AND (a.notes IS NULL OR a.notes NOT ILIKE '%LATE%') AND (a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT'))::int AS "present",
+          COUNT(a.id) FILTER (WHERE (a.status = 'LATE' OR a.notes ILIKE '%LATE%') AND (a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT'))::int AS "late",
+          COUNT(a.id) FILTER (WHERE a.status = 'ABSENT' AND (a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT'))::int AS "absent"
         FROM attendance_records a
         JOIN employees e ON e.id = a.employee_id
         WHERE a.org_id = $1
@@ -878,8 +909,9 @@ export const attendanceRepository = {
     }
 
     // 5. Total hours logged across 30 days for KPI
+    // Exclude leave-based attendance records
     const totalHoursQuery = `
-      SELECT COALESCE(SUM(a.total_hours), 0)::numeric AS "sumHours"
+      SELECT COALESCE(SUM(a.total_hours) FILTER (WHERE (a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT')), 0)::numeric AS "sumHours"
       FROM attendance_records a
       JOIN employees e ON e.id = a.employee_id
       WHERE a.org_id = $1

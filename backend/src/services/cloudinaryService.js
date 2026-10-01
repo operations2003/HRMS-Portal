@@ -1,9 +1,10 @@
-import { v2 as cloudinary } from 'cloudinary';
+import cloudinary from 'cloudinary';
+const cloudinaryV2 = cloudinary.v2;
 import { Readable } from 'stream';
 import { config } from '../config/index.js';
 
 // Configure Cloudinary SDK with provided credentials or URL
-cloudinary.config({
+cloudinaryV2.config({
   cloud_name: config.cloudinary?.cloudName || process.env.CLOUDINARY_CLOUD_NAME,
   api_key: config.cloudinary?.apiKey || process.env.CLOUDINARY_API_KEY,
   api_secret: config.cloudinary?.apiSecret || process.env.CLOUDINARY_API_SECRET,
@@ -47,7 +48,7 @@ export const cloudinaryService = {
 
     if (Buffer.isBuffer(fileSource)) {
       return new Promise((resolve, reject) => {
-        const uploadStream = cloudinary.uploader.upload_stream(
+        const uploadStream = cloudinaryV2.uploader.upload_stream(
           uploadOptions,
           (error, result) => {
             if (error) {
@@ -71,7 +72,7 @@ export const cloudinaryService = {
     }
 
     // Local file path
-    const result = await cloudinary.uploader.upload(fileSource, uploadOptions);
+    const result = await cloudinaryV2.uploader.upload(fileSource, uploadOptions);
     return {
       secureUrl: result.secure_url,
       publicId: result.public_id,
@@ -89,7 +90,7 @@ export const cloudinaryService = {
   async delete(publicId, resourceType = 'raw') {
     if (!publicId) return null;
     try {
-      return await cloudinary.uploader.destroy(publicId, { resource_type: resourceType });
+      return await cloudinaryV2.uploader.destroy(publicId, { resource_type: resourceType });
     } catch (err) {
       console.warn('Cloudinary delete warning:', err.message);
       return null;
