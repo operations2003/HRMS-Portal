@@ -6,9 +6,9 @@ import { Badge } from "../../components/common/Badge.jsx";
 import { EmptyState } from "../../components/common/EmptyState.jsx";
 import { LoadingSpinner } from "../../components/common/LoadingSpinner.jsx";
 import {
-  FileText, Send, CheckCircle2, Clock, AlertTriangle, RefreshCw,
+  FileText, Send, CheckCircle2, Clock, RefreshCw,
   ChevronDown, ChevronUp, Calendar, BarChart2, Users, Search,
-  Filter, X, PenLine, ThumbsUp, Smile, Frown, Meh, Zap, User,
+  Filter, PenLine, ThumbsUp,
 } from "lucide-react";
 
 const API_BASE = "/api/v1";
@@ -30,22 +30,6 @@ const fmtDate = (d) => {
   try { return new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }); }
   catch { return String(d); }
 };
-
-const MOOD_OPTIONS = [
-  { value: "PRODUCTIVE", label: "Productive", icon: Zap, color: "emerald" },
-  { value: "GOOD", label: "Good", icon: Smile, color: "blue" },
-  { value: "AVERAGE", label: "Average", icon: Meh, color: "amber" },
-  { value: "CHALLENGING", label: "Challenging", icon: Frown, color: "rose" },
-];
-
-const MOOD_COLORS = {
-  emerald: { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-300", ring: "ring-emerald-600/10", icon: "text-emerald-600", activeBg: "bg-emerald-50 border-emerald-400" },
-  blue:    { bg: "bg-blue-50",    text: "text-blue-700",    border: "border-blue-300",    ring: "ring-blue-600/10",    icon: "text-blue-600",    activeBg: "bg-blue-50 border-blue-400" },
-  amber:   { bg: "bg-amber-50",   text: "text-amber-700",   border: "border-amber-300",   ring: "ring-amber-600/10",   icon: "text-amber-600",   activeBg: "bg-amber-50 border-amber-400" },
-  rose:    { bg: "bg-rose-50",    text: "text-rose-700",    border: "border-rose-300",    ring: "ring-rose-600/10",    icon: "text-rose-600",    activeBg: "bg-rose-50 border-rose-400" },
-};
-
-const getMoodMeta = (mood) => MOOD_OPTIONS.find((m) => m.value === mood) || MOOD_OPTIONS[0];
 
 const StatusBadge = ({ status }) => {
   if (status === "ACKNOWLEDGED") return <Badge variant="success">Acknowledged</Badge>;
@@ -89,9 +73,6 @@ const ReportCard = ({ report, canFeedback, onFeedback }) => {
   const [feedback, setFeedback] = useState(report.managerFeedback || "");
   const [submitting, setSubmitting] = useState(false);
   const { addToast } = useToast();
-  const mood = getMoodMeta(report.moodOrStatus);
-  const moodColors = MOOD_COLORS[mood.color];
-  const MoodIcon = mood.icon;
 
   const handleFeedback = async () => {
     if (!feedback.trim()) return;
@@ -114,9 +95,9 @@ const ReportCard = ({ report, canFeedback, onFeedback }) => {
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-slate-50/70 transition-colors"
       >
-        {/* Mood indicator */}
-        <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${moodColors.bg} border ${moodColors.border}`}>
-          <MoodIcon className={`w-4 h-4 ${moodColors.icon}`} />
+        {/* Calendar icon */}
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-brand-50 border border-brand-200">
+          <Calendar className="w-4 h-4 text-brand-600" />
         </div>
 
         <div className="flex-1 min-w-0">
@@ -129,7 +110,7 @@ const ReportCard = ({ report, canFeedback, onFeedback }) => {
             )}
             <span className="text-slate-300">·</span>
             <span className="text-xs text-slate-500 flex items-center gap-1">
-              <Calendar className="w-3 h-3" /> {fmtDate(report.reportDate)}
+              {fmtDate(report.reportDate)}
             </span>
           </div>
           <p className="text-sm text-slate-500 mt-0.5 truncate pr-4">{report.workSummary}</p>
@@ -146,41 +127,8 @@ const ReportCard = ({ report, canFeedback, onFeedback }) => {
         <div className="border-t border-slate-100 px-5 pb-5 pt-4 space-y-4 animate-fade-in">
           {/* Work Summary */}
           <div>
-            <p className="text-xs font-semibold text-brand-600 uppercase tracking-wider mb-1.5">Work Summary</p>
-            <p className="text-sm text-slate-700 leading-relaxed">{report.workSummary}</p>
-          </div>
-
-          {report.tasksCompleted && (
-            <div>
-              <p className="text-xs font-semibold text-emerald-600 uppercase tracking-wider mb-1.5">Tasks Completed</p>
-              <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{report.tasksCompleted}</p>
-            </div>
-          )}
-
-          {report.blockers && (
-            <div>
-              <p className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                <AlertTriangle className="w-3.5 h-3.5" /> Blockers / Challenges
-              </p>
-              <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{report.blockers}</p>
-            </div>
-          )}
-
-          {report.planForTomorrow && (
-            <div>
-              <p className="text-xs font-semibold text-violet-600 uppercase tracking-wider mb-1.5">Plan for Tomorrow</p>
-              <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{report.planForTomorrow}</p>
-            </div>
-          )}
-
-          <div className="flex items-center gap-4 pt-1">
-            <div className="flex items-center gap-1.5 text-xs text-slate-500">
-              <Clock className="w-3.5 h-3.5 text-slate-400" />
-              <strong className="text-slate-700">{report.hoursWorked}h</strong> worked
-            </div>
-            <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${moodColors.bg} ${moodColors.text} ${moodColors.border}`}>
-              <MoodIcon className="w-3 h-3" /> {mood.label}
-            </div>
+            <p className="text-xs font-semibold text-brand-600 uppercase tracking-wider mb-1.5">Summary of the Day</p>
+            <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{report.workSummary}</p>
           </div>
 
           {/* Manager Feedback */}
@@ -241,7 +189,7 @@ export const DailyReportPage = () => {
   // Form state
   const [todayReport, setTodayReport] = useState(null);
   const [loadingToday, setLoadingToday] = useState(true);
-  const [form, setForm] = useState({ workSummary: "", tasksCompleted: "", blockers: "", planForTomorrow: "", hoursWorked: 8, moodOrStatus: "PRODUCTIVE" });
+  const [form, setForm] = useState({ workSummary: "" });
   const [submitting, setSubmitting] = useState(false);
 
   // My history
@@ -252,7 +200,7 @@ export const DailyReportPage = () => {
   const [teamReports, setTeamReports] = useState([]);
   const [loadingTeam, setLoadingTeam] = useState(false);
   const [summary, setSummary] = useState(null);
-  const [teamFilters, setTeamFilters] = useState({ search: "", date: "", status: "", hasBlocker: false });
+  const [teamFilters, setTeamFilters] = useState({ search: "", date: "", status: "" });
   const [teamPage, setTeamPage] = useState(1);
   const [teamTotal, setTeamTotal] = useState(0);
   const TEAM_PAGE_SIZE = 15;
@@ -264,7 +212,7 @@ export const DailyReportPage = () => {
       const data = await apiFetch(`${API_BASE}/daily-reports/my/today`);
       const r = data.data?.report || null;
       setTodayReport(r);
-      if (r) setForm({ workSummary: r.workSummary || "", tasksCompleted: r.tasksCompleted || "", blockers: r.blockers || "", planForTomorrow: r.planForTomorrow || "", hoursWorked: r.hoursWorked || 8, moodOrStatus: r.moodOrStatus || "PRODUCTIVE" });
+      if (r) setForm({ workSummary: r.workSummary || "" });
     } catch { /* no report yet */ } finally { setLoadingToday(false); }
   }, []);
 
@@ -281,7 +229,6 @@ export const DailyReportPage = () => {
       if (teamFilters.search) params.set("search", teamFilters.search);
       if (teamFilters.date) params.set("date", teamFilters.date);
       if (teamFilters.status) params.set("status", teamFilters.status);
-      if (teamFilters.hasBlocker) params.set("hasBlocker", "true");
       const [teamData, sumData] = await Promise.all([
         apiFetch(`${API_BASE}/daily-reports/team?${params}`),
         apiFetch(`${API_BASE}/daily-reports/summary${teamFilters.date ? `?date=${teamFilters.date}` : ""}`),
@@ -380,85 +327,13 @@ export const DailyReportPage = () => {
 
                 <FormField
                   id="daily-report-summary"
-                  label="Work Summary"
+                  label="Summary of the Day"
                   required
-                  rows={5}
-                  placeholder="Describe what you worked on today..."
+                  rows={8}
+                  placeholder="Describe what you worked on today, tasks completed, any challenges faced, and your plan for tomorrow..."
                   value={form.workSummary}
                   onChange={(v) => updateForm("workSummary", v)}
                 />
-
-                <FormField
-                  id="daily-report-tasks"
-                  label="Tasks Completed"
-                  rows={3}
-                  placeholder="List tasks or ticket numbers completed today..."
-                  value={form.tasksCompleted}
-                  onChange={(v) => updateForm("tasksCompleted", v)}
-                />
-
-                <FormField
-                  id="daily-report-blockers"
-                  label="Blockers / Challenges"
-                  rows={2}
-                  placeholder="Any blockers, dependencies, or issues? (type 'None' if none)"
-                  value={form.blockers}
-                  onChange={(v) => updateForm("blockers", v)}
-                />
-
-                <FormField
-                  id="daily-report-plan"
-                  label="Plan for Tomorrow"
-                  rows={2}
-                  placeholder="What do you plan to work on tomorrow?"
-                  value={form.planForTomorrow}
-                  onChange={(v) => updateForm("planForTomorrow", v)}
-                />
-
-                {/* Hours + Mood row */}
-                <div className="flex flex-wrap gap-6 pt-1">
-                  {/* Hours Worked */}
-                  <div className="space-y-1.5">
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">Hours Worked</label>
-                    <input
-                      id="daily-report-hours"
-                      type="number"
-                      min={0}
-                      max={24}
-                      step={0.5}
-                      value={form.hoursWorked}
-                      onChange={(e) => updateForm("hoursWorked", parseFloat(e.target.value) || 8)}
-                      className="w-32 px-4 py-2.5 text-sm text-slate-900 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-400 transition-all"
-                    />
-                  </div>
-
-                  {/* Day Mood */}
-                  <div className="space-y-1.5 flex-1">
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">Day Mood</label>
-                    <div className="flex flex-wrap gap-2">
-                      {MOOD_OPTIONS.map((m) => {
-                        const MIcon = m.icon;
-                        const colors = MOOD_COLORS[m.color];
-                        const selected = form.moodOrStatus === m.value;
-                        return (
-                          <button
-                            key={m.value}
-                            type="button"
-                            onClick={() => updateForm("moodOrStatus", m.value)}
-                            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${
-                              selected
-                                ? `${colors.bg} ${colors.text} ${colors.border} shadow-sm ring-1 ${colors.ring}`
-                                : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-                            }`}
-                          >
-                            <MIcon className={`w-3.5 h-3.5 ${selected ? colors.icon : "text-slate-400"}`} />
-                            {m.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
 
                 {/* Submit Button */}
                 <div className="pt-2">
@@ -512,12 +387,11 @@ export const DailyReportPage = () => {
         <div className="space-y-5">
           {/* Stats Grid */}
           {summary && (
-            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
               <StatCard icon={Users}         label="Total"       value={summary.totalEmployees}  colorClass="text-brand-600"   iconBgClass="bg-brand-50" />
               <StatCard icon={CheckCircle2}  label="Submitted"   value={summary.submittedCount}   colorClass="text-emerald-600" iconBgClass="bg-emerald-50" />
               <StatCard icon={Clock}         label="Pending"     value={summary.pendingCount}     colorClass="text-amber-600"   iconBgClass="bg-amber-50" />
               <StatCard icon={ThumbsUp}      label="Acknowledged" value={summary.acknowledgedCount} colorClass="text-blue-600"  iconBgClass="bg-blue-50" />
-              <StatCard icon={AlertTriangle} label="Blockers"    value={summary.blockersCount}    colorClass="text-rose-600"    iconBgClass="bg-rose-50" />
               <StatCard icon={BarChart2}     label="Compliance"  value={`${summary.complianceRate}%`} colorClass="text-violet-600" iconBgClass="bg-violet-50" />
             </div>
           )}
@@ -559,27 +433,17 @@ export const DailyReportPage = () => {
                 <option value="ACKNOWLEDGED">Acknowledged</option>
               </select>
 
-              {/* Buttons */}
+              {/* Filter button */}
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setTeamFilters((p) => ({ ...p, hasBlocker: !p.hasBlocker }))}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-semibold rounded-xl border transition-all ${
-                    teamFilters.hasBlocker
-                      ? "bg-rose-50 text-rose-700 border-rose-300"
-                      : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-                  }`}
-                >
-                  <AlertTriangle className="w-3.5 h-3.5" /> Blockers
-                </button>
                 <Button
                   id="team-report-filter-btn"
                   variant="primary"
                   size="sm"
                   icon={Filter}
                   onClick={() => fetchTeam(1)}
+                  className="flex-1"
                 >
-                  Apply
+                  Apply Filters
                 </Button>
               </div>
             </div>
