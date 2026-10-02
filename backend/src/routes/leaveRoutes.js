@@ -95,4 +95,18 @@ router.post(
   leaveController.rejectLeave
 );
 
+// 9. Edit leave request (Admin / HR / Reporting Manager)
+router.put(
+  '/:id',
+  requireRoles(['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin', 'Manager', 'Lead', 'TeamLead', 'Supervisor']),
+  leaveController.updateLeave
+);
+
+// 10. Delete leave request (Admin / HR / Reporting Manager)
+router.delete(
+  '/:id',
+  requireRoles(['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin', 'Manager', 'Lead', 'TeamLead', 'Supervisor']),
+  leaveController.deleteLeave
+);
+
 export default router;

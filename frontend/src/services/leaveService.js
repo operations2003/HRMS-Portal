@@ -191,4 +191,23 @@ export const leaveService = {
     const res = await http.post(`/v1/leaves/${id}/reject`, payload);
     return res.data;
   },
+
+  /**
+   * Edit / update an existing leave request (Admin, HR, or Reporting Manager)
+   * @param {string} id
+   * @param {Object} payload
+   */
+  async updateLeave(id, payload) {
+    const res = await http.put(`/v1/leaves/${id}`, payload);
+    return res.data;
+  },
+
+  /**
+   * Delete an existing leave request (Admin, HR, or Reporting Manager)
+   * @param {string} id
+   */
+  async deleteLeave(id) {
+    const res = await http.delete(`/v1/leaves/${id}`);
+    return res.data;
+  },
 };

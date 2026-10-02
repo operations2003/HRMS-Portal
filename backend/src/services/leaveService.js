@@ -1736,4 +1736,336 @@ export const leaveService = {
 
     return updated;
   },
+
+  /**
+   * Edit / Update Leave Request (Admin, HR, or Reporting Manager)
+   * Allows correcting mistaken leave category, dates, duration, or reason.
+   * Accurately reverts previous balance/attendance impact and applies new category rules.
+   */
+  async updateLeave(user, id, data) {
+    const record = await leaveRepository.findById(id);
+    if (!record) {
+      const error = new Error('Leave request not found.');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const normRole = normalizeRole(user.roleName || user.role);
+    const isAdmin =
+      ['admin', 'superadmin', 'orgadmin'].includes(normRole) ||
+      (user.email || '').toLowerCase() === 'sheetalbedi@tasknera.com';
+    const isHr = ['hr', 'hrmanager'].includes(normRole);
+    const isManager = ['manager', 'lead', 'teamlead', 'supervisor'].includes(normRole);
+
+    if (!isAdmin && !isHr && !isManager) {
+      const error = new Error('Access denied: Only Admin, HR, or Reporting Manager can edit leave requests.');
+      error.statusCode = 403;
+      throw error;
+    }
+
+    // Organization boundary check
+    if (!isAdmin && record.orgId !== user.orgId) {
+      const error = new Error('Access denied: Leave request belongs to a different organization.');
+      error.statusCode = 403;
+      throw error;
+    }
+
+    // Manager scope check: can only edit for employees reporting to them or in their department
+    if (isManager && !isAdmin && !isHr) {
+      const managerEmp = await resolveRequesterEmployee(user);
+      const isDirectReport = managerEmp && record.employee && record.employee.managerId === managerEmp.id;
+      const isDeptMatch = managerEmp && managerEmp.deptId && record.employee && record.employee.deptId === managerEmp.deptId;
+      if (!isDirectReport && !isDeptMatch) {
+        const error = new Error('Access denied: Managers can only edit leave requests for employees within their team or department.');
+        error.statusCode = 403;
+        throw error;
+      }
+    }
+
+    const oldLeaveTypeId = record.leaveTypeId;
+    const oldLeaveType = await leaveRepository.findLeaveTypeById(oldLeaveTypeId, record.orgId);
+    const oldYear = new Date(record.startDate).getFullYear();
+    const oldTotalDays = parseFloat(record.totalDays) || 0;
+    const oldStatus = (record.status || '').toUpperCase();
+    const oldIsSpecial = isSpecialLeaveType(oldLeaveType);
+    const oldIsPaid = oldLeaveType && !isUnpaidLeave(oldLeaveType) && Boolean(oldLeaveType.isPaid);
+
+    const newLeaveTypeId = data.leaveTypeId || oldLeaveTypeId;
+    const newLeaveType = await leaveRepository.findLeaveTypeById(newLeaveTypeId, record.orgId);
+    if (!newLeaveType) {
+      const error = new Error('Selected leave type does not exist.');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const newStartDate = data.startDate ? String(data.startDate).trim() : String(record.startDate).split('T')[0];
+    const newEndDate = data.endDate ? String(data.endDate).trim() : (data.startDate ? String(data.startDate).trim() : String(record.endDate).split('T')[0]);
+    const newIsHalfDay = data.isHalfDay !== undefined ? Boolean(data.isHalfDay) : Boolean(record.isHalfDay);
+    const newHalfDayPeriod = newIsHalfDay ? (data.halfDayPeriod || record.halfDayPeriod || 'FIRST_HALF') : null;
+    const newYear = new Date(newStartDate).getFullYear();
+
+    const newIsSpecial = isSpecialLeaveType(newLeaveType);
+    const newIsPaid = newLeaveType && !isUnpaidLeave(newLeaveType) && Boolean(newLeaveType.isPaid);
+
+    // Calculate new duration
+    let newTotalDays = oldTotalDays;
+    let newDateDecisions = [];
+    const dayFactor = newIsHalfDay ? 0.5 : 1.0;
+
+    if (Array.isArray(data.dates) && data.dates.length > 0) {
+      const rawDates = data.dates
+        .map((d) => String(d).trim())
+        .filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d));
+      const uniqueDates = Array.from(new Set(rawDates)).sort();
+      newTotalDays = uniqueDates.length * dayFactor;
+      newDateDecisions = uniqueDates.map((d) => ({
+        date: d,
+        status: oldStatus === 'APPROVED' ? 'APPROVED' : 'PENDING',
+        dayFraction: dayFactor,
+        reason: '',
+      }));
+    } else {
+      const calculation = await calculateLeaveDuration(
+        record.orgId,
+        newStartDate,
+        newEndDate,
+        newIsHalfDay,
+        newHalfDayPeriod,
+        false,
+        newIsSpecial
+      );
+      newTotalDays = calculation.totalDays;
+
+      // Expand dates
+      const holidays = await leaveRepository.findActiveHolidaysBetween(record.orgId, newStartDate, newEndDate);
+      const holidaySet = new Set(holidays.map((h) => h.holiday_date));
+      const sDate = parseLocalDate(newStartDate);
+      const eDate = parseLocalDate(newEndDate);
+      const cur = new Date(sDate.getTime());
+
+      while (cur <= eDate) {
+        const curStr = formatLocalDate(cur);
+        const isSunday = cur.getDay() === 0;
+        const isHoliday = holidaySet.has(curStr);
+
+        if (newIsSpecial || (!isSunday && !isHoliday)) {
+          newDateDecisions.push({
+            date: curStr,
+            status: oldStatus === 'APPROVED' ? 'APPROVED' : 'PENDING',
+            dayFraction: dayFactor,
+            reason: '',
+          });
+        }
+        cur.setDate(cur.getDate() + 1);
+      }
+      if (newDateDecisions.length === 0) {
+        newDateDecisions.push({
+          date: newStartDate,
+          status: oldStatus === 'APPROVED' ? 'APPROVED' : 'PENDING',
+          dayFraction: dayFactor,
+          reason: '',
+        });
+      }
+    }
+
+    // Overlap check (excluding current leave request id)
+    const overlapSql = `
+      SELECT id, status, start_date, end_date
+      FROM leave_requests
+      WHERE employee_id = $1
+        AND id != $2
+        AND UPPER(status) NOT IN ('CANCELLED', 'REJECTED')
+        AND (start_date <= $4::date AND end_date >= $3::date)
+      LIMIT 1;
+    `;
+    const overlapRes = await pool.query(overlapSql, [record.employeeId, id, newStartDate, newEndDate]);
+    if (overlapRes.rows.length > 0) {
+      const ov = overlapRes.rows[0];
+      const error = new Error(`Overlapping leave conflict: Employee already has an active ${ov.status} leave request from ${ov.start_date} to ${ov.end_date}.`);
+      error.statusCode = 409;
+      throw error;
+    }
+
+    // 1. Revert previous balance impact
+    if (oldStatus === 'APPROVED') {
+      if (!oldIsSpecial && oldIsPaid) {
+        await leaveRepository.adjustBalance(record.employeeId, oldLeaveTypeId, oldYear, { usedDelta: -oldTotalDays });
+      }
+    } else if (oldStatus === 'PENDING') {
+      if (!oldIsSpecial && oldIsPaid) {
+        await leaveRepository.adjustBalance(record.employeeId, oldLeaveTypeId, oldYear, { pendingDelta: -oldTotalDays });
+      }
+    }
+
+    // 2. Validate new balance if new type is paid normal leave
+    if (newIsPaid && !newIsSpecial) {
+      const balances = await leaveRepository.getLeaveBalances(record.employeeId, newYear);
+      const bal = balances.find((b) => b.leaveTypeId === newLeaveTypeId);
+      const remainingDays = bal ? (parseFloat(bal.remainingDays) || 0) : 0;
+      if (remainingDays < newTotalDays) {
+        // Restore old balance before throwing
+        if (oldStatus === 'APPROVED' && !oldIsSpecial && oldIsPaid) {
+          await leaveRepository.adjustBalance(record.employeeId, oldLeaveTypeId, oldYear, { usedDelta: oldTotalDays });
+        } else if (oldStatus === 'PENDING' && !oldIsSpecial && oldIsPaid) {
+          await leaveRepository.adjustBalance(record.employeeId, oldLeaveTypeId, oldYear, { pendingDelta: oldTotalDays });
+        }
+        const error = new Error(`Insufficient leave balance for ${newLeaveType.name}. Employee has ${remainingDays} days available, but edited leave requires ${newTotalDays} days.`);
+        error.statusCode = 400;
+        throw error;
+      }
+    }
+
+    // 3. Apply new balance impact
+    if (oldStatus === 'APPROVED') {
+      if (newIsSpecial) {
+        await leaveRepository.recordAssignedLeaveBalance(record.employeeId, record.orgId, newLeaveTypeId, newYear, newTotalDays);
+      } else if (newIsPaid) {
+        await leaveRepository.adjustBalance(record.employeeId, newLeaveTypeId, newYear, { usedDelta: newTotalDays });
+      }
+    } else if (oldStatus === 'PENDING') {
+      if (!newIsSpecial && newIsPaid) {
+        await leaveRepository.adjustBalance(record.employeeId, newLeaveTypeId, newYear, { pendingDelta: newTotalDays });
+      }
+    }
+
+    // 4. Update attendance records if approved
+    if (oldStatus === 'APPROVED') {
+      // Remove previous attendance records for old dates
+      await pool.query(
+        `DELETE FROM attendance_records
+         WHERE employee_id = $1
+           AND attendance_date BETWEEN $2::date AND $3::date
+           AND source = 'LEAVE_ASSIGNMENT'`,
+        [record.employeeId, record.startDate, record.endDate]
+      );
+
+      // Re-sync new attendance records
+      const targetEmp = await employeeRepository.findById(record.employeeId);
+      await syncLeaveToAttendance(
+        targetEmp,
+        { id },
+        newLeaveType,
+        newStartDate,
+        newEndDate,
+        newIsHalfDay,
+        newHalfDayPeriod,
+        newDateDecisions
+      );
+    }
+
+    // 5. Update reason if provided
+    const newReason = data.reason !== undefined ? data.reason : record.reason;
+
+    // 6. Update database record
+    const updated = await leaveRepository.updateLeaveRequest(id, {
+      leaveTypeId: newLeaveTypeId,
+      startDate: newStartDate,
+      endDate: newEndDate,
+      isHalfDay: newIsHalfDay,
+      halfDayPeriod: newHalfDayPeriod,
+      totalDays: newTotalDays,
+      reason: newReason,
+      dateDecisions: newDateDecisions,
+    });
+
+    return updated;
+  },
+
+  /**
+   * Delete Leave Request (Admin, HR, or Reporting Manager)
+   * Safely deletes mistaken leave entry, reverses balances and cleans up attendance marks.
+   */
+  async deleteLeave(user, id) {
+    const record = await leaveRepository.findById(id);
+    if (!record) {
+      const error = new Error('Leave request not found.');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const normRole = normalizeRole(user.roleName || user.role);
+    const isAdmin =
+      ['admin', 'superadmin', 'orgadmin'].includes(normRole) ||
+      (user.email || '').toLowerCase() === 'sheetalbedi@tasknera.com';
+    const isHr = ['hr', 'hrmanager'].includes(normRole);
+    const isManager = ['manager', 'lead', 'teamlead', 'supervisor'].includes(normRole);
+
+    if (!isAdmin && !isHr && !isManager) {
+      const error = new Error('Access denied: Only Admin, HR, or Reporting Manager can delete leave requests.');
+      error.statusCode = 403;
+      throw error;
+    }
+
+    // Organization boundary check
+    if (!isAdmin && record.orgId !== user.orgId) {
+      const error = new Error('Access denied: Leave request belongs to a different organization.');
+      error.statusCode = 403;
+      throw error;
+    }
+
+    // Manager scope check: can only delete for employees reporting to them
+    if (isManager && !isAdmin && !isHr) {
+      const managerEmp = await resolveRequesterEmployee(user);
+      const isDirectReport = managerEmp && record.employee && record.employee.managerId === managerEmp.id;
+      const isDeptMatch = managerEmp && managerEmp.deptId && record.employee && record.employee.deptId === managerEmp.deptId;
+      if (!isDirectReport && !isDeptMatch) {
+        const error = new Error('Access denied: Managers can only delete leave requests for employees within their team or department.');
+        error.statusCode = 403;
+        throw error;
+      }
+    }
+
+    const year = new Date(record.startDate).getFullYear();
+    const leaveType = await leaveRepository.findLeaveTypeById(record.leaveTypeId, record.orgId);
+    const isSpecial = isSpecialLeaveType(leaveType);
+    const isPaid = leaveType && !isUnpaidLeave(leaveType) && Boolean(leaveType.isPaid);
+
+    // 1. Revert balance impact:
+    if (record.status === 'APPROVED') {
+      if (!isSpecial && isPaid) {
+        await leaveRepository.adjustBalance(record.employeeId, record.leaveTypeId, year, { usedDelta: -record.totalDays });
+      }
+    } else if (record.status === 'PENDING') {
+      if (!isSpecial && isPaid) {
+        await leaveRepository.adjustBalance(record.employeeId, record.leaveTypeId, year, { pendingDelta: -record.totalDays });
+      }
+    }
+
+    // 2. Revert attendance records for this leave assignment if approved
+    if (record.status === 'APPROVED') {
+      const sDate = parseLocalDate(record.startDate);
+      const eDate = parseLocalDate(record.endDate);
+      if (sDate && eDate) {
+        await pool.query(
+          `DELETE FROM attendance_records
+           WHERE employee_id = $1
+             AND attendance_date BETWEEN $2::date AND $3::date
+             AND source = 'LEAVE_ASSIGNMENT'`,
+          [record.employeeId, record.startDate, record.endDate]
+        );
+      }
+    }
+
+    // 3. Delete associated notifications
+    try {
+      await pool.query('DELETE FROM notifications WHERE entity_id = $1', [id]);
+    } catch (nErr) {
+      logger.warn('LeaveService', `Failed to delete notifications for leave ${id}: ${nErr.message}`);
+    }
+
+    // 4. Delete associated workflow instances
+    try {
+      await pool.query('DELETE FROM approval_workflows WHERE entity_id = $1', [id]);
+    } catch (wfErr) {
+      logger.warn('LeaveService', `Failed to delete workflow instances for leave ${id}: ${wfErr.message}`);
+    }
+
+    // 5. Delete the leave request record
+    await leaveRepository.deleteLeaveRequest(id);
+
+    return {
+      success: true,
+      message: 'Leave request deleted successfully.',
+    };
+  },
 };

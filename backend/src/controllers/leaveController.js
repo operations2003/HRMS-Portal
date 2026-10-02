@@ -287,4 +287,36 @@ export const leaveController = {
       next(error);
     }
   },
+
+  /**
+   * PUT /api/v1/leaves/:id
+   * Edit leave request (Category, Dates, Duration, Reason) - Admin, HR, or Reporting Manager
+   */
+  async updateLeave(req, res, next) {
+    try {
+      const record = await leaveService.updateLeave(req.user, req.params.id, req.body);
+      return sendSuccess(res, 'Leave request updated successfully.', record, 200);
+    } catch (error) {
+      if (error.statusCode) {
+        return sendError(res, error.message, error.statusCode);
+      }
+      next(error);
+    }
+  },
+
+  /**
+   * DELETE /api/v1/leaves/:id
+   * Delete leave request - Admin, HR, or Reporting Manager
+   */
+  async deleteLeave(req, res, next) {
+    try {
+      const result = await leaveService.deleteLeave(req.user, req.params.id);
+      return sendSuccess(res, result.message || 'Leave request deleted successfully.', null, 200);
+    } catch (error) {
+      if (error.statusCode) {
+        return sendError(res, error.message, error.statusCode);
+      }
+      next(error);
+    }
+  },
 };

@@ -248,11 +248,12 @@ export const leaveRepository = {
     `;
     const values = [id];
     if (orgId) {
-      sql += ' AND (org_id = $2 OR org_id = \'org-1\')';
+      sql += ' AND (org_id = $2 OR org_id = \'org-1\') ORDER BY CASE WHEN org_id = $2 THEN 0 ELSE 1 END, status ASC LIMIT 1;';
       values.push(orgId);
+    } else {
+      sql += ' ORDER BY status ASC LIMIT 1;';
     }
-    sql += ' ORDER BY CASE WHEN org_id = $2 THEN 0 ELSE 1 END, status ASC LIMIT 1;';
-    const res = await pool.query(sql, orgId ? [id, orgId] : [id]);
+    const res = await pool.query(sql, values);
     return res.rows.length > 0 ? mapLeaveTypeRow(res.rows[0]) : null;
   },
 
@@ -733,6 +734,85 @@ export const leaveRepository = {
     if (res.rows.length === 0) return null;
 
     return this.findById(id);
+  },
+
+  /**
+   * Update details of an existing leave request (Category, Dates, Duration, Reason)
+   */
+  async updateLeaveRequest(id, {
+    leaveTypeId,
+    startDate,
+    endDate,
+    isHalfDay,
+    halfDayPeriod,
+    totalDays,
+    reason,
+    dateDecisions,
+  }) {
+    const setClauses = ['updated_at = NOW()'];
+    const values = [];
+    let paramIndex = 1;
+
+    if (leaveTypeId !== undefined && leaveTypeId !== null) {
+      setClauses.push(`leave_type_id = $${paramIndex++}`);
+      values.push(leaveTypeId);
+    }
+
+    if (startDate !== undefined && startDate !== null) {
+      setClauses.push(`start_date = $${paramIndex++}::date`);
+      values.push(startDate);
+    }
+
+    if (endDate !== undefined && endDate !== null) {
+      setClauses.push(`end_date = $${paramIndex++}::date`);
+      values.push(endDate);
+    }
+
+    if (isHalfDay !== undefined && isHalfDay !== null) {
+      setClauses.push(`is_half_day = $${paramIndex++}`);
+      values.push(Boolean(isHalfDay));
+    }
+
+    if (halfDayPeriod !== undefined) {
+      setClauses.push(`half_day_period = $${paramIndex++}`);
+      values.push(halfDayPeriod);
+    }
+
+    if (totalDays !== undefined && totalDays !== null) {
+      setClauses.push(`total_days = $${paramIndex++}`);
+      values.push(totalDays);
+    }
+
+    if (reason !== undefined && reason !== null) {
+      setClauses.push(`reason = $${paramIndex++}`);
+      values.push(reason);
+    }
+
+    if (dateDecisions !== undefined && dateDecisions !== null) {
+      setClauses.push(`date_decisions = $${paramIndex++}::jsonb`);
+      values.push(JSON.stringify(dateDecisions));
+    }
+
+    values.push(id);
+    const sql = `
+      UPDATE leave_requests
+      SET ${setClauses.join(', ')}
+      WHERE id = $${paramIndex}
+      RETURNING id;
+    `;
+
+    const res = await pool.query(sql, values);
+    if (res.rows.length === 0) return null;
+
+    return this.findById(id);
+  },
+
+  /**
+   * Delete a leave request record from database
+   */
+  async deleteLeaveRequest(id) {
+    const res = await pool.query('DELETE FROM leave_requests WHERE id = $1 RETURNING id;', [id]);
+    return res.rows[0] || null;
   },
 
   /**

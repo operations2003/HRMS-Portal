@@ -20,12 +20,15 @@ import {
   ShieldCheck,
   Check,
   PieChart,
+  Edit3,
+  Trash2,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { leaveService } from '../../services/leaveService.js';
 import { managerService } from '../../services/managerService.js';
 import { ApplyLeaveModal } from '../../components/leave/ApplyLeaveModal.jsx';
+import { EditLeaveModal } from '../../components/leave/EditLeaveModal.jsx';
 import { LeaveBalanceCards } from '../../components/leave/LeaveBalanceCards.jsx';
 import { EmployeeLeaveBalancesViewer } from '../../components/leave/EmployeeLeaveBalancesViewer.jsx';
 import { ApproveLeaveModal } from '../../components/leave/ApproveLeaveModal.jsx';
@@ -54,6 +57,7 @@ export const LeaveManagementPage = () => {
   const canApprove = hasPermission('leave:approve') || hasRole(['Manager', 'HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin']);
   const canViewTeam = hasRole(['Manager', 'HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin']);
   const canManageTypes = hasRole(['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin']);
+  const canEditOrDelete = isHrOrAdmin || canViewTeam;
 
   // Active Tab: 'my' | 'team' | 'balances' (synced with ?tab= query param)
   const tabParam = searchParams.get('tab');
@@ -95,6 +99,11 @@ export const LeaveManagementPage = () => {
   const [selectedDetailRecord, setSelectedDetailRecord] = useState(null);
   const [approvingRecord, setApprovingRecord] = useState(null);
   const [rejectingRecord, setRejectingRecord] = useState(null);
+
+  // Edit & Delete modal states (for HR, Admin, and Reporting Managers)
+  const [editingRecord, setEditingRecord] = useState(null);
+  const [deletingRecord, setDeletingRecord] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Cancellation Modal state (for employee withdrawing own request)
   const [cancellingRecord, setCancellingRecord] = useState(null);
@@ -280,6 +289,24 @@ export const LeaveManagementPage = () => {
       toast.error(err.message || 'Failed to cancel leave request.');
     } finally {
       setIsSubmittingCancel(false);
+    }
+  };
+
+  // Handle Delete Leave (Admin, HR, or Reporting Manager)
+  const handleConfirmDelete = async () => {
+    if (!deletingRecord) return;
+    try {
+      setIsDeleting(true);
+      await leaveService.deleteLeave(deletingRecord.id);
+      toast.success('Leave request deleted successfully.');
+      setDeletingRecord(null);
+      fetchMetadata();
+      fetchRecords(pagination?.page || 1);
+      fetchTeamStats();
+    } catch (err) {
+      toast.error(err.message || 'Failed to delete leave request.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -522,6 +549,29 @@ export const LeaveManagementPage = () => {
               onClick={() => setSelectedDetailRecord(row)}
               title="View complete leave details"
             />
+
+            {/* Edit Leave Action (Admin, HR, or Reporting Manager) */}
+            {canEditOrDelete && (
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={Edit3}
+                onClick={() => setEditingRecord(row)}
+                title="Edit category, dates, or reason"
+              />
+            )}
+
+            {/* Delete Leave Action (Admin, HR, or Reporting Manager) */}
+            {canEditOrDelete && (
+              <Button
+                variant="secondary"
+                size="sm"
+                className="text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                icon={Trash2}
+                onClick={() => setDeletingRecord(row)}
+                title="Delete mistaken leave record"
+              />
+            )}
 
             {/* Manager Approve / Reject Actions (Strictly gated to pending & non-self) */}
             {canApprove && isPending && (
@@ -1128,11 +1178,92 @@ export const LeaveManagementPage = () => {
         onClose={() => setSelectedDetailRecord(null)}
         leaveRecord={selectedDetailRecord}
         canApprove={canApprove}
+        canManage={canEditOrDelete}
         onApproveClick={(rec) => setApprovingRecord(rec)}
         onRejectClick={(rec) => setRejectingRecord(rec)}
         onCancelClick={(rec) => setCancellingRecord(rec)}
+        onEditClick={(rec) => setEditingRecord(rec)}
+        onDeleteClick={(rec) => setDeletingRecord(rec)}
         currentUser={user}
       />
+
+      {/* Edit Leave Modal (Admin / HR / Manager) */}
+      <EditLeaveModal
+        isOpen={Boolean(editingRecord)}
+        onClose={() => setEditingRecord(null)}
+        onSuccess={() => {
+          toast.success('Leave request updated successfully!');
+          fetchMetadata();
+          fetchRecords(pagination?.page || 1);
+          fetchTeamStats();
+        }}
+        leaveRecord={editingRecord}
+        leaveTypes={leaveTypes}
+      />
+
+      {/* Delete Leave Confirmation Modal (Admin / HR / Manager) */}
+      <Modal
+        isOpen={Boolean(deletingRecord)}
+        onClose={() => setDeletingRecord(null)}
+        title="Delete Leave Record"
+        subtitle="Permanently remove mistaken leave entry"
+        maxWidth="max-w-md"
+      >
+        <div className="space-y-4">
+          <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 flex items-start gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+            <div>
+              <strong className="block font-bold mb-0.5">Warning: This action cannot be undone.</strong>
+              Deleting this record will immediately restore any deducted leave balances and remove associated attendance marks for this period.
+            </div>
+          </div>
+
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1 text-xs">
+            <div>
+              <span className="text-slate-400 font-semibold">Employee: </span>
+              <strong className="text-slate-900">
+                {deletingRecord?.employee?.firstName} {deletingRecord?.employee?.lastName} ({deletingRecord?.employee?.employeeCode || '—'})
+              </strong>
+            </div>
+            <div>
+              <span className="text-slate-400 font-semibold">Category: </span>
+              <strong className="text-slate-900">{deletingRecord?.leaveType?.name || deletingRecord?.leaveTypeName || 'Leave'}</strong>
+            </div>
+            <div>
+              <span className="text-slate-400 font-semibold">Duration: </span>
+              <strong className="text-brand-600">
+                {deletingRecord?.totalDays} {deletingRecord?.totalDays === 1 ? 'day' : 'days'}
+              </strong>
+            </div>
+            <div>
+              <span className="text-slate-400 font-semibold">Dates: </span>
+              <span className="text-slate-700 font-mono">
+                {deletingRecord?.startDate ? String(deletingRecord.startDate).split('T')[0] : ''} &rarr; {deletingRecord?.endDate ? String(deletingRecord.endDate).split('T')[0] : ''}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={() => setDeletingRecord(null)}
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              size="md"
+              icon={Trash2}
+              onClick={handleConfirmDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting ? 'Deleting...' : 'Delete Leave'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Cancel Leave Confirmation Modal (for employees) */}
       <Modal

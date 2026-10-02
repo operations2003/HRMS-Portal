@@ -12,6 +12,8 @@ import {
   AlertCircle,
   MessageSquare,
   CalendarDays,
+  Edit3,
+  Trash2,
 } from 'lucide-react';
 import { Modal } from '../common/Modal.jsx';
 import { Button } from '../common/Button.jsx';
@@ -23,9 +25,12 @@ export const LeaveDetailModal = ({
   onClose,
   leaveRecord,
   canApprove = false,
+  canManage = false,
   onApproveClick,
   onRejectClick,
   onCancelClick,
+  onEditClick,
+  onDeleteClick,
   currentUser,
 }) => {
   if (!leaveRecord) return null;
@@ -344,12 +349,46 @@ export const LeaveDetailModal = ({
         </div>
 
         {/* Actions Footer */}
-        <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-          <Button variant="secondary" size="md" onClick={onClose}>
-            Close
-          </Button>
+        <div className="flex items-center justify-between pt-3 border-t border-slate-100 gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" size="md" onClick={onClose}>
+              Close
+            </Button>
+
+            {/* Admin / HR / Manager Delete Action */}
+            {canManage && onDeleteClick && (
+              <Button
+                variant="danger"
+                size="md"
+                icon={Trash2}
+                onClick={() => {
+                  onClose();
+                  onDeleteClick(leaveRecord);
+                }}
+                title="Delete this leave request"
+              >
+                Delete Leave
+              </Button>
+            )}
+          </div>
 
           <div className="flex items-center gap-2">
+            {/* Admin / HR / Manager Edit Action */}
+            {canManage && onEditClick && (
+              <Button
+                variant="secondary"
+                size="md"
+                icon={Edit3}
+                onClick={() => {
+                  onClose();
+                  onEditClick(leaveRecord);
+                }}
+                title="Edit category, dates, or reason"
+              >
+                Edit Leave
+              </Button>
+            )}
+
             {/* If pending and user is employee -> Cancel */}
             {isPending && isOwn && onCancelClick && (
               <Button
