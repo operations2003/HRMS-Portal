@@ -98,6 +98,8 @@ export const notificationRepository = {
     let query = `
       SELECT * FROM notifications
       WHERE user_id = $1
+        AND event_type NOT IN ('EMPLOYEE_ON_BREAK', 'EMPLOYEE_RESUMED_BREAK')
+        AND (entity_type IS NULL OR entity_type != 'ATTENDANCE_BREAK')
     `;
     const params = [userId];
 
@@ -116,7 +118,14 @@ export const notificationRepository = {
    * Count unread notifications for a user
    */
   async countUnread(userId) {
-    const query = `SELECT COUNT(*)::int AS count FROM notifications WHERE user_id = $1 AND is_read = FALSE;`;
+    const query = `
+      SELECT COUNT(*)::int AS count 
+      FROM notifications 
+      WHERE user_id = $1 
+        AND is_read = FALSE
+        AND event_type NOT IN ('EMPLOYEE_ON_BREAK', 'EMPLOYEE_RESUMED_BREAK')
+        AND (entity_type IS NULL OR entity_type != 'ATTENDANCE_BREAK');
+    `;
     const { rows } = await pool.query(query, [userId]);
     return rows[0]?.count || 0;
   },

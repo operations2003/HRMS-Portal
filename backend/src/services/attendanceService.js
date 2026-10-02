@@ -612,6 +612,7 @@ export const attendanceService = {
         const error = new Error('No employee profile found for your user account.');
         error.statusCode = 404;
         throw error;
+      }
     }
 
     // The Administrator / CEO supervises the system and is strictly exempt from recording attendance
@@ -788,37 +789,6 @@ export const attendanceService = {
       currentBreakStart: new Date(),
     });
 
-    // Notify Manager, HR, and Admin that employee is now on break
-    try {
-      let managerUserId = null;
-      if (targetEmployee.managerId) {
-        const mgrEmp = await employeeRepository.findById(targetEmployee.managerId);
-        if (mgrEmp?.userId) {
-          managerUserId = mgrEmp.userId;
-        } else if (mgrEmp?.email) {
-          const mgrUser = await userRepository.findByEmail(mgrEmp.email);
-          if (mgrUser) managerUserId = mgrUser.id;
-        }
-      }
-
-      const empName = `${targetEmployee.firstName || ''} ${targetEmployee.lastName || ''}`.trim() || targetEmployee.name || user.firstName || 'Employee';
-      const empCode = targetEmployee.employeeCode || '';
-      const deptName = targetEmployee.departmentName || targetEmployee.department?.name || '';
-
-      await notificationService.notifyBreakStarted({
-        orgId: targetEmployee.orgId || user.orgId || 'org-1',
-        employeeId: targetEmployee.id,
-        employeeName: empName,
-        employeeCode: empCode,
-        departmentName: deptName,
-        managerUserId,
-        requesterUserId: user.id,
-        breakStartTime: new Date(),
-      });
-    } catch (notifErr) {
-      logger.warn('AttendanceService', `Failed to dispatch break notification: ${notifErr.message}`);
-    }
-
     return updated;
   },
 
@@ -889,37 +859,6 @@ export const attendanceService = {
       breakDurationMinutes: totalBreakMinutes,
       breakHistory,
     });
-
-    // Notify Manager, HR, and Admin that employee has resumed from break
-    try {
-      let managerUserId = null;
-      if (targetEmployee.managerId) {
-        const mgrEmp = await employeeRepository.findById(targetEmployee.managerId);
-        if (mgrEmp?.userId) {
-          managerUserId = mgrEmp.userId;
-        } else if (mgrEmp?.email) {
-          const mgrUser = await userRepository.findByEmail(mgrEmp.email);
-          if (mgrUser) managerUserId = mgrUser.id;
-        }
-      }
-
-      const empName = `${targetEmployee.firstName || ''} ${targetEmployee.lastName || ''}`.trim() || targetEmployee.name || user.firstName || 'Employee';
-      const empCode = targetEmployee.employeeCode || '';
-      const deptName = targetEmployee.departmentName || targetEmployee.department?.name || '';
-
-      await notificationService.notifyBreakEnded({
-        orgId: targetEmployee.orgId || user.orgId || 'org-1',
-        employeeId: targetEmployee.id,
-        employeeName: empName,
-        employeeCode: empCode,
-        departmentName: deptName,
-        managerUserId,
-        requesterUserId: user.id,
-        breakDurationMinutes: elapsedMinutes,
-      });
-    } catch (notifErr) {
-      logger.warn('AttendanceService', `Failed to dispatch resume break notification: ${notifErr.message}`);
-    }
 
     return updated;
   },

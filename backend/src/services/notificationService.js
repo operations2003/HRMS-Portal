@@ -600,161 +600,18 @@ export const notificationService = {
 
   /**
    * 24. Event: Employee Started Break
-   * Notifies employee's reporting manager, HR personnel, and Admin
+   * Break and resume events are tracked in real-time on attendance dashboards and team pages
+   * rather than generating notification inbox noise for Manager, HR, and Admin.
    */
-  async notifyBreakStarted({
-    orgId,
-    employeeId,
-    employeeName,
-    employeeCode = '',
-    departmentName = '',
-    managerUserId = null,
-    requesterUserId = null,
-    breakStartTime = new Date(),
-  }) {
-    const notifications = [];
-    const notifiedUserIds = new Set();
-    if (requesterUserId) notifiedUserIds.add(requesterUserId);
-
-    const timeFormatted = breakStartTime instanceof Date
-      ? breakStartTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      : new Date(breakStartTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-    // 1. Notify Reporting Manager
-    if (managerUserId && !notifiedUserIds.has(managerUserId)) {
-      notifications.push({
-        orgId,
-        userId: managerUserId,
-        eventType: 'EMPLOYEE_ON_BREAK',
-        title: `Team Member on Break: ${employeeName}`,
-        message: `${employeeName} (${employeeCode || 'Emp'} • ${departmentName || 'Your Team'}) paused work and started a break at ${timeFormatted}.`,
-        entityType: 'ATTENDANCE_BREAK',
-        entityId: employeeId,
-        actionUrl: '/team',
-      });
-      notifiedUserIds.add(managerUserId);
-    }
-
-    // 2. Notify HR & Admin Staff across organization
-    try {
-      const allUsers = await userRepository.findAll();
-      for (const u of allUsers) {
-        if (!u || !u.id || notifiedUserIds.has(u.id)) continue;
-        if (u.status !== 'Active') continue;
-        if (u.orgId && u.orgId !== orgId && u.orgId !== 'org-1' && orgId !== 'org-1') continue;
-
-        const roleStr =
-          u.roleName ||
-          (typeof u.role === 'string' ? u.role : u.role?.name) ||
-          u.roleId ||
-          '';
-        const normRole = roleStr.toLowerCase().replace(/[^a-z0-9]/g, '');
-
-        const isAdmin = ['admin', 'superadmin', 'orgadmin'].includes(normRole);
-        const isHr = ['hr', 'hrmanager'].includes(normRole) ||
-          (Array.isArray(u.permissions) && (u.permissions.includes('hr:read') || u.permissions.includes('attendance:regularize')));
-
-        if (isAdmin || isHr) {
-          notifications.push({
-            orgId: u.orgId || orgId,
-            userId: u.id,
-            eventType: 'EMPLOYEE_ON_BREAK',
-            title: `Employee on Break: ${employeeName}`,
-            message: `${employeeName} (${employeeCode || 'Emp'} • ${departmentName || 'General'}) is currently on break (Shift Paused at ${timeFormatted}).`,
-            entityType: 'ATTENDANCE_BREAK',
-            entityId: employeeId,
-            actionUrl: '/attendance',
-          });
-          notifiedUserIds.add(u.id);
-        }
-      }
-    } catch (e) {
-      logger.warn('NotificationService', `Could not dispatch HR/Admin break notifications: ${e.message}`);
-    }
-
-    if (notifications.length > 0) {
-      logger.info('NotificationService', `Dispatching break start notifications for ${employeeName} to ${notifications.length} recipients (Manager, HR, Admin)`);
-      return notificationRepository.createBatch(notifications);
-    }
+  async notifyBreakStarted() {
     return [];
   },
 
   /**
    * 25. Event: Employee Resumed From Break
-   * Notifies employee's reporting manager, HR personnel, and Admin
+   * Tracked directly on attendance and team management pages without notification inbox clutter.
    */
-  async notifyBreakEnded({
-    orgId,
-    employeeId,
-    employeeName,
-    employeeCode = '',
-    departmentName = '',
-    managerUserId = null,
-    requesterUserId = null,
-    breakDurationMinutes = 0,
-  }) {
-    const notifications = [];
-    const notifiedUserIds = new Set();
-    if (requesterUserId) notifiedUserIds.add(requesterUserId);
-
-    const durationText = breakDurationMinutes > 0 ? `${breakDurationMinutes} mins` : 'a short break';
-
-    // 1. Notify Reporting Manager
-    if (managerUserId && !notifiedUserIds.has(managerUserId)) {
-      notifications.push({
-        orgId,
-        userId: managerUserId,
-        eventType: 'EMPLOYEE_RESUMED_BREAK',
-        title: `Team Member Resumed: ${employeeName}`,
-        message: `${employeeName} (${employeeCode || 'Emp'}) finished break (${durationText}) and resumed active work session.`,
-        entityType: 'ATTENDANCE_BREAK',
-        entityId: employeeId,
-        actionUrl: '/team',
-      });
-      notifiedUserIds.add(managerUserId);
-    }
-
-    // 2. Notify HR & Admin Staff across organization
-    try {
-      const allUsers = await userRepository.findAll();
-      for (const u of allUsers) {
-        if (!u || !u.id || notifiedUserIds.has(u.id)) continue;
-        if (u.status !== 'Active') continue;
-        if (u.orgId && u.orgId !== orgId && u.orgId !== 'org-1' && orgId !== 'org-1') continue;
-
-        const roleStr =
-          u.roleName ||
-          (typeof u.role === 'string' ? u.role : u.role?.name) ||
-          u.roleId ||
-          '';
-        const normRole = roleStr.toLowerCase().replace(/[^a-z0-9]/g, '');
-
-        const isAdmin = ['admin', 'superadmin', 'orgadmin'].includes(normRole);
-        const isHr = ['hr', 'hrmanager'].includes(normRole) ||
-          (Array.isArray(u.permissions) && (u.permissions.includes('hr:read') || u.permissions.includes('attendance:regularize')));
-
-        if (isAdmin || isHr) {
-          notifications.push({
-            orgId: u.orgId || orgId,
-            userId: u.id,
-            eventType: 'EMPLOYEE_RESUMED_BREAK',
-            title: `Work Resumed: ${employeeName}`,
-            message: `${employeeName} (${employeeCode || 'Emp'} • ${departmentName || 'General'}) concluded break (${durationText}) and returned to active shift.`,
-            entityType: 'ATTENDANCE_BREAK',
-            entityId: employeeId,
-            actionUrl: '/attendance',
-          });
-          notifiedUserIds.add(u.id);
-        }
-      }
-    } catch (e) {
-      logger.warn('NotificationService', `Could not dispatch HR/Admin resume break notifications: ${e.message}`);
-    }
-
-    if (notifications.length > 0) {
-      logger.info('NotificationService', `Dispatching break resume notifications for ${employeeName} to ${notifications.length} recipients (Manager, HR, Admin)`);
-      return notificationRepository.createBatch(notifications);
-    }
+  async notifyBreakEnded() {
     return [];
   },
 };

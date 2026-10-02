@@ -49,7 +49,23 @@ export const NotificationsPage = () => {
         const items = res?.items || res?.data?.items || (Array.isArray(res) ? res : []);
         const count = res?.unreadCount ?? res?.data?.unreadCount ?? 0;
 
-        setNotifications(items);
+        const isBreakOrLogout = (n) => {
+          const type = (n?.eventType || n?.event_type || '').toUpperCase();
+          const ent = (n?.entityType || n?.entity_type || '').toUpperCase();
+          const title = (n?.title || '').toLowerCase();
+          return (
+            type === 'EMPLOYEE_ON_BREAK' ||
+            type === 'EMPLOYEE_RESUMED_BREAK' ||
+            ent === 'ATTENDANCE_BREAK' ||
+            title.includes('on break') ||
+            title.includes('resumed break') ||
+            title.includes('work resumed') ||
+            title.includes('logged out') ||
+            title.includes('logout')
+          );
+        };
+
+        setNotifications(items.filter((n) => !isBreakOrLogout(n)));
         setUnreadCount(count);
       } catch (err) {
         console.error('Failed to load notifications:', err);
