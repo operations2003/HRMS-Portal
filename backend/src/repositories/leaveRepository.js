@@ -209,28 +209,12 @@ export const leaveRepository = {
   },
 
   /**
-   * Find active non-optional holidays for an organization within a date range
+   * Find active non-optional holidays for an organization within a date range.
+   * Company policy: Only Sundays are holidays/non-working days. No other calendar days are holidays.
    */
   async findActiveHolidaysBetween(orgId, startDate, endDate) {
-    const sql = `
-      SELECT
-        id,
-        org_id,
-        name,
-        TO_CHAR(holiday_date, 'YYYY-MM-DD') AS holiday_date,
-        holiday_type,
-        is_optional,
-        description
-      FROM holidays
-      WHERE org_id = $1
-        AND status = 'Active'
-        AND is_optional = FALSE
-        AND holiday_date >= $2::date
-        AND holiday_date <= $3::date
-      ORDER BY holiday_date ASC;
-    `;
-    const res = await pool.query(sql, [orgId, startDate, endDate]);
-    return res.rows;
+    // Only Sundays are non-working days; no other days are treated as holidays
+    return [];
   },
 
   /**
