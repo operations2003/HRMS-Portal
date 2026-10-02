@@ -136,7 +136,7 @@ export const EmployeeListPage = () => {
     { id: 'lt-hl', name: 'Holiday', code: 'HL', daysPerYear: 0, description: 'Official public holiday or declared company day-off', genderEligibility: 'ALL' },
     { id: 'lt-hdl', name: 'Half Day', code: 'HDL', daysPerYear: 0, description: 'Half-day leave for morning or afternoon session (0.5 day)', genderEligibility: 'ALL' },
     { id: 'lt-awol', name: 'Absent Without Leave(AWOL)', code: 'AWOL', daysPerYear: 0, description: 'Unauthorized absence without prior notice or approved leave', genderEligibility: 'ALL' },
-    { id: 'lt-lop', name: 'Leave without pay (LOP)', code: 'LOP', daysPerYear: 0, description: 'Loss of pay / unpaid leave of absence', genderEligibility: 'ALL' },
+    { id: 'lt-lop', name: 'Leave Without Pay', code: 'LWP', daysPerYear: 0, description: 'Unpaid leave of absence / Leave Without Pay (LWP)', genderEligibility: 'ALL' },
     { id: 'lt-ml', name: 'Maternity Leave', code: 'ML', daysPerYear: 0, description: 'Maternity leave for prenatal, postnatal, and childcare recovery', genderEligibility: 'FEMALE' },
     { id: 'lt-sbl', name: 'Sabbatical Leave', code: 'SBL', daysPerYear: 0, description: 'Extended leave for research, education, or personal enrichment', genderEligibility: 'ALL' },
     { id: 'lt-ptl', name: 'Paternity Leave', code: 'PTL', daysPerYear: 0, description: 'Paternity leave for new fathers upon birth or adoption', genderEligibility: 'MALE' },
@@ -2042,7 +2042,7 @@ export const EmployeeListPage = () => {
             </div>
 
             <p className="text-[11px] text-slate-600 leading-relaxed">
-              Define the exact annual paid leave days allocated to this employee (Planned Leave, Casual Leave, Sick Leave). Note: Holiday, AWOL, LOP, Maternity, Sabbatical, and Paternity leaves must be assigned with exact dates in the Leave module.
+              Define the exact annual paid leave days allocated to this employee (Planned Leave, Casual Leave, Sick Leave). Note: Holiday, AWOL, LWP, Maternity, Sabbatical, and Paternity leaves must be assigned with exact dates in the Leave module.
             </p>
 
             {loadingLeaveBalances ? (

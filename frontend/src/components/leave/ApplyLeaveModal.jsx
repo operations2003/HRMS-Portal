@@ -33,7 +33,7 @@ const DEFAULT_LEAVE_CATEGORIES = [
   { id: 'lt-hl', name: 'Holiday', code: 'HL', description: 'Official public holiday or declared company day-off', genderEligibility: 'ALL' },
   { id: 'lt-hdl', name: 'Half Day', code: 'HDL', description: 'Half-day leave for morning or afternoon session (0.5 day)', genderEligibility: 'ALL' },
   { id: 'lt-awol', name: 'Absent Without Leave(AWOL)', code: 'AWOL', description: 'Unauthorized absence without prior notice or approved leave', genderEligibility: 'ALL' },
-  { id: 'lt-lop', name: 'Leave without pay (LOP)', code: 'LOP', description: 'Loss of pay / unpaid leave of absence', genderEligibility: 'ALL' },
+  { id: 'lt-lop', name: 'Leave Without Pay', code: 'LWP', description: 'Unpaid leave of absence / Leave Without Pay (LWP)', genderEligibility: 'ALL' },
   { id: 'lt-ml', name: 'Maternity Leave', code: 'ML', description: 'Maternity leave for prenatal, postnatal, and childcare recovery', genderEligibility: 'FEMALE' },
   { id: 'lt-sbl', name: 'Sabbatical Leave', code: 'SBL', description: 'Extended leave for research, education, or personal enrichment', genderEligibility: 'ALL' },
   { id: 'lt-ptl', name: 'Paternity Leave', code: 'PTL', description: 'Paternity leave for new fathers upon birth or adoption', genderEligibility: 'MALE' },
