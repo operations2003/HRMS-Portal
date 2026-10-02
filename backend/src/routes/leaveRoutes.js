@@ -101,10 +101,25 @@ router.put(
   requireRoles(['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin', 'Manager', 'Lead', 'TeamLead', 'Supervisor']),
   leaveController.updateLeave
 );
+router.patch(
+  '/:id',
+  requireRoles(['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin', 'Manager', 'Lead', 'TeamLead', 'Supervisor']),
+  leaveController.updateLeave
+);
+router.post(
+  '/:id/edit',
+  requireRoles(['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin', 'Manager', 'Lead', 'TeamLead', 'Supervisor']),
+  leaveController.updateLeave
+);
 
 // 10. Delete leave request (Admin / HR / Reporting Manager)
 router.delete(
   '/:id',
+  requireRoles(['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin', 'Manager', 'Lead', 'TeamLead', 'Supervisor']),
+  leaveController.deleteLeave
+);
+router.post(
+  '/:id/delete',
   requireRoles(['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin', 'Manager', 'Lead', 'TeamLead', 'Supervisor']),
   leaveController.deleteLeave
 );
