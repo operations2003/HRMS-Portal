@@ -15,6 +15,9 @@ import {
   HelpCircle,
   Star,
   Check,
+  Plus,
+  Trash2,
+  Calendar,
 } from 'lucide-react';
 import { engagementService } from '../../services/engagementService.js';
 import { employeeService } from '../../services/employeeService.js';
@@ -25,8 +28,16 @@ import { Badge } from '../common/Badge.jsx';
 import { Button } from '../common/Button.jsx';
 
 export const EmployeeEngagementHub = () => {
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
   const toast = useToast();
+
+  const userRoleStr = (user?.roleName || user?.role?.name || user?.role || '').toLowerCase().trim();
+  const isHrOrAdmin =
+    ['admin', 'superadmin', 'orgadmin', 'hr', 'hrmanager'].includes(userRoleStr) ||
+    userRoleStr.includes('admin') ||
+    userRoleStr.includes('hr') ||
+    user?.email === 'sheetalbedi@tasknera.com' ||
+    (typeof hasPermission === 'function' && hasPermission('engagement:write'));
 
   const [activeTab, setActiveTab] = useState('surveys'); // 'surveys' | 'announcements' | 'kudos'
   const [announcements, setAnnouncements] = useState([]);
@@ -39,6 +50,29 @@ export const EmployeeEngagementHub = () => {
   const [activeSurveyModal, setActiveSurveyModal] = useState(null);
   const [surveyAnswers, setSurveyAnswers] = useState({});
   const [submittingSurvey, setSubmittingSurvey] = useState(false);
+
+  // Modals - Announcement
+  const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
+  const [announcementSubmitting, setAnnouncementSubmitting] = useState(false);
+  const [announcementForm, setAnnouncementForm] = useState({
+    title: '',
+    category: 'GENERAL',
+    content: '',
+    isPinned: false,
+    expiryDate: '',
+  });
+
+  // Modals - Survey & Pulse Poll
+  const [showSurveyModal, setShowSurveyModal] = useState(false);
+  const [surveySubmitting, setSurveySubmitting] = useState(false);
+  const [surveyType, setSurveyType] = useState('poll'); // 'poll' | 'rating' | 'feedback'
+  const [surveyForm, setSurveyForm] = useState({
+    title: '',
+    description: '',
+    isAnonymous: true,
+    endDate: '',
+    options: ['', ''],
+  });
 
   const [showKudosModal, setShowKudosModal] = useState(false);
   const [kudosSubmitting, setKudosSubmitting] = useState(false);
@@ -168,6 +202,145 @@ export const EmployeeEngagementHub = () => {
     }
   };
 
+  const handleCreateAnnouncement = async (e) => {
+    e.preventDefault();
+    if (!announcementForm.title.trim()) {
+      toast.error('Please enter an announcement title.');
+      return;
+    }
+    if (!announcementForm.content.trim()) {
+      toast.error('Please enter announcement content.');
+      return;
+    }
+
+    setAnnouncementSubmitting(true);
+    try {
+      await engagementService.createAnnouncement({
+        title: announcementForm.title.trim(),
+        content: announcementForm.content.trim(),
+        category: announcementForm.category,
+        isPinned: announcementForm.isPinned,
+        expiryDate: announcementForm.expiryDate || null,
+        targetType: 'ALL',
+      });
+      toast.success('Announcement broadcast successfully!');
+      setShowAnnouncementModal(false);
+      setAnnouncementForm({
+        title: '',
+        category: 'GENERAL',
+        content: '',
+        isPinned: false,
+        expiryDate: '',
+      });
+      const freshRes = await engagementService.getAnnouncements();
+      const list = Array.isArray(freshRes?.data) ? freshRes.data : Array.isArray(freshRes?.items) ? freshRes.items : Array.isArray(freshRes) ? freshRes : [];
+      setAnnouncements(list);
+    } catch (err) {
+      toast.error(err.message || 'Failed to publish announcement.');
+    } finally {
+      setAnnouncementSubmitting(false);
+    }
+  };
+
+  const handleAddOption = () => {
+    if (surveyForm.options.length >= 6) {
+      toast.error('Maximum 6 poll options allowed.');
+      return;
+    }
+    setSurveyForm((prev) => ({ ...prev, options: [...prev.options, ''] }));
+  };
+
+  const handleRemoveOption = (index) => {
+    if (surveyForm.options.length <= 2) {
+      toast.error('Pulse poll requires at least 2 options.');
+      return;
+    }
+    setSurveyForm((prev) => ({
+      ...prev,
+      options: prev.options.filter((_, idx) => idx !== index),
+    }));
+  };
+
+  const handleOptionChange = (index, value) => {
+    setSurveyForm((prev) => {
+      const next = [...prev.options];
+      next[index] = value;
+      return { ...prev, options: next };
+    });
+  };
+
+  const handleCreateSurvey = async (e) => {
+    e.preventDefault();
+    if (!surveyForm.title.trim()) {
+      toast.error('Please enter a survey/poll question or title.');
+      return;
+    }
+
+    let questions = [];
+    if (surveyType === 'poll') {
+      const validOptions = surveyForm.options.map((o) => o.trim()).filter(Boolean);
+      if (validOptions.length < 2) {
+        toast.error('Pulse poll requires at least 2 options.');
+        return;
+      }
+      questions = [
+        {
+          id: 'q_poll_1',
+          type: 'choice',
+          question: surveyForm.title.trim(),
+          text: surveyForm.title.trim(),
+          options: validOptions,
+        },
+      ];
+    } else if (surveyType === 'rating') {
+      questions = [
+        {
+          id: 'q_rating_1',
+          type: 'rating',
+          question: surveyForm.title.trim(),
+          text: surveyForm.title.trim(),
+        },
+      ];
+    } else {
+      questions = [
+        {
+          id: 'q_feedback_1',
+          type: 'text',
+          question: surveyForm.title.trim(),
+          text: surveyForm.title.trim(),
+        },
+      ];
+    }
+
+    setSurveySubmitting(true);
+    try {
+      await engagementService.createSurvey({
+        title: surveyForm.title.trim(),
+        description: surveyForm.description.trim(),
+        questions,
+        isAnonymous: surveyForm.isAnonymous,
+        endDate: surveyForm.endDate || null,
+        targetType: 'ALL',
+      });
+      toast.success('Survey & Pulse Poll created successfully!');
+      setShowSurveyModal(false);
+      setSurveyForm({
+        title: '',
+        description: '',
+        isAnonymous: true,
+        endDate: '',
+        options: ['', ''],
+      });
+      const freshRes = await engagementService.getSurveys();
+      const list = Array.isArray(freshRes?.data) ? freshRes.data : Array.isArray(freshRes?.items) ? freshRes.items : Array.isArray(freshRes) ? freshRes : [];
+      setSurveys(list);
+    } catch (err) {
+      toast.error(err.message || 'Failed to create survey.');
+    } finally {
+      setSurveySubmitting(false);
+    }
+  };
+
   const pendingSurveysCount = surveys.filter((s) => !s.has_responded).length;
   const unreadAnnouncementsCount = announcements.filter((a) => !a.is_read).length;
 
@@ -188,7 +361,31 @@ export const EmployeeEngagementHub = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {isHrOrAdmin && activeTab === 'announcements' && (
+              <Button
+                variant="primary"
+                size="md"
+                icon={Megaphone}
+                onClick={() => setShowAnnouncementModal(true)}
+                className="text-sm font-semibold shadow-sm"
+              >
+                Post Announcement
+              </Button>
+            )}
+
+            {isHrOrAdmin && activeTab === 'surveys' && (
+              <Button
+                variant="primary"
+                size="md"
+                icon={Vote}
+                onClick={() => setShowSurveyModal(true)}
+                className="text-sm font-semibold shadow-sm"
+              >
+                Create Pulse Poll
+              </Button>
+            )}
+
             <Button
               variant="secondary"
               size="md"
@@ -328,12 +525,23 @@ export const EmployeeEngagementHub = () => {
                     })}
                   </div>
                 ) : (
-                  <div className="py-12 text-center rounded-2xl bg-slate-50/60 border border-dashed border-slate-200">
+                  <div className="py-12 text-center rounded-2xl bg-slate-50/60 border border-dashed border-slate-200 flex flex-col items-center justify-center">
                     <Vote className="w-12 h-12 text-slate-300 mx-auto mb-2.5" />
                     <h4 className="text-base font-bold text-slate-800">No active pulse surveys</h4>
                     <p className="text-sm text-slate-500 mt-1 max-w-sm mx-auto">
                       You are all caught up! New feedback surveys and team polls will appear here when launched.
                     </p>
+                    {isHrOrAdmin && (
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        icon={Plus}
+                        onClick={() => setShowSurveyModal(true)}
+                        className="mt-4 text-sm font-semibold"
+                      >
+                        Create Pulse Poll
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>
@@ -411,12 +619,23 @@ export const EmployeeEngagementHub = () => {
                     ))}
                   </div>
                 ) : (
-                  <div className="py-12 text-center rounded-2xl bg-slate-50/60 border border-dashed border-slate-200">
+                  <div className="py-12 text-center rounded-2xl bg-slate-50/60 border border-dashed border-slate-200 flex flex-col items-center justify-center">
                     <Megaphone className="w-12 h-12 text-slate-300 mx-auto mb-2.5" />
                     <h4 className="text-base font-bold text-slate-800">No company announcements</h4>
                     <p className="text-sm text-slate-500 mt-1 max-w-sm mx-auto">
                       General announcements, notices, and policy bulletins will be broadcast here.
                     </p>
+                    {isHrOrAdmin && (
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        icon={Plus}
+                        onClick={() => setShowAnnouncementModal(true)}
+                        className="mt-4 text-sm font-semibold"
+                      >
+                        Broadcast Announcement
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>
@@ -729,6 +948,286 @@ export const EmployeeEngagementHub = () => {
                 </Button>
                 <Button type="submit" disabled={kudosSubmitting} icon={Heart} className="bg-rose-600 hover:bg-rose-700 text-sm font-semibold">
                   {kudosSubmitting ? 'Posting...' : 'Post Appreciation'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3: POST ANNOUNCEMENT (HR/Admin) */}
+      {showAnnouncementModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full p-6 sm:p-7 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3.5 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2.5 rounded-xl bg-indigo-50 text-indigo-600">
+                  <Megaphone className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-800">Broadcast Announcement</h3>
+                  <p className="text-xs text-slate-500">Post news, updates, or policy notices to all employees</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAnnouncementModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateAnnouncement} className="space-y-4">
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1.5">Announcement Title *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Q4 Townhall Meeting / Holiday Schedule / Policy Update"
+                  value={announcementForm.title}
+                  onChange={(e) => setAnnouncementForm({ ...announcementForm, title: e.target.value })}
+                  className="w-full text-sm border border-slate-300 rounded-xl p-3 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-1.5">Category</label>
+                  <select
+                    value={announcementForm.category}
+                    onChange={(e) => setAnnouncementForm({ ...announcementForm, category: e.target.value })}
+                    className="w-full text-sm border border-slate-300 rounded-xl p-3 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  >
+                    <option value="GENERAL">📢 General Notice</option>
+                    <option value="URGENT">🚨 Urgent Announcement</option>
+                    <option value="POLICY">📋 Policy Bulletin</option>
+                    <option value="EVENT">🎉 Company Event</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-1.5">Expiry Date (Optional)</label>
+                  <input
+                    type="date"
+                    value={announcementForm.expiryDate}
+                    onChange={(e) => setAnnouncementForm({ ...announcementForm, expiryDate: e.target.value })}
+                    className="w-full text-sm border border-slate-300 rounded-xl p-3 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1.5">Content / Notice Message *</label>
+                <textarea
+                  rows="4"
+                  required
+                  placeholder="Write the full announcement or message for the workforce..."
+                  value={announcementForm.content}
+                  onChange={(e) => setAnnouncementForm({ ...announcementForm, content: e.target.value })}
+                  className="w-full text-sm border border-slate-300 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                />
+              </div>
+
+              <label className="flex items-center gap-2.5 p-3 rounded-xl border border-slate-200 bg-slate-50 cursor-pointer hover:bg-slate-100/70 transition">
+                <input
+                  type="checkbox"
+                  checked={announcementForm.isPinned}
+                  onChange={(e) => setAnnouncementForm({ ...announcementForm, isPinned: e.target.checked })}
+                  className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4"
+                />
+                <div className="text-xs">
+                  <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                    <Pin className="w-3.5 h-3.5 text-amber-600" /> Pin notice to top of announcements feed
+                  </span>
+                  <span className="text-slate-500 block mt-0.5">Keeps this notice prominently displayed for all employees</span>
+                </div>
+              </label>
+
+              <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-100">
+                <Button variant="neutral" type="button" onClick={() => setShowAnnouncementModal(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={announcementSubmitting}
+                  icon={Send}
+                  className="text-sm font-semibold shadow-sm"
+                >
+                  {announcementSubmitting ? 'Publishing...' : 'Publish Announcement'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 4: CREATE SURVEY & PULSE POLL (HR/Admin) */}
+      {showSurveyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full p-6 sm:p-7 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3.5 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2.5 rounded-xl bg-indigo-50 text-indigo-600">
+                  <Vote className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-800">Create Survey & Pulse Poll</h3>
+                  <p className="text-xs text-slate-500">Collect employee feedback or launch a quick team poll</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowSurveyModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateSurvey} className="space-y-4">
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1.5">Poll Question / Survey Title *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Which team outing do you prefer this quarter?"
+                  value={surveyForm.title}
+                  onChange={(e) => setSurveyForm({ ...surveyForm, title: e.target.value })}
+                  className="w-full text-sm border border-slate-300 rounded-xl p-3 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1.5">Description (Optional)</label>
+                <textarea
+                  rows="2"
+                  placeholder="Brief context or instructions for respondents..."
+                  value={surveyForm.description}
+                  onChange={(e) => setSurveyForm({ ...surveyForm, description: e.target.value })}
+                  className="w-full text-sm border border-slate-300 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1.5">Feedback Format</label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSurveyType('poll')}
+                    className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition flex flex-col items-center gap-1 ${
+                      surveyType === 'poll'
+                        ? 'bg-indigo-50 border-indigo-600 text-indigo-700 shadow-2xs'
+                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <Vote className="w-4 h-4" />
+                    <span>Multiple Choice</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSurveyType('rating')}
+                    className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition flex flex-col items-center gap-1 ${
+                      surveyType === 'rating'
+                        ? 'bg-indigo-50 border-indigo-600 text-indigo-700 shadow-2xs'
+                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <Star className="w-4 h-4" />
+                    <span>1-5 Star Rating</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSurveyType('feedback')}
+                    className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition flex flex-col items-center gap-1 ${
+                      surveyType === 'feedback'
+                        ? 'bg-indigo-50 border-indigo-600 text-indigo-700 shadow-2xs'
+                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <Send className="w-4 h-4" />
+                    <span>Open Feedback</span>
+                  </button>
+                </div>
+              </div>
+
+              {surveyType === 'poll' && (
+                <div className="space-y-2.5 p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                      Poll Options (Min 2, Max 6)
+                    </label>
+                    {surveyForm.options.length < 6 && (
+                      <button
+                        type="button"
+                        onClick={handleAddOption}
+                        className="text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Add Option
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    {surveyForm.options.map((opt, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <span className="w-6 text-xs font-bold text-slate-400 text-center">{idx + 1}.</span>
+                        <input
+                          type="text"
+                          required
+                          placeholder={`Option ${idx + 1}...`}
+                          value={opt}
+                          onChange={(e) => handleOptionChange(idx, e.target.value)}
+                          className="flex-1 text-sm border border-slate-300 rounded-xl p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                        />
+                        {surveyForm.options.length > 2 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveOption(idx)}
+                            className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-1.5">End Date (Optional)</label>
+                  <input
+                    type="date"
+                    value={surveyForm.endDate}
+                    onChange={(e) => setSurveyForm({ ...surveyForm, endDate: e.target.value })}
+                    className="w-full text-sm border border-slate-300 rounded-xl p-3 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  />
+                </div>
+
+                <div className="flex items-center sm:pt-6">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={surveyForm.isAnonymous}
+                      onChange={(e) => setSurveyForm({ ...surveyForm, isAnonymous: e.target.checked })}
+                      className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4"
+                    />
+                    <span className="text-xs font-bold text-slate-700">🔒 100% Anonymous Responses</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-100">
+                <Button variant="neutral" type="button" onClick={() => setShowSurveyModal(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={surveySubmitting}
+                  icon={Vote}
+                  className="text-sm font-semibold shadow-sm"
+                >
+                  {surveySubmitting ? 'Creating...' : 'Launch Poll / Survey'}
                 </Button>
               </div>
             </form>
