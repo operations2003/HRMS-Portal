@@ -227,13 +227,6 @@ export const Sidebar = ({ isOpen, onClose }) => {
           icon: ShieldCheck,
           roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
         },
-        {
-          name: 'Performance Reviews',
-          path: '/performance',
-          icon: Award,
-          roles: ['HR', 'HRManager'],
-          excludeRoles: ['Admin', 'SuperAdmin', 'OrgAdmin'],
-        },
       ],
     },
     {
