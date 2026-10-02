@@ -100,21 +100,43 @@ export const getRemainingBalance = (lt, balances = []) => {
   return isNaN(rem) ? 0 : Math.max(0, rem);
 };
 
-const RESTRICTED_LEAVE_CODES = ['AWOL', 'ML', 'PTL', 'PATL', 'SBL'];
-const isRestrictedType = (lt) => {
+// SPECIAL LEAVE TYPES: 6 leave categories that have 0 balance and can only be assigned by Admin/HR/Manager
+const SPECIAL_LEAVE_CODES = ['HL', 'AWOL', 'LOP', 'LWP', 'ML', 'PTL', 'PATL', 'SBL'];
+const SPECIAL_LEAVE_NAMES = [
+  'holiday',
+  'absent without leave',
+  'awol',
+  'leave without pay',
+  'loss of pay',
+  'lop',
+  'lwp',
+  'maternity leave',
+  'maternity',
+  'sabbatical leave',
+  'sabbatical',
+  'paternity leave',
+  'paternity',
+];
+
+const isSpecialLeaveType = (lt) => {
   if (!lt) return false;
   const code = String(lt.code || lt.leaveTypeCode || '').trim().toUpperCase();
   const name = String(lt.name || lt.leaveTypeName || '').trim().toLowerCase();
-  if (RESTRICTED_LEAVE_CODES.includes(code)) return true;
+  if (SPECIAL_LEAVE_CODES.includes(code)) return true;
+  if (SPECIAL_LEAVE_NAMES.some(sn => name === sn || name.includes(sn))) return true;
   return (
-    code === 'UPL' ||
-    name.includes('unplanned') ||
-    name.includes('sabbatical') ||
+    name.includes('holiday') ||
+    name.includes('absent without leave') ||
+    name.includes('awol') ||
+    name.includes('without pay') ||
+    name.includes('loss of pay') ||
     name.includes('maternity') ||
-    name.includes('paternity') ||
-    name.includes('awol')
+    name.includes('sabbatical') ||
+    name.includes('paternity')
   );
 };
+
+const isRestrictedType = isSpecialLeaveType;
 
 export const ApplyLeaveModal = ({
   isOpen,
@@ -276,14 +298,21 @@ export const ApplyLeaveModal = ({
 
     // When applying for SELF:
     if (targetEmployeeId === 'SELF' && !isAssignMode) {
+      // SPECIAL LEAVE TYPES: Employees cannot self-apply for these 6 leave types
+      // Only Admin, HR, or Reporting Manager can assign these
+      if (isSpecialLeaveType(lt)) {
+        return false;
+      }
+
       // Restricted unauthorized leaves (AWOL, Sabbatical) cannot be self-applied
       if (code === 'AWOL' || name.includes('awol') || code === 'SBL' || name.includes('sabbatical')) {
         return false;
       }
 
-      // Unpaid Leave (LOP / LWP): always selectable (and is the ONLY selectable option if all paid balances are 0)
+      // Unpaid Leave (LOP / LWP): This is now a special leave type, so filtered above
+      // But if it somehow passes through, allow it
       if (isUnpaidLeave(lt)) {
-        return true;
+        return false; // Block it since it's a special leave type
       }
 
       // Paid Leave Types: strictly check remaining balance
@@ -448,10 +477,27 @@ export const ApplyLeaveModal = ({
 
     if (!formData.leaveTypeId) {
       errs.leaveTypeId = 'Please select a leave category.';
-    } else if (targetEmployeeId === 'SELF' && selectedTypeObj && !isUnpaidLeave(selectedTypeObj)) {
-      const rem = getRemainingBalance(selectedTypeObj, activeBalances);
-      if (rem <= 0) {
-        errs.leaveTypeId = `Selected leave type '${selectedTypeObj.name}' is not available because your current available balance is 0.`;
+    } else if (targetEmployeeId === 'SELF' && selectedTypeObj) {
+      // SPECIAL LEAVE TYPES: Should never appear for SELF, but double-check
+      if (isSpecialLeaveType(selectedTypeObj)) {
+        errs.leaveTypeId = `${selectedTypeObj.name} can only be assigned by Admin, HR, or your Reporting Manager.`;
+      } else if (!isUnpaidLeave(selectedTypeObj)) {
+        // ENHANCED BALANCE VALIDATION: Check both zero balance and insufficient balance
+        const remainingDays = getRemainingBalance(selectedTypeObj, activeBalances);
+        
+        // Critical Check 1: Block if balance is exactly 0
+        if (remainingDays === 0) {
+          errs.leaveTypeId = `Insufficient leave balance. You have 0 days available for ${selectedTypeObj.name}. Please contact HR if you need additional leave allocation.`;
+        } else if (remainingDays < 0) {
+          // Additional safety: warn if balance is already negative
+          errs.leaveTypeId = `Your leave balance for ${selectedTypeObj.name} is currently negative (${remainingDays} days). Please contact HR to resolve this issue.`;
+        } else if (durationPreview && durationPreview.totalDays > 0) {
+          // Critical Check 2: Block if requested days exceed available balance
+          const requestedDays = durationPreview.totalDays;
+          if (requestedDays > remainingDays) {
+            errs.duration = `Insufficient leave balance. You have only ${remainingDays} day${remainingDays === 1 ? '' : 's'} available for ${selectedTypeObj.name}, but you are requesting ${requestedDays} day${requestedDays === 1 ? '' : 's'}.`;
+          }
+        }
       }
     }
 
@@ -901,21 +947,92 @@ export const ApplyLeaveModal = ({
               </div>
             </div>
           ) : (
-            <div className="p-3.5 rounded-2xl bg-brand-50/60 border border-brand-100 flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-brand-600" />
-                <span className="font-semibold text-brand-900">
-                  Calculated Duration:{' '}
-                  <strong className="text-brand-700 font-bold">
-                    {durationPreview.totalDays} {durationPreview.totalDays === 1 ? 'day' : 'days'}
-                  </strong>
-                </span>
+            <>
+              <div className="p-3.5 rounded-2xl bg-brand-50/60 border border-brand-100 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-brand-600" />
+                  <span className="font-semibold text-brand-900">
+                    Calculated Duration:{' '}
+                    <strong className="text-brand-700 font-bold">
+                      {durationPreview.totalDays} {durationPreview.totalDays === 1 ? 'day' : 'days'}
+                    </strong>
+                  </span>
+                </div>
+                <div className="text-slate-500">
+                  {durationPreview.weekendDays > 0 && `(Excludes ${durationPreview.weekendDays} Sunday${durationPreview.weekendDays > 1 ? 's' : ''})`}
+                  {durationPreview.holidayDays > 0 && `(Excludes ${durationPreview.holidayDays} holiday days)`}
+                </div>
               </div>
-              <div className="text-slate-500">
-                {durationPreview.weekendDays > 0 && `(Excludes ${durationPreview.weekendDays} Sunday${durationPreview.weekendDays > 1 ? 's' : ''})`}
-                {durationPreview.holidayDays > 0 && `(Excludes ${durationPreview.holidayDays} holiday days)`}
-              </div>
-            </div>
+
+              {/* Balance Validation Warning for SELF applications */}
+              {targetEmployeeId === 'SELF' && selectedTypeObj && !isSpecialLeaveType(selectedTypeObj) && !isUnpaidLeave(selectedTypeObj) && (
+                (() => {
+                  const remainingDays = getRemainingBalance(selectedTypeObj, activeBalances);
+                  const requestedDays = durationPreview.totalDays;
+                  
+                  if (remainingDays === 0) {
+                    return (
+                      <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200/80 flex items-start gap-2.5 text-xs text-rose-900">
+                        <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <div className="font-bold text-rose-900">Insufficient Leave Balance</div>
+                          <div className="text-rose-800 mt-0.5 leading-relaxed">
+                            You have <strong>0 days available</strong> for {selectedTypeObj.name}. This leave request cannot be submitted. Please contact HR if you need additional leave allocation.
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  } else if (requestedDays > remainingDays) {
+                    return (
+                      <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200/80 flex items-start gap-2.5 text-xs text-rose-900">
+                        <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <div className="font-bold text-rose-900">Insufficient Leave Balance</div>
+                          <div className="text-rose-800 mt-0.5 leading-relaxed">
+                            You are requesting <strong>{requestedDays} day{requestedDays === 1 ? '' : 's'}</strong>, but you only have <strong>{remainingDays} day{remainingDays === 1 ? '' : 's'} available</strong> for {selectedTypeObj.name}. Please reduce your leave duration or select a different leave type.
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  } else if (remainingDays < 0) {
+                    return (
+                      <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200/80 flex items-start gap-2.5 text-xs text-rose-900">
+                        <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <div className="font-bold text-rose-900">Negative Leave Balance Detected</div>
+                          <div className="text-rose-800 mt-0.5 leading-relaxed">
+                            Your leave balance for {selectedTypeObj.name} is currently <strong>{remainingDays} days</strong> (negative). Please contact HR to resolve this issue before applying for new leave.
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  } else if (requestedDays <= remainingDays && remainingDays - requestedDays < 2) {
+                    // Success case with low balance warning
+                    return (
+                      <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200/80 flex items-start gap-2.5 text-xs text-emerald-900">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <div className="font-bold text-emerald-900">Balance Available</div>
+                          <div className="text-emerald-800 mt-0.5 leading-relaxed">
+                            You have <strong>{remainingDays} day{remainingDays === 1 ? '' : 's'} available</strong> for {selectedTypeObj.name}. After this request, you will have <strong>{remainingDays - requestedDays} day{remainingDays - requestedDays === 1 ? '' : 's'} remaining</strong>.
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  } else {
+                    // Success case with good balance
+                    return (
+                      <div className="p-3 rounded-xl bg-emerald-50/50 border border-emerald-100 flex items-center gap-2 text-xs text-emerald-800">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                        <span>
+                          Balance available: <strong className="text-emerald-900">{remainingDays} days</strong> → After request: <strong className="text-emerald-900">{remainingDays - requestedDays} days remaining</strong>
+                        </span>
+                      </div>
+                    );
+                  }
+                })()
+              )}
+            </>
           )
         )}
 
@@ -956,7 +1073,16 @@ export const ApplyLeaveModal = ({
             size="md"
             icon={CalendarDays}
             isLoading={isSubmitting}
-            disabled={isSubmitting || durationPreview?.isNonWorkingPeriod || durationPreview?.totalDays === 0}
+            disabled={
+              isSubmitting || 
+              durationPreview?.isNonWorkingPeriod || 
+              durationPreview?.totalDays === 0 ||
+              (targetEmployeeId === 'SELF' && selectedTypeObj && !isSpecialLeaveType(selectedTypeObj) && !isUnpaidLeave(selectedTypeObj) && durationPreview && (() => {
+                const remainingDays = getRemainingBalance(selectedTypeObj, activeBalances);
+                const requestedDays = durationPreview.totalDays;
+                return remainingDays === 0 || requestedDays > remainingDays || remainingDays < 0;
+              })())
+            }
           >
             {isSubmitting
               ? (isAssignMode || targetEmployeeId !== 'SELF' ? 'Assigning Leave...' : 'Submitting Application...')

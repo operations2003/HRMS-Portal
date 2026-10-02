@@ -1,4 +1,5 @@
 import { pool } from '../config/db.js';
+import { isSpecialLeaveType } from '../utils/leaveUtils.js';
 
 /**
  * Map raw leave type row to standardized domain model
@@ -834,17 +835,11 @@ export const leaveRepository = {
 
     const types = await this.findLeaveTypes(orgId);
     
-    // SPECIAL LEAVE TYPES: These 6 should have 0 balance
-    const SPECIAL_CODES = ['HL', 'AWOL', 'LOP', 'LWP', 'ML', 'PTL', 'PATL', 'SBL'];
-    const SPECIAL_NAMES = ['holiday', 'absent without leave', 'awol', 'leave without pay', 'loss of pay', 'lop', 'lwp', 'maternity leave', 'maternity', 'sabbatical leave', 'sabbatical', 'paternity leave', 'paternity'];
-    
     for (const lt of types) {
       if (lt.genderEligibility === 'FEMALE' && normGender === 'MALE') continue;
       if (lt.genderEligibility === 'MALE' && normGender === 'FEMALE') continue;
 
-      const code = String(lt.code || '').trim().toUpperCase();
-      const name = String(lt.name || '').trim().toLowerCase();
-      const isSpecial = SPECIAL_CODES.includes(code) || SPECIAL_NAMES.some(sn => name === sn || name.includes(sn));
+      const isSpecial = isSpecialLeaveType(lt);
       
       const balanceId = `lb-${employeeId}-${lt.id}-${year}`;
       
@@ -866,6 +861,13 @@ export const leaveRepository = {
    * Uses SELECT FOR UPDATE to lock the balance row during transaction
    */
   async adjustBalance(employeeId, leaveTypeId, year, { pendingDelta = 0, usedDelta = 0 }) {
+    // SPECIAL LEAVES: Never adjust or deduct bucket, keep at 0
+    const leaveType = await this.findLeaveTypeById(leaveTypeId);
+    if (leaveType && isSpecialLeaveType(leaveType)) {
+      const rec = await this.recordAssignedLeaveBalance(employeeId, leaveType.orgId || 'org-1', leaveTypeId, year, 0);
+      return mapLeaveBalanceRow(rec);
+    }
+
     const sql = `
       UPDATE leave_balances
       SET
@@ -885,6 +887,13 @@ export const leaveRepository = {
    * Returns null if operation would result in negative remaining balance
    */
   async adjustBalanceWithValidation(employeeId, leaveTypeId, year, { pendingDelta = 0, usedDelta = 0 }) {
+    // SPECIAL LEAVES: Never deduct from bucket, keep at 0
+    const leaveType = await this.findLeaveTypeById(leaveTypeId);
+    if (leaveType && isSpecialLeaveType(leaveType)) {
+      const rec = await this.recordAssignedLeaveBalance(employeeId, leaveType.orgId || 'org-1', leaveTypeId, year, 0);
+      return mapLeaveBalanceRow(rec);
+    }
+
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -1018,18 +1027,11 @@ export const leaveRepository = {
     const leaveType = await this.findLeaveTypeById(leaveTypeId, orgId);
     if (!leaveType) return null;
 
-    const code = String(leaveType.code || '').trim().toUpperCase();
-    const name = String(leaveType.name || '').trim().toLowerCase();
-    
-    // SPECIAL LEAVE TYPES: These 6 should NOT be deducted from balance
-    const SPECIAL_CODES = ['HL', 'AWOL', 'LOP', 'LWP', 'ML', 'PTL', 'PATL', 'SBL'];
-    const SPECIAL_NAMES = ['holiday', 'absent without leave', 'awol', 'leave without pay', 'loss of pay', 'lop', 'lwp', 'maternity leave', 'maternity', 'sabbatical leave', 'sabbatical', 'paternity leave', 'paternity'];
-    
-    const isSpecial = SPECIAL_CODES.includes(code) || SPECIAL_NAMES.some(sn => name === sn || name.includes(sn));
+    const isSpecial = isSpecialLeaveType(leaveType);
     
     if (isSpecial) {
-      // For special leaves: Ensure balance record exists with 0 allocated and 0 used
-      // Do NOT deduct days - these leaves are tracked separately and don't consume balance
+      // For special leaves: Ensure balance record exists with 0 allocated, 0 used, and 0 pending
+      // Do NOT deduct days - these leaves are tracked separately and never consume balance
       const balanceId = `lb-${employeeId}-${leaveTypeId}-${year}`;
       const sql = `
         INSERT INTO leave_balances (id, org_id, employee_id, leave_type_id, year, allocated_days, used_days, pending_days, updated_at)

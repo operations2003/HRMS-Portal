@@ -6,6 +6,7 @@ import { pool } from '../config/db.js';
 import { notificationService } from './notificationService.js';
 import { logger } from '../utils/logger.js';
 import { isCeoOrAdmin, checkIsEmployeeCeoOrAdmin } from '../utils/roleUtils.js';
+import { isSpecialLeaveType } from '../utils/leaveUtils.js';
 
 const normalizeRole = (r) => (r || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -1517,9 +1518,9 @@ export const attendanceService = {
       dateDecisions: [{ date: record.attendanceDate, status: 'APPROVED', dayFraction: 1.0 }],
     });
 
-    // 2. Deduct from employee leave bucket (used_days += 1)
-    const isRestricted = ['HL', 'AWOL', 'LOP', 'LWP'].includes(String(leaveType.code).toUpperCase()) || !leaveType.isPaid;
-    if (isRestricted) {
+    // 2. Deduct from employee leave bucket (used_days += 1 for normal leaves)
+    const isSpecial = isSpecialLeaveType(leaveType) || !leaveType.isPaid;
+    if (isSpecial) {
       await leaveRepository.recordAssignedLeaveBalance(
         targetEmp.id,
         targetEmp.orgId,

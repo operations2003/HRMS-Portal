@@ -4,6 +4,21 @@ import { employeeRepository } from '../repositories/employeeRepository.js';
 import { workflowRepository } from '../repositories/workflowRepository.js';
 import { notificationService } from './notificationService.js';
 import { logger } from '../utils/logger.js';
+import {
+  isSpecialLeaveType,
+  isRestrictedLeaveType,
+  isUnpaidLeave,
+  SPECIAL_LEAVE_CODES,
+  SPECIAL_LEAVE_NAMES,
+} from '../utils/leaveUtils.js';
+
+export {
+  isSpecialLeaveType,
+  isRestrictedLeaveType,
+  isUnpaidLeave,
+  SPECIAL_LEAVE_CODES,
+  SPECIAL_LEAVE_NAMES,
+};
 
 const normalizeRole = (r) => (r || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -271,77 +286,6 @@ const calculateLeaveDuration = async (
   };
 };
 
-export const isUnpaidLeave = (lt) => {
-  if (!lt) return false;
-  if (lt.isPaid === false || lt.is_paid === false) {
-    const code = String(lt.code || lt.leaveTypeCode || '').trim().toUpperCase();
-    if (code === 'AWOL') return false;
-    return true;
-  }
-  const code = String(lt.code || lt.leaveTypeCode || '').trim().toUpperCase();
-  const name = String(lt.name || lt.leaveTypeName || '').trim().toLowerCase();
-  return (
-    code === 'LOP' ||
-    code === 'LWP' ||
-    name.includes('without pay') ||
-    name.includes('loss of pay') ||
-    name.includes('unpaid')
-  );
-};
-
-// SPECIAL LEAVE TYPES: These 6 leave categories have 0 balance and are not deducted from employee allocation
-// Only Admin, HR, or Reporting Manager can assign these leaves
-export const SPECIAL_LEAVE_CODES = ['HL', 'AWOL', 'LOP', 'LWP', 'ML', 'PTL', 'PATL', 'SBL'];
-export const SPECIAL_LEAVE_NAMES = [
-  'holiday',
-  'absent without leave',
-  'awol',
-  'leave without pay',
-  'loss of pay',
-  'lop',
-  'lwp',
-  'maternity leave',
-  'maternity',
-  'sabbatical leave',
-  'sabbatical',
-  'paternity leave',
-  'paternity',
-];
-
-/**
- * Check if a leave type is a special leave (0 balance, admin/HR/manager assignment only)
- * Special leaves: Holiday, AWOL, LWP, Maternity, Sabbatical, Paternity
- * These are NOT deducted from employee balance and must remain at 0
- */
-export const isSpecialLeaveType = (lt) => {
-  if (!lt) return false;
-  const code = String(lt.code || lt.leaveTypeCode || '').trim().toUpperCase();
-  const name = String(lt.name || lt.leaveTypeName || '').trim().toLowerCase();
-  if (SPECIAL_LEAVE_CODES.includes(code)) return true;
-  return SPECIAL_LEAVE_NAMES.some((sn) => name === sn || name.includes(sn));
-};
-
-export const RESTRICTED_LEAVE_CODES = ['AWOL', 'HL', 'ML', 'PTL', 'PATL', 'SBL'];
-export const RESTRICTED_LEAVE_NAMES = [
-  'absent without leave(awol)',
-  'absent without leave',
-  'awol',
-  'holiday',
-  'maternity leave',
-  'maternity',
-  'sabbatical leave',
-  'sabbatical',
-  'paternity leave',
-  'paternity',
-];
-
-export const isRestrictedLeaveType = (lt) => {
-  if (!lt) return false;
-  const code = String(lt.code || lt.leaveTypeCode || '').trim().toUpperCase();
-  const name = String(lt.name || lt.leaveTypeName || '').trim().toLowerCase();
-  if (RESTRICTED_LEAVE_CODES.includes(code)) return true;
-  return RESTRICTED_LEAVE_NAMES.some((rn) => name === rn || name.includes(rn));
-};
 
 /**
  * Synchronize approved/assigned leave dates to the attendance_records table
@@ -1014,7 +958,7 @@ export const leaveService = {
 
     if (isDirectAssignment) {
       // 1. Update balances for assigned leave accurately without creating incorrect balances
-      if (isRestricted || ['HL', 'AWOL', 'LOP', 'LWP'].includes(String(leaveType.code).toUpperCase())) {
+      if (isRestricted || isSpecialLeaveType(leaveType)) {
         await leaveRepository.recordAssignedLeaveBalance(
           targetEmp.id,
           targetEmp.orgId,
@@ -1261,12 +1205,15 @@ export const leaveService = {
       cancelledAt: new Date(),
     });
 
-    // Revert balances
-    const year = new Date(record.startDate).getFullYear();
-    if (previousStatus === 'PENDING') {
-      await leaveRepository.adjustBalance(record.employeeId, record.leaveTypeId, year, { pendingDelta: -record.totalDays });
-    } else if (previousStatus === 'APPROVED') {
-      await leaveRepository.adjustBalance(record.employeeId, record.leaveTypeId, year, { usedDelta: -record.totalDays });
+    // Revert balances (only for normal leave types)
+    const leaveType = await leaveRepository.findLeaveTypeById(record.leaveTypeId, record.orgId);
+    if (!isSpecialLeaveType(leaveType)) {
+      const year = new Date(record.startDate).getFullYear();
+      if (previousStatus === 'PENDING') {
+        await leaveRepository.adjustBalance(record.employeeId, record.leaveTypeId, year, { pendingDelta: -record.totalDays });
+      } else if (previousStatus === 'APPROVED') {
+        await leaveRepository.adjustBalance(record.employeeId, record.leaveTypeId, year, { usedDelta: -record.totalDays });
+      }
     }
 
     return updated;
@@ -1470,48 +1417,38 @@ export const leaveService = {
       : (isPartiallyApproved ? (options.comments || 'Some dates rejected.') : '');
 
     // REVALIDATE BALANCE AT APPROVAL TIME (Prevent race conditions and duplicate approvals)
-    // Only validate for paid leave types with balance buckets
+    // Only validate for paid normal leave types with balance buckets
     const year = new Date(record.startDate).getFullYear();
-    if (!isAllRejected) {
-      const leaveType = await leaveRepository.findLeaveTypeById(record.leaveTypeId, record.orgId);
-      const isPaidLeave = leaveType && !isUnpaidLeave(leaveType) && Boolean(leaveType.isPaid);
-      const isRestrictedLeave = leaveType && isRestrictedLeaveType(leaveType);
-      const requiresBalanceCheck = isPaidLeave && !isRestrictedLeave;
+    const leaveType = await leaveRepository.findLeaveTypeById(record.leaveTypeId, record.orgId);
+    const isSpecialLeave = isSpecialLeaveType(leaveType);
+    const isPaidLeave = leaveType && !isUnpaidLeave(leaveType) && Boolean(leaveType.isPaid);
+    const requiresBalanceCheck = !isAllRejected && isPaidLeave && !isSpecialLeave;
 
-      if (requiresBalanceCheck) {
-        // Fetch current balance to verify sufficient remaining days
-        const balances = await leaveRepository.getLeaveBalances(record.employeeId, year);
-        const balance = balances.find((b) => b.leaveTypeId === record.leaveTypeId);
+    if (requiresBalanceCheck) {
+      // Fetch current balance to verify sufficient remaining days
+      const balances = await leaveRepository.getLeaveBalances(record.employeeId, year);
+      const balance = balances.find((b) => b.leaveTypeId === record.leaveTypeId);
 
-        if (balance) {
-          // Calculate what the remaining balance WILL BE after this approval
-          // remaining_days = allocated - used - pending
-          // After approval: new_used = current_used + approvedDays, new_pending = current_pending - record.totalDays
-          // So: new_remaining = allocated - (current_used + approvedDays) - (current_pending - record.totalDays)
-          //                   = allocated - current_used - current_pending - approvedDays + record.totalDays
-          //                   = current_remaining - approvedDays + record.totalDays
-          //                   = current_remaining + (record.totalDays - approvedDays)
-          
-          const currentRemaining = parseFloat(balance.remainingDays) || 0;
-          const projectedRemaining = currentRemaining + record.totalDays - approvedDays;
+      if (balance) {
+        const currentRemaining = parseFloat(balance.remainingDays) || 0;
+        const projectedRemaining = currentRemaining + record.totalDays - approvedDays;
 
-          if (projectedRemaining < 0) {
-            const error = new Error(
-              `Cannot approve leave: This would result in a negative balance. Employee currently has ${currentRemaining} days remaining for ${leaveType.name}. Approving ${approvedDays} days would create a balance deficit of ${Math.abs(projectedRemaining)} days.`
-            );
-            error.statusCode = 400;
-            throw error;
-          }
+        if (projectedRemaining < 0) {
+          const error = new Error(
+            `Cannot approve leave: This would result in a negative balance. Employee currently has ${currentRemaining} days remaining for ${leaveType.name}. Approving ${approvedDays} days would create a balance deficit of ${Math.abs(projectedRemaining)} days.`
+          );
+          error.statusCode = 400;
+          throw error;
+        }
 
-          // Additional safety: Check if current balance is already negative (data integrity issue)
-          if (currentRemaining < 0) {
-            logger.warn('LeaveService', `Employee ${record.employeeId} has negative balance (${currentRemaining}) for leave type ${record.leaveTypeId}. Blocking approval.`);
-            const error = new Error(
-              `Cannot approve leave: Employee's current balance for ${leaveType.name} is negative (${currentRemaining} days). Please contact HR to resolve this data integrity issue.`
-            );
-            error.statusCode = 400;
-            throw error;
-          }
+        // Additional safety: Check if current balance is already negative (data integrity issue)
+        if (currentRemaining < 0) {
+          logger.warn('LeaveService', `Employee ${record.employeeId} has negative balance (${currentRemaining}) for leave type ${record.leaveTypeId}. Blocking approval.`);
+          const error = new Error(
+            `Cannot approve leave: Employee's current balance for ${leaveType.name} is negative (${currentRemaining} days). Please contact HR to resolve this data integrity issue.`
+          );
+          error.statusCode = 400;
+          throw error;
         }
       }
     }
@@ -1527,29 +1464,38 @@ export const leaveService = {
     });
 
     // 4. Update employee balances:
-    // Release the entire pending reservation of requested days (-record.totalDays)
-    // And only add used balance for approved days (+approvedDays)
-    // Use atomic transaction to prevent race conditions
-    const balanceResult = await leaveRepository.adjustBalanceWithValidation(
-      record.employeeId, 
-      record.leaveTypeId, 
-      year, 
-      {
-        pendingDelta: -record.totalDays,
-        usedDelta: isAllRejected ? 0 : approvedDays,
-      }
-    );
-
-    if (balanceResult && balanceResult.error === 'INSUFFICIENT_BALANCE') {
-      const error = new Error(
-        `Cannot complete approval: Balance adjustment would result in negative balance. Current: ${balanceResult.currentRemaining}, Required: ${approvedDays}`
+    // Only adjust balance for non-special normal leaves
+    if (!isSpecialLeave) {
+      const balanceResult = await leaveRepository.adjustBalanceWithValidation(
+        record.employeeId, 
+        record.leaveTypeId, 
+        year, 
+        {
+          pendingDelta: -record.totalDays,
+          usedDelta: isAllRejected ? 0 : approvedDays,
+        }
       );
-      error.statusCode = 400;
-      throw error;
-    }
 
-    if (!balanceResult) {
-      logger.warn('LeaveService', `Failed to adjust balance for leave ${id} during approval`);
+      if (balanceResult && balanceResult.error === 'INSUFFICIENT_BALANCE') {
+        const error = new Error(
+          `Cannot complete approval: Balance adjustment would result in negative balance. Current: ${balanceResult.currentRemaining}, Required: ${approvedDays}`
+        );
+        error.statusCode = 400;
+        throw error;
+      }
+
+      if (!balanceResult) {
+        logger.warn('LeaveService', `Failed to adjust balance for leave ${id} during approval`);
+      }
+    } else {
+      // For special leaves: ensure balance record exists with 0 days and is never deducted
+      await leaveRepository.recordAssignedLeaveBalance(
+        record.employeeId,
+        record.orgId,
+        record.leaveTypeId,
+        year,
+        0
+      );
     }
 
     // 5. Advance workflow state machine
@@ -1739,11 +1685,14 @@ export const leaveService = {
       dateDecisions: allRejectedDecisions,
     });
 
-    // Release pending balance
-    const year = new Date(record.startDate).getFullYear();
-    await leaveRepository.adjustBalance(record.employeeId, record.leaveTypeId, year, {
-      pendingDelta: -record.totalDays,
-    });
+    // Release pending balance (only for normal leave types)
+    const leaveType = await leaveRepository.findLeaveTypeById(record.leaveTypeId, record.orgId);
+    if (!isSpecialLeaveType(leaveType)) {
+      const year = new Date(record.startDate).getFullYear();
+      await leaveRepository.adjustBalance(record.employeeId, record.leaveTypeId, year, {
+        pendingDelta: -record.totalDays,
+      });
+    }
 
     // Advance workflow state machine if tracking instance exists and not bypassed by workflow engine
     if (!data.skipWorkflowSync) {

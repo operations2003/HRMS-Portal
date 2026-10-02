@@ -7,6 +7,7 @@ import { pool } from '../config/db.js';
 import { logger } from '../utils/logger.js';
 import { validateEmployeeId } from '../validators/managerValidator.js';
 import { CEO_ADMIN_EXCLUSION_SQL } from '../utils/roleUtils.js';
+import { isSpecialLeaveType } from '../utils/leaveUtils.js';
 
 export const managerService = {
   /**
@@ -804,12 +805,23 @@ export const managerService = {
       approverUserId: currentUser.id,
     });
 
-    // Adjust leave balance
+    // Adjust leave balance (only for normal leave types)
     const year = new Date(leave.startDate).getFullYear();
-    await leaveRepository.adjustBalance(leave.employeeId, leave.leaveTypeId, year, {
-      pendingDelta: -leave.totalDays,
-      usedDelta: leave.totalDays,
-    });
+    const leaveType = await leaveRepository.findLeaveTypeById(leave.leaveTypeId, currentUser.orgId);
+    if (!isSpecialLeaveType(leaveType)) {
+      await leaveRepository.adjustBalance(leave.employeeId, leave.leaveTypeId, year, {
+        pendingDelta: -leave.totalDays,
+        usedDelta: leave.totalDays,
+      });
+    } else {
+      await leaveRepository.recordAssignedLeaveBalance(
+        leave.employeeId,
+        currentUser.orgId,
+        leave.leaveTypeId,
+        year,
+        0
+      );
+    }
 
     // Notify employee of approval
     const emp = await employeeRepository.findById(leave.employeeId);
@@ -869,11 +881,14 @@ export const managerService = {
       rejectionReason: rejectionReason.trim(),
     });
 
-    // Return pending days to remaining balance
+    // Return pending days to remaining balance (only for normal leave types)
     const year = new Date(leave.startDate).getFullYear();
-    await leaveRepository.adjustBalance(leave.employeeId, leave.leaveTypeId, year, {
-      pendingDelta: -leave.totalDays,
-    });
+    const leaveType = await leaveRepository.findLeaveTypeById(leave.leaveTypeId, currentUser.orgId);
+    if (!isSpecialLeaveType(leaveType)) {
+      await leaveRepository.adjustBalance(leave.employeeId, leave.leaveTypeId, year, {
+        pendingDelta: -leave.totalDays,
+      });
+    }
 
     // Notify employee of rejection
     const emp = await employeeRepository.findById(leave.employeeId);
