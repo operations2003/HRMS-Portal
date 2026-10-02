@@ -203,8 +203,16 @@ export const leaveService = {
       return res.data;
     } catch (err) {
       if (err.status === 404 || (err.message && err.message.includes('not found'))) {
-        const res = await http.post(`/v1/leaves/${id}/edit`, payload);
-        return res.data;
+        try {
+          const res = await http.post(`/v1/leaves/${id}/edit`, payload);
+          return res.data;
+        } catch (postErr) {
+          if (postErr.status === 404 || (postErr.message && postErr.message.includes('not found'))) {
+            const res = await http.post('/v1/leaves/update', { id, ...payload });
+            return res.data;
+          }
+          throw postErr;
+        }
       }
       throw err;
     }
@@ -220,8 +228,16 @@ export const leaveService = {
       return res.data;
     } catch (err) {
       if (err.status === 404 || (err.message && err.message.includes('not found'))) {
-        const res = await http.post(`/v1/leaves/${id}/delete`);
-        return res.data;
+        try {
+          const res = await http.post(`/v1/leaves/${id}/delete`);
+          return res.data;
+        } catch (postErr) {
+          if (postErr.status === 404 || (postErr.message && postErr.message.includes('not found'))) {
+            const res = await http.post('/v1/leaves/delete', { id });
+            return res.data;
+          }
+          throw postErr;
+        }
       }
       throw err;
     }

@@ -940,9 +940,9 @@ export const ApplyLeaveModal = ({
             <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200/80 flex items-start gap-2.5 text-xs text-amber-900">
               <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
               <div>
-                <div className="font-bold text-amber-900">Non-Working Day Selected</div>
+                <div className="font-bold text-amber-900">Sunday (Non-Working Day) Selected</div>
                 <div className="text-amber-800 mt-0.5 leading-relaxed">
-                  {durationPreview.warning || 'Selected dates fall on a Sunday or public holiday. Standard leaves only deduct working business days (Monday to Saturday). Please select a working day.'}
+                  {durationPreview.warning || 'Selected dates fall on a Sunday. Sundays are non-working days. Standard leaves only deduct working business days (Monday to Saturday). Please select a working day.'}
                 </div>
               </div>
             </div>
@@ -960,7 +960,6 @@ export const ApplyLeaveModal = ({
                 </div>
                 <div className="text-slate-500">
                   {durationPreview.weekendDays > 0 && `(Excludes ${durationPreview.weekendDays} Sunday${durationPreview.weekendDays > 1 ? 's' : ''})`}
-                  {durationPreview.holidayDays > 0 && `(Excludes ${durationPreview.holidayDays} holiday days)`}
                 </div>
               </div>
 

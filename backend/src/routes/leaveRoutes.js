@@ -96,6 +96,15 @@ router.post(
 );
 
 // 9. Edit leave request (Admin / HR / Reporting Manager)
+router.post(
+  '/update',
+  requireRoles(['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin', 'Manager', 'Lead', 'TeamLead', 'Supervisor']),
+  (req, res, next) => {
+    const id = req.body?.id || req.query?.id;
+    if (id) req.params.id = id;
+    return leaveController.updateLeave(req, res, next);
+  }
+);
 router.put(
   '/:id',
   requireRoles(['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin', 'Manager', 'Lead', 'TeamLead', 'Supervisor']),
@@ -113,6 +122,15 @@ router.post(
 );
 
 // 10. Delete leave request (Admin / HR / Reporting Manager)
+router.post(
+  '/delete',
+  requireRoles(['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin', 'Manager', 'Lead', 'TeamLead', 'Supervisor']),
+  (req, res, next) => {
+    const id = req.body?.id || req.query?.id;
+    if (id) req.params.id = id;
+    return leaveController.deleteLeave(req, res, next);
+  }
+);
 router.delete(
   '/:id',
   requireRoles(['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin', 'Manager', 'Lead', 'TeamLead', 'Supervisor']),

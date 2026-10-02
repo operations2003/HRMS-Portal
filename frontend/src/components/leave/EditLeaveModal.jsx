@@ -578,8 +578,8 @@ export const EditLeaveModal = ({
                 </span>
                 <div className="text-[11px] text-brand-700/80 flex items-center gap-2">
                   <span>Working: {calculation.workingDays || calculation.totalDays}d</span>
-                  {calculation.weekendDays > 0 && <span>• Weekends: {calculation.weekendDays}d</span>}
-                  {calculation.holidayDays > 0 && <span>• Holidays: {calculation.holidayDays}d</span>}
+                  {calculation.weekendDays > 0 && <span>• Excludes {calculation.weekendDays} Sunday{calculation.weekendDays > 1 ? 's' : ''}</span>}
+                  {calculation.holidayDays > 0 && <span>• Includes {calculation.holidayDays} holiday{calculation.holidayDays > 1 ? 's' : ''}</span>}
                 </div>
               </div>
             </div>

@@ -132,7 +132,8 @@ const calculateLeaveDuration = async (
     const curStr = formatLocalDate(cur);
     const dayOfWeek = cur.getDay(); // 0 = Sun, 6 = Sat
 
-    // 6 working days policy (Monday to Saturday): only Sunday (0) is a non-working weekend day
+    // 6 working days policy (Monday to Saturday): ONLY Sunday (0) is a non-working weekend day.
+    // Official / public holidays do NOT reduce leave duration; leaves CAN and should be applied on them.
     const isWeekend = dayOfWeek === 0;
     const isHoliday = holidayMap.has(curStr);
 
@@ -146,16 +147,18 @@ const calculateLeaveDuration = async (
           fallsOnWeekend: true,
         });
       }
-    } else if (isHoliday) {
-      holidayDaysCount++;
-      holidaysEncountered.push({
-        date: curStr,
-        name: holidayMap.get(curStr).name,
-        type: holidayMap.get(curStr).holiday_type,
-        fallsOnWeekend: false,
-      });
     } else {
+      // Monday to Saturday are working business days for leave purposes
       workingDaysCount++;
+      if (isHoliday) {
+        holidayDaysCount++;
+        holidaysEncountered.push({
+          date: curStr,
+          name: holidayMap.get(curStr).name,
+          type: holidayMap.get(curStr).holiday_type,
+          fallsOnWeekend: false,
+        });
+      }
     }
 
     cur.setDate(cur.getDate() + 1);
@@ -197,27 +200,6 @@ const calculateLeaveDuration = async (
       error.statusCode = 400;
       throw error;
     }
-    if (holidayDaysCount > 0) {
-      if (allowZeroWorkingDays) {
-        return {
-          startDate: startDateStr.trim(),
-          endDate: endDateStr.trim(),
-          isHalfDay: true,
-          halfDayPeriod,
-          totalCalendarDays: 1,
-          weekendDays: 0,
-          holidayDays: 1,
-          workingDays: 0,
-          totalDays: 0,
-          holidays: holidaysEncountered,
-          isNonWorkingPeriod: true,
-          warning: 'Cannot apply for half-day leave on an official public holiday.',
-        };
-      }
-      const error = new Error('Cannot apply for half-day leave on an official public holiday.');
-      error.statusCode = 400;
-      throw error;
-    }
     return {
       startDate: startDateStr.trim(),
       endDate: endDateStr.trim(),
@@ -225,10 +207,10 @@ const calculateLeaveDuration = async (
       halfDayPeriod,
       totalCalendarDays: 1,
       weekendDays: 0,
-      holidayDays: 0,
+      holidayDays: holidayDaysCount,
       workingDays: 0.5,
       totalDays: 0.5,
-      holidays: [],
+      holidays: holidaysEncountered,
     };
   }
 
@@ -264,10 +246,10 @@ const calculateLeaveDuration = async (
         totalDays: 0,
         holidays: holidaysEncountered,
         isNonWorkingPeriod: true,
-        warning: 'The requested leave period contains no working days (all selected days are Sundays or official public holidays). Standard leave applies to working business days (Monday to Saturday).',
+        warning: 'The requested leave period contains no working days (all selected days are Sundays). Standard leave applies to working business days (Monday to Saturday).',
       };
     }
-    const error = new Error('The requested leave period contains no working days (all days are Sundays or official public holidays). Please select a working business day (Monday to Saturday).');
+    const error = new Error('The requested leave period contains no working days (all days are Sundays). Please select a working business day (Monday to Saturday).');
     error.statusCode = 400;
     throw error;
   }
@@ -479,30 +461,28 @@ export const leaveService = {
         const isSunday = dObj.getDay() === 0;
         const holiday = holidayMap.get(dStr);
 
-        if (isRestricted) {
-          workingDays += dayFactor;
-          validDates.push(dStr);
+        if (isSunday) {
+          weekendDays++;
           if (holiday) {
             holidaysEncountered.push({
               date: dStr,
               name: holiday.name,
               type: holiday.holiday_type,
-              fallsOnWeekend: isSunday,
+              fallsOnWeekend: true,
             });
           }
-        } else if (isSunday) {
-          weekendDays++;
-        } else if (holiday) {
-          holidayDays++;
-          holidaysEncountered.push({
-            date: dStr,
-            name: holiday.name,
-            type: holiday.holiday_type,
-            fallsOnWeekend: false,
-          });
         } else {
           workingDays += dayFactor;
           validDates.push(dStr);
+          if (holiday) {
+            holidayDays++;
+            holidaysEncountered.push({
+              date: dStr,
+              name: holiday.name,
+              type: holiday.holiday_type,
+              fallsOnWeekend: false,
+            });
+          }
         }
       }
 
@@ -782,8 +762,8 @@ export const leaveService = {
         const isSunday = dObj.getDay() === 0;
         const isHoliday = holidaySet.has(dStr);
 
-        if (!isRestricted && (isSunday || isHoliday)) {
-          // If employee specifically selected a Sunday or holiday on standard leave, warn or skip
+        if (!isRestricted && isSunday) {
+          // Only Sundays are non-working days; skip Sundays
           continue;
         }
 
@@ -796,7 +776,7 @@ export const leaveService = {
       }
 
       if (dateDecisions.length === 0) {
-        const error = new Error('None of the selected dates are working business days (Mon–Sat excluding holidays).');
+        const error = new Error('None of the selected dates are working business days (Sundays are non-working days).');
         error.statusCode = 400;
         throw error;
       }
@@ -824,9 +804,7 @@ export const leaveService = {
       );
       totalDays = calculation.totalDays;
 
-      // Expand date range into individual date decisions
-      const holidays = await leaveRepository.findActiveHolidaysBetween(targetEmp.orgId, startDate, endDate);
-      const holidaySet = new Set(holidays.map((h) => h.holiday_date));
+      // Expand date range into individual date decisions (only Sundays are skipped)
       const sDate = parseLocalDate(startDate);
       const eDate = parseLocalDate(endDate);
       const cur = new Date(sDate.getTime());
@@ -834,9 +812,8 @@ export const leaveService = {
       while (cur <= eDate) {
         const curStr = formatLocalDate(cur);
         const isSunday = cur.getDay() === 0;
-        const isHoliday = holidaySet.has(curStr);
 
-        if (isRestricted || (!isSunday && !isHoliday)) {
+        if (isRestricted || !isSunday) {
           dateDecisions.push({
             date: curStr,
             status: 'PENDING',
@@ -1846,9 +1823,8 @@ export const leaveService = {
       while (cur <= eDate) {
         const curStr = formatLocalDate(cur);
         const isSunday = cur.getDay() === 0;
-        const isHoliday = holidaySet.has(curStr);
 
-        if (newIsSpecial || (!isSunday && !isHoliday)) {
+        if (newIsSpecial || !isSunday) {
           newDateDecisions.push({
             date: curStr,
             status: oldStatus === 'APPROVED' ? 'APPROVED' : 'PENDING',
