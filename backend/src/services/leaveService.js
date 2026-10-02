@@ -289,11 +289,44 @@ export const isUnpaidLeave = (lt) => {
   );
 };
 
-export const RESTRICTED_LEAVE_CODES = ['AWOL', 'ML', 'PTL', 'PATL', 'SBL'];
+// SPECIAL LEAVE TYPES: These 6 leave categories have 0 balance and are not deducted from employee allocation
+// Only Admin, HR, or Reporting Manager can assign these leaves
+export const SPECIAL_LEAVE_CODES = ['HL', 'AWOL', 'LOP', 'LWP', 'ML', 'PTL', 'PATL', 'SBL'];
+export const SPECIAL_LEAVE_NAMES = [
+  'holiday',
+  'absent without leave',
+  'awol',
+  'leave without pay',
+  'loss of pay',
+  'lop',
+  'lwp',
+  'maternity leave',
+  'maternity',
+  'sabbatical leave',
+  'sabbatical',
+  'paternity leave',
+  'paternity',
+];
+
+/**
+ * Check if a leave type is a special leave (0 balance, admin/HR/manager assignment only)
+ * Special leaves: Holiday, AWOL, LWP, Maternity, Sabbatical, Paternity
+ * These are NOT deducted from employee balance and must remain at 0
+ */
+export const isSpecialLeaveType = (lt) => {
+  if (!lt) return false;
+  const code = String(lt.code || lt.leaveTypeCode || '').trim().toUpperCase();
+  const name = String(lt.name || lt.leaveTypeName || '').trim().toLowerCase();
+  if (SPECIAL_LEAVE_CODES.includes(code)) return true;
+  return SPECIAL_LEAVE_NAMES.some((sn) => name === sn || name.includes(sn));
+};
+
+export const RESTRICTED_LEAVE_CODES = ['AWOL', 'HL', 'ML', 'PTL', 'PATL', 'SBL'];
 export const RESTRICTED_LEAVE_NAMES = [
   'absent without leave(awol)',
   'absent without leave',
   'awol',
+  'holiday',
   'maternity leave',
   'maternity',
   'sabbatical leave',
@@ -890,39 +923,59 @@ export const leaveService = {
 
     const startYear = new Date(startDate).getFullYear();
 
-    // Balance validation:
-    // If self-applying on paid leave: enforce current available balance > 0 and >= totalDays
+    // ENHANCED BALANCE VALIDATION:
+    // Strictly enforce balance limits for ALL paid leave types to prevent negative balances
+    // Skip validation only for unpaid leaves (LOP, LWP) and restricted types without balance buckets
     const isPaid = !isUnpaidLeave(leaveType) && Boolean(leaveType.isPaid);
-    if (isSelf && isPaid) {
+    const requiresBalanceCheck = isPaid && !isRestricted;
+
+    if (requiresBalanceCheck) {
+      // Fetch or initialize balances for the employee
       let balances = await leaveRepository.getLeaveBalances(targetEmp.id, startYear);
       if (balances.length === 0) {
         balances = await leaveRepository.initializeBalancesForEmployee(targetEmp.id, targetEmp.orgId, startYear);
       }
+
+      // Find the matching balance record for this leave type
       const balance = balances.find(
         (b) =>
           b.leaveTypeId === leaveType.id ||
           (leaveType.code && b.leaveTypeCode && String(leaveType.code).toUpperCase() === String(b.leaveTypeCode).toUpperCase()) ||
           (leaveType.name && b.leaveTypeName && String(leaveType.name).toLowerCase() === String(b.leaveTypeName).toLowerCase())
       );
-      const remDays = balance ? (parseFloat(balance.remainingDays) || 0) : 0;
-      if (remDays <= 0) {
-        const error = new Error(`Selected leave type '${leaveType.name}' is not available because your current available leave balance is 0.`);
+
+      if (!balance) {
+        const error = new Error(`Leave balance record not found for '${leaveType.name}'. Please contact HR to initialize your leave allocations.`);
         error.statusCode = 400;
         throw error;
       }
-      if (remDays < totalDays) {
-        const error = new Error(`Insufficient leave balance. You have ${remDays} days remaining for ${leaveType.name}, but requested ${totalDays} days.`);
+
+      const remainingDays = parseFloat(balance.remainingDays) || 0;
+
+      // CRITICAL CHECK 1: Block application if balance is exactly 0
+      if (remainingDays === 0) {
+        const error = new Error(
+          `Insufficient leave balance. You have 0 days available for ${leaveType.name}. Please contact HR if you need additional leave allocation.`
+        );
         error.statusCode = 400;
         throw error;
       }
-    } else if (!isRestricted && leaveType.isPaid && leaveType.daysPerYear > 0) {
-      let balances = await leaveRepository.getLeaveBalances(targetEmp.id, startYear);
-      if (balances.length === 0) {
-        balances = await leaveRepository.initializeBalancesForEmployee(targetEmp.id, targetEmp.orgId, startYear);
+
+      // CRITICAL CHECK 2: Block application if requested days exceed available balance
+      if (totalDays > remainingDays) {
+        const error = new Error(
+          `Insufficient leave balance. You have only ${remainingDays} day${remainingDays === 1 ? '' : 's'} available for ${leaveType.name}, but requested ${totalDays} day${totalDays === 1 ? '' : 's'}.`
+        );
+        error.statusCode = 400;
+        throw error;
       }
-      const balance = balances.find((b) => b.leaveTypeId === leaveType.id);
-      if (balance && balance.remainingDays < totalDays) {
-        const error = new Error(`Insufficient leave balance. Employee has ${balance.remainingDays} days remaining for ${leaveType.name}, but requested ${totalDays} days.`);
+
+      // Additional safety check: ensure remaining balance is positive
+      if (remainingDays < 0) {
+        logger.warn('LeaveService', `Employee ${targetEmp.id} has negative balance (${remainingDays}) for leave type ${leaveType.id}. Blocking new application.`);
+        const error = new Error(
+          `Your leave balance for ${leaveType.name} is currently negative (${remainingDays} days). Please contact HR to resolve this issue before applying for new leave.`
+        );
         error.statusCode = 400;
         throw error;
       }
@@ -986,8 +1039,28 @@ export const leaveService = {
       );
     } else {
       // Employee self-applying leave: record pending balance only for paid leaves
+      // Use atomic validation to prevent race conditions from duplicate submissions
       if (isPaid) {
-        await leaveRepository.adjustBalance(targetEmp.id, leaveType.id, startYear, { pendingDelta: totalDays });
+        const balanceResult = await leaveRepository.adjustBalanceWithValidation(
+          targetEmp.id, 
+          leaveType.id, 
+          startYear, 
+          { pendingDelta: totalDays }
+        );
+        
+        if (balanceResult && balanceResult.error === 'INSUFFICIENT_BALANCE') {
+          const error = new Error(
+            `Insufficient leave balance. You have ${balanceResult.currentRemaining} days remaining, but this request would require ${totalDays} days.`
+          );
+          error.statusCode = 400;
+          throw error;
+        }
+        
+        if (!balanceResult) {
+          const error = new Error('Failed to reserve leave balance. Please try again.');
+          error.statusCode = 500;
+          throw error;
+        }
       }
     }
 
@@ -1396,6 +1469,53 @@ export const leaveService = {
       ? (options.comments || options.rejectionReason || 'All requested dates were rejected.')
       : (isPartiallyApproved ? (options.comments || 'Some dates rejected.') : '');
 
+    // REVALIDATE BALANCE AT APPROVAL TIME (Prevent race conditions and duplicate approvals)
+    // Only validate for paid leave types with balance buckets
+    const year = new Date(record.startDate).getFullYear();
+    if (!isAllRejected) {
+      const leaveType = await leaveRepository.findLeaveTypeById(record.leaveTypeId, record.orgId);
+      const isPaidLeave = leaveType && !isUnpaidLeave(leaveType) && Boolean(leaveType.isPaid);
+      const isRestrictedLeave = leaveType && isRestrictedLeaveType(leaveType);
+      const requiresBalanceCheck = isPaidLeave && !isRestrictedLeave;
+
+      if (requiresBalanceCheck) {
+        // Fetch current balance to verify sufficient remaining days
+        const balances = await leaveRepository.getLeaveBalances(record.employeeId, year);
+        const balance = balances.find((b) => b.leaveTypeId === record.leaveTypeId);
+
+        if (balance) {
+          // Calculate what the remaining balance WILL BE after this approval
+          // remaining_days = allocated - used - pending
+          // After approval: new_used = current_used + approvedDays, new_pending = current_pending - record.totalDays
+          // So: new_remaining = allocated - (current_used + approvedDays) - (current_pending - record.totalDays)
+          //                   = allocated - current_used - current_pending - approvedDays + record.totalDays
+          //                   = current_remaining - approvedDays + record.totalDays
+          //                   = current_remaining + (record.totalDays - approvedDays)
+          
+          const currentRemaining = parseFloat(balance.remainingDays) || 0;
+          const projectedRemaining = currentRemaining + record.totalDays - approvedDays;
+
+          if (projectedRemaining < 0) {
+            const error = new Error(
+              `Cannot approve leave: This would result in a negative balance. Employee currently has ${currentRemaining} days remaining for ${leaveType.name}. Approving ${approvedDays} days would create a balance deficit of ${Math.abs(projectedRemaining)} days.`
+            );
+            error.statusCode = 400;
+            throw error;
+          }
+
+          // Additional safety: Check if current balance is already negative (data integrity issue)
+          if (currentRemaining < 0) {
+            logger.warn('LeaveService', `Employee ${record.employeeId} has negative balance (${currentRemaining}) for leave type ${record.leaveTypeId}. Blocking approval.`);
+            const error = new Error(
+              `Cannot approve leave: Employee's current balance for ${leaveType.name} is negative (${currentRemaining} days). Please contact HR to resolve this data integrity issue.`
+            );
+            error.statusCode = 400;
+            throw error;
+          }
+        }
+      }
+    }
+
     // 3. Update status in database
     const updated = await leaveRepository.updateStatus(id, {
       status: finalStatus,
@@ -1409,11 +1529,28 @@ export const leaveService = {
     // 4. Update employee balances:
     // Release the entire pending reservation of requested days (-record.totalDays)
     // And only add used balance for approved days (+approvedDays)
-    const year = new Date(record.startDate).getFullYear();
-    await leaveRepository.adjustBalance(record.employeeId, record.leaveTypeId, year, {
-      pendingDelta: -record.totalDays,
-      usedDelta: isAllRejected ? 0 : approvedDays,
-    });
+    // Use atomic transaction to prevent race conditions
+    const balanceResult = await leaveRepository.adjustBalanceWithValidation(
+      record.employeeId, 
+      record.leaveTypeId, 
+      year, 
+      {
+        pendingDelta: -record.totalDays,
+        usedDelta: isAllRejected ? 0 : approvedDays,
+      }
+    );
+
+    if (balanceResult && balanceResult.error === 'INSUFFICIENT_BALANCE') {
+      const error = new Error(
+        `Cannot complete approval: Balance adjustment would result in negative balance. Current: ${balanceResult.currentRemaining}, Required: ${approvedDays}`
+      );
+      error.statusCode = 400;
+      throw error;
+    }
+
+    if (!balanceResult) {
+      logger.warn('LeaveService', `Failed to adjust balance for leave ${id} during approval`);
+    }
 
     // 5. Advance workflow state machine
     if (!options.skipWorkflowSync) {
