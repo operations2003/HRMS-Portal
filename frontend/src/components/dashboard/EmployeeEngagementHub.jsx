@@ -31,13 +31,16 @@ export const EmployeeEngagementHub = () => {
   const { user, hasPermission } = useAuth();
   const toast = useToast();
 
+  const allRoles = (Array.isArray(user?.roles) ? user.roles : [user?.roleName || user?.role?.name || user?.role || ''])
+    .filter(Boolean)
+    .map((r) => String(r).toLowerCase().trim());
   const userRoleStr = (user?.roleName || user?.role?.name || user?.role || '').toLowerCase().trim();
+  const isEmployeeRole = userRoleStr === 'employee' || userRoleStr === 'staff' || userRoleStr === 'intern';
   const isHrOrAdmin =
-    ['admin', 'superadmin', 'orgadmin', 'hr', 'hrmanager'].includes(userRoleStr) ||
-    userRoleStr.includes('admin') ||
-    userRoleStr.includes('hr') ||
-    user?.email === 'sheetalbedi@tasknera.com' ||
-    (typeof hasPermission === 'function' && hasPermission('engagement:write'));
+    !isEmployeeRole && (
+      allRoles.some((r) => ['admin', 'superadmin', 'orgadmin', 'hr', 'hrmanager'].some((adm) => r.includes(adm))) ||
+      (user?.email || '').toLowerCase() === 'sheetalbedi@tasknera.com'
+    );
 
   const [activeTab, setActiveTab] = useState('surveys'); // 'surveys' | 'announcements' | 'kudos'
   const [announcements, setAnnouncements] = useState([]);
