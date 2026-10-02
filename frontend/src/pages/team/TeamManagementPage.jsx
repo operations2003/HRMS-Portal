@@ -43,6 +43,7 @@ import { EmptyState } from '../../components/common/EmptyState.jsx';
 import { TeamMemberDetailModal } from '../../components/team/TeamMemberDetailModal.jsx';
 import { AssignManagerModal } from '../../components/team/AssignManagerModal.jsx';
 import { ApprovalActionModal } from '../../components/approvals/ApprovalActionModal.jsx';
+import { filterNonCeoEmployees } from '../../utils/roleUtils.js';
 import { AttendanceDetailModal } from '../../components/attendance/AttendanceDetailModal.jsx';
 import { EditAttendanceTimingModal } from '../../components/attendance/EditAttendanceTimingModal.jsx';
 import { ConvertAbsenceToLeaveModal } from '../../components/attendance/ConvertAbsenceToLeaveModal.jsx';
@@ -170,7 +171,8 @@ export const TeamManagementPage = () => {
 
         if (attRes.status === 'fulfilled') {
           const a = attRes.value;
-          setAttendance(a.items || a.data || (Array.isArray(a) ? a : []));
+          const raw = a.items || a.data || (Array.isArray(a) ? a : []);
+          setAttendance(filterNonCeoEmployees(raw));
         }
         if (sumRes.status === 'fulfilled') {
           setAttendanceSummary(sumRes.value || {});

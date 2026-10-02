@@ -1,4 +1,5 @@
 import { pool } from '../config/db.js';
+import { CEO_ADMIN_EXCLUSION_SQL } from '../utils/roleUtils.js';
 
 const mapDailyReportRow = (row) => {
   if (!row) return null;
@@ -187,7 +188,7 @@ export const dailyReportRepository = {
     page = 1,
     limit = 20,
   } = {}) {
-    const conditions = ['r.org_id = $1'];
+    const conditions = ['r.org_id = $1', CEO_ADMIN_EXCLUSION_SQL];
     const values = [orgId];
     let pIdx = 2;
 
@@ -272,7 +273,7 @@ export const dailyReportRepository = {
   async getSummary({ orgId, managerId = null, deptId = '', date = null } = {}) {
     const targetDate = date || new Date().toISOString().split('T')[0];
 
-    const empConditions = ['e.org_id = $1', "e.status = 'Active'"];
+    const empConditions = ['e.org_id = $1', "e.status = 'Active'", CEO_ADMIN_EXCLUSION_SQL];
     const empValues = [orgId];
     let pIdx = 2;
 
@@ -291,7 +292,7 @@ export const dailyReportRepository = {
     const totalEmployees = totalEmpRes.rows[0]?.count || 0;
 
     // 2. Total reports submitted for target date
-    const reportConditions = ['r.org_id = $1', 'r.report_date = $2::date'];
+    const reportConditions = ['r.org_id = $1', 'r.report_date = $2::date', CEO_ADMIN_EXCLUSION_SQL];
     const reportValues = [orgId, targetDate];
     let rIdx = 3;
 

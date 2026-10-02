@@ -6,6 +6,7 @@ import { notificationService } from './notificationService.js';
 import { pool } from '../config/db.js';
 import { logger } from '../utils/logger.js';
 import { validateEmployeeId } from '../validators/managerValidator.js';
+import { CEO_ADMIN_EXCLUSION_SQL } from '../utils/roleUtils.js';
 
 export const managerService = {
   /**
@@ -481,7 +482,8 @@ export const managerService = {
       LEFT JOIN designations ds ON e.desig_id = ds.id
       LEFT JOIN attendance_records a ON a.employee_id = e.id AND a.attendance_date = $2
       WHERE e.manager_id = $1 AND e.org_id = $3
-      ${status ? (status.toUpperCase() === 'ON_BREAK' ? 'AND a.is_on_break = TRUE' : 'AND a.status = $4') : ''}
+        AND ${CEO_ADMIN_EXCLUSION_SQL}
+        ${status ? (status.toUpperCase() === 'ON_BREAK' ? 'AND a.is_on_break = TRUE' : 'AND a.status = $4') : ''}
       ORDER BY e.first_name ASC, e.last_name ASC;
     `;
     const params = status && status.toUpperCase() !== 'ON_BREAK'
@@ -564,7 +566,8 @@ export const managerService = {
       FROM attendance_records a
       JOIN employees e ON a.employee_id = e.id
       WHERE e.manager_id = $1 AND e.org_id = $2
-        AND a.attendance_date >= $3::date AND a.attendance_date <= $4::date;
+        AND a.attendance_date >= $3::date AND a.attendance_date <= $4::date
+        AND ${CEO_ADMIN_EXCLUSION_SQL};
     `;
     const res = await pool.query(query, [targetManagerId, currentUser.orgId, start, end]);
     const row = res.rows[0] || {};

@@ -5,6 +5,7 @@ import { leaveRepository } from '../repositories/leaveRepository.js';
 import { pool } from '../config/db.js';
 import { notificationService } from './notificationService.js';
 import { logger } from '../utils/logger.js';
+import { isCeoOrAdmin, checkIsEmployeeCeoOrAdmin } from '../utils/roleUtils.js';
 
 const normalizeRole = (r) => (r || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -500,6 +501,13 @@ export const attendanceService = {
       }
     }
 
+    // The Administrator / CEO supervises the system and is strictly exempt from recording attendance
+    if (isCeoOrAdmin(user) || (targetEmployee && isCeoOrAdmin(targetEmployee))) {
+      const error = new Error('Attendance check-in is not applicable for the Administrator / CEO as executive supervision does not require attendance logging.');
+      error.statusCode = 403;
+      throw error;
+    }
+
     // Inactive/terminated employees cannot record attendance (Notice Period & Probation are permitted)
     const NON_WORKING_STATUSES = ['inactive', 'terminated', 'suspended', 'exited', 'archived'];
     if (targetEmployee.status && NON_WORKING_STATUSES.includes(targetEmployee.status.trim().toLowerCase())) {
@@ -604,7 +612,13 @@ export const attendanceService = {
         const error = new Error('No employee profile found for your user account.');
         error.statusCode = 404;
         throw error;
-      }
+    }
+
+    // The Administrator / CEO supervises the system and is strictly exempt from recording attendance
+    if (isCeoOrAdmin(user) || (targetEmployee && isCeoOrAdmin(targetEmployee))) {
+      const error = new Error('Attendance check-out is not applicable for the Administrator / CEO as executive supervision does not require attendance logging.');
+      error.statusCode = 403;
+      throw error;
     }
 
     // Inactive/terminated employees cannot record attendance (Notice Period & Probation are permitted)
@@ -733,6 +747,12 @@ export const attendanceService = {
       throw error;
     }
 
+    if (isCeoOrAdmin(user) || isCeoOrAdmin(targetEmployee)) {
+      const error = new Error('Break logging is not applicable for the Administrator / CEO.');
+      error.statusCode = 403;
+      throw error;
+    }
+
     const todayDate = new Date().toISOString().split('T')[0];
     let existing = await attendanceRepository.findByEmployeeAndDate(targetEmployee.id, todayDate, targetEmployee.orgId);
 
@@ -810,6 +830,12 @@ export const attendanceService = {
     if (!targetEmployee) {
       const error = new Error('No employee profile found for your user account.');
       error.statusCode = 404;
+      throw error;
+    }
+
+    if (isCeoOrAdmin(user) || isCeoOrAdmin(targetEmployee)) {
+      const error = new Error('Break logging is not applicable for the Administrator / CEO.');
+      error.statusCode = 403;
       throw error;
     }
 
@@ -903,10 +929,37 @@ export const attendanceService = {
    */
   async getMyAttendance(user, query = {}) {
     const employee = await resolveRequesterEmployee(user);
-    if (!employee) {
+    if (!employee && !isCeoOrAdmin(user)) {
       const error = new Error('No employee profile found for your user account.');
       error.statusCode = 404;
       throw error;
+    }
+
+    // CEO / Administrator account is exempt from attendance logging
+    if (isCeoOrAdmin(user) || (employee && isCeoOrAdmin(employee))) {
+      return {
+        records: [],
+        statistics: {
+          presentDays: 0,
+          halfDays: 0,
+          lateDays: 0,
+          absentDays: 0,
+          totalHoursWorked: 0,
+          totalOvertimeHours: 0,
+          averageHoursPerDay: 0,
+        },
+        pagination: { total: 0, page: 1, limit: 15, totalPages: 0 },
+        todayRecord: null,
+        isExempt: true,
+        message: 'Administrator / CEO supervises the system and is exempt from daily attendance logging.',
+        employeeProfile: {
+          id: employee?.id || user.id,
+          firstName: employee?.firstName || user.firstName || 'Sheetal',
+          lastName: employee?.lastName || user.lastName || 'Bedi',
+          employeeCode: employee?.employeeCode || 'CEO',
+          shiftTiming: 'Executive Supervision',
+        },
+      };
     }
 
     // Auto-resolve any active unclosed records for this employee that exceeded the 10h post-shift cutoff
@@ -955,10 +1008,27 @@ export const attendanceService = {
    */
   async getMyTodayRecord(user) {
     const employee = await resolveRequesterEmployee(user);
-    if (!employee) {
+    if (!employee && !isCeoOrAdmin(user)) {
       const error = new Error('No employee profile found for your user account.');
       error.statusCode = 404;
       throw error;
+    }
+
+    // CEO / Administrator account is exempt from attendance logging
+    if (isCeoOrAdmin(user) || (employee && isCeoOrAdmin(employee))) {
+      return {
+        record: null,
+        todayRecord: null,
+        isExempt: true,
+        message: 'Administrator / CEO supervises the system and is exempt from daily attendance logging.',
+        employeeProfile: {
+          id: employee?.id || user.id,
+          firstName: employee?.firstName || user.firstName || 'Sheetal',
+          lastName: employee?.lastName || user.lastName || 'Bedi',
+          employeeCode: employee?.employeeCode || 'CEO',
+          shiftTiming: 'Executive Supervision',
+        },
+      };
     }
 
     // Auto-resolve any active unclosed records for this employee that exceeded cutoff

@@ -103,3 +103,28 @@ export const checkIsEmployeeCeoOrAdmin = async (employeeId, orgId = null) => {
     return false;
   }
 };
+
+/**
+ * SQL condition generator to exclude the CEO / Administrator from employee queries (such as attendance, headcount, reports).
+ *
+ * @param {string} [employeeAlias='e'] - Table alias for employees table
+ * @returns {string}
+ */
+export const getCeoAdminExclusionSql = (employeeAlias = 'e') => `
+  NOT (
+    ${employeeAlias}.desig_id = 'desig-ceo'
+    OR EXISTS (
+      SELECT 1 FROM designations ds 
+      WHERE ds.id = ${employeeAlias}.desig_id 
+        AND (ds.id = 'desig-ceo' OR UPPER(COALESCE(ds.code, '')) = 'CEO' OR LOWER(COALESCE(ds.title, '')) LIKE '%ceo%' OR LOWER(COALESCE(ds.title, '')) LIKE '%chief executive officer%')
+    )
+    OR EXISTS (
+      SELECT 1 FROM users u 
+      JOIN roles r ON r.id = u.role_id 
+      WHERE u.id = ${employeeAlias}.user_id 
+        AND LOWER(COALESCE(r.name, '')) IN ('admin', 'superadmin', 'orgadmin')
+    )
+  )
+`;
+
+export const CEO_ADMIN_EXCLUSION_SQL = getCeoAdminExclusionSql('e');

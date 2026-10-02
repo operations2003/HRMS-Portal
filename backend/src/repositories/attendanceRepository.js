@@ -1,4 +1,5 @@
 import { pool } from '../config/db.js';
+import { CEO_ADMIN_EXCLUSION_SQL, getCeoAdminExclusionSql } from '../utils/roleUtils.js';
 
 /**
  * Maps raw database row to standardized Attendance domain model
@@ -478,7 +479,8 @@ export const attendanceRepository = {
   async findTeamAttendance(deptId, orgId, { date = '', startDate = '', endDate = '', status = '', search = '', page = 1, limit = 20 } = {}) {
     const conditions = [
       'a.org_id = $1',
-      "(a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT')" // Exclude leave-based attendance records
+      "(a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT')", // Exclude leave-based attendance records
+      CEO_ADMIN_EXCLUSION_SQL,
     ];
     const values = [orgId];
     let paramIndex = 2;
@@ -566,7 +568,8 @@ export const attendanceRepository = {
   async findAllOrgAttendance(orgId, { date = '', startDate = '', endDate = '', deptId = '', status = '', search = '', page = 1, limit = 20 } = {}) {
     const conditions = [
       'a.org_id = $1',
-      "(a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT')" // Exclude leave-based attendance records
+      "(a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT')", // Exclude leave-based attendance records
+      CEO_ADMIN_EXCLUSION_SQL,
     ];
     const values = [orgId];
     let paramIndex = 2;
@@ -675,6 +678,7 @@ export const attendanceRepository = {
       FROM employees e
       WHERE e.org_id = $1
         AND e.status = 'Active'
+        AND ${CEO_ADMIN_EXCLUSION_SQL}
         -- Exclude employees who already have an attendance record for this date
         AND NOT EXISTS (
           SELECT 1 FROM attendance_records a
@@ -715,21 +719,25 @@ export const attendanceRepository = {
     // Exclude leave-based records (source = 'LEAVE_ASSIGNMENT') from attendance counts
     const summarySql = `
       SELECT
-        (SELECT COUNT(*)::int FROM employees WHERE org_id = $1 AND status = 'Active') AS "totalEmployees",
+        (SELECT COUNT(*)::int FROM employees e WHERE e.org_id = $1 AND e.status = 'Active' AND ${CEO_ADMIN_EXCLUSION_SQL}) AS "totalEmployees",
         COUNT(a.id) FILTER (WHERE a.status IN ('PRESENT', 'LATE') AND (a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT'))::int AS "presentCount",
         COUNT(a.id) FILTER (WHERE a.status = 'HALF_DAY' AND (a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT'))::int AS "halfDayCount",
         COUNT(a.id) FILTER (WHERE a.status = 'LATE' AND (a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT'))::int AS "lateCount",
         (SELECT COUNT(DISTINCT lr.employee_id)::int 
          FROM leave_requests lr 
+         JOIN employees e2 ON e2.id = lr.employee_id
          WHERE lr.org_id = $1 
            AND lr.status = 'APPROVED' 
            AND lr.start_date <= $2::date 
-           AND lr.end_date >= $2::date) AS "onLeaveCount",
+           AND lr.end_date >= $2::date
+           AND ${getCeoAdminExclusionSql('e2')}) AS "onLeaveCount",
         COUNT(a.id) FILTER (WHERE a.status = 'ABSENT' AND (a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT'))::int AS "absentCount",
         COUNT(a.id) FILTER (WHERE a.is_on_break = TRUE AND (a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT'))::int AS "onBreakCount",
         COUNT(a.id) FILTER (WHERE (a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT'))::int AS "totalMarked"
       FROM attendance_records a
-      WHERE a.org_id = $1 AND a.attendance_date = $2::date;
+      JOIN employees e ON e.id = a.employee_id
+      WHERE a.org_id = $1 AND a.attendance_date = $2::date
+        AND ${CEO_ADMIN_EXCLUSION_SQL};
     `;
 
     const res = await pool.query(summarySql, [orgId, targetDate]);
@@ -778,20 +786,21 @@ export const attendanceRepository = {
     const availableDepartments = deptsRes.rows;
     const availableShifts = shiftsRes.rows.map((r) => r.shift_timing);
 
-    // 2. Active Employee count with department and shift filters
+    // 2. Active Employee count with department and shift filters (excluding CEO/Admin)
     const empCountSql = `
       SELECT COUNT(*)::int AS "totalEmployees"
-      FROM employees
-      WHERE org_id = $1 AND status = 'Active'
-        AND ($2 = '' OR dept_id = $2)
-        AND ($3 = '' OR shift_timing ILIKE '%' || $3 || '%');
+      FROM employees e
+      WHERE e.org_id = $1 AND e.status = 'Active'
+        AND ${CEO_ADMIN_EXCLUSION_SQL}
+        AND ($2 = '' OR e.dept_id = $2)
+        AND ($3 = '' OR e.shift_timing ILIKE '%' || $3 || '%');
     `;
     const empCountRes = await pool.query(empCountSql, [orgId, deptId, shift]);
     const totalEmployees = empCountRes.rows[0]?.totalEmployees || 0;
 
     // 3. Status Distribution for Today
     // Exclude leave-based attendance records (source = 'LEAVE_ASSIGNMENT')
-    // Get onLeaveCount from leave_requests instead
+    // Exclude CEO / Administrator
     const statusSql = `
       SELECT
         COUNT(a.id) FILTER (WHERE a.status = 'PRESENT' AND a.status != 'LATE' AND (a.notes IS NULL OR a.notes NOT ILIKE '%LATE%') AND (a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT'))::int AS "onTimeCount",
@@ -805,6 +814,7 @@ export const attendanceRepository = {
            AND lr.status = 'APPROVED' 
            AND lr.start_date <= $2::date 
            AND lr.end_date >= $2::date
+           AND ${getCeoAdminExclusionSql('e2')}
            AND ($3 = '' OR e2.dept_id = $3)
            AND ($4 = '' OR e2.shift_timing ILIKE '%' || $4 || '%')) AS "onLeaveCount",
         COUNT(a.id) FILTER (WHERE (a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT'))::int AS "markedCount",
@@ -812,6 +822,7 @@ export const attendanceRepository = {
       FROM attendance_records a
       JOIN employees e ON e.id = a.employee_id
       WHERE a.org_id = $1 AND a.attendance_date = $2::date
+        AND ${CEO_ADMIN_EXCLUSION_SQL}
         AND ($3 = '' OR e.dept_id = $3)
         AND ($4 = '' OR e.shift_timing ILIKE '%' || $4 || '%');
     `;
@@ -854,6 +865,7 @@ export const attendanceRepository = {
         JOIN employees e ON e.id = a.employee_id
         WHERE a.org_id = $1
           AND a.attendance_date >= $2::date AND a.attendance_date <= $3::date
+          AND ${CEO_ADMIN_EXCLUSION_SQL}
           AND ($4 = '' OR e.dept_id = $4)
           AND ($5 = '' OR e.shift_timing ILIKE '%' || $5 || '%')
         GROUP BY a.attendance_date
@@ -890,6 +902,7 @@ export const attendanceRepository = {
         FROM attendance_records a
         JOIN employees e ON e.id = a.employee_id
         WHERE a.org_id = $1 AND a.attendance_date = $2::date AND a.check_in IS NOT NULL
+          AND ${CEO_ADMIN_EXCLUSION_SQL}
           AND ($3 = '' OR e.dept_id = $3)
           AND ($4 = '' OR e.shift_timing ILIKE '%' || $4 || '%')
         GROUP BY TO_CHAR(a.check_in, 'HH12 AM'), EXTRACT(HOUR FROM a.check_in)
@@ -923,6 +936,7 @@ export const attendanceRepository = {
         JOIN employees e ON e.id = a.employee_id
         WHERE a.org_id = $1
           AND a.attendance_date >= $2::date AND a.attendance_date <= $3::date
+          AND ${CEO_ADMIN_EXCLUSION_SQL}
           AND ($4 = '' OR e.dept_id = $4)
           AND ($5 = '' OR e.shift_timing ILIKE '%' || $5 || '%')
         GROUP BY TO_CHAR(a.attendance_date, 'W')

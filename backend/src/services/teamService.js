@@ -6,6 +6,7 @@ import { pool } from '../config/db.js';
 import { logger } from '../utils/logger.js';
 import { notificationService } from './notificationService.js';
 import { validateEmployeeId } from '../validators/managerValidator.js';
+import { CEO_ADMIN_EXCLUSION_SQL } from '../utils/roleUtils.js';
 
 const normalizeRole = (r) => (r || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -487,7 +488,7 @@ export const teamService = {
     }
 
     const queryDate = date || new Date().toISOString().split('T')[0];
-    const whereConditions = ['e.org_id = $1'];
+    const whereConditions = ['e.org_id = $1', CEO_ADMIN_EXCLUSION_SQL];
     const params = [currentUser.orgId, queryDate];
     let pIdx = 3;
 
@@ -604,6 +605,7 @@ export const teamService = {
       'e.org_id = $1',
       'a.attendance_date >= $2::date',
       'a.attendance_date <= $3::date',
+      CEO_ADMIN_EXCLUSION_SQL,
     ];
     const params = [currentUser.orgId, start, end];
 

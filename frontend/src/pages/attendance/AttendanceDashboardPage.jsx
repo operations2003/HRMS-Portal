@@ -24,10 +24,12 @@ import { AttendanceAnalyticsSection } from '../../components/attendance/Attendan
 import { Button } from '../../components/common/Button.jsx';
 import { Alert } from '../../components/common/Alert.jsx';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
+import { isCeoOrAdmin } from '../../utils/roleUtils.js';
 
 export const AttendanceDashboardPage = () => {
   const { user, hasRole, hasPermission } = useAuth();
   const toast = useToast();
+  const isCeo = isCeoOrAdmin(user);
 
   // Role permissions: HR, Admin, and Manager can see the whole organization's attendance
   const canViewOrg = hasRole(['HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin', 'Manager']);
@@ -35,8 +37,14 @@ export const AttendanceDashboardPage = () => {
   // Tagging / remark option is authorized for HR Manager, Admin, and Manager
   const canRemark = hasRole(['HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin', 'Manager']);
 
-  // Active view tab: Admin, HR, and Manager default to 'org', regular Employees have 'my'
+  // Active view tab: Admin, HR, and Manager default to 'org', regular Employees have 'my'. CEO stays exclusively on 'org'
   const [activeTab, setActiveTab] = useState(() => (canViewOrg ? 'org' : 'my'));
+
+  useEffect(() => {
+    if (isCeo && activeTab !== 'org') {
+      setActiveTab('org');
+    }
+  }, [isCeo, activeTab]);
 
   // Today's attendance state for punch card
   const [todayRecord, setTodayRecord] = useState(null);
@@ -169,8 +177,10 @@ export const AttendanceDashboardPage = () => {
   );
 
   useEffect(() => {
-    fetchTodayRecord();
-  }, [fetchTodayRecord]);
+    if (!isCeo) {
+      fetchTodayRecord();
+    }
+  }, [fetchTodayRecord, isCeo]);
 
   useEffect(() => {
     fetchTableData(1);
@@ -285,13 +295,15 @@ export const AttendanceDashboardPage = () => {
         <div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-50 text-brand-700 text-xs font-semibold border border-brand-200 mb-2">
             <Sparkles className="w-3.5 h-3.5 text-brand-600" />
-            <span>Workforce Management • Phase 4</span>
+            <span>{isCeo ? 'Executive Cockpit • Attendance Oversight' : 'Workforce Management • Attendance'}</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
-            Attendance Dashboard
+            {isCeo ? 'Attendance & Workforce Supervision' : 'Attendance Dashboard'}
           </h1>
           <p className="mt-1 text-sm text-slate-500 leading-relaxed">
-            Record daily work punches, track active hours, and review history.
+            {isCeo
+              ? 'Supervise organization-wide daily punches, review punctuality trends, and audit employee attendance records.'
+              : 'Record daily work punches, track active hours, and review history.'}
           </p>
         </div>
 
@@ -301,7 +313,7 @@ export const AttendanceDashboardPage = () => {
             size="md"
             icon={RefreshCw}
             onClick={() => {
-              fetchTodayRecord();
+              if (!isCeo) fetchTodayRecord();
               fetchTableData(pagination?.page || 1);
             }}
           >
@@ -312,7 +324,7 @@ export const AttendanceDashboardPage = () => {
 
       {/* Tabs Navigation for HR / Admin / Manager */}
       {canViewOrg && (
-        <div className="border-b border-slate-200 dark:border-slate-800">
+        <div className="border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
           <nav className="-mb-px flex space-x-6">
             <button
               type="button"
@@ -327,19 +339,29 @@ export const AttendanceDashboardPage = () => {
               <span>Organization Attendance & Analytics</span>
             </button>
 
-            <button
-              type="button"
-              onClick={() => setActiveTab('my')}
-              className={`pb-4 px-1 border-b-2 font-semibold text-sm transition-colors flex items-center gap-2 ${
-                activeTab === 'my'
-                  ? 'border-brand-500 text-brand-600 dark:text-brand-400 font-bold'
-                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-              }`}
-            >
-              <UserCheck className="w-4 h-4" />
-              <span>My Punch & Attendance</span>
-            </button>
+            {!isCeo && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('my')}
+                className={`pb-4 px-1 border-b-2 font-semibold text-sm transition-colors flex items-center gap-2 ${
+                  activeTab === 'my'
+                    ? 'border-brand-500 text-brand-600 dark:text-brand-400 font-bold'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                }`}
+              >
+                <UserCheck className="w-4 h-4" />
+                <span>My Punch & Attendance</span>
+              </button>
+            )}
           </nav>
+
+          {isCeo && (
+            <div className="pb-3 flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-2xs">
+                <ShieldCheck className="w-3.5 h-3.5" /> Executive Supervisor • Attendance Tracking Exempt
+              </span>
+            </div>
+          )}
         </div>
       )}
 

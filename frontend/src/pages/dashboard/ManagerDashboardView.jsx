@@ -29,6 +29,7 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { managerService } from '../../services/managerService.js';
 import { leaveService } from '../../services/leaveService.js';
+import { filterNonCeoEmployees } from '../../utils/roleUtils.js';
 import { notificationService } from '../../services/notificationService.js';
 import { Button } from '../../components/common/Button.jsx';
 import { Badge } from '../../components/common/Badge.jsx';
@@ -91,7 +92,7 @@ export const ManagerDashboardView = () => {
       if (attRes.status === 'fulfilled') {
         const a = attRes.value;
         const list = Array.isArray(a?.records) ? a.records : Array.isArray(a?.data) ? a.data : Array.isArray(a) ? a : [];
-        setTeamAttendance(list);
+        setTeamAttendance(filterNonCeoEmployees(list));
       }
 
       if (leavesRes.status === 'fulfilled') {
