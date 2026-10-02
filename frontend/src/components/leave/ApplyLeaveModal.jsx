@@ -520,7 +520,9 @@ export const ApplyLeaveModal = ({
     }
 
     if (durationPreview && (durationPreview.isNonWorkingPeriod || durationPreview.totalDays === 0)) {
-      errs.startDate = durationPreview.warning || 'Selected dates contain no working business days (Mon–Sat).';
+      if (targetEmployeeId === 'SELF' && !isSpecialLeaveType(selectedTypeObj)) {
+        errs.startDate = durationPreview.warning || 'Selected dates contain no working business days (Sundays are non-working days).';
+      }
     }
 
     if (formData.isHalfDay && !formData.halfDayPeriod) {
@@ -1072,16 +1074,7 @@ export const ApplyLeaveModal = ({
             size="md"
             icon={CalendarDays}
             isLoading={isSubmitting}
-            disabled={
-              isSubmitting || 
-              durationPreview?.isNonWorkingPeriod || 
-              durationPreview?.totalDays === 0 ||
-              (targetEmployeeId === 'SELF' && selectedTypeObj && !isSpecialLeaveType(selectedTypeObj) && !isUnpaidLeave(selectedTypeObj) && durationPreview && (() => {
-                const remainingDays = getRemainingBalance(selectedTypeObj, activeBalances);
-                const requestedDays = durationPreview.totalDays;
-                return remainingDays === 0 || requestedDays > remainingDays || remainingDays < 0;
-              })())
-            }
+            disabled={isSubmitting}
           >
             {isSubmitting
               ? (isAssignMode || targetEmployeeId !== 'SELF' ? 'Assigning Leave...' : 'Submitting Application...')
