@@ -6,7 +6,6 @@ import {
   Users,
   UserCheck,
   Briefcase,
-  ShieldCheck,
   X,
   Sparkles,
   CalendarCheck,
@@ -211,20 +210,6 @@ export const Sidebar = ({ isOpen, onClose }) => {
           name: 'Engagement & Surveys',
           path: '/engagement',
           icon: Megaphone,
-          roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
-        },
-      ],
-    },
-    {
-      id: 'hr-operations',
-      title: 'HR Operations',
-      icon: ShieldCheck,
-      roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
-      items: [
-        {
-          name: 'HR Operations & Analytics',
-          path: '/hr-operations',
-          icon: ShieldCheck,
           roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
         },
       ],
