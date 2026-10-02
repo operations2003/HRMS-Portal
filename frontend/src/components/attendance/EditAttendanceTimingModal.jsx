@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Clock,
   Calendar,
@@ -10,12 +10,119 @@ import {
   Zap,
   Info,
   RotateCcw,
+  Moon,
 } from 'lucide-react';
 import { Modal } from '../common/Modal.jsx';
 import { Button } from '../common/Button.jsx';
 import { Badge } from '../common/Badge.jsx';
+import { TimePicker12 } from '../common/TimePicker12.jsx';
 import { attendanceService } from '../../services/attendanceService.js';
 import { useToast } from '../../context/ToastContext.jsx';
+
+/**
+ * Robust shift timing parser
+ * Handles "2:00 PM - 08:00 PM", "11:00 AM - 07:00 PM", "09:30 AM to 06:30 PM", etc.
+ */
+export const parseShiftTiming = (shiftStr) => {
+  if (!shiftStr || typeof shiftStr !== 'string') return null;
+  const parts = shiftStr.split(/[-–—]|(?:\s+to\s+)/i).map((s) => s.trim());
+  const parsePart = (str) => {
+    const m = str.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+    if (!m) return null;
+    let h = parseInt(m[1], 10);
+    const min = m[2].padStart(2, '0');
+    let period = (m[3] || '').toUpperCase();
+    if (!period) {
+      period = h >= 12 ? 'PM' : 'AM';
+      if (h > 12) h -= 12;
+      if (h === 0) h = 12;
+    }
+    return {
+      hour: String(h).padStart(2, '0'),
+      minute: min,
+      period: period || 'AM',
+      display: `${String(h).padStart(2, '0')}:${min} ${period}`,
+    };
+  };
+  return {
+    start: parts[0] ? parsePart(parts[0]) : null,
+    end: parts[1] ? parsePart(parts[1]) : null,
+  };
+};
+
+/**
+ * Converts ISO string into 12-hour object { hour, minute, period }
+ */
+export const extractTime12 = (isoString) => {
+  if (!isoString) return null;
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return null;
+    const hours24 = d.getHours();
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    const period = hours24 >= 12 ? 'PM' : 'AM';
+    let hours12 = hours24 % 12;
+    if (hours12 === 0) hours12 = 12;
+    return {
+      hour: String(hours12).padStart(2, '0'),
+      minute: minutes,
+      period,
+    };
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Formats ISO string into 12-hour display string (e.g. "02:00 PM")
+ */
+export const formatTime12Display = (isoString) => {
+  if (!isoString) return 'None';
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return 'None';
+    return d.toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
+  } catch {
+    return 'None';
+  }
+};
+
+/**
+ * Extracts YYYY-MM-DD in local time
+ */
+export const getDateStr = (rec) => {
+  if (!rec) return '';
+  if (rec.attendanceDate) {
+    if (typeof rec.attendanceDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rec.attendanceDate.trim())) {
+      return rec.attendanceDate.trim();
+    }
+    const d = new Date(rec.attendanceDate);
+    if (!isNaN(d.getTime())) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+  }
+  if (rec.checkIn) {
+    const d = new Date(rec.checkIn);
+    if (!isNaN(d.getTime())) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+  }
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
 
 export const EditAttendanceTimingModal = ({
   isOpen,
@@ -25,54 +132,68 @@ export const EditAttendanceTimingModal = ({
 }) => {
   const toast = useToast();
 
-  const [checkInTime, setCheckInTime] = useState('');
-  const [checkOutTime, setCheckOutTime] = useState('');
+  const [checkInTime, setCheckInTime] = useState({ hour: '02', minute: '00', period: 'PM' });
+  const [checkOutTime, setCheckOutTime] = useState({ hour: '09', minute: '00', period: 'PM' });
+  const [isCheckOutEnabled, setIsCheckOutEnabled] = useState(false);
+  const [isNextDayDeparture, setIsNextDayDeparture] = useState(false);
   const [status, setStatus] = useState('AUTO');
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
-  // Helper to extract HH:MM (24-hour format) from ISO timestamp
-  const extractTime = (isoString) => {
-    if (!isoString) return '';
-    try {
-      const d = new Date(isoString);
-      const hours = String(d.getHours()).padStart(2, '0');
-      const minutes = String(d.getMinutes()).padStart(2, '0');
-      return `${hours}:${minutes}`;
-    } catch {
-      return '';
-    }
-  };
-
-  // Helper to format date string YYYY-MM-DD
-  const getDateStr = (rec) => {
-    if (!rec) return '';
-    if (rec.attendanceDate) {
-      return typeof rec.attendanceDate === 'string'
-        ? rec.attendanceDate.split('T')[0]
-        : new Date(rec.attendanceDate).toISOString().split('T')[0];
-    }
-    if (rec.checkIn) {
-      return new Date(rec.checkIn).toISOString().split('T')[0];
-    }
-    return new Date().toISOString().split('T')[0];
-  };
+  const shiftTiming = record?.employee?.shiftTiming || '11:00 AM - 07:00 PM';
+  const parsedShift = useMemo(() => parseShiftTiming(shiftTiming), [shiftTiming]);
 
   useEffect(() => {
     if (record) {
-      setCheckInTime(extractTime(record.checkIn));
-      setCheckOutTime(extractTime(record.checkOut));
+      const parsedIn = extractTime12(record.checkIn);
+      const parsedOut = extractTime12(record.checkOut);
+
+      if (parsedIn) {
+        setCheckInTime(parsedIn);
+      } else if (parsedShift?.start) {
+        setCheckInTime({
+          hour: parsedShift.start.hour,
+          minute: parsedShift.start.minute,
+          period: parsedShift.start.period,
+        });
+      } else {
+        setCheckInTime({ hour: '11', minute: '00', period: 'AM' });
+      }
+
+      if (parsedOut) {
+        setCheckOutTime(parsedOut);
+        setIsCheckOutEnabled(true);
+      } else if (parsedShift?.end) {
+        setCheckOutTime({
+          hour: parsedShift.end.hour,
+          minute: parsedShift.end.minute,
+          period: parsedShift.end.period,
+        });
+        setIsCheckOutEnabled(false);
+      } else {
+        setCheckOutTime({ hour: '07', minute: '00', period: 'PM' });
+        setIsCheckOutEnabled(false);
+      }
+
+      // Check if original check-out is on the next day compared to check-in
+      if (record.checkIn && record.checkOut) {
+        const inD = new Date(record.checkIn);
+        const outD = new Date(record.checkOut);
+        setIsNextDayDeparture(outD.getDate() !== inD.getDate());
+      } else {
+        setIsNextDayDeparture(false);
+      }
+
       setStatus(record.status === 'LATE' ? 'AUTO' : record.status || 'AUTO');
       setReason(record.regularizationReason || '');
       setError(null);
     }
-  }, [record]);
+  }, [record, parsedShift]);
 
   if (!record) return null;
 
   const dateStr = getDateStr(record);
-  const shiftTiming = record.employee?.shiftTiming || '11:00 AM - 07:00 PM';
 
   // Common quick reasons for late arrivals due to technical issues
   const quickReasons = [
@@ -89,20 +210,76 @@ export const EditAttendanceTimingModal = ({
 
   // Quick button to set arrival to shift start
   const handleSetToShiftStart = () => {
-    // Standard shift is 11:00 AM unless configured otherwise
-    if (shiftTiming.includes('11:00 AM')) {
-      setCheckInTime('11:00');
-    } else if (shiftTiming.includes('09:00 AM') || shiftTiming.includes('9:00 AM')) {
-      setCheckInTime('09:00');
-    } else if (shiftTiming.includes('10:00 AM')) {
-      setCheckInTime('10:00');
+    if (parsedShift?.start) {
+      setCheckInTime({
+        hour: parsedShift.start.hour,
+        minute: parsedShift.start.minute,
+        period: parsedShift.start.period,
+      });
     } else {
-      setCheckInTime('11:00');
+      setCheckInTime({ hour: '11', minute: '00', period: 'AM' });
     }
     if (status === 'LATE') {
       setStatus('AUTO');
     }
   };
+
+  // Quick button to set departure to shift end
+  const handleSetToShiftEnd = () => {
+    setIsCheckOutEnabled(true);
+    if (parsedShift?.end) {
+      setCheckOutTime({
+        hour: parsedShift.end.hour,
+        minute: parsedShift.end.minute,
+        period: parsedShift.end.period,
+      });
+    } else {
+      setCheckOutTime({ hour: '07', minute: '00', period: 'PM' });
+    }
+  };
+
+  // Calculate live preview metrics
+  const liveCalculation = useMemo(() => {
+    try {
+      let inH = parseInt(checkInTime.hour, 10);
+      const inM = parseInt(checkInTime.minute, 10);
+      if (checkInTime.period === 'PM' && inH < 12) inH += 12;
+      if (checkInTime.period === 'AM' && inH === 12) inH = 0;
+      const inDate = new Date(`${dateStr}T${String(inH).padStart(2, '0')}:${String(inM).padStart(2, '0')}:00`);
+
+      if (!isCheckOutEnabled) {
+        return {
+          valid: true,
+          checkInDate: inDate,
+          checkOutDate: null,
+          totalHours: null,
+        };
+      }
+
+      let outH = parseInt(checkOutTime.hour, 10);
+      const outM = parseInt(checkOutTime.minute, 10);
+      if (checkOutTime.period === 'PM' && outH < 12) outH += 12;
+      if (checkOutTime.period === 'AM' && outH === 12) outH = 0;
+
+      const outDate = new Date(`${dateStr}T${String(outH).padStart(2, '0')}:${String(outM).padStart(2, '0')}:00`);
+      if (isNextDayDeparture) {
+        outDate.setDate(outDate.getDate() + 1);
+      }
+
+      const diffMs = outDate.getTime() - inDate.getTime();
+      const grossHours = Math.max(0, diffMs / (1000 * 60 * 60));
+
+      return {
+        valid: diffMs >= 0,
+        checkInDate: inDate,
+        checkOutDate: outDate,
+        totalHours: grossHours.toFixed(2),
+        isNegative: diffMs < 0,
+      };
+    } catch {
+      return { valid: false };
+    }
+  }, [dateStr, checkInTime, checkOutTime, isCheckOutEnabled, isNextDayDeparture]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -113,7 +290,7 @@ export const EditAttendanceTimingModal = ({
       return;
     }
 
-    if (!checkInTime) {
+    if (!checkInTime || !checkInTime.hour || !checkInTime.minute || !checkInTime.period) {
       setError('Check-in arrival time is required.');
       return;
     }
@@ -121,18 +298,29 @@ export const EditAttendanceTimingModal = ({
     try {
       setSubmitting(true);
 
-      // Construct ISO timestamps with current date
-      const [inH, inM] = checkInTime.split(':').map(Number);
+      // Convert check-in to 24-hr Date object
+      let inH = parseInt(checkInTime.hour, 10);
+      const inM = parseInt(checkInTime.minute, 10);
+      if (checkInTime.period === 'PM' && inH < 12) inH += 12;
+      if (checkInTime.period === 'AM' && inH === 12) inH = 0;
+
       const checkInDate = new Date(`${dateStr}T${String(inH).padStart(2, '0')}:${String(inM).padStart(2, '0')}:00`);
 
       let checkOutDate = null;
-      if (checkOutTime) {
-        const [outH, outM] = checkOutTime.split(':').map(Number);
-        checkOutDate = new Date(`${dateStr}T${String(outH).padStart(2, '0')}:${String(outM).padStart(2, '0')}:00`);
+      if (isCheckOutEnabled && checkOutTime) {
+        let outH = parseInt(checkOutTime.hour, 10);
+        const outM = parseInt(checkOutTime.minute, 10);
+        if (checkOutTime.period === 'PM' && outH < 12) outH += 12;
+        if (checkOutTime.period === 'AM' && outH === 12) outH = 0;
 
-        // Check if checkout time is earlier than checkin (possible overnight or mistake)
+        checkOutDate = new Date(`${dateStr}T${String(outH).padStart(2, '0')}:${String(outM).padStart(2, '0')}:00`);
+        if (isNextDayDeparture) {
+          checkOutDate.setDate(checkOutDate.getDate() + 1);
+        }
+
+        // Validate ordering
         if (checkOutDate.getTime() < checkInDate.getTime()) {
-          setError('Check-out time cannot be earlier than check-in arrival time.');
+          setError('Check-out departure time cannot be earlier than check-in arrival time. If this was an overnight shift, please enable "Next Day Departure".');
           setSubmitting(false);
           return;
         }
@@ -167,8 +355,8 @@ export const EditAttendanceTimingModal = ({
       isOpen={isOpen}
       onClose={onClose}
       title="Adjust Attendance Timing"
-      subtitle={`Correct arrival or departure timing and log reason`}
-      maxWidth="max-w-xl"
+      subtitle="Correct arrival or departure timing with 12-hour AM/PM controls and audit justification"
+      maxWidth="max-w-2xl"
     >
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Employee & Record Context Header */}
@@ -189,8 +377,11 @@ export const EditAttendanceTimingModal = ({
                   ? `${record.employee.firstName} ${record.employee.lastName} (${record.employee.employeeCode})`
                   : 'Employee Session'}
               </div>
-              <div className="text-xs text-slate-500 mt-0.5">
-                Scheduled Shift: <span className="font-semibold text-slate-700">{shiftTiming}</span>
+              <div className="text-xs text-slate-600 mt-0.5 flex items-center gap-2">
+                <span>Scheduled Shift:</span>
+                <span className="font-bold text-brand-700 bg-white px-2 py-0.5 rounded border border-brand-200/70 shadow-2xs">
+                  {shiftTiming}
+                </span>
               </div>
             </div>
 
@@ -229,56 +420,115 @@ export const EditAttendanceTimingModal = ({
           </div>
         )}
 
-        {/* Timings Inputs Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {/* Check-In Arrival Time */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="block text-xs font-bold text-slate-700">
-                Check-In (Arrival) Time <span className="text-rose-500">*</span>
-              </label>
-              <button
-                type="button"
-                onClick={handleSetToShiftStart}
-                className="text-[11px] font-semibold text-brand-600 hover:text-brand-700 underline cursor-pointer"
-              >
-                Set to Shift Start
-              </button>
-            </div>
-            <div className="relative">
-              <input
-                type="time"
-                value={checkInTime}
-                onChange={(e) => setCheckInTime(e.target.value)}
-                required
-                className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm font-mono text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 shadow-2xs"
-              />
-            </div>
-            <span className="text-[11px] text-slate-400">
-              Original: {record.checkIn ? new Date(record.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'None'}
-            </span>
-          </div>
+        {/* Timings Inputs Grid with AM / PM Options */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Check-In Arrival Time (12-Hour with AM/PM) */}
+          <TimePicker12
+            label="Check-In (Arrival) Time"
+            value={checkInTime}
+            onChange={(val) => {
+              setCheckInTime(val);
+              if (status === 'LATE') setStatus('AUTO');
+            }}
+            required
+            originalTimeStr={formatTime12Display(record.checkIn)}
+            shiftPreset={
+              parsedShift?.start
+                ? {
+                    label: `Shift Start (${parsedShift.start.display})`,
+                    onClick: handleSetToShiftStart,
+                  }
+                : null
+            }
+            extraPresets={
+              parsedShift?.start
+                ? [
+                    {
+                      label: `${parsedShift.start.display}`,
+                      onClick: handleSetToShiftStart,
+                    },
+                  ]
+                : []
+            }
+          />
 
-          {/* Check-Out Departure Time */}
-          <div className="space-y-1.5">
-            <label className="block text-xs font-bold text-slate-700">
-              Check-Out Time (Optional)
-            </label>
-            <div className="relative">
-              <input
-                type="time"
-                value={checkOutTime}
-                onChange={(e) => setCheckOutTime(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm font-mono text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 shadow-2xs"
-              />
-            </div>
-            <span className="text-[11px] text-slate-400">
-              {record.checkOut
-                ? `Original: ${new Date(record.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-                : 'Session is currently active / open'}
-            </span>
-          </div>
+          {/* Check-Out Departure Time (12-Hour with AM/PM) */}
+          <TimePicker12
+            label="Check-Out Departure Time"
+            value={checkOutTime}
+            onChange={setCheckOutTime}
+            isOptional
+            isEnabled={isCheckOutEnabled}
+            onToggleEnabled={setIsCheckOutEnabled}
+            originalTimeStr={
+              record.checkOut
+                ? formatTime12Display(record.checkOut)
+                : 'Session is currently active / open'
+            }
+            shiftPreset={
+              parsedShift?.end
+                ? {
+                    label: `Shift End (${parsedShift.end.display})`,
+                    onClick: handleSetToShiftEnd,
+                  }
+                : null
+            }
+            extraPresets={
+              parsedShift?.end
+                ? [
+                    {
+                      label: `${parsedShift.end.display}`,
+                      onClick: handleSetToShiftEnd,
+                    },
+                    {
+                      label: '+1h OT',
+                      onClick: () => {
+                        setIsCheckOutEnabled(true);
+                        let h = parseInt(parsedShift.end.hour, 10) + 1;
+                        let period = parsedShift.end.period;
+                        if (h === 12) {
+                          period = period === 'AM' ? 'PM' : 'AM';
+                        } else if (h > 12) {
+                          h = 1;
+                        }
+                        setCheckOutTime({
+                          hour: String(h).padStart(2, '0'),
+                          minute: parsedShift.end.minute,
+                          period,
+                        });
+                      },
+                    },
+                  ]
+                : []
+            }
+            allowClear
+            onClear={() => setIsCheckOutEnabled(false)}
+          />
         </div>
+
+        {/* Overnight / Next Day Departure Toggle */}
+        {isCheckOutEnabled && (
+          <div className="flex items-center justify-between px-3 py-2 bg-slate-50/70 border border-slate-200/80 rounded-xl text-xs">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={isNextDayDeparture}
+                onChange={(e) => setIsNextDayDeparture(e.target.checked)}
+                className="w-4 h-4 rounded text-brand-600 focus:ring-brand-500 border-slate-300 cursor-pointer"
+              />
+              <span className="font-semibold text-slate-700 flex items-center gap-1.5">
+                <Moon className="w-3.5 h-3.5 text-indigo-500" />
+                Next Day Departure (Overnight shift past midnight)
+              </span>
+            </label>
+
+            {liveCalculation.totalHours && (
+              <span className="text-slate-600 font-medium">
+                Total Duration: <strong className="text-brand-700">{liveCalculation.totalHours} hrs</strong>
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Wise Status Selection */}
         <div className="space-y-1.5">
@@ -288,7 +538,7 @@ export const EditAttendanceTimingModal = ({
           <select
             value={status}
             onChange={(e) => setStatus(e.target.value)}
-            className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs sm:text-sm font-medium text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 shadow-2xs"
+            className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs sm:text-sm font-medium text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 shadow-2xs cursor-pointer"
           >
             <option value="AUTO">
               ⚡ Auto-Evaluate (Wisely marks Present if arrival within grace window)
@@ -324,7 +574,7 @@ export const EditAttendanceTimingModal = ({
                 key={idx}
                 type="button"
                 onClick={() => handleApplyQuickReason(qr)}
-                className="text-[10px] bg-slate-100 hover:bg-brand-50 hover:text-brand-700 hover:border-brand-300 text-slate-600 px-2 py-1 rounded-lg border border-slate-200 transition-colors text-left"
+                className="text-[10px] bg-slate-100 hover:bg-brand-50 hover:text-brand-700 hover:border-brand-300 text-slate-600 px-2 py-1 rounded-lg border border-slate-200 transition-colors text-left cursor-pointer"
               >
                 + {qr}
               </button>
@@ -336,7 +586,7 @@ export const EditAttendanceTimingModal = ({
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             required
-            placeholder="Describe why the time was changed (e.g., Employee was present at office at 11:00 AM, but could not check in due to technical portal glitch)..."
+            placeholder="Describe why the time was changed (e.g., Employee was present at office at 2:00 PM, but could not check in due to technical portal glitch)..."
             className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 shadow-2xs"
           />
           <div className="flex items-center justify-between text-[11px] text-slate-400">
