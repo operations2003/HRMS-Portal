@@ -92,8 +92,22 @@ export const employeeController = {
         (req.user?.id && employee.userId === req.user.id) ||
         (req.user?.email && employee.email && req.user.email.toLowerCase() === employee.email.toLowerCase());
 
+      let isManager = false;
+      if (!isHrOrAdmin && !isSelf && req.user) {
+        if (employee.managerId && (employee.managerId === req.user.employeeId || employee.managerId === req.user.id)) {
+          isManager = true;
+        } else if (employee.manager?.id && (employee.manager.id === req.user.employeeId || employee.manager.id === req.user.id)) {
+          isManager = true;
+        } else if (employee.manager?.email && req.user.email && employee.manager.email.toLowerCase() === req.user.email.toLowerCase()) {
+          isManager = true;
+        }
+      }
+
       if (!isHrOrAdmin && !isSelf) {
         const { salary, bankAccountNumber, salaryStructure, ...sanitized } = employee;
+        if (!isManager) {
+          sanitized.personalEmail = '';
+        }
         employee = sanitized;
       }
 

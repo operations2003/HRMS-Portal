@@ -104,10 +104,32 @@ export const TeamMemberDetailModal = ({ isOpen, onClose, member }) => {
           <div className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-50 border border-slate-100 text-xs">
             <Mail className="w-4 h-4 text-slate-400 shrink-0" />
             <div className="min-w-0">
-              <span className="text-slate-400 block text-[10px]">Email</span>
+              <span className="text-slate-400 block text-[10px]">Work Email</span>
               <span className="font-medium text-slate-800 truncate block">{m.email || 'N/A'}</span>
             </div>
           </div>
+
+          {(m.personalEmail || m.personal_email) ? (
+            <div className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-50 border border-slate-100 text-xs">
+              <Mail className="w-4 h-4 text-brand-600 shrink-0" />
+              <div className="min-w-0">
+                <span className="text-slate-400 block text-[10px]">Personal Email</span>
+                <span className="font-medium text-slate-800 truncate block" title={m.personalEmail || m.personal_email}>
+                  {m.personalEmail || m.personal_email}
+                </span>
+              </div>
+            </div>
+          ) : null}
+
+          {m.phone ? (
+            <div className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-50 border border-slate-100 text-xs">
+              <Phone className="w-4 h-4 text-slate-400 shrink-0" />
+              <div className="min-w-0">
+                <span className="text-slate-400 block text-[10px]">Phone</span>
+                <span className="font-medium text-slate-800 truncate block">{m.phone}</span>
+              </div>
+            </div>
+          ) : null}
 
           <div className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-50 border border-slate-100 text-xs">
             <Briefcase className="w-4 h-4 text-slate-400 shrink-0" />

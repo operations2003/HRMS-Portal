@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   User,
   Phone,
@@ -28,6 +28,7 @@ import {
   AlertCircle,
   File,
   Eye,
+  ArrowLeft,
 } from 'lucide-react';
 import { profileService } from '../../services/profileService.js';
 import { documentService } from '../../services/documentService.js';
@@ -44,8 +45,12 @@ import { useToast } from '../../context/ToastContext.jsx';
 
 export const ProfilePage = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const toast = useToast();
   const { user, updateUser } = useAuth();
+
+  const targetEmployeeId = searchParams.get('employeeId') || searchParams.get('id');
+  const isViewingOther = Boolean(targetEmployeeId && targetEmployeeId !== user?.employeeId && targetEmployeeId !== user?.id);
 
   const isAdmin = ['admin', 'superadmin', 'orgadmin'].includes(
     (user?.roleName || user?.role?.name || '').toLowerCase()
@@ -97,7 +102,12 @@ export const ProfilePage = () => {
       if (isBackground) setRefreshing(true);
       else setLoading(true);
       setError(null);
-      const res = await profileService.getMyProfile();
+      let res;
+      if (isViewingOther) {
+        res = await profileService.getProfileById(targetEmployeeId);
+      } else {
+        res = await profileService.getMyProfile();
+      }
       setProfile(res);
       setFormData({
         phone: res.phone || '',
@@ -130,10 +140,10 @@ export const ProfilePage = () => {
 
   useEffect(() => {
     fetchProfile();
-    if (!isAdmin) {
+    if (!isAdmin && !isViewingOther) {
       fetchMyDocs();
     }
-  }, [isAdmin]);
+  }, [isAdmin, targetEmployeeId]);
 
   const handleDocTypeChange = (e) => {
     const val = e.target.value;
@@ -485,15 +495,28 @@ export const ProfilePage = () => {
           </div>
           <div>
             <h1 className="font-display text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-              My Profile
+              {isViewingOther ? `${profile?.fullName || 'Employee'}'s Profile` : 'My Profile'}
             </h1>
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              Manage your personal information, view reporting structure, and review statutory records.
+              {isViewingOther
+                ? 'Reviewing employee profile details, contact information, and organizational assignment.'
+                : 'Manage your personal information, view reporting structure, and review statutory records.'}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2.5">
+          {isViewingOther && (
+            <Button
+              variant="outline"
+              size="sm"
+              icon={ArrowLeft}
+              onClick={() => navigate(-1)}
+            >
+              Back
+            </Button>
+          )}
+
           <Button
             variant="outline"
             size="sm"
@@ -504,14 +527,16 @@ export const ProfilePage = () => {
             Refresh
           </Button>
 
-          <Button
-            variant="primary"
-            size="sm"
-            icon={Edit2}
-            onClick={handleOpenEdit}
-          >
-            Edit Profile
-          </Button>
+          {!isViewingOther && (
+            <Button
+              variant="primary"
+              size="sm"
+              icon={Edit2}
+              onClick={handleOpenEdit}
+            >
+              Edit Profile
+            </Button>
+          )}
         </div>
       </div>
 
@@ -532,27 +557,31 @@ export const ProfilePage = () => {
               />
 
               {/* Hover overlay for quick change */}
-              <button
-                type="button"
-                onClick={handleOpenPhotoModal}
-                className="absolute inset-0 bg-slate-900/60 text-white flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-pointer rounded-2xl text-[10px] font-semibold"
-                aria-label="Change photo"
-              >
-                <Camera className="w-4 h-4 mb-0.5" />
-                <span>Change</span>
-              </button>
+              {!isViewingOther && (
+                <button
+                  type="button"
+                  onClick={handleOpenPhotoModal}
+                  className="absolute inset-0 bg-slate-900/60 text-white flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-pointer rounded-2xl text-[10px] font-semibold"
+                  aria-label="Change photo"
+                >
+                  <Camera className="w-4 h-4 mb-0.5" />
+                  <span>Change</span>
+                </button>
+              )}
             </div>
 
             {/* Camera badge action button */}
-            <button
-              type="button"
-              onClick={handleOpenPhotoModal}
-              className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-brand-600 hover:bg-brand-700 text-white flex items-center justify-center shadow-md border-2 border-white dark:border-slate-900 transition-transform hover:scale-110 focus:outline-none"
-              title="Add or update photo"
-              aria-label="Add or update photo"
-            >
-              <Camera className="w-3.5 h-3.5" />
-            </button>
+            {!isViewingOther && (
+              <button
+                type="button"
+                onClick={handleOpenPhotoModal}
+                className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-brand-600 hover:bg-brand-700 text-white flex items-center justify-center shadow-md border-2 border-white dark:border-slate-900 transition-transform hover:scale-110 focus:outline-none"
+                title="Add or update photo"
+                aria-label="Add or update photo"
+              >
+                <Camera className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
           {/* Details */}
@@ -567,14 +596,16 @@ export const ProfilePage = () => {
               <Badge variant="success" size="sm">
                 {profile?.status || 'Active'}
               </Badge>
-              <button
-                type="button"
-                onClick={handleOpenPhotoModal}
-                className="text-xs text-brand-600 dark:text-brand-400 hover:text-brand-700 font-medium inline-flex items-center gap-1 transition-colors ml-1"
-              >
-                <Camera className="w-3.5 h-3.5" />
-                <span>{profile?.avatarUrl ? 'Change photo' : 'Add photo'}</span>
-              </button>
+              {!isViewingOther && (
+                <button
+                  type="button"
+                  onClick={handleOpenPhotoModal}
+                  className="text-xs text-brand-600 dark:text-brand-400 hover:text-brand-700 font-medium inline-flex items-center gap-1 transition-colors ml-1"
+                >
+                  <Camera className="w-3.5 h-3.5" />
+                  <span>{profile?.avatarUrl ? 'Change photo' : 'Add photo'}</span>
+                </button>
+              )}
             </div>
 
             <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-5 gap-y-1.5 text-xs text-slate-500 dark:text-slate-400">
@@ -610,13 +641,15 @@ export const ProfilePage = () => {
                 Personal & Family Information
               </h3>
             </div>
-            <button
-              type="button"
-              onClick={handleOpenEdit}
-              className="text-xs text-brand-600 hover:text-brand-700 dark:text-brand-400 font-medium flex items-center gap-1"
-            >
-              <Edit2 className="w-3 h-3" /> Edit
-            </button>
+            {!isViewingOther && (
+              <button
+                type="button"
+                onClick={handleOpenEdit}
+                className="text-xs text-brand-600 hover:text-brand-700 dark:text-brand-400 font-medium flex items-center gap-1"
+              >
+                <Edit2 className="w-3 h-3" /> Edit
+              </button>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4 text-xs">
@@ -659,13 +692,15 @@ export const ProfilePage = () => {
                 Contact & Address
               </h3>
             </div>
-            <button
-              type="button"
-              onClick={handleOpenEdit}
-              className="text-xs text-brand-600 hover:text-brand-700 dark:text-brand-400 font-medium flex items-center gap-1"
-            >
-              <Edit2 className="w-3 h-3" /> Edit
-            </button>
+            {!isViewingOther && (
+              <button
+                type="button"
+                onClick={handleOpenEdit}
+                className="text-xs text-brand-600 hover:text-brand-700 dark:text-brand-400 font-medium flex items-center gap-1"
+              >
+                <Edit2 className="w-3 h-3" /> Edit
+              </button>
+            )}
           </div>
 
           <div className="space-y-3 text-xs">
