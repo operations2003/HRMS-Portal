@@ -163,12 +163,6 @@ export const Sidebar = ({ isOpen, onClose }) => {
           icon: UserCheck,
           roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
         },
-        {
-          name: 'Offboarding & Clearances',
-          path: '/offboarding',
-          icon: UserMinus,
-          roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
-        },
       ],
     },
     {
