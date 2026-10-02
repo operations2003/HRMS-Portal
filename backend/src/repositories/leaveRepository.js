@@ -196,7 +196,7 @@ export const leaveRepository = {
           WHEN UPPER(code) = 'HL' THEN 4
           WHEN UPPER(code) = 'HDL' THEN 5
           WHEN UPPER(code) = 'AWOL' THEN 6
-          WHEN UPPER(code) = 'LOP' THEN 7
+          WHEN UPPER(code) IN ('LWP', 'LOP') THEN 7
           WHEN UPPER(code) = 'ML' THEN 8
           WHEN UPPER(code) = 'SBL' THEN 9
           WHEN UPPER(code) = 'PTL' THEN 10
@@ -767,7 +767,7 @@ export const leaveRepository = {
           WHEN UPPER(lt.code) = 'HL' THEN 4
           WHEN UPPER(lt.code) = 'HDL' THEN 5
           WHEN UPPER(lt.code) = 'AWOL' THEN 6
-          WHEN UPPER(lt.code) = 'LOP' THEN 7
+          WHEN UPPER(lt.code) IN ('LWP', 'LOP') THEN 7
           WHEN UPPER(lt.code) = 'ML' THEN 8
           WHEN UPPER(lt.code) = 'SBL' THEN 9
           WHEN UPPER(lt.code) = 'PTL' THEN 10
