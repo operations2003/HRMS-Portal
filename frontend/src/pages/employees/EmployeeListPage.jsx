@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { employeeService } from '../../services/employeeService.js';
 import { designationService } from '../../services/designationService.js';
 import { departmentService } from '../../services/departmentService.js';
@@ -35,6 +35,7 @@ import {
   ChevronUp,
   CheckCircle2,
   GraduationCap,
+  ExternalLink,
 } from 'lucide-react';
 import { DataTable } from '../../components/common/DataTable.jsx';
 import { Button } from '../../components/common/Button.jsx';
@@ -95,6 +96,7 @@ const isInternshipEnded = (emp) => {
 };
 
 export const EmployeeListPage = () => {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user, hasPermission } = useAuth();
   const toast = useToast();
@@ -882,6 +884,28 @@ export const EmployeeListPage = () => {
     return Boolean(isSelf);
   };
 
+  // Determine if logged in user has personal email view privilege (Admin/CEO, HR, Reporting Manager, or self only)
+  const canViewPersonalEmail = (emp) => {
+    if (!emp) return false;
+    if (isHrOrAdmin) return true;
+
+    // Strict self check
+    const isSelf =
+      (user?.email && emp.email && user.email.toLowerCase() === emp.email.toLowerCase()) ||
+      (user?.id && emp.userId && user.id === emp.userId) ||
+      (user?.employeeId && emp.id && user.employeeId === emp.id);
+    if (isSelf) return true;
+
+    // Reporting manager check
+    const isReportingManager =
+      (emp.managerId && (emp.managerId === user?.employeeId || emp.managerId === user?.id)) ||
+      (emp.manager?.id && (emp.manager.id === user?.employeeId || emp.manager.id === user?.id)) ||
+      (emp.manager?.email && user?.email && emp.manager.email.toLowerCase() === user.email.toLowerCase()) ||
+      (emp.manager_id && (emp.manager_id === user?.employeeId || emp.manager_id === user?.id));
+
+    return Boolean(isReportingManager);
+  };
+
   const columns = [
     {
       header: 'Employee',
@@ -918,6 +942,12 @@ export const EmployeeListPage = () => {
               )}
             </div>
             <div className="text-xs text-slate-400 mt-0.5">{row.email}</div>
+            {canViewPersonalEmail(row) && (row.personalEmail || row.personal_email) && (
+              <div className="text-[11px] text-brand-600 flex items-center gap-1 mt-0.5 font-medium" title="Personal Email">
+                <Mail className="w-3 h-3 text-brand-500 shrink-0" />
+                <span className="truncate max-w-[180px]">{row.personalEmail || row.personal_email}</span>
+              </div>
+            )}
           </div>
         </div>
       ),
@@ -2524,10 +2554,24 @@ export const EmployeeListPage = () => {
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
                 <div className="text-xs text-slate-400 flex items-center gap-1.5 mb-1">
                   <Mail className="w-3.5 h-3.5" />
-                  Email
+                  Work Email
                 </div>
                 <div className="font-medium text-slate-800 break-all">{viewingEmployee.email}</div>
               </div>
+
+              {canViewPersonalEmail(viewingEmployee) && (
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                  <div className="text-xs text-slate-400 flex items-center gap-1.5 mb-1">
+                    <Mail className="w-3.5 h-3.5 text-brand-600" />
+                    Personal Email
+                  </div>
+                  <div className="font-medium text-slate-800 break-all">
+                    {viewingEmployee.personalEmail || viewingEmployee.personal_email || (
+                      <span className="text-slate-400 font-normal italic">Not uploaded</span>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
                 <div className="text-xs text-slate-400 flex items-center gap-1.5 mb-1">
@@ -2835,6 +2879,16 @@ export const EmployeeListPage = () => {
                   Personal Information
                 </div>
                 <div className="grid grid-cols-2 gap-3 text-xs">
+                  {canViewPersonalEmail(viewingEmployee) && (
+                    <div className="col-span-2 sm:col-span-1">
+                      <span className="text-slate-400 block font-medium">Personal Email Address</span>
+                      <span className="font-semibold text-slate-800 break-all">
+                        {viewingEmployee.personalEmail || viewingEmployee.personal_email || (
+                          <span className="text-slate-400 font-normal italic">Not uploaded</span>
+                        )}
+                      </span>
+                    </div>
+                  )}
                   <div>
                     <span className="text-slate-400 block font-medium">Father's Name</span>
                     <span className="font-semibold text-slate-800">{viewingEmployee.fatherName || '—'}</span>
@@ -2936,6 +2990,18 @@ export const EmployeeListPage = () => {
                   onClick={() => setEndInternshipTarget(viewingEmployee)}
                 >
                   End of Internship
+                </Button>
+              )}
+              {canViewPersonalEmail(viewingEmployee) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  icon={ExternalLink}
+                  onClick={() => {
+                    navigate(`/profile?employeeId=${viewingEmployee.id}`);
+                  }}
+                >
+                  Full Profile Page
                 </Button>
               )}
               <div className="ml-auto">

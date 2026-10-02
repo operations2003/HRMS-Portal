@@ -433,8 +433,13 @@ export const teamService = {
       }
     }
 
-    const isSelfOrPrivileged = this.isHrOrAdmin(currentUser) || 
-      (await this.resolveEmployee(currentUser))?.id === targetEmp.id;
+    const requesterEmp = await this.resolveEmployee(currentUser);
+    const isSelf = requesterEmp?.id === targetEmp.id;
+    const isHrAdmin = this.isHrOrAdmin(currentUser);
+    const isReportingManager = this.isManager(currentUser) && targetEmp.managerId === requesterEmp?.id;
+    const canSeePersonalEmail = isHrAdmin || isReportingManager || isSelf;
+
+    const isSelfOrPrivileged = isHrAdmin || isSelf;
 
     return {
       id: targetEmp.id,
@@ -443,6 +448,7 @@ export const teamService = {
       lastName: targetEmp.lastName,
       fullName: `${targetEmp.firstName || ''} ${targetEmp.lastName || ''}`.trim(),
       email: targetEmp.email,
+      personalEmail: canSeePersonalEmail ? (targetEmp.personalEmail || targetEmp.personal_email || '') : undefined,
       phone: targetEmp.phone,
       department: targetEmp.department?.name || '',
       designation: targetEmp.designation?.title || '',
