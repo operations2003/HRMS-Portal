@@ -1,0 +1,248 @@
+-- Migration: 052_document_leave_balance_rules.sql
+-- Purpose: Document leave balance validation rules for different leave types
+-- This is a documentation-only migration that explains the validation logic
+-- Date: 2026-09-21
+
+-- ============================================================================
+-- LEAVE BALANCE VALIDATION RULES
+-- ============================================================================
+--
+-- This migration documents how leave balance validation works for different
+-- leave types in the HRMS system. The validation logic prevents negative
+-- balance scenarios while preserving special workflows for certain leave types.
+--
+-- ============================================================================
+-- LEAVE TYPE CATEGORIES
+-- ============================================================================
+--
+-- 1. PAID LEAVE TYPES WITH BALANCE VALIDATION (Standard Employee Leaves)
+--    - Planned Leave (PL)
+--    - Casual Leave (CL)
+--    - Sick Leave (SL)
+--    - Half Day Leave (HDL)
+--    
+--    VALIDATION RULES:
+--    ✓ Balance must be > 0 to apply
+--    ✓ Requested days must be <= remaining balance
+--    ✓ Balance revalidated at approval time
+--    ✓ Concurrent request protection with row-level locking
+--    ✓ Employees can self-apply
+--    ✓ Deducted from allocated_days balance bucket
+--
+-- 2. UNPAID LEAVE TYPES (No Balance Validation)
+--    - Leave Without Pay (LOP / LWP)
+--    
+--    VALIDATION RULES:
+--    ✗ No balance checks
+--    ✓ Employees can self-apply (unlimited)
+--    ✗ Not deducted from any balance bucket
+--    ✓ Tracked separately for payroll deductions
+--
+-- 3. RESTRICTED LEAVE TYPES (Admin/HR/Manager Assignment Only)
+--    - Absent Without Leave (AWOL)
+--    - Holiday (HL)
+--    - Maternity Leave (ML)
+--    - Paternity Leave (PTL / PATL)
+--    - Sabbatical Leave (SBL)
+--    
+--    VALIDATION RULES:
+--    ✗ Employees CANNOT self-apply
+--    ✓ Only Admin/HR/Manager can assign with exact dates
+--    ✗ No balance validation (assigned leave is auto-approved)
+--    ✓ Tracked in separate buckets or no balance tracking
+--    ✓ Gender eligibility enforced (ML=Female, PTL=Male)
+--
+-- ============================================================================
+-- VALIDATION ENFORCEMENT POINTS
+-- ============================================================================
+--
+-- A. FRONTEND VALIDATION (ApplyLeaveModal.jsx)
+--    - Real-time balance checking as user selects dates
+--    - Visual warnings when balance insufficient
+--    - Submit button disabled when balance = 0 or requested > remaining
+--    - Only applies to SELF applications of PAID leave types
+--
+-- B. BACKEND VALIDATION (leaveService.applyLeave)
+--    - Critical Check 1: Block if balance = 0
+--    - Critical Check 2: Block if requested > remaining
+--    - Critical Check 3: Block if balance < 0 (data integrity issue)
+--    - Uses atomic row-level locking to prevent race conditions
+--    - Only applies to PAID, NON-RESTRICTED leave types
+--
+-- C. APPROVAL VALIDATION (leaveService.approveLeave)
+--    - Revalidate balance before moving pending → used
+--    - Check projected balance after approval
+--    - Block approval if would result in negative balance
+--    - Atomic transaction with SELECT FOR UPDATE
+--
+-- ============================================================================
+-- CONCURRENT REQUEST PROTECTION
+-- ============================================================================
+--
+-- The system uses database-level row locking to prevent race conditions:
+--
+-- 1. adjustBalanceWithValidation() function:
+--    - Acquires row lock with SELECT FOR UPDATE
+--    - Calculates projected balance after adjustment
+--    - Rejects transaction if projected balance < 0
+--    - Commits only if validation passes
+--
+-- 2. Prevents scenarios like:
+--    - User submits same leave request twice rapidly
+--    - Two different requests submitted simultaneously
+--    - Approval happening while another request is pending
+--
+-- ============================================================================
+-- EXAMPLE SCENARIOS
+-- ============================================================================
+--
+-- SCENARIO 1: Employee with 0 balance
+--   Balance: PL = 0 days
+--   Action: Try to apply for 2 days PL
+--   Result: ❌ BLOCKED
+--   Message: "Insufficient leave balance. You have 0 days available for Planned Leave."
+--
+-- SCENARIO 2: Insufficient balance
+--   Balance: CL = 2 days
+--   Action: Try to apply for 3 days CL
+--   Result: ❌ BLOCKED
+--   Message: "Insufficient leave balance. You have only 2 days available for Casual Leave, but requested 3 days."
+--
+-- SCENARIO 3: Sufficient balance
+--   Balance: SL = 5 days
+--   Action: Apply for 2 days SL
+--   Result: ✓ ALLOWED
+--   After: Balance = 5 days, Pending = 2 days, Remaining = 3 days
+--
+-- SCENARIO 4: Unpaid leave (LOP)
+--   Balance: Not applicable
+--   Action: Apply for 10 days LOP
+--   Result: ✓ ALLOWED (no balance check)
+--   Note: Unlimited, tracked separately for payroll
+--
+-- SCENARIO 5: Restricted leave (AWOL)
+--   Action: Employee tries to self-apply
+--   Result: ❌ BLOCKED
+--   Message: "Employees cannot apply for 'Absent Without Leave' for themselves. This leave must be assigned by Manager/HR/Admin."
+--
+-- SCENARIO 6: Admin assigning leave
+--   Actor: Admin/HR/Manager
+--   Action: Assign 3 days ML to employee
+--   Result: ✓ ALLOWED (auto-approved, no balance check)
+--   Note: Direct assignment bypasses standard approval workflow
+--
+-- SCENARIO 7: Concurrent requests (race condition prevention)
+--   User: Submits 2-day leave request twice rapidly
+--   First Request: Acquires lock, reserves 2 days → SUCCESS
+--   Second Request: Acquires lock, sees insufficient balance → BLOCKED
+--   Result: Only one request succeeds
+--
+-- SCENARIO 8: Approval with insufficient balance
+--   Balance: PL = 2 days used, 0 pending, 1 remaining (3 allocated)
+--   Pending: 2-day leave request
+--   Action: Manager approves
+--   Result: ❌ BLOCKED
+--   Message: "Cannot approve: Would result in negative balance."
+--   Note: This protects against data corruption or concurrent modifications
+--
+-- ============================================================================
+-- SPECIAL CASES
+-- ============================================================================
+--
+-- HALF-DAY LEAVES:
+--   - Counted as 0.5 days
+--   - Balance validation uses 0.5 in calculations
+--   - Must specify FIRST_HALF or SECOND_HALF
+--   - Cannot span multiple dates
+--
+-- CANCELLED LEAVES:
+--   - Pending: Releases pending balance back to remaining
+--   - Approved (future): Releases used balance back to remaining
+--   - Approved (past/started): Cannot be cancelled
+--
+-- REJECTED LEAVES:
+--   - Releases pending balance back to remaining
+--   - No used balance deduction occurs
+--
+-- PARTIAL APPROVALS:
+--   - Some dates approved, some rejected
+--   - Only approved days deducted from balance
+--   - Remaining pending balance released
+--
+-- ============================================================================
+-- NEGATIVE BALANCE DETECTION
+-- ============================================================================
+--
+-- See migration 051_identify_negative_leave_balances.sql
+--
+-- If negative balances exist (from legacy data or edge cases):
+--   1. New applications are BLOCKED until resolved
+--   2. Approvals are BLOCKED until resolved
+--   3. HR/Admin must manually investigate root cause
+--   4. Check negative_leave_balance_report table for details
+--   5. Verify leave_requests history before correcting
+--
+-- ============================================================================
+-- QUERIES FOR TESTING
+-- ============================================================================
+
+-- Check employee's current balances
+-- SELECT 
+--   e.first_name, e.last_name,
+--   lt.name as leave_type,
+--   lt.code,
+--   lb.allocated_days,
+--   lb.used_days,
+--   lb.pending_days,
+--   (lb.allocated_days - lb.used_days - lb.pending_days) as remaining_days
+-- FROM leave_balances lb
+-- JOIN employees e ON lb.employee_id = e.id
+-- JOIN leave_types lt ON lb.leave_type_id = lt.id
+-- WHERE e.email = 'didar@tasknera.com'
+--   AND lb.year = 2026
+-- ORDER BY lt.name;
+
+-- Check pending leave requests
+-- SELECT 
+--   lr.id,
+--   e.first_name || ' ' || e.last_name as employee,
+--   lt.name as leave_type,
+--   lr.start_date,
+--   lr.end_date,
+--   lr.total_days,
+--   lr.status,
+--   lr.created_at
+-- FROM leave_requests lr
+-- JOIN employees e ON lr.employee_id = e.id
+-- JOIN leave_types lt ON lr.leave_type_id = lt.id
+-- WHERE lr.status = 'PENDING'
+-- ORDER BY lr.created_at DESC;
+
+-- Verify no negative balances exist
+-- SELECT 
+--   e.first_name || ' ' || e.last_name as employee,
+--   lt.name as leave_type,
+--   lb.year,
+--   (lb.allocated_days - lb.used_days - lb.pending_days) as remaining_days
+-- FROM leave_balances lb
+-- JOIN employees e ON lb.employee_id = e.id
+-- JOIN leave_types lt ON lb.leave_type_id = lt.id
+-- WHERE (lb.allocated_days - lb.used_days - lb.pending_days) < 0
+-- ORDER BY remaining_days ASC;
+
+-- ============================================================================
+-- DOCUMENTATION COMPLETE
+-- ============================================================================
+
+SELECT 1 as migration_052_documentation_complete;
+
+COMMENT ON COLUMN leave_balances.allocated_days IS 
+  'Total days allocated for this leave type and year (e.g., 15 PL/year). Set by HR/Admin or system default.';
+
+COMMENT ON COLUMN leave_balances.used_days IS 
+  'Days already consumed through APPROVED leave requests. Deducted from remaining balance.';
+
+COMMENT ON COLUMN leave_balances.pending_days IS 
+  'Days reserved by PENDING leave requests awaiting approval. Not yet deducted but temporarily unavailable.';
+
+COMMENT ON TABLE leave_balances IS 'Employee leave balance tracking. Remaining = allocated - used - pending. Balance validation enforced for paid leave types (PL, CL, SL, HDL). Unpaid (LOP/LWP) and restricted (AWOL, HL, ML, PTL, SBL) leaves do not use standard balance validation.';

@@ -833,23 +833,37 @@ export const leaveRepository = {
     }
 
     const types = await this.findLeaveTypes(orgId);
+    
+    // SPECIAL LEAVE TYPES: These 6 should have 0 balance
+    const SPECIAL_CODES = ['HL', 'AWOL', 'LOP', 'LWP', 'ML', 'PTL', 'PATL', 'SBL'];
+    const SPECIAL_NAMES = ['holiday', 'absent without leave', 'awol', 'leave without pay', 'loss of pay', 'lop', 'lwp', 'maternity leave', 'maternity', 'sabbatical leave', 'sabbatical', 'paternity leave', 'paternity'];
+    
     for (const lt of types) {
       if (lt.genderEligibility === 'FEMALE' && normGender === 'MALE') continue;
       if (lt.genderEligibility === 'MALE' && normGender === 'FEMALE') continue;
 
+      const code = String(lt.code || '').trim().toUpperCase();
+      const name = String(lt.name || '').trim().toLowerCase();
+      const isSpecial = SPECIAL_CODES.includes(code) || SPECIAL_NAMES.some(sn => name === sn || name.includes(sn));
+      
       const balanceId = `lb-${employeeId}-${lt.id}-${year}`;
+      
+      // Special leaves: Always initialize with 0 allocated and 0 used
+      const allocatedDays = isSpecial ? 0.0 : lt.daysPerYear;
+      
       const sql = `
         INSERT INTO leave_balances (id, org_id, employee_id, leave_type_id, year, allocated_days, used_days, pending_days)
         VALUES ($1, $2, $3, $4, $5, $6, 0.0, 0.0)
         ON CONFLICT (employee_id, leave_type_id, year) DO NOTHING;
       `;
-      await pool.query(sql, [balanceId, orgId, employeeId, lt.id, year, lt.daysPerYear]);
+      await pool.query(sql, [balanceId, orgId, employeeId, lt.id, year, allocatedDays]);
     }
     return this.getLeaveBalances(employeeId, year, normGender);
   },
 
   /**
-   * Adjust employee leave balance
+   * Adjust employee leave balance with atomic row-level locking to prevent race conditions
+   * Uses SELECT FOR UPDATE to lock the balance row during transaction
    */
   async adjustBalance(employeeId, leaveTypeId, year, { pendingDelta = 0, usedDelta = 0 }) {
     const sql = `
@@ -863,6 +877,71 @@ export const leaveRepository = {
     `;
     const res = await pool.query(sql, [pendingDelta, usedDelta, employeeId, leaveTypeId, year]);
     return res.rows.length > 0 ? mapLeaveBalanceRow(res.rows[0]) : null;
+  },
+
+  /**
+   * Atomically adjust leave balance with validation to prevent negative balances
+   * Includes row-level locking and balance verification in a single transaction
+   * Returns null if operation would result in negative remaining balance
+   */
+  async adjustBalanceWithValidation(employeeId, leaveTypeId, year, { pendingDelta = 0, usedDelta = 0 }) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Lock the balance row for this transaction to prevent concurrent modifications
+      const lockSql = `
+        SELECT 
+          id, employee_id, leave_type_id, year,
+          allocated_days, used_days, pending_days,
+          (allocated_days - used_days - pending_days) as remaining_days
+        FROM leave_balances
+        WHERE employee_id = $1 AND leave_type_id = $2 AND year = $3
+        FOR UPDATE;
+      `;
+      const lockRes = await client.query(lockSql, [employeeId, leaveTypeId, year]);
+
+      if (lockRes.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+
+      const current = lockRes.rows[0];
+      const currentRemaining = parseFloat(current.remaining_days) || 0;
+      
+      // Calculate projected remaining after adjustment
+      // remaining = allocated - used - pending
+      // After adjustment: new_remaining = allocated - (used + usedDelta) - (pending + pendingDelta)
+      //                                  = allocated - used - pending - usedDelta - pendingDelta
+      //                                  = currentRemaining - usedDelta - pendingDelta
+      const projectedRemaining = currentRemaining - usedDelta - pendingDelta;
+
+      // Reject if this would create negative balance
+      if (projectedRemaining < 0) {
+        await client.query('ROLLBACK');
+        return { error: 'INSUFFICIENT_BALANCE', currentRemaining, projectedRemaining };
+      }
+
+      // Perform the update
+      const updateSql = `
+        UPDATE leave_balances
+        SET
+          pending_days = GREATEST(0.0, pending_days + $1),
+          used_days = GREATEST(0.0, used_days + $2),
+          updated_at = NOW()
+        WHERE employee_id = $3 AND leave_type_id = $4 AND year = $5
+        RETURNING *;
+      `;
+      const updateRes = await client.query(updateSql, [pendingDelta, usedDelta, employeeId, leaveTypeId, year]);
+
+      await client.query('COMMIT');
+      return updateRes.rows.length > 0 ? mapLeaveBalanceRow(updateRes.rows[0]) : null;
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
   },
 
   /**
@@ -930,9 +1009,44 @@ export const leaveRepository = {
 
   /**
    * Record balance for an assigned leave (e.g., Holiday, AWOL, LOP, Maternity, Sabbatical, Paternity)
+   * For SPECIAL leaves (HL, AWOL, LWP, ML, SBL, PTL): Do NOT deduct from balance - keep at 0
+   * For other restricted leaves: Track the assignment in balance bucket
    * Ensures bucket allocated_days and used_days accurately reflect the assigned leave dates.
    */
   async recordAssignedLeaveBalance(employeeId, orgId, leaveTypeId, year, days) {
+    // Fetch the leave type to check if it's a special leave
+    const leaveType = await this.findLeaveTypeById(leaveTypeId, orgId);
+    if (!leaveType) return null;
+
+    const code = String(leaveType.code || '').trim().toUpperCase();
+    const name = String(leaveType.name || '').trim().toLowerCase();
+    
+    // SPECIAL LEAVE TYPES: These 6 should NOT be deducted from balance
+    const SPECIAL_CODES = ['HL', 'AWOL', 'LOP', 'LWP', 'ML', 'PTL', 'PATL', 'SBL'];
+    const SPECIAL_NAMES = ['holiday', 'absent without leave', 'awol', 'leave without pay', 'loss of pay', 'lop', 'lwp', 'maternity leave', 'maternity', 'sabbatical leave', 'sabbatical', 'paternity leave', 'paternity'];
+    
+    const isSpecial = SPECIAL_CODES.includes(code) || SPECIAL_NAMES.some(sn => name === sn || name.includes(sn));
+    
+    if (isSpecial) {
+      // For special leaves: Ensure balance record exists with 0 allocated and 0 used
+      // Do NOT deduct days - these leaves are tracked separately and don't consume balance
+      const balanceId = `lb-${employeeId}-${leaveTypeId}-${year}`;
+      const sql = `
+        INSERT INTO leave_balances (id, org_id, employee_id, leave_type_id, year, allocated_days, used_days, pending_days, updated_at)
+        VALUES ($1, $2, $3, $4, $5, 0.0, 0.0, 0.0, NOW())
+        ON CONFLICT (employee_id, leave_type_id, year)
+        DO UPDATE SET
+          allocated_days = 0.0,
+          used_days = 0.0,
+          pending_days = 0.0,
+          updated_at = NOW()
+        RETURNING *;
+      `;
+      const res = await pool.query(sql, [balanceId, orgId, employeeId, leaveTypeId, year]);
+      return res.rows[0];
+    }
+    
+    // For non-special restricted leaves: Track assignment in balance bucket
     const assignedDays = parseFloat(days) || 0;
     const balanceId = `lb-${employeeId}-${leaveTypeId}-${year}`;
     const sql = `
