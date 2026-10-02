@@ -18,6 +18,7 @@ import { Badge } from '../common/Badge.jsx';
 import { TimePicker12 } from '../common/TimePicker12.jsx';
 import { attendanceService } from '../../services/attendanceService.js';
 import { useToast } from '../../context/ToastContext.jsx';
+import { formatHoursToClock } from '../../utils/timeUtils.js';
 
 /**
  * Robust shift timing parser
@@ -524,7 +525,8 @@ export const EditAttendanceTimingModal = ({
 
             {liveCalculation.totalHours && (
               <span className="text-slate-600 font-medium">
-                Total Duration: <strong className="text-brand-700">{liveCalculation.totalHours} hrs</strong>
+                Total Duration: <strong className="text-brand-700">{formatHoursToClock(liveCalculation.totalHours)}</strong>
+                <span className="text-xs text-slate-400 ml-1">({liveCalculation.totalHours} hrs)</span>
               </span>
             )}
           </div>

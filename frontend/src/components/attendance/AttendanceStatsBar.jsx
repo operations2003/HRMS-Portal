@@ -10,6 +10,7 @@ import {
   FileCheck,
   Coffee,
 } from 'lucide-react';
+import { formatHoursToClock } from '../../utils/timeUtils.js';
 
 export const AttendanceStatsBar = ({ statistics = {}, summary = {}, isOrgView = false }) => {
   if (isOrgView) {
@@ -107,8 +108,8 @@ export const AttendanceStatsBar = ({ statistics = {}, summary = {}, isOrgView = 
     },
     {
       title: 'Total Hours Worked',
-      value: `${Number(statistics.totalHoursWorked || 0).toFixed(1)} hrs`,
-      subtext: 'Net duration this period',
+      value: formatHoursToClock(statistics.totalHoursWorked || 0),
+      subtext: `${Number(statistics.totalHoursWorked || 0).toFixed(1)} hrs net duration`,
       icon: Clock,
       color: 'text-brand-600',
       bgLight: 'bg-brand-50',
@@ -116,8 +117,8 @@ export const AttendanceStatsBar = ({ statistics = {}, summary = {}, isOrgView = 
     },
     {
       title: 'Overtime Hours',
-      value: `${Number(statistics.totalOvertimeHours || 0).toFixed(1)} hrs`,
-      subtext: 'Beyond 8.0 hr daily baseline',
+      value: formatHoursToClock(statistics.totalOvertimeHours || 0),
+      subtext: 'Beyond daily shift baseline',
       icon: Flame,
       color: 'text-amber-600',
       bgLight: 'bg-amber-50',

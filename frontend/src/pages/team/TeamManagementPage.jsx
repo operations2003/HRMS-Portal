@@ -43,6 +43,7 @@ import { EmptyState } from '../../components/common/EmptyState.jsx';
 import { TeamMemberDetailModal } from '../../components/team/TeamMemberDetailModal.jsx';
 import { AssignManagerModal } from '../../components/team/AssignManagerModal.jsx';
 import { ApprovalActionModal } from '../../components/approvals/ApprovalActionModal.jsx';
+import { formatHoursToClock } from '../../utils/timeUtils.js';
 import { filterNonCeoEmployees } from '../../utils/roleUtils.js';
 import { AttendanceDetailModal } from '../../components/attendance/AttendanceDetailModal.jsx';
 import { EditAttendanceTimingModal } from '../../components/attendance/EditAttendanceTimingModal.jsx';
@@ -559,12 +560,11 @@ export const TeamManagementPage = () => {
       render: (row) => {
         const hrs = Number(row.attendance?.totalHours ?? row.totalHours ?? 0);
         const otVal = Number(row.attendance?.overtimeHours ?? row.overtimeHours ?? 0);
-        const overtime = otVal > 0 ? otVal.toFixed(1) : null;
         return (
           <div>
-            <span className="text-xs font-medium text-slate-800">{hrs.toFixed(1)} hrs</span>
-            {overtime && (
-              <span className="block text-[10px] text-emerald-600 font-semibold">+{overtime}h Overtime</span>
+            <span className="text-xs font-medium text-slate-800">{formatHoursToClock(hrs)}</span>
+            {otVal > 0 && (
+              <span className="block text-[10px] text-emerald-600 font-semibold">+{formatHoursToClock(otVal)} Overtime</span>
             )}
           </div>
         );

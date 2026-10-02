@@ -25,6 +25,7 @@ import { Button } from '../../components/common/Button.jsx';
 import { Alert } from '../../components/common/Alert.jsx';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
 import { isCeoOrAdmin } from '../../utils/roleUtils.js';
+import { formatHoursToClock } from '../../utils/timeUtils.js';
 
 export const AttendanceDashboardPage = () => {
   const { user, hasRole, hasPermission } = useAuth();
@@ -221,7 +222,7 @@ export const AttendanceDashboardPage = () => {
       const record = await attendanceService.checkOut(punchData);
       setTodayRecord(record);
       toast.success(
-        `Logged out successfully! Total work time: ${record.totalHours || 0} hrs.`
+        `Logged out successfully! Total work time: ${formatHoursToClock(record.totalHours || 0)}.`
       );
       // Refresh backend attendance state
       fetchTodayRecord();

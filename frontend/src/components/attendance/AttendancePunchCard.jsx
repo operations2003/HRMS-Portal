@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { Button } from '../common/Button.jsx';
 import { Alert } from '../common/Alert.jsx';
+import { formatHoursToClock } from '../../utils/timeUtils.js';
 
 /**
  * Parse scheduled duration hours from shift timing string (e.g. "11:00 AM - 07:00 PM" -> 8.0)
@@ -386,9 +387,7 @@ export const AttendancePunchCard = ({
             <div className="text-base sm:text-lg font-bold text-brand-950 font-mono tracking-tight truncate">
               {hasCheckedIn && !hasCheckedOut
                 ? elapsedTime
-                : todayRecord?.totalHours !== undefined
-                ? `${Number(todayRecord.totalHours).toFixed(2)} hrs`
-                : '0.00 hrs'}
+                : formatHoursToClock(todayRecord?.totalHours)}
             </div>
             {hasCheckedIn && !hasCheckedOut && isOnBreak && (
               <span className="text-[10px] text-amber-700 font-semibold mt-0.5 truncate">
@@ -402,7 +401,7 @@ export const AttendancePunchCard = ({
             )}
             {hasCheckedOut && Number(todayRecord?.overtimeHours || todayRecord?.overtime_hours || 0) > 0 && (
               <span className="inline-flex items-center gap-1 text-[10px] text-purple-700 font-bold mt-1 bg-purple-100 px-1.5 py-0.5 rounded-full w-fit">
-                <Zap className="w-2.5 h-2.5" /> OT: {Number(todayRecord?.overtimeHours || todayRecord?.overtime_hours).toFixed(2)} hrs
+                <Zap className="w-2.5 h-2.5" /> OT: +{formatHoursToClock(todayRecord?.overtimeHours || todayRecord?.overtime_hours)}
               </span>
             )}
           </div>

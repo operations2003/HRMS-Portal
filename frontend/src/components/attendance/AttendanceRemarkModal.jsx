@@ -18,6 +18,7 @@ import { Badge } from '../common/Badge.jsx';
 import { Avatar } from '../common/Avatar.jsx';
 import { attendanceService } from '../../services/attendanceService.js';
 import { useToast } from '../../context/ToastContext.jsx';
+import { formatHoursToClock } from '../../utils/timeUtils.js';
 
 export const AttendanceRemarkModal = ({
   isOpen,
@@ -184,14 +185,14 @@ export const AttendanceRemarkModal = ({
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2 border-t border-slate-200/60 text-xs">
             <div>
               <span className="text-slate-400 block text-[10px]">Total Recorded Hours</span>
-              <span className="font-bold text-slate-800 font-mono">
-                {record.totalHours !== undefined ? `${Number(record.totalHours).toFixed(2)} hrs` : '—'}
+              <span className="font-bold text-slate-800 font-mono" title={record.totalHours !== undefined ? `${Number(record.totalHours).toFixed(2)} hrs` : undefined}>
+                {record.totalHours !== undefined ? formatHoursToClock(record.totalHours) : '—'}
               </span>
             </div>
             <div>
               <span className="text-slate-400 block text-[10px]">Overtime</span>
-              <span className="font-bold text-amber-600 font-mono">
-                {otHours > 0 ? `+${otHours.toFixed(2)} hrs` : '0.00 hrs'}
+              <span className="font-bold text-amber-600 font-mono" title={otHours > 0 ? `+${otHours.toFixed(2)} hrs` : undefined}>
+                {otHours > 0 ? `+${formatHoursToClock(otHours)}` : '0h 00m'}
               </span>
             </div>
             <div>

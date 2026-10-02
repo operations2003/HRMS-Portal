@@ -28,6 +28,7 @@ import { Input } from '../common/Input.jsx';
 import { Select } from '../common/Select.jsx';
 import { LoadingSpinner } from '../common/LoadingSpinner.jsx';
 import { EmptyState } from '../common/EmptyState.jsx';
+import { formatHoursToClock, formatOvertimeDuration } from '../../utils/timeUtils.js';
 
 export const AttendanceHistoryTable = ({
   records = [],
@@ -381,15 +382,15 @@ export const AttendanceHistoryTable = ({
 
                     <div className="p-2 rounded-xl bg-slate-50/80 border border-slate-100">
                       <span className="text-slate-400 text-[10px] block font-medium">Net Duration</span>
-                      <span className="font-bold text-slate-800 font-mono">
-                        {row.totalHours !== undefined ? `${Number(row.totalHours).toFixed(2)} hrs` : '0.00 hrs'}
+                      <span className="font-bold text-slate-800 font-mono" title={row.totalHours !== undefined ? `${Number(row.totalHours).toFixed(2)} hrs` : undefined}>
+                        {formatHoursToClock(row.totalHours)}
                       </span>
                     </div>
 
                     <div className="p-2 rounded-xl bg-slate-50/80 border border-slate-100">
                       <span className="text-slate-400 text-[10px] block font-medium">Overtime</span>
-                      <span className="font-bold text-amber-600 font-mono">
-                        {ot > 0 ? `+${ot.toFixed(2)} hrs` : '—'}
+                      <span className="font-bold text-amber-600 font-mono" title={ot > 0 ? `+${ot.toFixed(2)} hrs` : undefined}>
+                        {formatOvertimeDuration(ot)}
                       </span>
                     </div>
                   </div>
@@ -694,10 +695,11 @@ export const AttendanceHistoryTable = ({
 
                       {/* Working Duration */}
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="font-mono text-xs font-semibold text-slate-800">
-                          {row.totalHours !== undefined
-                            ? `${Number(row.totalHours).toFixed(2)} hrs`
-                            : '0.00 hrs'}
+                        <span
+                          className="font-mono text-xs font-semibold text-slate-800"
+                          title={row.totalHours !== undefined ? `${Number(row.totalHours).toFixed(2)} hrs` : undefined}
+                        >
+                          {formatHoursToClock(row.totalHours)}
                         </span>
                         {row.breakDurationMinutes > 0 && (
                           <span className="text-[11px] text-slate-400 block">
@@ -709,8 +711,11 @@ export const AttendanceHistoryTable = ({
                       {/* Overtime */}
                       <td className="px-6 py-4 whitespace-nowrap">
                         {ot > 0 ? (
-                          <span className="font-mono text-xs font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
-                            +{ot.toFixed(2)} hrs
+                          <span
+                            className="font-mono text-xs font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200"
+                            title={`+${ot.toFixed(2)} hrs`}
+                          >
+                            {formatOvertimeDuration(ot)}
                           </span>
                         ) : (
                           <span className="text-slate-400 text-xs">—</span>

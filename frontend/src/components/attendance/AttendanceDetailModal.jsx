@@ -22,6 +22,7 @@ import {
 import { Modal } from '../common/Modal.jsx';
 import { Badge } from '../common/Badge.jsx';
 import { Button } from '../common/Button.jsx';
+import { formatHoursToClock } from '../../utils/timeUtils.js';
 
 export const AttendanceDetailModal = ({
   isOpen,
@@ -145,8 +146,8 @@ export const AttendanceDetailModal = ({
               <Clock className="w-4 h-4 text-brand-600" />
               Net Total Hours
             </div>
-            <div className="text-sm font-bold text-slate-900 font-mono">
-              {record.totalHours !== undefined ? `${record.totalHours} hrs` : '0.00 hrs'}
+            <div className="text-sm font-bold text-slate-900 font-mono" title={record.totalHours !== undefined ? `${record.totalHours} hrs` : undefined}>
+              {formatHoursToClock(record.totalHours)}
             </div>
             <div className="text-xs text-slate-400 mt-0.5">
               Break: {record.breakDurationMinutes || 0} mins
@@ -158,11 +159,11 @@ export const AttendanceDetailModal = ({
               <ShieldCheck className="w-4 h-4 text-amber-600" />
               Overtime Duration
             </div>
-            <div className="text-sm font-bold text-slate-900 font-mono">
-              {record.overtimeHours !== undefined ? `${record.overtimeHours} hrs` : '0.00 hrs'}
+            <div className="text-sm font-bold text-slate-900 font-mono" title={record.overtimeHours !== undefined ? `${record.overtimeHours} hrs` : undefined}>
+              {record.overtimeHours > 0 ? `+${formatHoursToClock(record.overtimeHours)}` : '0h 00m'}
             </div>
             <div className="text-xs text-slate-400 mt-0.5">
-              Beyond 8 standard shift hours
+              Beyond standard shift hours
             </div>
           </div>
         </div>
