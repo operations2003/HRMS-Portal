@@ -119,6 +119,54 @@ const BORDERS = {
 };
 
 /**
+ * Resolves standard leave short code (CL, PL, SL, ML, PTL, LOP, HDL, AWOL, SBL, EL, COMP)
+ * from joined DB leaveCode, leaveName, leaveType, or notes.
+ */
+export const getLeaveShortCode = (rec) => {
+  if (!rec) return 'CL';
+
+  // 1. Direct code from DB lateral join or attached property
+  const directCode =
+    rec.leaveCode ||
+    rec.leave_code ||
+    rec.leaveTypeCode ||
+    (typeof rec.leaveType === 'string' ? rec.leaveType : rec.leaveType?.code);
+  if (directCode && typeof directCode === 'string' && directCode.trim()) {
+    const code = directCode.trim().toUpperCase();
+    if (code === 'LWP') return 'LOP'; // Standardize Leave Without Pay -> LOP
+    if (code === 'PATL') return 'PTL'; // Paternity Leave -> PTL
+    return code;
+  }
+
+  // 2. Name from DB lateral join or object, plus notes
+  const name = (
+    rec.leaveName ||
+    rec.leave_name ||
+    rec.leaveTypeName ||
+    rec.leaveType?.name ||
+    ''
+  ).toUpperCase();
+  const notes = (rec.notes || '').toUpperCase();
+  const combined = `${name} ${notes}`;
+
+  if (combined.includes('CASUAL') || combined.includes('CL')) return 'CL';
+  if (combined.includes('PLANNED') || combined.includes('PRIVILEGE') || combined.includes('ANNUAL') || combined.includes('PL')) return 'PL';
+  if (combined.includes('SICK') || combined.includes('MEDICAL') || combined.includes('SL')) return 'SL';
+  if (combined.includes('MATERNITY') || combined.includes('ML')) return 'ML';
+  if (combined.includes('PATERNITY') || combined.includes('PTL')) return 'PTL';
+  if (combined.includes('SABBATICAL') || combined.includes('SBL')) return 'SBL';
+  if (combined.includes('HALF DAY') || combined.includes('HALF-DAY') || combined.includes('HDL')) return 'HDL';
+  if (combined.includes('AWOL') || combined.includes('WITHOUT LEAVE')) return 'AWOL';
+  if (combined.includes('WITHOUT PAY') || combined.includes('LOSS OF PAY') || combined.includes('LOP') || combined.includes('LWP')) return 'LOP';
+  if (combined.includes('COMPENSATORY') || combined.includes('COMP OFF') || combined.includes('COMP-OFF') || combined.includes('CO')) return 'COMP';
+  if (combined.includes('EMERGENCY') || combined.includes('EL')) return 'EL';
+  if (combined.includes('BEREAVEMENT') || combined.includes('BL')) return 'BL';
+  if (combined.includes('HOLIDAY') || combined.includes('HL')) return 'HL';
+
+  return 'CL'; // Sensible standard default
+};
+
+/**
  * Builds all dates strictly for a single calendar month (Day 1 to Last Day)
  * @param {string} monthKey - "YYYY-MM" e.g. "2026-09"
  */
@@ -267,7 +315,7 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
 
   wsMatrix.mergeCells('A2:I2');
   const subTitleCell = wsMatrix.getCell('A2');
-  subTitleCell.value = `Month: ${cleanMonthTitle} (01 ${cleanMonthTitle.split(' ')[0]} to ${sortedDates.length} ${cleanMonthTitle.split(' ')[0]}) | Total Employees: ${employeeList.length} | Generated: ${new Date().toLocaleString()}`;
+  subTitleCell.value = `Month: ${cleanMonthTitle} (01 to ${sortedDates.length} ${cleanMonthTitle.split(' ')[0]}) | Total Employees: ${employeeList.length} | Leave Codes: CL (Casual), PL (Planned), SL (Sick), ML (Maternity), PTL (Paternity), LOP (Loss of Pay), SBL (Sabbatical) | Generated: ${new Date().toLocaleString()}`;
   subTitleCell.font = { name: 'Segoe UI', size: 10, italic: true, color: { argb: 'FF64748B' } };
   subTitleCell.alignment = { vertical: 'middle', horizontal: 'left' };
   wsMatrix.getRow(2).height = 20;
@@ -378,7 +426,8 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
         rowData.push('ABSENT');
       } else if (status === 'ON_LEAVE') {
         leaveCount++;
-        rowData.push('LEAVE');
+        const lCode = getLeaveShortCode(rec);
+        rowData.push(`LEAVE (${lCode})`);
       } else if (status === 'HOLIDAY') {
         rowData.push('HOLIDAY');
       } else if (status === 'WEEKEND') {
@@ -423,9 +472,9 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
         } else if (val === 'ABSENT') {
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.ABSENT_BG } };
           cell.font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: COLORS.ABSENT_TXT } };
-        } else if (val === 'LEAVE') {
+        } else if (val.startsWith('LEAVE') || val === 'LEAVE') {
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.LEAVE_BG } };
-          cell.font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: COLORS.LEAVE_TXT } };
+          cell.font = { name: 'Segoe UI', size: 8.5, bold: true, color: { argb: COLORS.LEAVE_TXT } };
         } else if (val === 'WEEKEND') {
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.WEEKEND_BG } };
           cell.font = { name: 'Segoe UI', size: 8.5, color: { argb: COLORS.WEEKEND_TXT } };
@@ -555,8 +604,15 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
     const shift =
       rec.employee?.shiftTiming || rec.shiftTiming || '11:00 AM - 07:00 PM';
 
+    const isLeave = (rec.status || '').toUpperCase() === 'ON_LEAVE';
+    const lCode = isLeave ? getLeaveShortCode(rec) : null;
+    const statusDisplay = isLeave ? `ON_LEAVE (${lCode})` : (rec.status || '').toUpperCase();
+
     let remarks = '';
     if (rec.notes) remarks += rec.notes;
+    if (isLeave && rec.leaveName && !remarks.includes(rec.leaveName)) {
+      remarks = remarks ? `${remarks} | Leave: ${rec.leaveName}` : `Leave: ${rec.leaveName}`;
+    }
     if (rec.regularizationReason) {
       remarks += (remarks ? ' | ' : '') + `Adjusted: ${rec.regularizationReason}`;
     }
@@ -575,7 +631,7 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
       hours,
       breakMins > 0 ? `${breakMins} mins` : '0 mins',
       ot > 0 ? `+${formatHoursToClock(ot)}` : '—',
-      (rec.status || '').toUpperCase(),
+      statusDisplay,
       shift,
       rec.isRegularized ? 'Yes' : 'No',
       remarks || '—',
@@ -606,7 +662,7 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
         } else if (st === 'ABSENT') {
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.ABSENT_BG } };
           cell.font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: COLORS.ABSENT_TXT } };
-        } else if (st === 'ON_LEAVE') {
+        } else if (st.startsWith('ON_LEAVE') || st === 'LEAVE') {
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.LEAVE_BG } };
           cell.font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: COLORS.LEAVE_TXT } };
         }
@@ -627,7 +683,7 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
   wsLogs.getColumn(11).width = 20;
   wsLogs.getColumn(12).width = 15;
   wsLogs.getColumn(13).width = 15;
-  wsLogs.getColumn(14).width = 14;
+  wsLogs.getColumn(14).width = 18;
   wsLogs.getColumn(15).width = 24;
   wsLogs.getColumn(16).width = 20;
   wsLogs.getColumn(17).width = 32;
@@ -672,6 +728,7 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
     'Days Present',
     'Days Absent',
     'Days Leave',
+    'Leave Breakdown (CL/PL/SL)',
     `Total Hours Worked (${cleanMonthTitle})`,
     'Total Hours (Decimal)',
     'Total Overtime (OT)',
@@ -697,6 +754,7 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
     let presentDays = 0;
     let absentDays = 0;
     let leaveDays = 0;
+    const leaveBreakdown = {};
 
     emp.records.forEach((rec) => {
       const h = Number(rec.totalHours || 0);
@@ -711,8 +769,15 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
         absentDays++;
       } else if (st === 'ON_LEAVE') {
         leaveDays++;
+        const lCode = getLeaveShortCode(rec);
+        leaveBreakdown[lCode] = (leaveBreakdown[lCode] || 0) + 1;
       }
     });
+
+    const leaveBreakdownStr =
+      Object.entries(leaveBreakdown)
+        .map(([code, count]) => `${count} ${code}`)
+        .join(', ') || (leaveDays > 0 ? `${leaveDays} Leave` : '—');
 
     const avgDailyHours =
       presentDays > 0 ? (totalHours / presentDays).toFixed(2) : '0.00';
@@ -728,6 +793,7 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
       presentDays,
       absentDays,
       leaveDays,
+      leaveBreakdownStr,
       formatHoursToClock(totalHours),
       parseFloat(totalHours.toFixed(2)),
       totalOT > 0 ? `+${formatHoursToClock(totalOT)}` : '0h 00m',
@@ -747,7 +813,7 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
       if (colNumber === 2 || colNumber === 3) {
         if (colNumber === 3) cell.alignment = { vertical: 'middle', horizontal: 'left' };
         cell.font = { name: 'Segoe UI', size: 9.5, bold: true };
-      } else if (colNumber === 11 || colNumber === 12) {
+      } else if (colNumber === 12 || colNumber === 13) {
         cell.font = { name: 'Segoe UI', size: 10, bold: true, color: { argb: 'FF1E3A8A' } };
       }
     });
@@ -763,10 +829,11 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
   wsSummary.getColumn(8).width = 14;
   wsSummary.getColumn(9).width = 14;
   wsSummary.getColumn(10).width = 14;
-  wsSummary.getColumn(11).width = 28;
-  wsSummary.getColumn(12).width = 22;
+  wsSummary.getColumn(11).width = 26;
+  wsSummary.getColumn(12).width = 26;
   wsSummary.getColumn(13).width = 22;
   wsSummary.getColumn(14).width = 20;
+  wsSummary.getColumn(15).width = 18;
 
   wsSummary.autoFilter = {
     from: { row: 4, column: 1 },

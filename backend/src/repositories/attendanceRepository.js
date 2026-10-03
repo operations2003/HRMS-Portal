@@ -30,6 +30,8 @@ const mapAttendanceRow = (row) => {
     regularizedBy: row.regularizedBy || null,
     regularizedAt: row.regularizedAt ? new Date(row.regularizedAt).toISOString() : null,
     notes: row.notes || '',
+    leaveCode: row.leaveCode || null,
+    leaveName: row.leaveName || null,
     createdAt: row.createdAt ? new Date(row.createdAt).toISOString() : new Date().toISOString(),
     updatedAt: row.updatedAt ? new Date(row.updatedAt).toISOString() : new Date().toISOString(),
     // Joined employee information
@@ -88,6 +90,8 @@ const BASE_ATTENDANCE_SELECT = `
     a.regularized_by AS "regularizedBy",
     a.regularized_at AS "regularizedAt",
     a.notes,
+    lr_info.leave_code AS "leaveCode",
+    lr_info.leave_name AS "leaveName",
     a.created_at AS "createdAt",
     a.updated_at AS "updatedAt",
     e.id AS emp_id,
@@ -115,6 +119,16 @@ const BASE_ATTENDANCE_SELECT = `
   LEFT JOIN users u ON u.id = a.regularized_by
   LEFT JOIN users eu ON eu.id = e.user_id
   LEFT JOIN roles r ON r.id = eu.role_id
+  LEFT JOIN LATERAL (
+    SELECT lt.code AS leave_code, lt.name AS leave_name
+    FROM leave_requests lr
+    JOIN leave_types lt ON lt.id = lr.leave_type_id
+    WHERE lr.employee_id = a.employee_id
+      AND lr.status = 'APPROVED'
+      AND a.attendance_date >= lr.start_date
+      AND a.attendance_date <= lr.end_date
+    LIMIT 1
+  ) lr_info ON (a.status = 'ON_LEAVE' OR a.source = 'LEAVE_ASSIGNMENT')
 `;
 
 export const attendanceRepository = {

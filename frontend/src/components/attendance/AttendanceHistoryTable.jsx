@@ -30,6 +30,7 @@ import { Select } from '../common/Select.jsx';
 import { LoadingSpinner } from '../common/LoadingSpinner.jsx';
 import { EmptyState } from '../common/EmptyState.jsx';
 import { formatHoursToClock, formatOvertimeDuration } from '../../utils/timeUtils.js';
+import { getLeaveShortCode } from '../../utils/attendanceExcelExport.js';
 
 export const AttendanceHistoryTable = ({
   records = [],
@@ -86,7 +87,7 @@ export const AttendanceHistoryTable = ({
     };
   };
 
-  const getStatusBadge = (status) => {
+  const getStatusBadge = (status, row = null) => {
     switch ((status || '').toUpperCase()) {
       case 'PRESENT':
         return <Badge variant="success">Present</Badge>;
@@ -96,8 +97,14 @@ export const AttendanceHistoryTable = ({
         return <Badge variant="info">Half Day</Badge>;
       case 'ABSENT':
         return <Badge variant="danger">Absent</Badge>;
-      case 'ON_LEAVE':
-        return <Badge variant="warning">On Leave</Badge>;
+      case 'ON_LEAVE': {
+        const lCode = row ? getLeaveShortCode(row) : null;
+        return (
+          <Badge variant="warning">
+            {lCode ? `On Leave (${lCode})` : 'On Leave'}
+          </Badge>
+        );
+      }
       case 'HOLIDAY':
         return <Badge variant="brand">Holiday</Badge>;
       case 'WEEKEND':
@@ -613,7 +620,7 @@ export const AttendanceHistoryTable = ({
                       {/* Status */}
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-2 flex-wrap">
-                          {getStatusBadge(row.status)}
+                          {getStatusBadge(row.status, row)}
                           {row.isOnBreak && (
                             <span
                               title="Employee is currently on an active break (Shift Paused)"
