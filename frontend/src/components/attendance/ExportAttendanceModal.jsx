@@ -17,7 +17,9 @@ import { Select } from '../common/Select.jsx';
  * E.g. October 2026, September 2026, August 2026, etc.
  */
 const getAvailableMonths = () => {
-  const options = [];
+  const options = [
+    { value: 'all', label: 'All Months' },
+  ];
   // Center around September & October 2026
   const anchorDate = new Date(); // e.g. 2026-10-03
   const anchorYear = anchorDate.getFullYear();
@@ -35,7 +37,7 @@ const getAvailableMonths = () => {
 
   // Ensure 2026-09 is present and prominent
   if (!options.some((o) => o.value === '2026-09')) {
-    options.splice(1, 0, { value: '2026-09', label: 'September 2026' });
+    options.splice(2, 0, { value: '2026-09', label: 'September 2026' });
   }
 
   return options;
@@ -54,9 +56,13 @@ export const ExportAttendanceModal = ({
   const [selectedMonth, setSelectedMonth] = useState('2026-09');
   const [selectedDeptId, setSelectedDeptId] = useState(currentDeptId || '');
 
+  const isAllMonths = selectedMonth === 'all';
   const selectedMonthObj = monthOptions.find((m) => m.value === selectedMonth) || monthOptions[0];
-  const [yearStr, monthStr] = selectedMonth.split('-');
-  const daysInMonth = new Date(parseInt(yearStr, 10), parseInt(monthStr, 10), 0).getDate();
+  let daysInMonth = 30;
+  if (!isAllMonths && selectedMonth.includes('-')) {
+    const [yearStr, monthStr] = selectedMonth.split('-');
+    daysInMonth = new Date(parseInt(yearStr, 10), parseInt(monthStr, 10), 0).getDate();
+  }
 
   const handleConfirm = () => {
     if (onExport) {
@@ -80,8 +86,12 @@ export const ExportAttendanceModal = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Export Monthly Attendance Report"
-      subtitle="Generate a strictly single-month attendance report with daily punches and total monthly hours."
+      title="Export Attendance Report"
+      subtitle={
+        isAllMonths
+          ? "Generate comprehensive attendance report with individual timesheets and logs across all recorded months."
+          : "Generate a strictly single-month attendance report with daily punches and total monthly hours."
+      }
       maxWidth="max-w-lg"
     >
       <div className="space-y-5">
@@ -97,7 +107,9 @@ export const ExportAttendanceModal = ({
             options={monthOptions}
           />
           <p className="text-[11px] text-slate-400 mt-1">
-            Reports are generated strictly for this calendar month (Day 1 to Day {daysInMonth}). No months will be merged.
+            {isAllMonths
+              ? 'Reports will include all recorded months with individual timesheet tabs per month.'
+              : `Reports are generated strictly for this calendar month (Day 1 to Day ${daysInMonth}). No months will be merged.`}
           </p>
         </div>
 
@@ -124,7 +136,7 @@ export const ExportAttendanceModal = ({
               <span>Report Contents for {selectedMonthObj.label}</span>
             </span>
             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-              {daysInMonth} Days Matrix
+              {isAllMonths ? 'All Months Timesheets' : `${daysInMonth} Days Matrix`}
             </span>
           </div>
 
@@ -136,9 +148,15 @@ export const ExportAttendanceModal = ({
                   Day & Date Columns
                 </strong>
                 <span className="text-[11px]">
-                  Header Row: Date (`01 Sep` to `{daysInMonth} Sep`)
-                  <br />
-                  Subheader: Day (`Mon`, `Tue`...)
+                  {isAllMonths ? (
+                    <>Dedicated timesheet sheets with calendar dates for each month.</>
+                  ) : (
+                    <>
+                      Header Row: Date (`01 {selectedMonthObj.label.slice(0, 3)}` to `{daysInMonth} {selectedMonthObj.label.slice(0, 3)}`)
+                      <br />
+                      Subheader: Day (`Mon`, `Tue`...)
+                    </>
+                  )}
                 </span>
               </div>
             </div>
@@ -162,7 +180,9 @@ export const ExportAttendanceModal = ({
                   Total Monthly Working Hours
                 </strong>
                 <span className="text-[11px]">
-                  Accurate monthly total hours per employee strictly for {selectedMonthObj.label}.
+                  {isAllMonths
+                    ? 'Accurate working hours and overtime calculated across all recorded months.'
+                    : `Accurate monthly total hours per employee strictly for ${selectedMonthObj.label}.`}
                 </span>
               </div>
             </div>
@@ -182,7 +202,11 @@ export const ExportAttendanceModal = ({
             onClick={handleConfirm}
             className="!bg-brand-600 hover:!bg-brand-700 text-white font-bold shadow-sm"
           >
-            {isExporting ? 'Generating Excel...' : `Download ${selectedMonthObj.label} Report`}
+            {isExporting
+              ? 'Generating Excel...'
+              : isAllMonths
+              ? 'Download All Months Report'
+              : `Download ${selectedMonthObj.label} Report`}
           </Button>
         </div>
       </div>

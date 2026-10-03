@@ -308,12 +308,18 @@ export const AttendanceDashboardPage = () => {
       setIsExporting(true);
       toast.info(`Preparing ${monthLabel} attendance report...`);
 
-      const [yearStr, monthNumStr] = month.split('-');
-      const y = parseInt(yearStr, 10);
-      const m = parseInt(monthNumStr, 10);
-      const daysInMonth = new Date(y, m, 0).getDate();
-      const startDate = `${month}-01`;
-      const endDate = `${month}-${String(daysInMonth).padStart(2, '0')}`;
+      const isAllMonths = month === 'all';
+      let startDate = undefined;
+      let endDate = undefined;
+
+      if (!isAllMonths && month.includes('-')) {
+        const [yearStr, monthNumStr] = month.split('-');
+        const y = parseInt(yearStr, 10);
+        const m = parseInt(monthNumStr, 10);
+        const daysInMonth = new Date(y, m, 0).getDate();
+        startDate = `${month}-01`;
+        endDate = `${month}-${String(daysInMonth).padStart(2, '0')}`;
+      }
 
       let exportRecords = [];
       if (activeTab === 'org' && canViewOrg) {

@@ -185,57 +185,25 @@ export const getDatesForSingleMonth = (monthKey) => {
   return dates;
 };
 
-/**
- * Export strictly ONE MONTH attendance report to Excel
- * Prevents multiple months from being merged together.
- */
-export const exportAttendanceToExcel = async (records = [], options = {}) => {
-  if (!Array.isArray(records) || records.length === 0) {
-    throw new Error('No attendance records found for this period to export.');
-  }
-
-  const {
-    filters = {},
-    month = '',
-    monthLabel = '',
-    orgName = 'TaskNera HRMS',
-  } = options;
-
-  // Determine target month: e.g. '2026-09'
-  let targetMonth = month;
-  if (!targetMonth && filters.startDate) {
-    targetMonth = filters.startDate.substring(0, 7);
-  }
-  if (!targetMonth && records[0]?.attendanceDate) {
-    targetMonth = getLocalDateString(records[0].attendanceDate).substring(0, 7);
-  }
-  if (!targetMonth) {
-    targetMonth = '2026-09';
-  }
-
-  // Strictly filter records for this target month only
-  const monthRecords = records.filter((r) => {
-    const dStr = getLocalDateString(r.attendanceDate);
-    return dStr.startsWith(targetMonth);
-  });
-
-  if (monthRecords.length === 0) {
-    throw new Error(`No attendance records found for ${targetMonth}.`);
-  }
-
-  // Get full sequence of dates for this single calendar month
-  const sortedDates = getDatesForSingleMonth(targetMonth);
-
-  // Month title: e.g. "September 2026"
-  const [yStr, mStr] = targetMonth.split('-');
+// ==========================================
+// Helper: Build Single Monthly Timesheet Worksheet
+// ==========================================
+const buildMonthlyMatrixWorksheet = (
+  workbook,
+  targetMonthStr,
+  monthRecords,
+  orgName,
+  customMonthTitle = null
+) => {
+  const sortedDates = getDatesForSingleMonth(targetMonthStr);
+  const [yStr, mStr] = targetMonthStr.split('-');
   const monthObj = new Date(parseInt(yStr, 10), parseInt(mStr, 10) - 1, 1);
   const cleanMonthTitle =
-    monthLabel ||
+    customMonthTitle ||
     monthObj.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
   // Group records by employee
   const employeeMap = new Map();
-
   monthRecords.forEach((rec) => {
     const empId =
       rec.employeeId ||
@@ -289,16 +257,6 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
     a.fullName.localeCompare(b.fullName)
   );
 
-  // ==========================================
-  // Initialize ExcelJS Workbook
-  // ==========================================
-  const workbook = new ExcelJS.Workbook();
-  workbook.creator = 'TaskNera HRMS';
-  workbook.created = new Date();
-
-  // =========================================================================
-  // SHEET 1: Monthly Attendance Timesheet (Single Month Grid)
-  // =========================================================================
   const sheetName = `${cleanMonthTitle} Timesheet`.substring(0, 31);
   const wsMatrix = workbook.addWorksheet(sheetName, {
     views: [{ state: 'frozen', xSplit: 3, ySplit: 5 }],
@@ -460,15 +418,20 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
       cell.font = { name: 'Segoe UI', size: 9 };
 
       if (colNumber === 1) {
-        cell.font = { name: 'Segoe UI', size: 9, bold: true };
+        cell.font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: 'FF334155' } };
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: baseBg } };
-      } else if (colNumber === 2 || colNumber === 3) {
-        cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+      } else if (colNumber === 2) {
+        cell.alignment = { vertical: 'middle', horizontal: 'left' };
+        cell.font = { name: 'Segoe UI', size: 9.5, bold: true, color: { argb: 'FF0F172A' } };
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: baseBg } };
-        if (colNumber === 2) cell.font = { name: 'Segoe UI', size: 9.5, bold: true };
-      } else if (colNumber > 3 && colNumber <= 3 + sortedDates.length) {
+      } else if (colNumber === 3) {
+        cell.alignment = { vertical: 'middle', horizontal: 'left' };
+        cell.font = { name: 'Segoe UI', size: 9, color: { argb: 'FF475569' } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: baseBg } };
+      } else if (colNumber <= 3 + sortedDates.length) {
+        // Daily attendance cell
         const val = String(cell.value || '');
-        if (val.includes('–') || val.includes('Present')) {
+        if (val.includes('–') || val.startsWith('Present')) {
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.PRESENT_BG } };
           cell.font = { name: 'Segoe UI', size: 8.5, color: { argb: COLORS.PRESENT_TXT } };
         } else if (val === 'ABSENT') {
@@ -510,9 +473,13 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
   wsMatrix.getColumn(summaryStartCol + 3).width = 28;
   wsMatrix.getColumn(summaryStartCol + 4).width = 18;
 
-  // =========================================================================
-  // SHEET 2: Daily Attendance Logs (Single Month Only)
-  // =========================================================================
+  return { employeeList, cleanMonthTitle };
+};
+
+// ==========================================
+// Helper: Build Daily Attendance Logs Worksheet
+// ==========================================
+const buildDailyLogsWorksheet = (workbook, exportRecords, cleanMonthTitle, orgName) => {
   const wsLogs = workbook.addWorksheet('Daily Attendance Logs', {
     views: [{ state: 'frozen', xSplit: 0, ySplit: 4 }],
     properties: { defaultRowHeight: 24 },
@@ -527,7 +494,7 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
 
   wsLogs.mergeCells('A2:G2');
   const logsSub = wsLogs.getCell('A2');
-  logsSub.value = `Month: ${cleanMonthTitle} | Total Records: ${monthRecords.length} | Generated: ${new Date().toLocaleString()}`;
+  logsSub.value = `Report Scope: ${cleanMonthTitle} | Total Records: ${exportRecords.length} | Generated: ${new Date().toLocaleString()}`;
   logsSub.font = { name: 'Segoe UI', size: 10, italic: true, color: { argb: 'FF64748B' } };
   logsSub.alignment = { vertical: 'middle', horizontal: 'left' };
   wsLogs.getRow(2).height = 20;
@@ -548,9 +515,9 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
     'Hours Worked (Decimal)',
     'Break Duration',
     'Overtime (OT)',
-    'Status',
-    'Assigned Shift',
-    'Adjusted / Regularized',
+    'Attendance Status',
+    'Shift Assigned',
+    'Is Regularized',
     'Remarks / Notes',
   ];
 
@@ -567,31 +534,31 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
     cell.border = BORDERS.header;
   });
 
-  const sortedMonthRecords = [...monthRecords].sort((a, b) => {
-    const dComp = (a.attendanceDate || '').localeCompare(b.attendanceDate || '');
-    if (dComp !== 0) return dComp;
-    const nameA = a.employee?.firstName || a.fullName || '';
-    const nameB = b.employee?.firstName || b.fullName || '';
-    return nameA.localeCompare(nameB);
+  const sortedLogs = [...exportRecords].sort((a, b) => {
+    const da = new Date(a.attendanceDate || 0);
+    const db = new Date(b.attendanceDate || 0);
+    if (da - db !== 0) return da - db;
+    const na = (a.employee?.firstName || a.fullName || '').toLowerCase();
+    const nb = (b.employee?.firstName || b.fullName || '').toLowerCase();
+    return na.localeCompare(nb);
   });
 
-  sortedMonthRecords.forEach((rec, idx) => {
-    const displayDate = formatDisplayDate(rec.attendanceDate);
-    const dayOfWeek = getDayOfWeek(rec.attendanceDate, 'long');
-    const inTime = formatTimeWithSeconds(rec.checkIn);
-    const outTime = formatTimeWithSeconds(rec.checkOut);
-    const inTime12 = formatTime12h(rec.checkIn);
-    const outTime12 = formatTime12h(rec.checkOut);
-    const punchWindow =
-      inTime12 && outTime12
-        ? `${inTime12} – ${outTime12}`
-        : inTime12
-        ? `${inTime12} – (Active Session)`
-        : '—';
-
+  sortedLogs.forEach((rec, idx) => {
+    const d = new Date(rec.attendanceDate);
+    const displayDate = formatDisplayDate(d);
+    const dayOfWeek = getDayOfWeek(d, 'short');
+    const inTime = formatTime12h(rec.checkIn);
+    const outTime = formatTime12h(rec.checkOut);
     const hours = Number(rec.totalHours || 0);
     const ot = Number(rec.overtimeHours || 0);
-    const breakMins = Number(rec.breakDurationMinutes || 0);
+    const breakMins = rec.breakDurationMinutes || 0;
+
+    let punchWindow = '—';
+    if (inTime && outTime) {
+      punchWindow = `${inTime} – ${outTime}`;
+    } else if (inTime) {
+      punchWindow = `${inTime} – Active (Working)`;
+    }
 
     const empCode = rec.employee?.employeeCode || rec.employeeCode || '—';
     const empName =
@@ -705,25 +672,75 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
     from: { row: 4, column: 1 },
     to: { row: 4, column: logHeaders.length },
   };
+};
 
-  // =========================================================================
-  // SHEET 3: Monthly Hours Summary (Per Employee for this Month)
-  // =========================================================================
+// ==========================================
+// Helper: Build Employee Hours Summary Worksheet
+// ==========================================
+const buildMonthlySummaryWorksheet = (workbook, exportRecords, cleanMonthTitle, orgName) => {
   const wsSummary = workbook.addWorksheet('Monthly Hours Summary', {
     views: [{ state: 'frozen', xSplit: 0, ySplit: 4 }],
     properties: { defaultRowHeight: 25 },
   });
 
+  // Group by employee
+  const employeeMap = new Map();
+  exportRecords.forEach((rec) => {
+    const empId =
+      rec.employeeId ||
+      rec.employee?.id ||
+      rec.employeeCode ||
+      rec.employee?.employeeCode ||
+      'UNKNOWN';
+    const empCode = rec.employee?.employeeCode || rec.employeeCode || '—';
+    const firstName = rec.employee?.firstName || rec.firstName || '';
+    const lastName = rec.employee?.lastName || rec.lastName || '';
+    const fullName =
+      (firstName || lastName ? `${firstName} ${lastName}`.trim() : null) ||
+      rec.fullName ||
+      rec.employeeName ||
+      'Staff Member';
+    const dept =
+      rec.employee?.departmentName ||
+      rec.employee?.department?.name ||
+      (typeof rec.department === 'object' ? rec.department?.name : rec.department) ||
+      'General';
+    const designation =
+      rec.employee?.designationName ||
+      rec.employee?.designation?.title ||
+      rec.designation ||
+      'Employee';
+    const shiftTiming =
+      rec.employee?.shiftTiming || rec.shiftTiming || '11:00 AM - 07:00 PM';
+
+    if (!employeeMap.has(empId)) {
+      employeeMap.set(empId, {
+        id: empId,
+        empCode,
+        fullName,
+        dept,
+        designation,
+        shiftTiming,
+        records: [],
+      });
+    }
+    employeeMap.get(empId).records.push(rec);
+  });
+
+  const employeeList = Array.from(employeeMap.values()).sort((a, b) =>
+    a.fullName.localeCompare(b.fullName)
+  );
+
   wsSummary.mergeCells('A1:G1');
   const sumTitle = wsSummary.getCell('A1');
-  sumTitle.value = `${orgName} — Employee Monthly Working Hours Summary (${cleanMonthTitle})`;
+  sumTitle.value = `${orgName} — Employee Working Hours Summary (${cleanMonthTitle})`;
   sumTitle.font = { name: 'Segoe UI', size: 14, bold: true, color: { argb: 'FF1E3A8A' } };
   sumTitle.alignment = { vertical: 'middle', horizontal: 'left' };
   wsSummary.getRow(1).height = 28;
 
   wsSummary.mergeCells('A2:G2');
   const sumSub = wsSummary.getCell('A2');
-  sumSub.value = `Month: ${cleanMonthTitle} | Total Employees: ${employeeList.length} | Generated: ${new Date().toLocaleString()}`;
+  sumSub.value = `Scope: ${cleanMonthTitle} | Total Employees: ${employeeList.length} | Generated: ${new Date().toLocaleString()}`;
   sumSub.font = { name: 'Segoe UI', size: 10, italic: true, color: { argb: 'FF64748B' } };
   sumSub.alignment = { vertical: 'middle', horizontal: 'left' };
   wsSummary.getRow(2).height = 20;
@@ -737,7 +754,7 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
     'Department',
     'Designation',
     'Assigned Shift',
-    'Report Month',
+    'Report Scope',
     'Days Present',
     'Days Absent',
     'Days Leave',
@@ -853,9 +870,13 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
     to: { row: 4, column: sumHeaders.length },
   };
 
-  // ==========================================
-  // Trigger Browser Download
-  // ==========================================
+  return { employeeCount: employeeList.length };
+};
+
+// ==========================================
+// Helper: Trigger Browser Download
+// ==========================================
+const downloadWorkbook = async (workbook, cleanMonthTitle, recordCount, employeeCount, orgName) => {
   const buffer = await workbook.xlsx.writeBuffer();
   const cleanOrg = orgName.replace(/[^a-zA-Z0-9_-]/g, '_');
   const cleanMonth = cleanMonthTitle.replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -877,9 +898,103 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
 
   return {
     fileName,
-    recordCount: monthRecords.length,
-    employeeCount: employeeList.length,
+    recordCount,
+    employeeCount,
     month: cleanMonthTitle,
     buffer,
   };
+};
+
+/**
+ * Main export function supporting Single-Month and ALL MONTHS selection
+ */
+export const exportAttendanceToExcel = async (records = [], options = {}) => {
+  if (!Array.isArray(records) || records.length === 0) {
+    throw new Error('No attendance records found for this period to export.');
+  }
+
+  const {
+    filters = {},
+    month = '',
+    monthLabel = '',
+    orgName = 'TaskNera HRMS',
+  } = options;
+
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'TaskNera HRMS';
+  workbook.created = new Date();
+
+  const isAllMonths = month === 'all';
+
+  if (isAllMonths) {
+    // 1. Identify all distinct months present in the dataset
+    const distinctMonths = [
+      ...new Set(
+        records
+          .map((r) => {
+            const dStr = getLocalDateString(r.attendanceDate);
+            return dStr && /^\d{4}-\d{2}/.test(dStr) ? dStr.substring(0, 7) : null;
+          })
+          .filter(Boolean)
+      ),
+    ].sort();
+
+    if (distinctMonths.length === 0) {
+      distinctMonths.push('2026-09');
+    }
+
+    // 2. Generate a dedicated monthly timesheet tab for each month
+    distinctMonths.forEach((mStr) => {
+      const monthRecs = records.filter((r) => {
+        const dStr = getLocalDateString(r.attendanceDate);
+        return dStr && dStr.startsWith(mStr);
+      });
+      if (monthRecs.length > 0) {
+        buildMonthlyMatrixWorksheet(workbook, mStr, monthRecs, orgName);
+      }
+    });
+
+    // 3. Generate consolidated Daily Attendance Register across all months
+    buildDailyLogsWorksheet(workbook, records, 'All Months', orgName);
+
+    // 4. Generate Employee Working Hours Summary across all months
+    const summaryResult = buildMonthlySummaryWorksheet(workbook, records, 'All Months', orgName);
+
+    // 5. Download workbook
+    return downloadWorkbook(workbook, 'All_Months', records.length, summaryResult.employeeCount, orgName);
+  } else {
+    // Single Month Mode
+    let targetMonth = month;
+    if (!targetMonth && filters.startDate) {
+      targetMonth = filters.startDate.substring(0, 7);
+    }
+    if (!targetMonth && records[0]?.attendanceDate) {
+      targetMonth = getLocalDateString(records[0].attendanceDate).substring(0, 7);
+    }
+    if (!targetMonth) {
+      targetMonth = '2026-09';
+    }
+
+    // Strictly filter records for this target month only
+    const monthRecords = records.filter((r) => {
+      const dStr = getLocalDateString(r.attendanceDate);
+      return dStr && dStr.startsWith(targetMonth);
+    });
+
+    if (monthRecords.length === 0) {
+      throw new Error(`No attendance records found for ${targetMonth}.`);
+    }
+
+    const [yStr, mStr] = targetMonth.split('-');
+    const monthObj = new Date(parseInt(yStr, 10), parseInt(mStr, 10) - 1, 1);
+    const cleanMonthTitle =
+      monthLabel ||
+      monthObj.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+    buildMonthlyMatrixWorksheet(workbook, targetMonth, monthRecords, orgName, cleanMonthTitle);
+    buildDailyLogsWorksheet(workbook, monthRecords, cleanMonthTitle, orgName);
+    const summaryResult = buildMonthlySummaryWorksheet(workbook, monthRecords, cleanMonthTitle, orgName);
+
+    return downloadWorkbook(workbook, cleanMonthTitle, monthRecords.length, summaryResult.employeeCount, orgName);
+  }
 };
