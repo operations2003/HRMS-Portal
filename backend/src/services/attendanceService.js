@@ -35,108 +35,12 @@ const resolveRequesterEmployee = async (user) => {
   return null;
 };
 
-/**
- * Parse a time string into 24-hour hour and minute
- * Handles:
- *   - 12-hour AM/PM: "1:00 AM", "01:00 AM", "11:34 PM", "12:00 AM" (0:00), "12:00 PM" (12:00)
- *   - 24-hour: "13:00", "23:34", "07:00", "00:15"
- */
-export const parseTimeStr = (str) => {
-  if (!str || typeof str !== 'string') return null;
-  const trimmed = str.trim();
-  const match12 = trimmed.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?/i);
-  if (match12) {
-    let h = parseInt(match12[1], 10);
-    const m = parseInt(match12[2], 10);
-    const period = (match12[3] || '').toUpperCase();
-    if (period === 'PM' && h < 12) h += 12;
-    if (period === 'AM' && h === 12) h = 0;
-    return { hour: h, minute: m };
-  }
-  const match24 = trimmed.match(/^(\d{1,2}):(\d{2})/);
-  if (match24) {
-    return { hour: parseInt(match24[1], 10), minute: parseInt(match24[2], 10) };
-  }
-  return null;
-};
-
-/**
- * Parse start hour and minute from shift timing string
- * Supports: "03:00 PM - 08:00 PM", "1:00 AM - 7:00 PM", "11:00 AM to 07:00 PM", "15:00 - 23:00", etc.
- */
-export const parseShiftStartTime = (shiftTiming) => {
-  if (!shiftTiming || typeof shiftTiming !== 'string') {
-    return { hour: 11, minute: 0 };
-  }
-  const parts = shiftTiming.split(/\s*[-–—]|\s+to\s+/i).map((s) => s.trim()).filter(Boolean);
-  const startStr = parts.length > 0 ? parts[0] : shiftTiming;
-  const parsed = parseTimeStr(startStr);
-  return parsed || { hour: 11, minute: 0 };
-};
-
-/**
- * Parse start, end, overnight flag, and scheduled duration hours from shift timing string.
- * Supports:
- *   - 12-hour: "01:00 AM - 07:00 PM", "1:00 AM–7:00 PM", "11:00 AM to 07:00 PM", "06:08 PM - 07:00 AM"
- *   - 24-hour: "21:00 - 05:00", "09:30 - 18:30"
- *   - Midnight / noon edges: "12:00 AM - 08:00 AM", "12:00 PM - 08:00 PM"
- */
-export const parseShiftTiming = (shiftTiming) => {
-  const defaultShift = {
-    startHour: 11,
-    startMinute: 0,
-    endHour: 19,
-    endMinute: 0,
-    scheduledDurationHours: 8.0,
-    isOvernight: false,
-  };
-
-  if (!shiftTiming || typeof shiftTiming !== 'string') {
-    return defaultShift;
-  }
-
-  const parts = shiftTiming.split(/\s*[-–—]|\s+to\s+/i).map((s) => s.trim()).filter(Boolean);
-  if (parts.length < 2) {
-    const start = parseShiftStartTime(shiftTiming);
-    const endH = (start.hour + 8) % 24;
-    return {
-      startHour: start.hour,
-      startMinute: start.minute,
-      endHour: endH,
-      endMinute: start.minute,
-      scheduledDurationHours: 8.0,
-      isOvernight: endH < start.hour,
-    };
-  }
-
-  const start = parseTimeStr(parts[0]);
-  const end = parseTimeStr(parts[1]);
-
-  if (!start || !end) {
-    return defaultShift;
-  }
-
-  let startMinutes = start.hour * 60 + start.minute;
-  let endMinutes = end.hour * 60 + end.minute;
-  let isOvernight = false;
-
-  if (endMinutes <= startMinutes) {
-    // Overnight shift crossing midnight (e.g. 06:08 PM to 07:00 AM, 09:00 PM to 05:00 AM)
-    endMinutes += 24 * 60;
-    isOvernight = true;
-  }
-
-  const durationHours = parseFloat(((endMinutes - startMinutes) / 60).toFixed(2));
-
-  return {
-    startHour: start.hour,
-    startMinute: start.minute,
-    endHour: end.hour,
-    endMinute: end.minute,
-    scheduledDurationHours: durationHours > 0 ? durationHours : 8.0,
-    isOvernight,
-  };
-};
+export {
+  parseTimeStr,
+  parseShiftStartTime,
+  parseShiftTiming,
+  hasShiftStarted,
+} from '../utils/shiftUtils.js';
 
 /**
  * Universal deterministic calculation of actual working duration and overtime.
@@ -558,12 +462,12 @@ export const attendanceService = {
     const status = determineAttendanceStatus(serverNow, shiftTiming, tz, 10);
 
     if (existing) {
-      // If a shell record already exists (e.g. ABSENT or initialized), update it with check-in
+      // If a shell record already exists (e.g. NOT_STARTED, ABSENT or initialized), update it with check-in
       return attendanceRepository.update(existing.id, {
         checkIn: serverNow,
         status,
-        source: data.source || existing.source || 'WEB',
-        notes: data.notes || existing.notes || '',
+        source: data.source || 'WEB',
+        notes: data.notes !== undefined ? data.notes : (existing.source?.startsWith('SYSTEM_') ? '' : existing.notes || ''),
         location: data.location || existing.location || {},
       });
     }

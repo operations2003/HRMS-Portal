@@ -7,6 +7,7 @@ import { logger } from '../utils/logger.js';
 import { notificationService } from './notificationService.js';
 import { validateEmployeeId } from '../validators/managerValidator.js';
 import { CEO_ADMIN_EXCLUSION_SQL } from '../utils/roleUtils.js';
+import { hasShiftStarted } from '../utils/shiftUtils.js';
 
 const normalizeRole = (r) => (r || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -320,7 +321,8 @@ export const teamService = {
             COUNT(e.id) FILTER (WHERE LOWER(e.status) = 'active')::int AS "activeMembers",
             COUNT(e.id) FILTER (WHERE LOWER(e.status) = 'on leave')::int AS "onLeaveToday",
             COUNT(DISTINCT a.id) FILTER (WHERE a.status IN ('PRESENT', 'HALF_DAY'))::int AS "presentToday",
-            COUNT(DISTINCT a.id) FILTER (WHERE a.status = 'LATE')::int AS "lateToday"
+            COUNT(DISTINCT a.id) FILTER (WHERE a.status = 'LATE')::int AS "lateToday",
+            COUNT(DISTINCT a.id) FILTER (WHERE a.status = 'ABSENT')::int AS "absentToday"
           FROM employees e
           LEFT JOIN attendance_records a 
             ON a.employee_id = e.id 
@@ -369,7 +371,7 @@ export const teamService = {
         onLeaveToday,
         presentToday,
         lateToday,
-        absentToday: Math.max(0, totalMembers - presentToday - lateToday - onLeaveToday),
+        absentToday: row.absentToday || 0,
         pendingLeaveApprovals: isHrAdmin || this.isManager(currentUser) ? leaveRes.rows[0]?.pendingLeaves || 0 : undefined,
         pendingAppraisals: isHrAdmin || this.isManager(currentUser) ? perfRes.rows[0]?.pendingAppraisals || 0 : undefined,
         departmentBreakdown: deptRes.rows.map((r) => ({
@@ -564,7 +566,7 @@ export const teamService = {
             breakHistory: Array.isArray(r.breakHistory) ? r.breakHistory : [],
           }
         : {
-            status: 'ABSENT',
+            status: hasShiftStarted(r.shiftTiming) ? 'ABSENT' : 'NOT_STARTED',
             punchIn: null,
             punchOut: null,
             totalHours: 0,

@@ -575,22 +575,27 @@ export const TeamManagementPage = () => {
       render: (row) => {
         const isOnBreak = Boolean(row.attendance?.isOnBreak || row.isOnBreak);
         const breakDuration = row.attendance?.breakDurationMinutes || row.breakDurationMinutes || 0;
-        const status = (row.attendance?.status || row.status || 'ABSENT').toUpperCase();
+        const rawStatus = (row.attendance?.status || row.status || 'ABSENT').toUpperCase();
+        const isNotStarted = rawStatus === 'NOT_STARTED' || rawStatus === 'YET_TO_CHECK_IN';
         return (
           <div className="flex items-center gap-1.5 flex-wrap">
             <Badge
               variant={
-                status === 'PRESENT'
+                rawStatus === 'PRESENT'
                   ? 'success'
-                  : status === 'LATE'
+                  : rawStatus === 'LATE'
                   ? 'warning'
-                  : status === 'HALF_DAY'
+                  : rawStatus === 'HALF_DAY'
                   ? 'info'
+                  : rawStatus === 'ON_LEAVE'
+                  ? 'brand'
+                  : isNotStarted
+                  ? 'neutral'
                   : 'danger'
               }
               size="sm"
             >
-              {status}
+              {isNotStarted ? 'Shift Not Started' : rawStatus.replace(/_/g, ' ')}
             </Badge>
             {isOnBreak && (
               <span
@@ -617,54 +622,58 @@ export const TeamManagementPage = () => {
     {
       header: 'Action',
       className: 'text-right',
-      render: (row) => (
-        <div className="flex items-center justify-end gap-1.5">
-          {((row.attendance?.status === 'ABSENT') || (!row.attendance?.punchIn && !row.attendance?.checkIn && row.attendance?.status !== 'ON_LEAVE')) && (() => {
-            const userRole = (user?.role || user?.roleName || '').toLowerCase();
-            const isAdmin = ['admin', 'superadmin', 'orgadmin'].includes(userRole);
-            if (isAdmin) return true;
-            const targetRole = (row.roleName || row.role || 'Employee').toLowerCase();
-            const isTargetHrOrManager = ['manager', 'lead', 'teamlead', 'supervisor', 'hr', 'hrmanager'].some((r) => targetRole.includes(r));
-            if (isTargetHrOrManager) return false;
-            return ['manager', 'lead', 'teamlead', 'supervisor', 'hr', 'hrmanager'].some((r) => userRole.includes(r));
-          })() && (
+      render: (row) => {
+        const curStatus = (row.attendance?.status || row.status || '').toUpperCase();
+        const isActuallyAbsent = curStatus === 'ABSENT';
+        return (
+          <div className="flex items-center justify-end gap-1.5">
+            {isActuallyAbsent && (() => {
+              const userRole = (user?.role || user?.roleName || '').toLowerCase();
+              const isAdmin = ['admin', 'superadmin', 'orgadmin'].includes(userRole);
+              if (isAdmin) return true;
+              const targetRole = (row.roleName || row.role || 'Employee').toLowerCase();
+              const isTargetHrOrManager = ['manager', 'lead', 'teamlead', 'supervisor', 'hr', 'hrmanager'].some((r) => targetRole.includes(r));
+              if (isTargetHrOrManager) return false;
+              return ['manager', 'lead', 'teamlead', 'supervisor', 'hr', 'hrmanager'].some((r) => userRole.includes(r));
+            })() && (
+              <Button
+                size="sm"
+                variant="primary"
+                icon={Umbrella}
+                className="!bg-brand-600 hover:!bg-brand-700 text-white !py-1 !px-2.5 !text-xs font-semibold shadow-xs"
+                onClick={() => handleOpenConvertAbsence(row)}
+                title="Convert this absence into an approved leave and deduct from bucket"
+              >
+                Convert to Leave
+              </Button>
+            )}
+            {row.attendance && (
+              <Button
+                size="sm"
+                variant={row.attendance.status === 'LATE' ? 'primary' : 'secondary'}
+                icon={Clock}
+                className={
+                  row.attendance.status === 'LATE'
+                    ? '!bg-amber-600 hover:!bg-amber-700 text-white !py-1 !px-2.5 !text-xs font-semibold shadow-xs'
+                    : '!py-1 !px-2.5 !text-xs text-slate-700 hover:text-slate-900 border-slate-200'
+                }
+                onClick={() => handleEditTiming(row)}
+                title="Adjust arrival/departure timing"
+              >
+                {row.attendance.status === 'LATE' ? 'Adjust Late Arrival' : 'Edit Timing'}
+              </Button>
+            )}
             <Button
               size="sm"
-              variant="primary"
-              icon={Umbrella}
-              className="!bg-brand-600 hover:!bg-brand-700 text-white !py-1 !px-2.5 !text-xs font-semibold shadow-xs"
-              onClick={() => handleOpenConvertAbsence(row)}
-              title="Convert this absence into an approved leave and deduct from bucket"
+              variant="ghost"
+              icon={Eye}
+              onClick={() => handleViewPunch(row)}
             >
-              Convert to Leave
+              View Punch
             </Button>
-          )}
-          {row.attendance && (
-            <Button
-              size="sm"
-              variant={row.attendance.status === 'LATE' ? 'primary' : 'secondary'}
-              icon={Clock}
-              className={
-                row.attendance.status === 'LATE'
-                  ? '!bg-amber-600 hover:!bg-amber-700 text-white !py-1 !px-2.5 !text-xs font-semibold shadow-xs'
-                  : '!py-1 !px-2.5 !text-xs text-slate-700 hover:text-slate-900 border-slate-200'
-              }
-              onClick={() => handleEditTiming(row)}
-              title="Adjust arrival/departure timing"
-            >
-              {row.attendance.status === 'LATE' ? 'Adjust Late Arrival' : 'Edit Timing'}
-            </Button>
-          )}
-          <Button
-            size="sm"
-            variant="ghost"
-            icon={Eye}
-            onClick={() => handleViewPunch(row)}
-          >
-            View Punch
-          </Button>
-        </div>
-      ),
+          </div>
+        );
+      },
     },
   ];
 

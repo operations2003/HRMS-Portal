@@ -1,5 +1,6 @@
 import { pool } from '../config/db.js';
 import { CEO_ADMIN_EXCLUSION_SQL, getCeoAdminExclusionSql } from '../utils/roleUtils.js';
+import { hasShiftStarted } from '../utils/shiftUtils.js';
 
 /**
  * Maps raw database row to standardized Attendance domain model
@@ -666,29 +667,85 @@ export const attendanceRepository = {
 
   /**
    * Automatically marks active employees who have not logged in as ABSENT for a specific date.
-   * Excludes employees who are on approved leave or if the date is an organization holiday.
+   * STRICT SLOT TIMING RULE:
+   *   - If targetDate is today: an employee is ONLY marked ABSENT if their slot/shift timing has arrived/passed.
+   *     If their slot timing has not started yet, their record is kept as 'NOT_STARTED' (or upcoming).
+   *     Premature absences created before shift start are automatically corrected to 'NOT_STARTED'.
+   *   - If targetDate is a past date: all shifts have concluded, so un-logged employees are ABSENT.
+   *   - If targetDate is a future date: 0 absences are marked.
    */
   async syncDailyAbsences(orgId, targetDate = new Date().toISOString().split('T')[0]) {
-    const sql = `
-      INSERT INTO attendance_records (
-        id, org_id, employee_id, attendance_date, timezone,
-        check_in, check_out, total_hours, status,
-        source, notes, created_at, updated_at
-      )
-      SELECT
-        'att-abs-' || e.id || '-' || $2,
-        e.org_id,
-        e.id,
-        $2::date,
-        'Asia/Kolkata',
-        NULL,
-        NULL,
-        0.00,
-        'ABSENT',
-        'SYSTEM_ABSENCE_CUTOFF',
-        'Auto-marked Absent: Did not log in for the day',
-        NOW(),
-        NOW()
+    const nowKolkata = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+    const todayStr = [
+      nowKolkata.getFullYear(),
+      String(nowKolkata.getMonth() + 1).padStart(2, '0'),
+      String(nowKolkata.getDate()).padStart(2, '0'),
+    ].join('-');
+    const cleanTargetDate = typeof targetDate === 'string' ? targetDate.split('T')[0] : targetDate;
+
+    // Never mark absences for future dates
+    if (cleanTargetDate > todayStr) {
+      return 0;
+    }
+
+    // 1. For today: Fix any premature 'ABSENT' records where shift hasn't even started yet
+    if (cleanTargetDate === todayStr) {
+      const prematureRes = await pool.query(
+        `SELECT a.id, a.employee_id, e.shift_timing
+         FROM attendance_records a
+         JOIN employees e ON e.id = a.employee_id
+         WHERE a.org_id = $1
+           AND a.attendance_date = $2::date
+           AND a.status = 'ABSENT'
+           AND a.source = 'SYSTEM_ABSENCE_CUTOFF'
+           AND a.check_in IS NULL;`,
+        [orgId, cleanTargetDate]
+      );
+
+      for (const row of prematureRes.rows) {
+        if (!hasShiftStarted(row.shift_timing, cleanTargetDate)) {
+          await pool.query(
+            `UPDATE attendance_records
+             SET status = 'NOT_STARTED',
+                 source = 'SYSTEM_UPCOMING_SHIFT',
+                 notes = 'Shift Not Started'
+             WHERE id = $1;`,
+            [row.id]
+          );
+        }
+      }
+
+      // 2. Also, if any records for today are 'NOT_STARTED', but their shift has now started and check_in is NULL,
+      // transition them to ABSENT!
+      const pendingRes = await pool.query(
+        `SELECT a.id, a.employee_id, e.shift_timing
+         FROM attendance_records a
+         JOIN employees e ON e.id = a.employee_id
+         WHERE a.org_id = $1
+           AND a.attendance_date = $2::date
+           AND a.status = 'NOT_STARTED'
+           AND a.check_in IS NULL;`,
+        [orgId, cleanTargetDate]
+      );
+
+      for (const row of pendingRes.rows) {
+        if (hasShiftStarted(row.shift_timing, cleanTargetDate)) {
+          await pool.query(
+            `UPDATE attendance_records
+             SET status = 'ABSENT',
+                 source = 'SYSTEM_ABSENCE_CUTOFF',
+                 notes = 'Auto-marked Absent: Did not log in at slot timing',
+                 updated_at = NOW()
+             WHERE id = $1;`,
+            [row.id]
+          );
+        }
+      }
+    }
+
+    // 3. Find active employees who don't have an attendance record for this date
+    const candidateSql = `
+      SELECT e.id, e.shift_timing
       FROM employees e
       WHERE e.org_id = $1
         AND e.status = 'Active'
@@ -713,12 +770,60 @@ export const attendanceRepository = {
             AND h.status = 'Active'
             AND h.is_optional = FALSE
             AND h.holiday_date = $2::date
-        )
-      ON CONFLICT (employee_id, attendance_date) DO NOTHING
-      RETURNING id;
+        );
     `;
-    const res = await pool.query(sql, [orgId, targetDate]);
-    return res.rowCount || 0;
+
+    const candidateRes = await pool.query(candidateSql, [orgId, cleanTargetDate]);
+    let markedAbsentCount = 0;
+
+    for (const emp of candidateRes.rows) {
+      const shiftStarted = hasShiftStarted(emp.shift_timing, cleanTargetDate);
+      let status = 'ABSENT';
+      let source = 'SYSTEM_ABSENCE_CUTOFF';
+      let notes = 'Auto-marked Absent: Did not log in for the day';
+
+      if (cleanTargetDate === todayStr) {
+        if (!shiftStarted) {
+          status = 'NOT_STARTED';
+          source = 'SYSTEM_UPCOMING_SHIFT';
+          notes = 'Shift Not Started';
+        } else {
+          status = 'ABSENT';
+          source = 'SYSTEM_ABSENCE_CUTOFF';
+          notes = 'Auto-marked Absent: Did not log in at slot timing';
+        }
+      }
+
+      const insSql = `
+        INSERT INTO attendance_records (
+          id, org_id, employee_id, attendance_date, timezone,
+          check_in, check_out, total_hours, status,
+          source, notes, created_at, updated_at
+        ) VALUES (
+          $1, $2, $3, $4::date, 'Asia/Kolkata',
+          NULL, NULL, 0.00, $5,
+          $6, $7, NOW(), NOW()
+        )
+        ON CONFLICT (employee_id, attendance_date) DO NOTHING;
+      `;
+
+      const id = `att-abs-${emp.id}-${cleanTargetDate}`;
+      const insRes = await pool.query(insSql, [
+        id,
+        orgId,
+        emp.id,
+        cleanTargetDate,
+        status,
+        source,
+        notes,
+      ]);
+
+      if (insRes.rowCount > 0 && status === 'ABSENT') {
+        markedAbsentCount++;
+      }
+    }
+
+    return markedAbsentCount;
   },
 
   /**
@@ -746,6 +851,7 @@ export const attendanceRepository = {
            AND lr.end_date >= $2::date
            AND ${getCeoAdminExclusionSql('e2')}) AS "onLeaveCount",
         COUNT(a.id) FILTER (WHERE a.status = 'ABSENT' AND (a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT'))::int AS "absentCount",
+        COUNT(a.id) FILTER (WHERE a.status = 'NOT_STARTED' AND (a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT'))::int AS "notStartedCount",
         COUNT(a.id) FILTER (WHERE a.is_on_break = TRUE AND (a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT'))::int AS "onBreakCount",
         COUNT(a.id) FILTER (WHERE (a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT'))::int AS "totalMarked"
       FROM attendance_records a
@@ -775,6 +881,7 @@ export const attendanceRepository = {
       lateCount,
       onLeaveCount,
       absentCount: row.absentCount || 0,
+      notStartedCount: row.notStartedCount || 0,
       onBreakCount,
       pendingCount,
       attendanceRate: totalEmployees > 0 ? parseFloat((((presentCount + halfDayCount) / totalEmployees) * 100).toFixed(1)) : 0.0,

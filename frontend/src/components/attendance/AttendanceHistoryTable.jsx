@@ -111,6 +111,9 @@ export const AttendanceHistoryTable = ({
         return <Badge variant="neutral">Weekend</Badge>;
       case 'REGULARIZED':
         return <Badge variant="brand">Regularized</Badge>;
+      case 'NOT_STARTED':
+      case 'YET_TO_CHECK_IN':
+        return <Badge variant="neutral">Shift Not Started</Badge>;
       default:
         return <Badge variant="neutral">{status || '—'}</Badge>;
     }

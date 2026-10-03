@@ -424,6 +424,8 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
       } else if (status === 'ABSENT') {
         absentCount++;
         rowData.push('ABSENT');
+      } else if (status === 'NOT_STARTED' || status === 'YET_TO_CHECK_IN') {
+        rowData.push('Shift Not Started');
       } else if (status === 'ON_LEAVE') {
         leaveCount++;
         const lCode = getLeaveShortCode(rec);
@@ -472,6 +474,9 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
         } else if (val === 'ABSENT') {
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.ABSENT_BG } };
           cell.font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: COLORS.ABSENT_TXT } };
+        } else if (val === 'Shift Not Started') {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.WEEKEND_BG } };
+          cell.font = { name: 'Segoe UI', size: 8.5, italic: true, color: { argb: COLORS.WEEKEND_TXT } };
         } else if (val.startsWith('LEAVE') || val === 'LEAVE') {
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.LEAVE_BG } };
           cell.font = { name: 'Segoe UI', size: 8.5, bold: true, color: { argb: COLORS.LEAVE_TXT } };
@@ -605,8 +610,13 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
       rec.employee?.shiftTiming || rec.shiftTiming || '11:00 AM - 07:00 PM';
 
     const isLeave = (rec.status || '').toUpperCase() === 'ON_LEAVE';
+    const isNotStarted = (rec.status || '').toUpperCase() === 'NOT_STARTED' || (rec.status || '').toUpperCase() === 'YET_TO_CHECK_IN';
     const lCode = isLeave ? getLeaveShortCode(rec) : null;
-    const statusDisplay = isLeave ? `ON_LEAVE (${lCode})` : (rec.status || '').toUpperCase();
+    const statusDisplay = isLeave
+      ? `ON_LEAVE (${lCode})`
+      : isNotStarted
+      ? 'SHIFT_NOT_STARTED'
+      : (rec.status || '').toUpperCase();
 
     let remarks = '';
     if (rec.notes) remarks += rec.notes;
@@ -665,6 +675,9 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
         } else if (st.startsWith('ON_LEAVE') || st === 'LEAVE') {
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.LEAVE_BG } };
           cell.font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: COLORS.LEAVE_TXT } };
+        } else if (st === 'SHIFT_NOT_STARTED' || st === 'NOT_STARTED') {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.WEEKEND_BG } };
+          cell.font = { name: 'Segoe UI', size: 8.5, italic: true, color: { argb: COLORS.WEEKEND_TXT } };
         }
       }
     });
