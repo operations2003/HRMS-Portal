@@ -680,7 +680,7 @@ export const attendanceRepository = {
 
       const leaveRes = await pool.query(
         `SELECT lr.id, lr.employee_id, lr.start_date::text, lr.end_date::text,
-                lr.day_fraction, lt.name as leave_name, lt.code as leave_code,
+                lr.is_half_day, lr.total_days, lt.name as leave_name, lt.code as leave_code,
                 e.org_id
          FROM leave_requests lr
          JOIN employees e ON e.id = lr.employee_id
