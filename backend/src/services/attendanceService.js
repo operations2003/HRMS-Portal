@@ -35,12 +35,19 @@ const resolveRequesterEmployee = async (user) => {
   return null;
 };
 
-export {
+import {
   parseTimeStr,
   parseShiftStartTime,
   parseShiftTiming,
   hasShiftStarted,
 } from '../utils/shiftUtils.js';
+
+export {
+  parseTimeStr,
+  parseShiftStartTime,
+  parseShiftTiming,
+  hasShiftStarted,
+};
 
 /**
  * Universal deterministic calculation of actual working duration and overtime.
