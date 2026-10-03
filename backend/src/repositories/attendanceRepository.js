@@ -1,4 +1,5 @@
 import { pool } from '../config/db.js';
+import { logger } from '../utils/logger.js';
 import { CEO_ADMIN_EXCLUSION_SQL, getCeoAdminExclusionSql } from '../utils/roleUtils.js';
 import { hasShiftStarted } from '../utils/shiftUtils.js';
 
@@ -364,7 +365,6 @@ export const attendanceRepository = {
     const conditions = [
       'a.employee_id = $1',
       'a.org_id = $2',
-      "(a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT')" // Exclude leave-based attendance records
     ];
     const values = [employeeId, orgId];
     let paramIndex = 3;
@@ -494,7 +494,6 @@ export const attendanceRepository = {
   async findTeamAttendance(deptId, orgId, { date = '', startDate = '', endDate = '', status = '', search = '', page = 1, limit = 20 } = {}) {
     const conditions = [
       'a.org_id = $1',
-      "(a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT')", // Exclude leave-based attendance records
       CEO_ADMIN_EXCLUSION_SQL,
     ];
     const values = [orgId];
@@ -583,7 +582,6 @@ export const attendanceRepository = {
   async findAllOrgAttendance(orgId, { date = '', startDate = '', endDate = '', deptId = '', status = '', search = '', page = 1, limit = 20 } = {}) {
     const conditions = [
       'a.org_id = $1',
-      "(a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT')", // Exclude leave-based attendance records
       CEO_ADMIN_EXCLUSION_SQL,
     ];
     const values = [orgId];
@@ -666,6 +664,72 @@ export const attendanceRepository = {
   },
 
   /**
+   * Synchronize approved leave requests into attendance_records as ON_LEAVE
+   */
+  async syncApprovedLeaves(orgId, startDate = null, endDate = null) {
+    try {
+      let dateFilter = '';
+      const params = [orgId];
+      if (startDate && endDate) {
+        params.push(startDate, endDate);
+        dateFilter = 'AND lr.end_date >= $2::date AND lr.start_date <= $3::date';
+      } else if (startDate) {
+        params.push(startDate);
+        dateFilter = 'AND lr.end_date >= $2::date';
+      }
+
+      const leaveRes = await pool.query(
+        `SELECT lr.id, lr.employee_id, lr.start_date::text, lr.end_date::text,
+                lr.day_fraction, lt.name as leave_name, lt.code as leave_code,
+                e.org_id
+         FROM leave_requests lr
+         JOIN employees e ON e.id = lr.employee_id
+         LEFT JOIN leave_types lt ON lt.id = lr.leave_type_id
+         WHERE lr.status = 'APPROVED'
+           AND e.org_id = $1
+           ${dateFilter};`,
+        params
+      );
+
+      for (const row of leaveRes.rows) {
+        let curStr = row.start_date;
+        const endStr = row.end_date;
+
+        while (curStr <= endStr) {
+          const recordId = `att-lve-${row.employee_id}-${curStr}`;
+          const leaveName = row.leave_name || 'Leave';
+          const notes = `${leaveName} (Approved)`;
+
+          await pool.query(
+            `INSERT INTO attendance_records (
+              id, org_id, employee_id, attendance_date, timezone,
+              total_hours, status, notes, source, created_at, updated_at
+            ) VALUES (
+              $1, $2, $3, $4::date, 'Asia/Kolkata',
+              0.00, 'ON_LEAVE', $5, 'LEAVE_ASSIGNMENT', NOW(), NOW()
+            )
+            ON CONFLICT (employee_id, attendance_date)
+            DO UPDATE SET
+              status = 'ON_LEAVE',
+              source = 'LEAVE_ASSIGNMENT',
+              notes = EXCLUDED.notes,
+              updated_at = NOW()
+            WHERE attendance_records.status IN ('ABSENT', 'NOT_STARTED')
+               OR (attendance_records.check_in IS NULL AND attendance_records.status != 'ON_LEAVE');`,
+            [recordId, row.org_id, row.employee_id, curStr, notes]
+          );
+
+          const [y, m, d] = curStr.split('-').map(Number);
+          const nextDt = new Date(Date.UTC(y, m - 1, d + 1));
+          curStr = nextDt.toISOString().split('T')[0];
+        }
+      }
+    } catch (err) {
+      logger.warn('AttendanceRepository', `Failed to sync approved leaves: ${err.message}`);
+    }
+  },
+
+  /**
    * Automatically marks active employees who have not logged in as ABSENT for a specific date.
    * STRICT SLOT TIMING RULE:
    *   - If targetDate is today: an employee is ONLY marked ABSENT if their slot/shift timing has arrived/passed.
@@ -675,6 +739,7 @@ export const attendanceRepository = {
    *   - If targetDate is a future date: 0 absences are marked.
    */
   async syncDailyAbsences(orgId, targetDate = new Date().toISOString().split('T')[0]) {
+    await this.syncApprovedLeaves(orgId, targetDate, targetDate);
     const nowKolkata = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
     const todayStr = [
       nowKolkata.getFullYear(),

@@ -322,7 +322,7 @@ export const AttendanceDashboardPage = () => {
       }
 
       let exportRecords = [];
-      if (activeTab === 'org' && canViewOrg) {
+      if (canViewOrg) {
         const res = await attendanceService.getOrgAttendance({
           startDate,
           endDate,

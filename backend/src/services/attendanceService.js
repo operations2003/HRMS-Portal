@@ -995,9 +995,10 @@ export const attendanceService = {
     // Automatically resolve stale sessions before returning team view
     await autoCheckoutStaleRecords(user.orgId);
 
-    // Sync daily absences for target date
+    // Sync daily absences and approved leaves for target date
     const targetDate = query.date || query.startDate || new Date().toISOString().split('T')[0];
     try {
+      await attendanceRepository.syncApprovedLeaves(user.orgId, query.startDate, query.endDate);
       await attendanceRepository.syncDailyAbsences(user.orgId, targetDate);
     } catch (absErr) {
       logger.warn('AttendanceService', `Failed to sync daily absences for team: ${absErr.message}`);
@@ -1037,9 +1038,10 @@ export const attendanceService = {
     // Automatically resolve stale sessions across organization before returning view
     await autoCheckoutStaleRecords(user.orgId);
 
-    // Sync daily absences for target date
+    // Sync daily absences and approved leaves for target date / range
     const targetDate = query.date || query.startDate || new Date().toISOString().split('T')[0];
     try {
+      await attendanceRepository.syncApprovedLeaves(user.orgId, query.startDate, query.endDate);
       await attendanceRepository.syncDailyAbsences(user.orgId, targetDate);
     } catch (absErr) {
       logger.warn('AttendanceService', `Failed to sync daily absences: ${absErr.message}`);
