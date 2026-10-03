@@ -144,6 +144,11 @@ export const AttendanceHistoryTable = ({
         onFilterChange('startDate', toYMD(last7));
         onFilterChange('endDate', toYMD(today));
       }
+    } else if (preset === 'sep26') {
+      if (onFilterChange) {
+        onFilterChange('startDate', '2026-09-26');
+        onFilterChange('endDate', toYMD(today));
+      }
     }
   };
 
@@ -242,6 +247,13 @@ export const AttendanceHistoryTable = ({
             className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-brand-50 hover:text-brand-600 text-slate-600 font-medium transition-colors"
           >
             This Month
+          </button>
+          <button
+            type="button"
+            onClick={() => applyPreset('sep26')}
+            className="px-2.5 py-1 rounded-lg bg-brand-50 border border-brand-200 text-brand-700 hover:bg-brand-100 font-bold transition-colors"
+          >
+            From Sep 26
           </button>
         </div>
       </div>

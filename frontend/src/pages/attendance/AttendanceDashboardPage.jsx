@@ -289,13 +289,16 @@ export const AttendanceDashboardPage = () => {
       setIsExporting(true);
       toast.info('Preparing attendance records for Excel export...');
 
+      // Default start date to September 26, 2026 to capture all active records
+      const effectiveStartDate = filters.startDate || '2026-09-26';
+      const effectiveEndDate = filters.endDate || todayDateString;
+
       let exportRecords = [];
       if (activeTab === 'org' && canViewOrg) {
         // Fetch all matching records without pagination restriction (e.g. limit 10000)
         const res = await attendanceService.getOrgAttendance({
-          date: filters.startDate && filters.startDate === filters.endDate ? filters.startDate : undefined,
-          startDate: filters.startDate,
-          endDate: filters.endDate,
+          startDate: effectiveStartDate,
+          endDate: effectiveEndDate,
           status: filters.status,
           deptId: filters.deptId,
           search: filters.search,
@@ -305,8 +308,8 @@ export const AttendanceDashboardPage = () => {
         exportRecords = res.records || [];
       } else {
         const res = await attendanceService.getMyAttendance({
-          startDate: filters.startDate,
-          endDate: filters.endDate,
+          startDate: effectiveStartDate,
+          endDate: effectiveEndDate,
           status: filters.status,
           page: 1,
           limit: 10000,
@@ -319,8 +322,12 @@ export const AttendanceDashboardPage = () => {
         return;
       }
 
-      const result = exportAttendanceToExcel(exportRecords, {
-        filters,
+      const result = await exportAttendanceToExcel(exportRecords, {
+        filters: {
+          ...filters,
+          startDate: effectiveStartDate,
+          endDate: effectiveEndDate,
+        },
         orgName: 'TaskNera HRMS',
         exportTitle: activeTab === 'org' ? 'Organization Attendance Timesheet' : 'My Attendance Timesheet',
       });
