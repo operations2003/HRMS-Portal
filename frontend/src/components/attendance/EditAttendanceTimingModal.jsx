@@ -145,6 +145,9 @@ export const EditAttendanceTimingModal = ({
   const shiftTiming = record?.employee?.shiftTiming || '11:00 AM - 07:00 PM';
   const parsedShift = useMemo(() => parseShiftTiming(shiftTiming), [shiftTiming]);
 
+  // Derive dateStr here (safe even if record is null — returns today)
+  const dateStr = useMemo(() => getDateStr(record), [record]);
+
   useEffect(() => {
     if (record) {
       const parsedIn = extractTime12(record.checkIn);
@@ -192,9 +195,56 @@ export const EditAttendanceTimingModal = ({
     }
   }, [record, parsedShift]);
 
-  if (!record) return null;
+  // Calculate live preview metrics — MUST be before any early return (Rules of Hooks)
+  const liveCalculation = useMemo(() => {
+    if (!dateStr) return { valid: false };
+    try {
+      const safeIn = checkInTime || { hour: '11', minute: '00', period: 'AM' };
+      let inH = parseInt(safeIn.hour || '11', 10);
+      const inM = parseInt(safeIn.minute || '00', 10);
+      if (isNaN(inH)) inH = 11;
+      if (safeIn.period === 'PM' && inH < 12) inH += 12;
+      if (safeIn.period === 'AM' && inH === 12) inH = 0;
+      const inDate = new Date(`${dateStr}T${String(inH).padStart(2, '0')}:${String(inM).padStart(2, '0')}:00`);
 
-  const dateStr = getDateStr(record);
+      if (!isCheckOutEnabled) {
+        return {
+          valid: true,
+          checkInDate: inDate,
+          checkOutDate: null,
+          totalHours: null,
+        };
+      }
+
+      const safeOut = checkOutTime || { hour: '07', minute: '00', period: 'PM' };
+      let outH = parseInt(safeOut.hour || '07', 10);
+      const outM = parseInt(safeOut.minute || '00', 10);
+      if (isNaN(outH)) outH = 7;
+      if (safeOut.period === 'PM' && outH < 12) outH += 12;
+      if (safeOut.period === 'AM' && outH === 12) outH = 0;
+
+      const outDate = new Date(`${dateStr}T${String(outH).padStart(2, '0')}:${String(outM).padStart(2, '0')}:00`);
+      if (isNextDayDeparture) {
+        outDate.setDate(outDate.getDate() + 1);
+      }
+
+      const diffMs = outDate.getTime() - inDate.getTime();
+      const grossHours = Math.max(0, diffMs / (1000 * 60 * 60));
+
+      return {
+        valid: diffMs >= 0,
+        checkInDate: inDate,
+        checkOutDate: outDate,
+        totalHours: grossHours.toFixed(2),
+        isNegative: diffMs < 0,
+      };
+    } catch {
+      return { valid: false };
+    }
+  }, [dateStr, checkInTime, checkOutTime, isCheckOutEnabled, isNextDayDeparture]);
+
+  // ALL hooks above — early return is safe here
+  if (!record) return null;
 
   // Common quick reasons for late arrivals due to technical issues
   const quickReasons = [
@@ -238,49 +288,6 @@ export const EditAttendanceTimingModal = ({
       setCheckOutTime({ hour: '07', minute: '00', period: 'PM' });
     }
   };
-
-  // Calculate live preview metrics
-  const liveCalculation = useMemo(() => {
-    try {
-      let inH = parseInt(checkInTime.hour, 10);
-      const inM = parseInt(checkInTime.minute, 10);
-      if (checkInTime.period === 'PM' && inH < 12) inH += 12;
-      if (checkInTime.period === 'AM' && inH === 12) inH = 0;
-      const inDate = new Date(`${dateStr}T${String(inH).padStart(2, '0')}:${String(inM).padStart(2, '0')}:00`);
-
-      if (!isCheckOutEnabled) {
-        return {
-          valid: true,
-          checkInDate: inDate,
-          checkOutDate: null,
-          totalHours: null,
-        };
-      }
-
-      let outH = parseInt(checkOutTime.hour, 10);
-      const outM = parseInt(checkOutTime.minute, 10);
-      if (checkOutTime.period === 'PM' && outH < 12) outH += 12;
-      if (checkOutTime.period === 'AM' && outH === 12) outH = 0;
-
-      const outDate = new Date(`${dateStr}T${String(outH).padStart(2, '0')}:${String(outM).padStart(2, '0')}:00`);
-      if (isNextDayDeparture) {
-        outDate.setDate(outDate.getDate() + 1);
-      }
-
-      const diffMs = outDate.getTime() - inDate.getTime();
-      const grossHours = Math.max(0, diffMs / (1000 * 60 * 60));
-
-      return {
-        valid: diffMs >= 0,
-        checkInDate: inDate,
-        checkOutDate: outDate,
-        totalHours: grossHours.toFixed(2),
-        isNegative: diffMs < 0,
-      };
-    } catch {
-      return { valid: false };
-    }
-  }, [dateStr, checkInTime, checkOutTime, isCheckOutEnabled, isNextDayDeparture]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -375,8 +382,8 @@ export const EditAttendanceTimingModal = ({
               </div>
               <div className="text-base font-bold text-slate-900 mt-0.5">
                 {record.employee
-                  ? `${record.employee.firstName} ${record.employee.lastName} (${record.employee.employeeCode})`
-                  : 'Employee Session'}
+                  ? `${record.employee.firstName || ''} ${record.employee.lastName || ''}${record.employee.employeeCode ? ` (${record.employee.employeeCode})` : ''}`.trim() || 'Employee'
+                  : record.employeeName || record.fullName || 'Employee Session'}
               </div>
               <div className="text-xs text-slate-600 mt-0.5 flex items-center gap-2">
                 <span>Scheduled Shift:</span>
@@ -593,7 +600,7 @@ export const EditAttendanceTimingModal = ({
           />
           <div className="flex items-center justify-between text-[11px] text-slate-400">
             <span>This text message will appear on the employee&apos;s attendance record and audit trail.</span>
-            <span>{reason.length}/500</span>
+            <span>{(reason || '').length}/500</span>
           </div>
         </div>
 

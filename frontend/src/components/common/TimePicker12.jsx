@@ -20,40 +20,55 @@ export const TimePicker12 = ({
   isEnabled = true,
   onToggleEnabled = null,
 }) => {
+  const safeVal = {
+    hour: value?.hour || '12',
+    minute: value?.minute || '00',
+    period: value?.period || 'AM',
+  };
+
+  const safeLabel = typeof label === 'string' ? label : 'Time';
+  const labelId = `toggle-${safeLabel.replace(/[^a-zA-Z0-9_-]/g, '-').toLowerCase()}`;
+
   const hours = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
   
   // Standard 60-minute selection
   const minutes = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
 
   const handleHourChange = (e) => {
-    onChange({
-      ...value,
-      hour: e.target.value,
-    });
+    if (onChange) {
+      onChange({
+        ...safeVal,
+        hour: e.target.value,
+      });
+    }
   };
 
   const handleMinuteChange = (e) => {
-    onChange({
-      ...value,
-      minute: e.target.value,
-    });
+    if (onChange) {
+      onChange({
+        ...safeVal,
+        minute: e.target.value,
+      });
+    }
   };
 
   const handlePeriodChange = (period) => {
     if (disabled || !isEnabled) return;
-    onChange({
-      ...value,
-      period,
-    });
+    if (onChange) {
+      onChange({
+        ...safeVal,
+        period,
+      });
+    }
   };
 
   // Compute 24-hour representation for preview
   const get24HourStr = () => {
-    let h = parseInt(value.hour || '12', 10);
-    const m = String(value.minute || '00').padStart(2, '0');
+    let h = parseInt(safeVal.hour, 10);
+    const m = String(safeVal.minute || '00').padStart(2, '0');
     if (isNaN(h)) h = 12;
-    if (value.period === 'PM' && h < 12) h += 12;
-    if (value.period === 'AM' && h === 12) h = 0;
+    if (safeVal.period === 'PM' && h < 12) h += 12;
+    if (safeVal.period === 'AM' && h === 12) h = 0;
     return `${String(h).padStart(2, '0')}:${m}`;
   };
 
@@ -65,17 +80,17 @@ export const TimePicker12 = ({
           {isOptional && onToggleEnabled && (
             <input
               type="checkbox"
-              id={`toggle-${label.replace(/\s+/g, '-').toLowerCase()}`}
+              id={labelId}
               checked={isEnabled}
               onChange={(e) => onToggleEnabled(e.target.checked)}
               className="w-4 h-4 rounded text-brand-600 focus:ring-brand-500 border-slate-300 cursor-pointer"
             />
           )}
           <label
-            htmlFor={`toggle-${label.replace(/\s+/g, '-').toLowerCase()}`}
+            htmlFor={labelId}
             className="block text-xs font-bold text-slate-800 cursor-pointer select-none"
           >
-            {label} {required && <span className="text-rose-500">*</span>}
+            {safeLabel} {required && <span className="text-rose-500">*</span>}
           </label>
         </div>
 
@@ -116,7 +131,7 @@ export const TimePicker12 = ({
             <div className="flex-1 min-w-[64px]">
               <label className="sr-only">Hour</label>
               <select
-                value={value.hour || '12'}
+                value={safeVal.hour}
                 onChange={handleHourChange}
                 disabled={disabled}
                 className="w-full bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-lg px-2 py-1.5 text-sm font-bold text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-brand-500 cursor-pointer"
@@ -135,7 +150,7 @@ export const TimePicker12 = ({
             <div className="flex-1 min-w-[64px]">
               <label className="sr-only">Minute</label>
               <select
-                value={value.minute || '00'}
+                value={safeVal.minute}
                 onChange={handleMinuteChange}
                 disabled={disabled}
                 className="w-full bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-lg px-2 py-1.5 text-sm font-bold text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-brand-500 cursor-pointer"
@@ -155,11 +170,11 @@ export const TimePicker12 = ({
                 disabled={disabled}
                 onClick={() => handlePeriodChange('AM')}
                 className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer select-none ${
-                  value.period === 'AM'
+                  safeVal.period === 'AM'
                     ? 'bg-brand-600 text-white shadow-xs ring-1 ring-brand-700/20'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
                 }`}
-                aria-pressed={value.period === 'AM'}
+                aria-pressed={safeVal.period === 'AM'}
               >
                 AM
               </button>
@@ -168,11 +183,11 @@ export const TimePicker12 = ({
                 disabled={disabled}
                 onClick={() => handlePeriodChange('PM')}
                 className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer select-none ${
-                  value.period === 'PM'
+                  safeVal.period === 'PM'
                     ? 'bg-brand-600 text-white shadow-xs ring-1 ring-brand-700/20'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
                 }`}
-                aria-pressed={value.period === 'PM'}
+                aria-pressed={safeVal.period === 'PM'}
               >
                 PM
               </button>
@@ -201,7 +216,7 @@ export const TimePicker12 = ({
             <div className="flex items-center gap-1.5">
               <span className="text-slate-500">Selected:</span>
               <span className="font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200 shadow-2xs">
-                {value.hour}:{value.minute} {value.period}
+                {safeVal.hour}:{safeVal.minute} {safeVal.period}
               </span>
               <span className="text-slate-400 text-[10px]">
                 ({get24HourStr()} 24-hr)
