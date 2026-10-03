@@ -22,7 +22,9 @@ import { AttendanceDetailModal } from '../../components/attendance/AttendanceDet
 import { AttendanceRemarkModal } from '../../components/attendance/AttendanceRemarkModal.jsx';
 import { EditAttendanceTimingModal } from '../../components/attendance/EditAttendanceTimingModal.jsx';
 import { ConvertAbsenceToLeaveModal } from '../../components/attendance/ConvertAbsenceToLeaveModal.jsx';
+import { ExportAttendanceModal } from '../../components/attendance/ExportAttendanceModal.jsx';
 import { AttendanceAnalyticsSection } from '../../components/attendance/AttendanceAnalyticsSection.jsx';
+import { departmentService } from '../../services/departmentService.js';
 import { Button } from '../../components/common/Button.jsx';
 import { Alert } from '../../components/common/Alert.jsx';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
@@ -61,6 +63,8 @@ export const AttendanceDashboardPage = () => {
   const [selectedConvertRecord, setSelectedConvertRecord] = useState(null);
   const [isSyncingAbsences, setIsSyncingAbsences] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [departments, setDepartments] = useState([]);
 
   // History & Metrics state
   const [records, setRecords] = useState([]);
@@ -190,6 +194,16 @@ export const AttendanceDashboardPage = () => {
     fetchTableData(1);
   }, [fetchTableData]);
 
+  // Load departments for export filter selector
+  useEffect(() => {
+    if (canViewOrg) {
+      departmentService.getAllDepartments().then((res) => {
+        const list = res?.items || res?.data || (Array.isArray(res) ? res : []);
+        setDepartments(list);
+      }).catch(() => {});
+    }
+  }, [canViewOrg]);
+
   // Handle Login (Punch In)
   const handleCheckIn = async (punchData) => {
     if (isPunchingIn || isPunchingOut) return;
@@ -278,39 +292,43 @@ export const AttendanceDashboardPage = () => {
   };
 
   /**
-   * Export all matching attendance records to Excel with:
-   * 1. Monthly Timesheet Matrix (Day, Date, Logged In to Logged Out, Total Month Hours)
-   * 2. Daily Attendance Logs (Row-by-row full details)
-   * 3. Monthly Hours Summary (Per-employee monthly totals)
+   * Open Month Selector Modal to pick exact month (e.g. September 2026, October 2026)
+   * Prevents two months from getting merged together.
    */
-  const handleExportExcel = async () => {
+  const handleOpenExportModal = () => {
+    setIsExportModalOpen(true);
+  };
+
+  /**
+   * Execute single-month export once user confirms month in modal
+   */
+  const handleConfirmExportMonthly = async ({ month, monthLabel, deptId }) => {
     if (isExporting) return;
     try {
       setIsExporting(true);
-      toast.info('Preparing attendance records for Excel export...');
+      toast.info(`Preparing ${monthLabel} attendance report...`);
 
-      // Default start date to September 26, 2026 to capture all active records
-      const effectiveStartDate = filters.startDate || '2026-09-26';
-      const effectiveEndDate = filters.endDate || todayDateString;
+      const [yearStr, monthNumStr] = month.split('-');
+      const y = parseInt(yearStr, 10);
+      const m = parseInt(monthNumStr, 10);
+      const daysInMonth = new Date(y, m, 0).getDate();
+      const startDate = `${month}-01`;
+      const endDate = `${month}-${String(daysInMonth).padStart(2, '0')}`;
 
       let exportRecords = [];
       if (activeTab === 'org' && canViewOrg) {
-        // Fetch all matching records without pagination restriction (e.g. limit 10000)
         const res = await attendanceService.getOrgAttendance({
-          startDate: effectiveStartDate,
-          endDate: effectiveEndDate,
-          status: filters.status,
-          deptId: filters.deptId,
-          search: filters.search,
+          startDate,
+          endDate,
+          deptId: deptId || undefined,
           page: 1,
           limit: 10000,
         });
         exportRecords = res.records || [];
       } else {
         const res = await attendanceService.getMyAttendance({
-          startDate: effectiveStartDate,
-          endDate: effectiveEndDate,
-          status: filters.status,
+          startDate,
+          endDate,
           page: 1,
           limit: 10000,
         });
@@ -318,26 +336,23 @@ export const AttendanceDashboardPage = () => {
       }
 
       if (!exportRecords || exportRecords.length === 0) {
-        toast.warning('No attendance records found to export for the selected filter.');
+        toast.warning(`No attendance records found for ${monthLabel}.`);
         return;
       }
 
       const result = await exportAttendanceToExcel(exportRecords, {
-        filters: {
-          ...filters,
-          startDate: effectiveStartDate,
-          endDate: effectiveEndDate,
-        },
+        month,
+        monthLabel,
         orgName: 'TaskNera HRMS',
-        exportTitle: activeTab === 'org' ? 'Organization Attendance Timesheet' : 'My Attendance Timesheet',
       });
 
       toast.success(
-        `Successfully exported ${result.recordCount} attendance records for ${result.employeeCount} employee(s) to Excel!`
+        `Successfully exported ${monthLabel} report for ${result.employeeCount} employee(s) to Excel!`
       );
+      setIsExportModalOpen(false);
     } catch (err) {
-      console.error('Failed to export attendance to Excel:', err);
-      toast.error(err.message || 'Failed to export attendance records to Excel.');
+      console.error('Failed to export monthly attendance:', err);
+      toast.error(err.message || 'Failed to export attendance to Excel.');
     } finally {
       setIsExporting(false);
     }
@@ -394,11 +409,10 @@ export const AttendanceDashboardPage = () => {
             variant="primary"
             size="md"
             icon={Download}
-            loading={isExporting}
-            onClick={handleExportExcel}
-            title="Download Monthly Attendance Timesheet with Day, Date, In/Out Timings, and Total Working Hours"
+            onClick={handleOpenExportModal}
+            title="Select Month to download single-month attendance report"
           >
-            {isExporting ? 'Exporting...' : 'Export to Excel'}
+            Export to Excel
           </Button>
         </div>
       </div>
@@ -526,7 +540,7 @@ export const AttendanceDashboardPage = () => {
         onFilterChange={handleFilterChange}
         onResetFilters={handleResetFilters}
         onRetry={() => fetchTableData(pagination?.page || 1)}
-        onExport={handleExportExcel}
+        onExport={handleOpenExportModal}
         isExporting={isExporting}
       />
 
@@ -588,6 +602,16 @@ export const AttendanceDashboardPage = () => {
             setTodayRecord(updated);
           }
         }}
+      />
+
+      {/* Single-Month Attendance Export Modal */}
+      <ExportAttendanceModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        onExport={handleConfirmExportMonthly}
+        isExporting={isExporting}
+        departments={departments}
+        currentDeptId={filters.deptId}
       />
     </div>
   );

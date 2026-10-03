@@ -1,5 +1,5 @@
 import ExcelJS from 'exceljs';
-import { formatHoursToClock, formatOvertimeDuration } from './timeUtils.js';
+import { formatHoursToClock } from './timeUtils.js';
 
 /**
  * Format date value to YYYY-MM-DD
@@ -88,7 +88,6 @@ const COLORS = {
   SLATE_BG: 'FFF8FAFC',
   ZEBRA_ROW: 'FFF1F5F9',
   BORDER_GRAY: 'FFCBD5E1',
-  BORDER_THIN: 'FFE2E8F0',
   // Status Colors
   PRESENT_BG: 'FFDCFCE7',    // Emerald 100
   PRESENT_TXT: 'FF166534',   // Emerald 800
@@ -120,57 +119,76 @@ const BORDERS = {
 };
 
 /**
- * Build & Download a high-precision, formatted Excel Workbook using ExcelJS:
- * 1. Monthly Timesheet (Matrix Grid: Date, Day, In-Out Window, Total Month Hours)
- * 2. Daily Attendance Logs (Row-by-Row clean register with borders and colors)
- * 3. Monthly Hours Summary (Per-employee monthly rollup)
+ * Builds all dates strictly for a single calendar month (Day 1 to Last Day)
+ * @param {string} monthKey - "YYYY-MM" e.g. "2026-09"
+ */
+export const getDatesForSingleMonth = (monthKey) => {
+  const [yearStr, monthStr] = (monthKey || '2026-09').split('-');
+  const y = parseInt(yearStr, 10);
+  const m = parseInt(monthStr, 10); // 1-12
+  const daysInMonth = new Date(y, m, 0).getDate();
+
+  const dates = [];
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dayPadded = String(day).padStart(2, '0');
+    const monthPadded = String(m).padStart(2, '0');
+    dates.push(`${y}-${monthPadded}-${dayPadded}`);
+  }
+  return dates;
+};
+
+/**
+ * Export strictly ONE MONTH attendance report to Excel
+ * Prevents multiple months from being merged together.
  */
 export const exportAttendanceToExcel = async (records = [], options = {}) => {
   if (!Array.isArray(records) || records.length === 0) {
-    throw new Error('No attendance records available to export.');
+    throw new Error('No attendance records found for this period to export.');
   }
 
   const {
     filters = {},
+    month = '',
+    monthLabel = '',
     orgName = 'TaskNera HRMS',
-    exportTitle = 'Monthly Attendance Timesheet',
   } = options;
 
-  // Determine sorted unique dates from records
-  const dateSet = new Set();
-  records.forEach((r) => {
+  // Determine target month: e.g. '2026-09'
+  let targetMonth = month;
+  if (!targetMonth && filters.startDate) {
+    targetMonth = filters.startDate.substring(0, 7);
+  }
+  if (!targetMonth && records[0]?.attendanceDate) {
+    targetMonth = getLocalDateString(records[0].attendanceDate).substring(0, 7);
+  }
+  if (!targetMonth) {
+    targetMonth = '2026-09';
+  }
+
+  // Strictly filter records for this target month only
+  const monthRecords = records.filter((r) => {
     const dStr = getLocalDateString(r.attendanceDate);
-    if (dStr) dateSet.add(dStr);
+    return dStr.startsWith(targetMonth);
   });
 
-  // Default start date to '2026-09-26' if not specified or earlier
-  const effectiveStartDate = filters.startDate || '2026-09-26';
-  const effectiveEndDate =
-    filters.endDate || new Date().toISOString().split('T')[0];
-
-  // Fill in full date sequence between start and end date (up to 65 days)
-  let sortedDates = [];
-  const start = new Date(effectiveStartDate);
-  const end = new Date(effectiveEndDate);
-  if (!isNaN(start.getTime()) && !isNaN(end.getTime()) && start <= end) {
-    const curr = new Date(start);
-    let count = 0;
-    while (curr <= end && count < 65) {
-      sortedDates.push(curr.toLocaleDateString('en-CA'));
-      curr.setDate(curr.getDate() + 1);
-      count++;
-    }
+  if (monthRecords.length === 0) {
+    throw new Error(`No attendance records found for ${targetMonth}.`);
   }
 
-  // Fallback to dates in records if range generation failed
-  if (sortedDates.length === 0) {
-    sortedDates = Array.from(dateSet).sort();
-  }
+  // Get full sequence of dates for this single calendar month
+  const sortedDates = getDatesForSingleMonth(targetMonth);
+
+  // Month title: e.g. "September 2026"
+  const [yStr, mStr] = targetMonth.split('-');
+  const monthObj = new Date(parseInt(yStr, 10), parseInt(mStr, 10) - 1, 1);
+  const cleanMonthTitle =
+    monthLabel ||
+    monthObj.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
   // Group records by employee
   const employeeMap = new Map();
 
-  records.forEach((rec) => {
+  monthRecords.forEach((rec) => {
     const empId =
       rec.employeeId ||
       rec.employee?.id ||
@@ -223,9 +241,6 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
     a.fullName.localeCompare(b.fullName)
   );
 
-  // Period label
-  const periodLabel = `${formatDisplayDate(effectiveStartDate)} to ${formatDisplayDate(effectiveEndDate)}`;
-
   // ==========================================
   // Initialize ExcelJS Workbook
   // ==========================================
@@ -234,33 +249,34 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
   workbook.created = new Date();
 
   // =========================================================================
-  // SHEET 1: Monthly Attendance Timesheet (The Exact Matrix Requested)
+  // SHEET 1: Monthly Attendance Timesheet (Single Month Grid)
   // =========================================================================
-  const wsMatrix = workbook.addWorksheet('Monthly Timesheet', {
+  const sheetName = `${cleanMonthTitle} Timesheet`.substring(0, 31);
+  const wsMatrix = workbook.addWorksheet(sheetName, {
     views: [{ state: 'frozen', xSplit: 3, ySplit: 5 }],
     properties: { defaultRowHeight: 28 },
   });
 
   // 1. Title Banner (Rows 1 & 2)
-  wsMatrix.mergeCells('A1:H1');
+  wsMatrix.mergeCells('A1:I1');
   const titleCell = wsMatrix.getCell('A1');
-  titleCell.value = `${orgName} — Monthly Attendance Timesheet`;
+  titleCell.value = `${orgName} — Monthly Attendance Timesheet (${cleanMonthTitle})`;
   titleCell.font = { name: 'Segoe UI', size: 14, bold: true, color: { argb: 'FF1E3A8A' } };
   titleCell.alignment = { vertical: 'middle', horizontal: 'left' };
   wsMatrix.getRow(1).height = 28;
 
-  wsMatrix.mergeCells('A2:H2');
+  wsMatrix.mergeCells('A2:I2');
   const subTitleCell = wsMatrix.getCell('A2');
-  subTitleCell.value = `Period: ${periodLabel} | Total Employees: ${employeeList.length} | Generated: ${new Date().toLocaleString()}`;
+  subTitleCell.value = `Month: ${cleanMonthTitle} (01 ${cleanMonthTitle.split(' ')[0]} to ${sortedDates.length} ${cleanMonthTitle.split(' ')[0]}) | Total Employees: ${employeeList.length} | Generated: ${new Date().toLocaleString()}`;
   subTitleCell.font = { name: 'Segoe UI', size: 10, italic: true, color: { argb: 'FF64748B' } };
   subTitleCell.alignment = { vertical: 'middle', horizontal: 'left' };
   wsMatrix.getRow(2).height = 20;
 
   wsMatrix.getRow(3).height = 10; // blank separator
 
-  // 2. Header Row 1: Date & Fixed Columns (Row 4)
+  // 2. Header Row 4: Date
   const row4Values = ['Employee ID', 'Employee Name', 'Department'];
-  // 3. Header Row 2: Day of Week & Subheaders (Row 5)
+  // 3. Header Row 5: Day of Week
   const row5Values = ['Code', 'Full Name', 'Team / Unit'];
 
   sortedDates.forEach((dStr) => {
@@ -276,7 +292,7 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
     'Days Present',
     'Days Absent',
     'Days Leave',
-    'Total Hours Worked (Month)',
+    `Total Hours (${cleanMonthTitle})`,
     'Total Overtime'
   );
   row5Values.push(
@@ -315,7 +331,7 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
     cell.border = BORDERS.thin;
   });
 
-  // 4. Populate Employee Data Rows in Sheet 1
+  // 4. Populate Employee Data Rows
   employeeList.forEach((emp, empIdx) => {
     let totalMonthHours = 0;
     let totalMonthOT = 0;
@@ -351,7 +367,6 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
       if (status === 'PRESENT' || status === 'LATE' || status === 'HALF_DAY' || status === 'REGULARIZED') {
         presentCount++;
         if (inTime && outTime) {
-          // Exactly as requested: Login to Logout window with hours worked below
           rowData.push(`${inTime} – ${outTime}\n(${formatHoursToClock(hoursNum)})`);
         } else if (inTime) {
           rowData.push(`${inTime} – Active`);
@@ -383,7 +398,7 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
     );
 
     const addedRow = wsMatrix.addRow(rowData);
-    addedRow.height = 36; // Generous height for multiline In - Out and Hours
+    addedRow.height = 36;
 
     const isZebra = empIdx % 2 === 1;
     const baseBg = isZebra ? COLORS.ZEBRA_ROW : COLORS.WHITE;
@@ -393,7 +408,6 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
       cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
       cell.font = { name: 'Segoe UI', size: 9 };
 
-      // Left align employee details
       if (colNumber === 1) {
         cell.font = { name: 'Segoe UI', size: 9, bold: true };
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: baseBg } };
@@ -402,7 +416,6 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: baseBg } };
         if (colNumber === 2) cell.font = { name: 'Segoe UI', size: 9.5, bold: true };
       } else if (colNumber > 3 && colNumber <= 3 + sortedDates.length) {
-        // Daily Attendance Cells
         const val = String(cell.value || '');
         if (val.includes('–') || val.includes('Present')) {
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.PRESENT_BG } };
@@ -423,53 +436,50 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: baseBg } };
         }
       } else {
-        // Summary Columns at the end
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.SUMMARY_BG } };
         cell.font = { name: 'Segoe UI', size: 9.5, bold: true, color: { argb: COLORS.SUMMARY_TXT } };
       }
     });
   });
 
-  // Set explicit column widths for Sheet 1
-  wsMatrix.getColumn(1).width = 14; // Employee ID
-  wsMatrix.getColumn(2).width = 25; // Employee Name
-  wsMatrix.getColumn(3).width = 20; // Department
+  // Set column widths
+  wsMatrix.getColumn(1).width = 14;
+  wsMatrix.getColumn(2).width = 25;
+  wsMatrix.getColumn(3).width = 20;
   for (let i = 0; i < sortedDates.length; i++) {
-    wsMatrix.getColumn(4 + i).width = 22; // Each Date column
+    wsMatrix.getColumn(4 + i).width = 22;
   }
   const summaryStartCol = 4 + sortedDates.length;
-  wsMatrix.getColumn(summaryStartCol).width = 14;     // Present
-  wsMatrix.getColumn(summaryStartCol + 1).width = 14; // Absent
-  wsMatrix.getColumn(summaryStartCol + 2).width = 14; // Leave
-  wsMatrix.getColumn(summaryStartCol + 3).width = 26; // Total Hours Worked (Month)
-  wsMatrix.getColumn(summaryStartCol + 4).width = 18; // Total Overtime
+  wsMatrix.getColumn(summaryStartCol).width = 14;
+  wsMatrix.getColumn(summaryStartCol + 1).width = 14;
+  wsMatrix.getColumn(summaryStartCol + 2).width = 14;
+  wsMatrix.getColumn(summaryStartCol + 3).width = 28;
+  wsMatrix.getColumn(summaryStartCol + 4).width = 18;
 
   // =========================================================================
-  // SHEET 2: Daily Attendance Logs (Row-by-Row Register)
+  // SHEET 2: Daily Attendance Logs (Single Month Only)
   // =========================================================================
   const wsLogs = workbook.addWorksheet('Daily Attendance Logs', {
     views: [{ state: 'frozen', xSplit: 0, ySplit: 4 }],
     properties: { defaultRowHeight: 24 },
   });
 
-  // Title Banner
   wsLogs.mergeCells('A1:G1');
   const logsTitle = wsLogs.getCell('A1');
-  logsTitle.value = `${orgName} — Daily Attendance Register`;
+  logsTitle.value = `${orgName} — Daily Attendance Register (${cleanMonthTitle})`;
   logsTitle.font = { name: 'Segoe UI', size: 14, bold: true, color: { argb: 'FF1E3A8A' } };
   logsTitle.alignment = { vertical: 'middle', horizontal: 'left' };
   wsLogs.getRow(1).height = 28;
 
   wsLogs.mergeCells('A2:G2');
   const logsSub = wsLogs.getCell('A2');
-  logsSub.value = `Period: ${periodLabel} | Total Records: ${records.length} | Generated: ${new Date().toLocaleString()}`;
+  logsSub.value = `Month: ${cleanMonthTitle} | Total Records: ${monthRecords.length} | Generated: ${new Date().toLocaleString()}`;
   logsSub.font = { name: 'Segoe UI', size: 10, italic: true, color: { argb: 'FF64748B' } };
   logsSub.alignment = { vertical: 'middle', horizontal: 'left' };
   wsLogs.getRow(2).height = 20;
 
   wsLogs.getRow(3).height = 10;
 
-  // Header Row 4
   const logHeaders = [
     '#',
     'Employee ID',
@@ -503,8 +513,7 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
     cell.border = BORDERS.header;
   });
 
-  // Sort records chronologically
-  const sortedRecords = [...records].sort((a, b) => {
+  const sortedMonthRecords = [...monthRecords].sort((a, b) => {
     const dComp = (a.attendanceDate || '').localeCompare(b.attendanceDate || '');
     if (dComp !== 0) return dComp;
     const nameA = a.employee?.firstName || a.fullName || '';
@@ -512,8 +521,7 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
     return nameA.localeCompare(nameB);
   });
 
-  sortedRecords.forEach((rec, idx) => {
-    const dStr = getLocalDateString(rec.attendanceDate);
+  sortedMonthRecords.forEach((rec, idx) => {
     const displayDate = formatDisplayDate(rec.attendanceDate);
     const dayOfWeek = getDayOfWeek(rec.attendanceDate, 'long');
     const inTime = formatTimeWithSeconds(rec.checkIn);
@@ -585,14 +593,12 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
       cell.alignment = { vertical: 'middle', horizontal: 'center' };
       cell.font = { name: 'Segoe UI', size: 9.5 };
 
-      // Alignments & Styles
       if (colNumber === 2 || colNumber === 3) {
         if (colNumber === 3) cell.alignment = { vertical: 'middle', horizontal: 'left' };
         cell.font = { name: 'Segoe UI', size: 9.5, bold: true };
       } else if (colNumber === 10 || colNumber === 11) {
         cell.font = { name: 'Segoe UI', size: 9.5, bold: true, color: { argb: 'FF0F172A' } };
       } else if (colNumber === 14) {
-        // Status column badge styling
         const st = String(cell.value || '');
         if (st === 'PRESENT') {
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.PRESENT_BG } };
@@ -608,33 +614,31 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
     });
   });
 
-  // Column Widths for Sheet 2
-  wsLogs.getColumn(1).width = 6;   // #
-  wsLogs.getColumn(2).width = 14;  // Employee ID
-  wsLogs.getColumn(3).width = 24;  // Name
-  wsLogs.getColumn(4).width = 20;  // Department
-  wsLogs.getColumn(5).width = 15;  // Date
-  wsLogs.getColumn(6).width = 14;  // Day
-  wsLogs.getColumn(7).width = 16;  // Log In Time
-  wsLogs.getColumn(8).width = 16;  // Log Out Time
-  wsLogs.getColumn(9).width = 26;  // Window
-  wsLogs.getColumn(10).width = 22; // Hours Clock
-  wsLogs.getColumn(11).width = 20; // Hours Decimal
-  wsLogs.getColumn(12).width = 15; // Break
-  wsLogs.getColumn(13).width = 15; // OT
-  wsLogs.getColumn(14).width = 14; // Status
-  wsLogs.getColumn(15).width = 24; // Shift
-  wsLogs.getColumn(16).width = 20; // Regularized
-  wsLogs.getColumn(17).width = 32; // Remarks
+  wsLogs.getColumn(1).width = 6;
+  wsLogs.getColumn(2).width = 14;
+  wsLogs.getColumn(3).width = 24;
+  wsLogs.getColumn(4).width = 20;
+  wsLogs.getColumn(5).width = 15;
+  wsLogs.getColumn(6).width = 14;
+  wsLogs.getColumn(7).width = 16;
+  wsLogs.getColumn(8).width = 16;
+  wsLogs.getColumn(9).width = 26;
+  wsLogs.getColumn(10).width = 22;
+  wsLogs.getColumn(11).width = 20;
+  wsLogs.getColumn(12).width = 15;
+  wsLogs.getColumn(13).width = 15;
+  wsLogs.getColumn(14).width = 14;
+  wsLogs.getColumn(15).width = 24;
+  wsLogs.getColumn(16).width = 20;
+  wsLogs.getColumn(17).width = 32;
 
-  // Auto-filter on Row 4
   wsLogs.autoFilter = {
     from: { row: 4, column: 1 },
     to: { row: 4, column: logHeaders.length },
   };
 
   // =========================================================================
-  // SHEET 3: Monthly Hours Summary (Per Employee Totals)
+  // SHEET 3: Monthly Hours Summary (Per Employee for this Month)
   // =========================================================================
   const wsSummary = workbook.addWorksheet('Monthly Hours Summary', {
     views: [{ state: 'frozen', xSplit: 0, ySplit: 4 }],
@@ -643,14 +647,14 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
 
   wsSummary.mergeCells('A1:G1');
   const sumTitle = wsSummary.getCell('A1');
-  sumTitle.value = `${orgName} — Employee Monthly Working Hours Summary`;
+  sumTitle.value = `${orgName} — Employee Monthly Working Hours Summary (${cleanMonthTitle})`;
   sumTitle.font = { name: 'Segoe UI', size: 14, bold: true, color: { argb: 'FF1E3A8A' } };
   sumTitle.alignment = { vertical: 'middle', horizontal: 'left' };
   wsSummary.getRow(1).height = 28;
 
   wsSummary.mergeCells('A2:G2');
   const sumSub = wsSummary.getCell('A2');
-  sumSub.value = `Period: ${periodLabel} | Total Employees: ${employeeList.length} | Generated: ${new Date().toLocaleString()}`;
+  sumSub.value = `Month: ${cleanMonthTitle} | Total Employees: ${employeeList.length} | Generated: ${new Date().toLocaleString()}`;
   sumSub.font = { name: 'Segoe UI', size: 10, italic: true, color: { argb: 'FF64748B' } };
   sumSub.alignment = { vertical: 'middle', horizontal: 'left' };
   wsSummary.getRow(2).height = 20;
@@ -664,13 +668,13 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
     'Department',
     'Designation',
     'Assigned Shift',
-    'Period',
+    'Report Month',
     'Days Present',
     'Days Absent',
     'Days Leave',
-    'Total Hours Worked (Month)',
+    `Total Hours Worked (${cleanMonthTitle})`,
     'Total Hours (Decimal)',
-    'Total Overtime (Month)',
+    'Total Overtime (OT)',
     'Average Daily Hours',
   ];
 
@@ -702,7 +706,6 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
 
       const st = (rec.status || '').toUpperCase();
       if (st === 'PRESENT' || st === 'LATE' || st === 'HALF_DAY' || st === 'REGULARIZED') {
-        presentCount(st);
         presentDays++;
       } else if (st === 'ABSENT') {
         absentDays++;
@@ -710,8 +713,6 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
         leaveDays++;
       }
     });
-
-    function presentCount() {}
 
     const avgDailyHours =
       presentDays > 0 ? (totalHours / presentDays).toFixed(2) : '0.00';
@@ -723,7 +724,7 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
       emp.dept,
       emp.designation,
       emp.shiftTiming,
-      periodLabel,
+      cleanMonthTitle,
       presentDays,
       absentDays,
       leaveDays,
@@ -758,11 +759,11 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
   wsSummary.getColumn(4).width = 20;
   wsSummary.getColumn(5).width = 22;
   wsSummary.getColumn(6).width = 22;
-  wsSummary.getColumn(7).width = 26;
+  wsSummary.getColumn(7).width = 22;
   wsSummary.getColumn(8).width = 14;
   wsSummary.getColumn(9).width = 14;
   wsSummary.getColumn(10).width = 14;
-  wsSummary.getColumn(11).width = 26;
+  wsSummary.getColumn(11).width = 28;
   wsSummary.getColumn(12).width = 22;
   wsSummary.getColumn(13).width = 22;
   wsSummary.getColumn(14).width = 20;
@@ -777,9 +778,9 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
   // ==========================================
   const buffer = await workbook.xlsx.writeBuffer();
   const cleanOrg = orgName.replace(/[^a-zA-Z0-9_-]/g, '_');
-  const fileName = `${cleanOrg}_Attendance_Timesheet_From_Sep_26.xlsx`;
+  const cleanMonth = cleanMonthTitle.replace(/[^a-zA-Z0-9_-]/g, '_');
+  const fileName = `${cleanOrg}_Attendance_Report_${cleanMonth}.xlsx`;
 
-  // Safe browser download
   if (typeof window !== 'undefined' && window.document) {
     const blob = new Blob([buffer], {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -796,8 +797,9 @@ export const exportAttendanceToExcel = async (records = [], options = {}) => {
 
   return {
     fileName,
-    recordCount: records.length,
+    recordCount: monthRecords.length,
     employeeCount: employeeList.length,
+    month: cleanMonthTitle,
     buffer,
   };
 };
