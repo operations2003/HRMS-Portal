@@ -353,7 +353,8 @@ const buildMonthlyMatrixWorksheet = (
       const dayOfWeek = d.getDay(); // 0 = Sun, 6 = Sat
 
       if (!rec) {
-        if (dayOfWeek === 0 || dayOfWeek === 6) {
+        if (dayOfWeek === 0) {
+          // Strictly Sunday only is the weekend
           rowData.push('WEEKEND');
         } else {
           rowData.push('—');
