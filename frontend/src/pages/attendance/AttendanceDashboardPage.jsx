@@ -9,7 +9,9 @@ import {
   Sparkles,
   ShieldCheck,
   AlertCircle,
+  Download,
 } from 'lucide-react';
+import { exportAttendanceToExcel } from '../../utils/attendanceExcelExport.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { attendanceService } from '../../services/attendanceService.js';
@@ -58,6 +60,7 @@ export const AttendanceDashboardPage = () => {
   const [selectedEditTimingRecord, setSelectedEditTimingRecord] = useState(null);
   const [selectedConvertRecord, setSelectedConvertRecord] = useState(null);
   const [isSyncingAbsences, setIsSyncingAbsences] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   // History & Metrics state
   const [records, setRecords] = useState([]);
@@ -274,6 +277,65 @@ export const AttendanceDashboardPage = () => {
     }
   };
 
+  /**
+   * Export all matching attendance records to Excel with:
+   * 1. Monthly Timesheet Matrix (Day, Date, Logged In to Logged Out, Total Month Hours)
+   * 2. Daily Attendance Logs (Row-by-row full details)
+   * 3. Monthly Hours Summary (Per-employee monthly totals)
+   */
+  const handleExportExcel = async () => {
+    if (isExporting) return;
+    try {
+      setIsExporting(true);
+      toast.info('Preparing attendance records for Excel export...');
+
+      let exportRecords = [];
+      if (activeTab === 'org' && canViewOrg) {
+        // Fetch all matching records without pagination restriction (e.g. limit 10000)
+        const res = await attendanceService.getOrgAttendance({
+          date: filters.startDate && filters.startDate === filters.endDate ? filters.startDate : undefined,
+          startDate: filters.startDate,
+          endDate: filters.endDate,
+          status: filters.status,
+          deptId: filters.deptId,
+          search: filters.search,
+          page: 1,
+          limit: 10000,
+        });
+        exportRecords = res.records || [];
+      } else {
+        const res = await attendanceService.getMyAttendance({
+          startDate: filters.startDate,
+          endDate: filters.endDate,
+          status: filters.status,
+          page: 1,
+          limit: 10000,
+        });
+        exportRecords = res.records || [];
+      }
+
+      if (!exportRecords || exportRecords.length === 0) {
+        toast.warning('No attendance records found to export for the selected filter.');
+        return;
+      }
+
+      const result = exportAttendanceToExcel(exportRecords, {
+        filters,
+        orgName: 'TaskNera HRMS',
+        exportTitle: activeTab === 'org' ? 'Organization Attendance Timesheet' : 'My Attendance Timesheet',
+      });
+
+      toast.success(
+        `Successfully exported ${result.recordCount} attendance records for ${result.employeeCount} employee(s) to Excel!`
+      );
+    } catch (err) {
+      console.error('Failed to export attendance to Excel:', err);
+      toast.error(err.message || 'Failed to export attendance records to Excel.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
 
   const handleFilterChange = (key, value) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
@@ -319,6 +381,17 @@ export const AttendanceDashboardPage = () => {
             }}
           >
             Refresh Logs
+          </Button>
+
+          <Button
+            variant="primary"
+            size="md"
+            icon={Download}
+            loading={isExporting}
+            onClick={handleExportExcel}
+            title="Download Monthly Attendance Timesheet with Day, Date, In/Out Timings, and Total Working Hours"
+          >
+            {isExporting ? 'Exporting...' : 'Export to Excel'}
           </Button>
         </div>
       </div>
@@ -446,6 +519,8 @@ export const AttendanceDashboardPage = () => {
         onFilterChange={handleFilterChange}
         onResetFilters={handleResetFilters}
         onRetry={() => fetchTableData(pagination?.page || 1)}
+        onExport={handleExportExcel}
+        isExporting={isExporting}
       />
 
       {/* Attendance Details Modal */}

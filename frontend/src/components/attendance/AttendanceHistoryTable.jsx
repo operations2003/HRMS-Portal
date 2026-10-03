@@ -21,6 +21,7 @@ import {
   ShieldCheck,
   Tag,
   Umbrella,
+  Download,
 } from 'lucide-react';
 import { Badge } from '../common/Badge.jsx';
 import { Button } from '../common/Button.jsx';
@@ -51,6 +52,8 @@ export const AttendanceHistoryTable = ({
   onResetFilters,
   showSearch = false,
   onRetry,
+  onExport,
+  isExporting = false,
 }) => {
   const handleEditTiming = onEditTiming || onRegularize;
   const canEdit = canEditTiming || canRegularize;
@@ -190,6 +193,18 @@ export const AttendanceHistoryTable = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {onExport && (
+              <Button
+                variant="primary"
+                size="md"
+                icon={Download}
+                loading={isExporting}
+                onClick={onExport}
+                title="Export monthly attendance timesheet to Excel"
+              >
+                {isExporting ? 'Exporting...' : 'Export to Excel'}
+              </Button>
+            )}
             <Button
               variant="secondary"
               size="md"
