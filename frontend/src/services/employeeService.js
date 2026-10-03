@@ -7,6 +7,7 @@ export const employeeService = {
     if (params.deptId) query.append('deptId', params.deptId);
     if (params.orgId) query.append('orgId', params.orgId);
     if (params.status) query.append('status', params.status);
+    if (params.isEws !== undefined && params.isEws !== '') query.append('isEws', params.isEws);
     if (params.page) query.append('page', params.page);
     if (params.limit) query.append('limit', params.limit);
     const queryString = query.toString() ? `?${query.toString()}` : '';

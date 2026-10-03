@@ -31,6 +31,7 @@ import {
   Sparkles,
   TrendingUp,
   AlertCircle,
+  AlertTriangle,
   ChevronDown,
   ChevronUp,
   CheckCircle2,
@@ -115,6 +116,7 @@ export const EmployeeListPage = () => {
   const [orgFilter, setOrgFilter] = useState('');
   const [deptFilter, setDeptFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [ewsFilter, setEwsFilter] = useState('');
   const [metadata, setMetadata] = useState({ organizations: [], departments: [], designations: [], roles: [], managers: [], hrs: [] });
   const [error, setError] = useState(null);
 
@@ -125,6 +127,12 @@ export const EmployeeListPage = () => {
   const [loadingViewProfile, setLoadingViewProfile] = useState(false);
   const [timelineEmployee, setTimelineEmployee] = useState(null);
   const [reassigningEmployee, setReassigningEmployee] = useState(null);
+
+  // Quick EWS Modal State
+  const [ewsTarget, setEwsTarget] = useState(null);
+  const [ewsFormIsEws, setEwsFormIsEws] = useState(false);
+  const [ewsFormReason, setEwsFormReason] = useState('');
+  const [isUpdatingEws, setIsUpdatingEws] = useState(false);
 
   // End of Internship Dialog State
   const [endInternshipTarget, setEndInternshipTarget] = useState(null);
@@ -426,6 +434,8 @@ export const EmployeeListPage = () => {
     uanNumber: '',
     probationStatus: 'IN_PROBATION',
     probationNotes: 'Standard 6-month probation period.',
+    isEws: false,
+    ewsReason: '',
   });
   const [formErrors, setFormErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -444,6 +454,7 @@ export const EmployeeListPage = () => {
         orgId: orgFilter,
         deptId: deptFilter,
         status: statusFilter,
+        isEws: ewsFilter,
         page,
         limit: 10,
       });
@@ -483,7 +494,7 @@ export const EmployeeListPage = () => {
 
   useEffect(() => {
     fetchEmployees(1);
-  }, [search, orgFilter, deptFilter, statusFilter]);
+  }, [search, orgFilter, deptFilter, statusFilter, ewsFilter]);
 
   // Handle URL action (e.g. ?action=new)
   useEffect(() => {
@@ -546,6 +557,8 @@ export const EmployeeListPage = () => {
       uanNumber: '',
       probationStatus: 'IN_PROBATION',
       probationNotes: 'Standard 6-month probation period.',
+      isEws: false,
+      ewsReason: '',
     });
     setShiftFromTime('11:00');
     setShiftFromPeriod('AM');
@@ -618,6 +631,8 @@ export const EmployeeListPage = () => {
       probationStartDate: emp.probationStartDate || emp.dateOfJoining || '',
       probationEndDate: emp.probationEndDate || getProbationEndDate(emp.dateOfJoining) || '',
       probationNotes: emp.probationNotes || '',
+      isEws: Boolean(emp.isEws),
+      ewsReason: emp.ewsReason || '',
     });
     const parsedShift = parseShiftTiming(emp.shiftTiming || '11:00 AM - 07:00 PM');
     setShiftFromTime(parsedShift.fromTime);
@@ -782,6 +797,8 @@ export const EmployeeListPage = () => {
         probationStartDate: formData.probationStartDate || formData.dateOfJoining,
         probationEndDate: ['CONFIRMED', 'NOT_ELIGIBLE'].includes(formData.probationStatus) ? null : (formData.probationEndDate || getProbationEndDate(formData.dateOfJoining)),
         probationNotes: formData.probationNotes || (formData.probationStatus === 'NOT_ELIGIBLE' ? 'Not eligible for probation.' : 'Standard 6-month probation period.'),
+        isEws: Boolean(formData.isEws),
+        ewsReason: formData.isEws ? (formData.ewsReason || '').trim() : '',
       };
 
       if (editingEmployee && !canViewSalary(editingEmployee)) {
@@ -854,14 +871,52 @@ export const EmployeeListPage = () => {
     }
   };
 
+  const handleOpenEwsModal = (emp) => {
+    setEwsTarget(emp);
+    setEwsFormIsEws(Boolean(emp.isEws));
+    setEwsFormReason(emp.ewsReason || '');
+  };
+
+  const handleSaveEws = async () => {
+    if (!ewsTarget) return;
+    try {
+      setIsUpdatingEws(true);
+      await employeeService.updateEmployee(ewsTarget.id, {
+        isEws: ewsFormIsEws,
+        ewsReason: ewsFormIsEws ? (ewsFormReason || 'Under review for full-time conversion').trim() : '',
+      });
+      toast.success(
+        ewsFormIsEws
+          ? `${ewsTarget.firstName} ${ewsTarget.lastName} has been placed on Early Warning System (EWS).`
+          : `${ewsTarget.firstName} ${ewsTarget.lastName} has been removed from Early Warning System.`
+      );
+      setViewingEmployee((prev) => {
+        if (!prev || prev.id !== ewsTarget.id) return prev;
+        return {
+          ...prev,
+          isEws: ewsFormIsEws,
+          ewsReason: ewsFormIsEws ? (ewsFormReason || 'Under review for full-time conversion').trim() : '',
+          ewsUpdatedAt: new Date().toISOString(),
+        };
+      });
+      setEwsTarget(null);
+      await fetchEmployees(pagination?.page || 1);
+    } catch (err) {
+      toast.error(err.message || 'Failed to update Early Warning System status.');
+    } finally {
+      setIsUpdatingEws(false);
+    }
+  };
+
   const handleClearFilters = () => {
     setSearch('');
     setOrgFilter('');
     setDeptFilter('');
     setStatusFilter('');
+    setEwsFilter('');
   };
 
-  const hasActiveFilters = Boolean(search || orgFilter || deptFilter || statusFilter);
+  const hasActiveFilters = Boolean(search || orgFilter || deptFilter || statusFilter || ewsFilter);
 
   // Determine if logged in user has salary view privilege (Admin/CEO, HR, or self only)
   const canViewSalary = (emp) => {
@@ -927,6 +982,19 @@ export const EmployeeListPage = () => {
               <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
                 {row.employeeCode}
               </span>
+              {row.isEws && (
+                <span
+                  className="inline-flex items-center gap-1 text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-amber-100 text-amber-850 border border-amber-300 shadow-xs cursor-pointer hover:bg-amber-200 transition-colors"
+                  title={row.ewsReason ? `Early Warning System (EWS): ${row.ewsReason}` : 'Early Warning System (EWS) Active'}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (isHrOrAdmin) handleOpenEwsModal(row);
+                  }}
+                >
+                  <AlertTriangle className="w-2.5 h-2.5 text-amber-600 shrink-0" />
+                  EWS
+                </span>
+              )}
               <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
                 row.gender === 'Female'
                   ? 'bg-pink-50 text-pink-700 border-pink-200'
@@ -1109,6 +1177,18 @@ export const EmployeeListPage = () => {
               End Internship
             </Button>
           )}
+          {isHrOrAdmin && (
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={AlertTriangle}
+              onClick={() => handleOpenEwsModal(row)}
+              className={row.isEws ? "text-amber-800 bg-amber-100 hover:bg-amber-200 font-semibold border border-amber-300" : "text-slate-500 hover:text-amber-700 hover:bg-amber-50"}
+              title={row.isEws ? `EWS Active: ${row.ewsReason || 'Under Review'}` : "Put on Early Warning System (EWS)"}
+            >
+              {row.isEws ? 'EWS Active' : 'EWS'}
+            </Button>
+          )}
           <Can permission="employee:write">
             <Button
               variant="ghost"
@@ -1171,7 +1251,7 @@ export const EmployeeListPage = () => {
 
       {/* Filter Bar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           <div>
             <Input
               placeholder="Search by name, email, code..."
@@ -1212,6 +1292,18 @@ export const EmployeeListPage = () => {
                 { value: 'Active', label: 'Active' },
                 { value: 'On Leave', label: 'On Leave' },
                 { value: 'Inactive', label: 'Inactive' },
+              ]}
+            />
+          </div>
+          <div>
+            <Select
+              value={ewsFilter}
+              onChange={(e) => setEwsFilter(e.target.value)}
+              placeholder="All Staff & EWS"
+              options={[
+                { value: '', label: 'All Staff (Normal & EWS)' },
+                { value: 'true', label: '⚠️ EWS Flagged Only' },
+                { value: 'false', label: 'Normal (Non-EWS)' },
               ]}
             />
           </div>
@@ -1873,6 +1965,78 @@ export const EmployeeListPage = () => {
             <p className="text-[11px] text-amber-800/90 leading-relaxed">
               <strong>Company Rule:</strong> Every employee, manager, or HR member has a mandatory 6-month probation period by default upon joining. Select <em>'Yes — In Probation'</em> to apply the 6-month timeline, or <em>'No — Confirmed'</em> if exempt.
             </p>
+          </div>
+
+          {/* Early Warning System (EWS) Assignment Section */}
+          <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-300/80 space-y-3 shadow-xs">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-600" />
+                <span className="text-xs font-bold uppercase tracking-wider text-amber-950">
+                  Early Warning System (EWS)
+                </span>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={Boolean(formData.isEws)}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setFormData((prev) => ({
+                      ...prev,
+                      isEws: checked,
+                      ewsReason: checked ? (prev.ewsReason || 'Uncertain Full-Time Conversion') : '',
+                    }));
+                  }}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-600"></div>
+                <span className="ml-2 text-xs font-bold text-amber-900">
+                  {formData.isEws ? 'Flagged ON' : 'Off'}
+                </span>
+              </label>
+            </div>
+
+            <p className="text-[11px] text-amber-900/90 leading-relaxed">
+              <strong>HR Early Warning System:</strong> Put an employee or manager on EWS when you are uncertain about converting them to full-time or need active retention &amp; performance monitoring.
+            </p>
+
+            {formData.isEws && (
+              <div className="space-y-2 pt-2 border-t border-amber-200">
+                <label className="block text-xs font-semibold text-amber-950">
+                  EWS Reason / Observation Notes
+                </label>
+                <div className="flex flex-wrap gap-1.5 mb-1.5">
+                  {[
+                    'Uncertain Full-Time Conversion',
+                    'Performance Review Underway',
+                    'Probation Extension Review',
+                    'Attendance / Punctuality Concern',
+                    'Role Fit Evaluation',
+                  ].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setFormData((prev) => ({ ...prev, ewsReason: preset }))}
+                      className={`text-[10px] px-2 py-0.5 rounded-full font-medium border transition-colors ${
+                        formData.ewsReason === preset
+                          ? 'bg-amber-600 text-white border-amber-600'
+                          : 'bg-white text-amber-800 border-amber-300 hover:bg-amber-100'
+                      }`}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+                <textarea
+                  rows={2}
+                  value={formData.ewsReason || ''}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, ewsReason: e.target.value }))}
+                  placeholder="Specify review details or reason for putting employee on EWS..."
+                  className="w-full text-xs rounded-lg border border-amber-300 p-2.5 bg-white text-slate-800 focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
+                />
+              </div>
+            )}
           </div>
 
           {/* Work Shift & Time Slot Segment */}
@@ -2537,6 +2701,12 @@ export const EmployeeListPage = () => {
                   <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-slate-100 text-slate-700 border border-slate-200">
                     {viewingEmployee.gender || 'Male'}
                   </span>
+                  {viewingEmployee.isEws && (
+                    <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1 shadow-xs">
+                      <AlertTriangle className="w-3 h-3 text-amber-600" />
+                      EWS Active
+                    </span>
+                  )}
                   {isInternEmployee(viewingEmployee) && (
                     <span className={`text-xs px-2 py-0.5 rounded-full font-semibold border ${
                       isInternshipEnded(viewingEmployee)
@@ -2549,6 +2719,39 @@ export const EmployeeListPage = () => {
                 </div>
               </div>
             </div>
+
+            {viewingEmployee.isEws && (
+              <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-300/80 text-amber-950 flex items-start justify-between gap-3 shadow-xs">
+                <div className="flex items-start gap-2.5">
+                  <div className="p-1.5 rounded-lg bg-amber-100 text-amber-700 mt-0.5">
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold uppercase tracking-wider text-amber-900">
+                      Early Warning System (EWS) Active
+                    </div>
+                    <div className="text-xs mt-0.5 font-medium text-amber-900">
+                      {viewingEmployee.ewsReason || 'Under active monitoring for full-time conversion or performance review.'}
+                    </div>
+                    {viewingEmployee.ewsUpdatedAt && (
+                      <div className="text-[10px] text-amber-700/80 mt-1">
+                        Flagged on: {viewingEmployee.ewsUpdatedAt}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {isHrOrAdmin && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 bg-white border-amber-300 text-amber-900 hover:bg-amber-100 text-xs"
+                    onClick={() => handleOpenEwsModal(viewingEmployee)}
+                  >
+                    Edit EWS
+                  </Button>
+                )}
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
@@ -2982,6 +3185,17 @@ export const EmployeeListPage = () => {
               >
                 Lifecycle Timeline
               </Button>
+              {isHrOrAdmin && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  icon={AlertTriangle}
+                  className={viewingEmployee.isEws ? "text-amber-800 border-amber-300 bg-amber-50 hover:bg-amber-100 font-semibold" : "text-slate-600 hover:text-amber-700"}
+                  onClick={() => handleOpenEwsModal(viewingEmployee)}
+                >
+                  {viewingEmployee.isEws ? 'Edit EWS Flag' : 'Put on EWS'}
+                </Button>
+              )}
               {isHrOrAdmin && isInternEmployee(viewingEmployee) && !isInternshipEnded(viewingEmployee) && (
                 <Button
                   variant="danger"
@@ -3056,6 +3270,117 @@ export const EmployeeListPage = () => {
         onClose={() => setReassigningEmployee(null)}
         onSuccess={() => fetchEmployees(pagination?.page || 1)}
       />
+
+      {/* Quick EWS Modal */}
+      <Modal
+        isOpen={Boolean(ewsTarget)}
+        onClose={() => {
+          if (!isUpdatingEws) setEwsTarget(null);
+        }}
+        maxWidth="max-w-md"
+        title={
+          <div className="flex items-center gap-2 text-slate-900">
+            <div className="p-1.5 rounded-lg bg-amber-100 text-amber-700">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <span>Early Warning System (EWS)</span>
+          </div>
+        }
+        subtitle={ewsTarget ? `${ewsTarget.firstName} ${ewsTarget.lastName} (${ewsTarget.employeeCode || '—'})` : ''}
+      >
+        <div className="space-y-4">
+          <div className="bg-amber-50/70 border border-amber-200/90 rounded-2xl p-4 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-amber-950 uppercase tracking-wide">
+                EWS Monitoring Status
+              </span>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={ewsFormIsEws}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setEwsFormIsEws(checked);
+                    if (checked && !ewsFormReason) {
+                      setEwsFormReason('Uncertain Full-Time Conversion');
+                    }
+                  }}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-600"></div>
+                <span className="ml-2 text-xs font-bold text-amber-900">
+                  {ewsFormIsEws ? 'ACTIVE (FLAGGED)' : 'OFF'}
+                </span>
+              </label>
+            </div>
+            <p className="text-[11px] text-amber-900/90 leading-relaxed">
+              Early Warning System (EWS) flags employees or managers whose retention or conversion to full-time is undecided. Flagged individuals are monitored for review.
+            </p>
+          </div>
+
+          {ewsFormIsEws && (
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-700">
+                Reason / Observation Notes
+              </label>
+              <div className="flex flex-wrap gap-1.5 mb-1.5">
+                {[
+                  'Uncertain Full-Time Conversion',
+                  'Performance Review Underway',
+                  'Probation Extension Review',
+                  'Attendance / Punctuality Concern',
+                  'Role Fit Evaluation',
+                ].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setEwsFormReason(preset)}
+                    className={`text-[10px] px-2.5 py-1 rounded-full font-medium border transition-colors ${
+                      ewsFormReason === preset
+                        ? 'bg-amber-600 text-white border-amber-600'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-amber-50 hover:border-amber-300'
+                    }`}
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
+              <textarea
+                rows={3}
+                value={ewsFormReason}
+                onChange={(e) => setEwsFormReason(e.target.value)}
+                placeholder="Enter details on why this employee/manager is placed on EWS..."
+                className="w-full text-xs rounded-xl border border-slate-300 p-3 bg-white text-slate-800 focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
+              />
+              {ewsTarget?.ewsUpdatedAt && (
+                <div className="text-[10px] text-slate-400 italic">
+                  Last updated: {ewsTarget.ewsUpdatedAt}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setEwsTarget(null)}
+              disabled={isUpdatingEws}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleSaveEws}
+              isLoading={isUpdatingEws}
+              className="bg-amber-600 hover:bg-amber-700 focus:ring-amber-500 text-white font-medium"
+            >
+              {ewsFormIsEws ? 'Confirm EWS Flag' : 'Remove EWS Flag'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

@@ -64,6 +64,9 @@ const mapEmployeeRow = (row) => {
     probationStartDate: row.probationStartDate || row.dateOfJoining || null,
     probationEndDate: row.probationEndDate || null,
     probationNotes: row.probationNotes || '',
+    isEws: Boolean(row.isEws),
+    ewsReason: row.ewsReason || '',
+    ewsUpdatedAt: row.ewsUpdatedAt || null,
   };
 };
 
@@ -104,6 +107,9 @@ const BASE_EMPLOYEE_SELECT = `
     e.probation_notes AS "probationNotes",
     e.internship_status AS "internshipStatus",
     TO_CHAR(e.internship_end_date, 'YYYY-MM-DD') AS "internshipEndDate",
+    e.is_ews AS "isEws",
+    e.ews_reason AS "ewsReason",
+    TO_CHAR(e.ews_updated_at, 'YYYY-MM-DD HH24:MI:SS') AS "ewsUpdatedAt",
     COALESCE(e.avatar_url, u.avatar_url) AS "avatarUrl",
     e.created_at AS "createdAt",
     e.updated_at AS "updatedAt",
@@ -128,7 +134,7 @@ export const employeeRepository = {
   /**
    * Find all employees with filtering and pagination
    */
-  async findAll({ search = '', orgId = '', deptId = '', status = '', managerId = '', hrId = '', page = 1, limit = 20 } = {}) {
+  async findAll({ search = '', orgId = '', deptId = '', status = '', managerId = '', hrId = '', isEws = '', page = 1, limit = 20 } = {}) {
     const conditions = [];
     const values = [];
     let paramIndex = 1;
@@ -156,6 +162,11 @@ export const employeeRepository = {
     if (hrId) {
       conditions.push(`e.hr_id = $${paramIndex++}`);
       values.push(hrId);
+    }
+
+    if (isEws !== undefined && isEws !== '') {
+      conditions.push(`e.is_ews = $${paramIndex++}`);
+      values.push(isEws === true || isEws === 'true');
     }
 
     if (search) {
@@ -320,6 +331,8 @@ export const employeeRepository = {
       probationEndDate = pDate.toISOString().split('T')[0];
     }
     const probationNotes = data.probationNotes ? data.probationNotes.trim() : (probationStatus === 'NOT_ELIGIBLE' ? 'Not eligible for probation.' : 'Standard 6-month probation period.');
+    const isEws = Boolean(data.isEws ?? data.is_ews ?? false);
+    const ewsReason = (data.ewsReason ?? data.ews_reason ?? '').trim() || null;
 
     const sql = `
       INSERT INTO employees (
@@ -329,8 +342,8 @@ export const employeeRepository = {
         father_name, mother_name, emergency_contact, address,
         bank_name, bank_account_number, bank_ifsc, bank_branch, uan_number,
         probation_status, probation_start_date, probation_end_date, probation_notes,
-        salary_structure
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33)
+        salary_structure, is_ews, ews_reason, ews_updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36)
       RETURNING id;
     `;
 
@@ -368,6 +381,9 @@ export const employeeRepository = {
       probationEndDate,
       probationNotes,
       data.salaryStructure ? (typeof data.salaryStructure === 'string' ? data.salaryStructure : JSON.stringify(data.salaryStructure)) : null,
+      isEws,
+      ewsReason,
+      isEws ? new Date() : null,
     ]);
 
     return this.findById(id);
@@ -557,6 +573,18 @@ export const employeeRepository = {
     if (data.internshipEndDate !== undefined) {
       setClauses.push(`internship_end_date = $${paramIndex++}`);
       values.push(data.internshipEndDate || null);
+    }
+
+    if (data.isEws !== undefined || data.is_ews !== undefined) {
+      const val = Boolean(data.isEws ?? data.is_ews);
+      setClauses.push(`is_ews = $${paramIndex++}`);
+      values.push(val);
+      setClauses.push(`ews_updated_at = NOW()`);
+    }
+
+    if (data.ewsReason !== undefined || data.ews_reason !== undefined) {
+      setClauses.push(`ews_reason = $${paramIndex++}`);
+      values.push(data.ewsReason ?? data.ews_reason ?? null);
     }
 
     if (setClauses.length === 0) {
