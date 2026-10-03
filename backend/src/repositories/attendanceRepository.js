@@ -361,13 +361,19 @@ export const attendanceRepository = {
    * Find employee's own attendance history with date filtering and pagination
    * Excludes leave-based records (source = 'LEAVE_ASSIGNMENT') to show only actual attendance
    */
-  async findByEmployeeHistory(employeeId, orgId, { startDate = '', endDate = '', status = '', page = 1, limit = 20 } = {}) {
+  async findByEmployeeHistory(employeeId, orgId, { startDate = '', endDate = '', status = '', page = 1, limit = 20, includeLeaves = false } = {}) {
     const conditions = [
       'a.employee_id = $1',
       'a.org_id = $2',
     ];
     const values = [employeeId, orgId];
     let paramIndex = 3;
+
+    const shouldIncludeLeaves = includeLeaves === true || includeLeaves === 'true';
+    if (!shouldIncludeLeaves && status.toUpperCase() !== 'ON_LEAVE') {
+      conditions.push("(a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT')");
+      conditions.push("a.status != 'ON_LEAVE'");
+    }
 
     if (startDate) {
       conditions.push(`a.attendance_date >= $${paramIndex++}::date`);
@@ -491,13 +497,19 @@ export const attendanceRepository = {
    * Find team attendance for a Manager (scoped by department)
    * Excludes leave-based records (source = 'LEAVE_ASSIGNMENT') to show only actual attendance
    */
-  async findTeamAttendance(deptId, orgId, { date = '', startDate = '', endDate = '', status = '', search = '', page = 1, limit = 20 } = {}) {
+  async findTeamAttendance(deptId, orgId, { date = '', startDate = '', endDate = '', status = '', search = '', page = 1, limit = 20, includeLeaves = false } = {}) {
     const conditions = [
       'a.org_id = $1',
       CEO_ADMIN_EXCLUSION_SQL,
     ];
     const values = [orgId];
     let paramIndex = 2;
+
+    const shouldIncludeLeaves = includeLeaves === true || includeLeaves === 'true';
+    if (!shouldIncludeLeaves && status.toUpperCase() !== 'ON_LEAVE') {
+      conditions.push("(a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT')");
+      conditions.push("a.status != 'ON_LEAVE'");
+    }
 
     if (deptId) {
       conditions.push(`e.dept_id = $${paramIndex++}`);
@@ -579,13 +591,19 @@ export const attendanceRepository = {
    * Find organization-wide attendance records for HR & Admin
    * Excludes leave-based records (source = 'LEAVE_ASSIGNMENT') to show only actual attendance
    */
-  async findAllOrgAttendance(orgId, { date = '', startDate = '', endDate = '', deptId = '', status = '', search = '', page = 1, limit = 20 } = {}) {
+  async findAllOrgAttendance(orgId, { date = '', startDate = '', endDate = '', deptId = '', status = '', search = '', page = 1, limit = 20, includeLeaves = false } = {}) {
     const conditions = [
       'a.org_id = $1',
       CEO_ADMIN_EXCLUSION_SQL,
     ];
     const values = [orgId];
     let paramIndex = 2;
+
+    const shouldIncludeLeaves = includeLeaves === true || includeLeaves === 'true';
+    if (!shouldIncludeLeaves && status.toUpperCase() !== 'ON_LEAVE') {
+      conditions.push("(a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT')");
+      conditions.push("a.status != 'ON_LEAVE'");
+    }
 
     if (deptId) {
       conditions.push(`e.dept_id = $${paramIndex++}`);

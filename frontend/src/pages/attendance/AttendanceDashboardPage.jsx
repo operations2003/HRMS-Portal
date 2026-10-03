@@ -327,6 +327,7 @@ export const AttendanceDashboardPage = () => {
           startDate,
           endDate,
           deptId: deptId || undefined,
+          includeLeaves: true,
           page: 1,
           limit: 10000,
         });
@@ -335,6 +336,7 @@ export const AttendanceDashboardPage = () => {
         const res = await attendanceService.getMyAttendance({
           startDate,
           endDate,
+          includeLeaves: true,
           page: 1,
           limit: 10000,
         });

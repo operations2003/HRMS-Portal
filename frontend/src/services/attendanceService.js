@@ -57,6 +57,7 @@ export const attendanceService = {
     if (params.status) query.append('status', params.status);
     if (params.page) query.append('page', params.page);
     if (params.limit) query.append('limit', params.limit);
+    if (params.includeLeaves !== undefined) query.append('includeLeaves', params.includeLeaves);
     const queryString = query.toString() ? `?${query.toString()}` : '';
 
     const res = await http.get(`/v1/attendance/my${queryString}`);
@@ -81,6 +82,7 @@ export const attendanceService = {
     if (params.status) query.append('status', params.status);
     if (params.page) query.append('page', params.page);
     if (params.limit) query.append('limit', params.limit);
+    if (params.includeLeaves !== undefined) query.append('includeLeaves', params.includeLeaves);
     const queryString = query.toString() ? `?${query.toString()}` : '';
 
     const res = await http.get(`/v1/attendance/team${queryString}`);
@@ -104,6 +106,7 @@ export const attendanceService = {
     if (params.search) query.append('search', params.search);
     if (params.page) query.append('page', params.page);
     if (params.limit) query.append('limit', params.limit);
+    if (params.includeLeaves !== undefined) query.append('includeLeaves', params.includeLeaves);
     const queryString = query.toString() ? `?${query.toString()}` : '';
 
     const res = await http.get(`/v1/attendance/organization${queryString}`);
