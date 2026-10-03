@@ -97,13 +97,23 @@ export const DashboardPage = () => {
       action: () => navigate('/employees'),
     },
     {
+      title: 'Early Warning (EWS)',
+      value: stats?.ewsCount ?? 0,
+      subtext: 'Flagged for conversion / retention review',
+      icon: AlertTriangle,
+      color: 'text-amber-600',
+      bgLight: 'bg-amber-50',
+      border: 'border-amber-300/80',
+      action: () => navigate('/employees?isEws=true'),
+    },
+    {
       title: 'Active Departments',
       value: stats?.totalDepartments || 0,
       subtext: 'Operational units mapped',
       icon: Briefcase,
-      color: 'text-amber-600',
-      bgLight: 'bg-amber-50',
-      border: 'border-amber-200/70',
+      color: 'text-purple-600',
+      bgLight: 'bg-purple-50',
+      border: 'border-purple-200/70',
       action: () => navigate('/departments'),
     },
     {
@@ -214,7 +224,7 @@ export const DashboardPage = () => {
       </div>
 
       {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div className={`grid grid-cols-1 sm:grid-cols-2 ${isEmployee ? 'lg:grid-cols-4' : 'lg:grid-cols-5'} gap-5`}>
         {statCards.map((card, i) => {
           const Icon = card.icon;
           return (

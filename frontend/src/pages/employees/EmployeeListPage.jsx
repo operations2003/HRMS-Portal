@@ -99,14 +99,18 @@ const isInternshipEnded = (emp) => {
 export const EmployeeListPage = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { user, hasPermission } = useAuth();
+  const { user, hasPermission, hasRole } = useAuth();
   const toast = useToast();
 
-  const allUserRoles = (Array.isArray(user?.roles) ? user.roles : [user?.roleName || user?.role || ''])
+  const allUserRoles = (Array.isArray(user?.roles) ? user.roles : [user?.roleName || user?.role || user?.role?.name || ''])
     .filter(Boolean)
     .map((r) => String(r).toLowerCase());
   const isHrOrAdmin =
     allUserRoles.some((r) => ['admin', 'superadmin', 'hr', 'hrmanager', 'orgadmin'].some((adm) => r.includes(adm))) ||
+    hasPermission('employee:write') ||
+    (hasRole && hasRole(['admin', 'hr', 'superadmin', 'orgadmin'])) ||
+    (user?.roleName || '').toLowerCase().includes('admin') ||
+    (user?.roleName || '').toLowerCase().includes('hr') ||
     (user?.email || '').toLowerCase() === 'sheetalbedi@tasknera.com';
 
   const [employees, setEmployees] = useState([]);
@@ -496,11 +500,14 @@ export const EmployeeListPage = () => {
     fetchEmployees(1);
   }, [search, orgFilter, deptFilter, statusFilter, ewsFilter]);
 
-  // Handle URL action (e.g. ?action=new)
+  // Handle URL action (e.g. ?action=new or ?isEws=true)
   useEffect(() => {
     if (searchParams.get('action') === 'new') {
       handleOpenCreate();
       setSearchParams({});
+    }
+    if (searchParams.get('isEws') === 'true') {
+      setEwsFilter('true');
     }
   }, [searchParams]);
 

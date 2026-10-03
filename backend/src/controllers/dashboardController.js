@@ -19,6 +19,7 @@ export const dashboardController = {
 
       const activeEmployees = empData.employees.filter((e) => e.status === 'Active').length;
       const onLeaveEmployees = empData.employees.filter((e) => e.status === 'On Leave').length;
+      const ewsCount = empData.employees.filter((e) => Boolean(e.isEws)).length;
 
       // Group employees by department for dashboard breakdown
       const deptDistribution = departments.map((dept) => {
@@ -36,6 +37,7 @@ export const dashboardController = {
         totalEmployees: empData.pagination.total,
         activeEmployees,
         onLeaveEmployees,
+        ewsCount,
         totalDepartments: departments.length,
         totalUsers: users.length,
         recentEmployees: empData.employees.slice(0, 5),

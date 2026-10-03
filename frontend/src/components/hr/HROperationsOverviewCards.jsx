@@ -1,5 +1,5 @@
 import React from 'react';
-import { Users, UserCheck, CalendarOff, Award, TrendingUp, Clock } from 'lucide-react';
+import { Users, UserCheck, CalendarOff, Award, TrendingUp, Clock, AlertTriangle } from 'lucide-react';
 
 export const HROperationsOverviewCards = ({ stats = {} }) => {
   const workforce = stats.workforce || {};
@@ -14,6 +14,7 @@ export const HROperationsOverviewCards = ({ stats = {} }) => {
   const pendingTotal = actionItems.totalPendingActions ?? ((actionItems.pendingLeaves ?? stats.pendingLeaves ?? 0) + (actionItems.pendingAppraisals ?? stats.pendingAppraisals ?? 0));
   const pendingLeaves = actionItems.pendingLeaves ?? stats.pendingLeaves ?? 0;
   const pendingAppraisals = actionItems.pendingAppraisals ?? stats.pendingAppraisals ?? 0;
+  const ewsCount = workforce.ewsCount ?? stats.ewsCount ?? 0;
 
   const cards = [
     {
@@ -35,6 +36,16 @@ export const HROperationsOverviewCards = ({ stats = {} }) => {
       bgLight: 'bg-purple-50/60',
       textColor: 'text-purple-700',
       borderColor: 'border-purple-100',
+    },
+    {
+      title: 'Early Warning (EWS)',
+      value: ewsCount,
+      subtext: 'Under retention & conversion review',
+      icon: AlertTriangle,
+      color: 'from-amber-600 to-orange-600',
+      bgLight: 'bg-amber-50/70',
+      textColor: 'text-amber-800',
+      borderColor: 'border-amber-200',
     },
     {
       title: 'Today Presence',
@@ -59,7 +70,7 @@ export const HROperationsOverviewCards = ({ stats = {} }) => {
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
       {cards.map((card, idx) => {
         const Icon = card.icon;
         return (

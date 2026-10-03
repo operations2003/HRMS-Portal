@@ -39,7 +39,8 @@ export const hrOperationsService = {
         `SELECT 
           COUNT(*)::int AS "totalEmployees",
           COUNT(*) FILTER (WHERE LOWER(status) = 'active')::int AS "activeEmployees",
-          COUNT(*) FILTER (WHERE LOWER(status) = 'on leave')::int AS "onLeaveCount"
+          COUNT(*) FILTER (WHERE LOWER(status) = 'on leave')::int AS "onLeaveCount",
+          COUNT(*) FILTER (WHERE is_ews = TRUE)::int AS "ewsCount"
         FROM employees
         WHERE org_id = $1 ${assignedHrId ? 'AND hr_id = $2' : ''};`,
         assignedHrId ? [orgId, assignedHrId] : [orgId]
@@ -123,7 +124,9 @@ export const hrOperationsService = {
         activeEmployees: empStats.activeEmployees,
         onLeaveToday: empStats.onLeaveCount,
         noticePeriodCount: exitRow.noticePeriodExits,
+        ewsCount: empStats.ewsCount || 0,
       },
+      ewsCount: empStats.ewsCount || 0,
       actionItems: {
         pendingLeaves,
         pendingRequests,
