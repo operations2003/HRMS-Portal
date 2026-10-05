@@ -496,6 +496,13 @@ export const teamService = {
     }
 
     const queryDate = date || new Date().toISOString().split('T')[0];
+    const [qy, qm, qd] = queryDate.split('-').map(Number);
+    const isQuerySunday = new Date(qy, qm - 1, qd).getDay() === 0;
+    // Sundays are company holidays: do not show any attendance data for Sunday
+    if (isQuerySunday) {
+      return [];
+    }
+
     const whereConditions = ['e.org_id = $1', CEO_ADMIN_EXCLUSION_SQL];
     const params = [currentUser.orgId, queryDate];
     let pIdx = 3;
@@ -613,6 +620,7 @@ export const teamService = {
       'e.org_id = $1',
       'a.attendance_date >= $2::date',
       'a.attendance_date <= $3::date',
+      'EXTRACT(DOW FROM a.attendance_date) != 0',
       CEO_ADMIN_EXCLUSION_SQL,
     ];
     const params = [currentUser.orgId, start, end];

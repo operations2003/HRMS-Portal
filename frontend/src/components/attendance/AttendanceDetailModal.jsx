@@ -169,28 +169,42 @@ export const AttendanceDetailModal = ({
         </div>
 
         {/* Break Sessions History Breakdown */}
-        {Array.isArray(record.breakHistory) && record.breakHistory.length > 0 && (
+        {((Array.isArray(record.breakHistory) && record.breakHistory.length > 0) || (record.breakDurationMinutes > 0)) && (
           <div className="p-4 rounded-2xl bg-amber-50/50 border border-amber-200/70 space-y-2">
-            <div className="flex items-center gap-2 text-xs font-bold text-amber-800 uppercase tracking-wider">
-              <Coffee className="w-4 h-4 text-amber-600" />
-              Break Sessions ({record.breakHistory.length}) — Total {record.breakDurationMinutes || 0} mins
-            </div>
-            <div className="space-y-1.5 max-h-36 overflow-y-auto">
-              {record.breakHistory.map((b, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-center justify-between py-1.5 px-3 rounded-xl bg-white/90 border border-amber-200/50 text-xs text-slate-700"
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-xs font-bold text-amber-800 uppercase tracking-wider">
+                <Coffee className="w-4 h-4 text-amber-600" />
+                Break Sessions {Array.isArray(record.breakHistory) && record.breakHistory.length > 0 ? `(${record.breakHistory.length})` : ''} — Total {record.breakDurationMinutes || 0} mins
+              </div>
+              {canEditTiming && (
+                <button
+                  type="button"
+                  onClick={() => onEditTiming && onEditTiming(record)}
+                  className="text-xs font-semibold text-amber-800 hover:text-amber-950 underline flex items-center gap-1 cursor-pointer bg-amber-100/70 px-2 py-0.5 rounded-lg border border-amber-200 hover:bg-amber-100 transition-colors"
                 >
-                  <span className="font-semibold text-slate-700">Break #{idx + 1}</span>
-                  <span className="font-mono text-slate-500">
-                    {formatTimestamp(b.startTime)} — {formatTimestamp(b.endTime)}
-                  </span>
-                  <span className="font-bold text-amber-700 font-mono">
-                    {b.durationMinutes ?? (b.durationSeconds ? Math.round(b.durationSeconds / 60) : 0)} mins
-                  </span>
-                </div>
-              ))}
+                  <Edit3 className="w-3 h-3 text-amber-700" />
+                  Edit Break Timing
+                </button>
+              )}
             </div>
+            {Array.isArray(record.breakHistory) && record.breakHistory.length > 0 && (
+              <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                {record.breakHistory.map((b, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between py-1.5 px-3 rounded-xl bg-white/90 border border-amber-200/50 text-xs text-slate-700"
+                  >
+                    <span className="font-semibold text-slate-700">Break #{idx + 1}</span>
+                    <span className="font-mono text-slate-500">
+                      {formatTimestamp(b.startTime)} — {formatTimestamp(b.endTime)}
+                    </span>
+                    <span className="font-bold text-amber-700 font-mono">
+                      {b.durationMinutes ?? (b.durationSeconds ? Math.round(b.durationSeconds / 60) : 0)} mins
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

@@ -64,6 +64,7 @@ export const calculateWorkingHoursAndOvertime = ({
   checkOut,
   breakHistory = [],
   breakDurationMinutes = null,
+  overrideBreakDuration = false,
   shiftTiming = '11:00 AM - 07:00 PM',
 }) => {
   if (!checkIn) {
@@ -125,9 +126,9 @@ export const calculateWorkingHoursAndOvertime = ({
   const grossSeconds = Math.floor(grossMs / 1000);
   const grossHours = parseFloat((grossSeconds / 3600).toFixed(2));
 
-  // Break duration: sum from completed sessions in breakHistory
+  // Break duration: sum from completed sessions in breakHistory (unless explicitly overridden by HR/Admin)
   let totalBreakSeconds = 0;
-  if (Array.isArray(breakHistory) && breakHistory.length > 0) {
+  if (!overrideBreakDuration && Array.isArray(breakHistory) && breakHistory.length > 0) {
     for (const b of breakHistory) {
       if (b.durationSeconds !== undefined && b.durationSeconds !== null) {
         totalBreakSeconds += Number(b.durationSeconds);
@@ -142,9 +143,11 @@ export const calculateWorkingHoursAndOvertime = ({
 
   // Check if explicit breakDurationMinutes provides additional / overridden duration
   const explicitBreakMinutes = parseInt(breakDurationMinutes, 10);
-  if (!isNaN(explicitBreakMinutes) && explicitBreakMinutes > 0) {
+  if (!isNaN(explicitBreakMinutes) && explicitBreakMinutes >= 0) {
     const explicitSecs = explicitBreakMinutes * 60;
-    if (explicitSecs > totalBreakSeconds) {
+    if (overrideBreakDuration) {
+      totalBreakSeconds = explicitSecs;
+    } else if (explicitSecs > totalBreakSeconds || totalBreakSeconds === 0) {
       totalBreakSeconds = explicitSecs;
     }
   }
@@ -996,10 +999,15 @@ export const attendanceService = {
     await autoCheckoutStaleRecords(user.orgId);
 
     // Sync daily absences and approved leaves for target date
-    const targetDate = query.date || query.startDate || new Date().toISOString().split('T')[0];
+    const singleDate = query.date || (query.startDate && query.startDate === query.endDate ? query.startDate : null);
+    const targetDate = singleDate || new Date().toISOString().split('T')[0];
     try {
       await attendanceRepository.syncApprovedLeaves(user.orgId, query.startDate, query.endDate);
-      await attendanceRepository.syncDailyAbsences(user.orgId, targetDate);
+      const [tY, tM, tD] = targetDate.split('-').map(Number);
+      const isSunday = new Date(tY, tM - 1, tD).getDay() === 0;
+      if (!isSunday && targetDate >= new Date().toISOString().split('T')[0]) {
+        await attendanceRepository.syncDailyAbsences(user.orgId, targetDate);
+      }
     } catch (absErr) {
       logger.warn('AttendanceService', `Failed to sync daily absences for team: ${absErr.message}`);
     }
@@ -1039,10 +1047,15 @@ export const attendanceService = {
     await autoCheckoutStaleRecords(user.orgId);
 
     // Sync daily absences and approved leaves for target date / range
-    const targetDate = query.date || query.startDate || new Date().toISOString().split('T')[0];
+    const singleDate = query.date || (query.startDate && query.startDate === query.endDate ? query.startDate : null);
+    const targetDate = singleDate || new Date().toISOString().split('T')[0];
     try {
       await attendanceRepository.syncApprovedLeaves(user.orgId, query.startDate, query.endDate);
-      await attendanceRepository.syncDailyAbsences(user.orgId, targetDate);
+      const [tY, tM, tD] = targetDate.split('-').map(Number);
+      const isSunday = new Date(tY, tM - 1, tD).getDay() === 0;
+      if (!isSunday && targetDate >= new Date().toISOString().split('T')[0]) {
+        await attendanceRepository.syncDailyAbsences(user.orgId, targetDate);
+      }
     } catch (absErr) {
       logger.warn('AttendanceService', `Failed to sync daily absences: ${absErr.message}`);
     }
@@ -1095,9 +1108,22 @@ export const attendanceService = {
     const newCheckIn = data.checkIn ? new Date(data.checkIn) : record.checkIn ? new Date(record.checkIn) : null;
     const newCheckOut = data.checkOut ? new Date(data.checkOut) : record.checkOut ? new Date(record.checkOut) : null;
 
+    const hasExplicitBreak = data.breakDurationMinutes !== undefined && data.breakDurationMinutes !== null && data.breakDurationMinutes !== '';
+    const explicitBreakMinutes = hasExplicitBreak ? Math.max(0, parseInt(data.breakDurationMinutes, 10) || 0) : null;
+
     let totalHours = record.totalHours;
     let overtimeHours = record.overtimeHours;
-    let breakDurationMinutes = record.breakDurationMinutes || 0;
+    let breakDurationMinutes = hasExplicitBreak ? explicitBreakMinutes : (record.breakDurationMinutes || 0);
+
+    let breakHistory = Array.isArray(record.breakHistory) ? [...record.breakHistory] : [];
+    if (hasExplicitBreak && explicitBreakMinutes !== (record.breakDurationMinutes || 0)) {
+      breakHistory.push({
+        note: `Break duration adjusted from ${record.breakDurationMinutes || 0}m to ${explicitBreakMinutes}m by ${normRole.toUpperCase()} (${user.email || user.id})`,
+        adjustedBreakMinutes: explicitBreakMinutes,
+        originalBreakMinutes: record.breakDurationMinutes || 0,
+        adjustedAt: new Date().toISOString(),
+      });
+    }
 
     if (newCheckIn && newCheckOut) {
       if (newCheckOut.getTime() < newCheckIn.getTime()) {
@@ -1108,13 +1134,28 @@ export const attendanceService = {
       const calc = calculateWorkingHoursAndOvertime({
         checkIn: newCheckIn,
         checkOut: newCheckOut,
-        breakHistory: record.breakHistory || [],
-        breakDurationMinutes: data.breakDurationMinutes !== undefined ? data.breakDurationMinutes : record.breakDurationMinutes,
+        breakHistory,
+        breakDurationMinutes: hasExplicitBreak ? explicitBreakMinutes : record.breakDurationMinutes,
+        overrideBreakDuration: hasExplicitBreak,
         shiftTiming,
       });
       totalHours = calc.totalHours;
       overtimeHours = calc.overtimeHours;
       breakDurationMinutes = calc.breakDurationMinutes;
+    }
+
+    // Handle end/clear break if requested or if explicit break passed for a stuck break
+    let isOnBreak = record.isOnBreak;
+    let currentBreakStart = record.currentBreakStart;
+    if (data.isOnBreak !== undefined) {
+      isOnBreak = Boolean(data.isOnBreak);
+      if (!isOnBreak) {
+        currentBreakStart = null;
+      }
+    } else if (hasExplicitBreak && record.isOnBreak) {
+      // If HR explicitly corrects break duration and session was left on break, close open break
+      isOnBreak = false;
+      currentBreakStart = null;
     }
 
     // Wisely determine final attendance status
@@ -1139,7 +1180,10 @@ export const attendanceService = {
     const userDisplayName = user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : (user.email || 'HR/Manager');
     const roleLabel = normRole === 'manager' ? 'Manager' : (['hr', 'hrmanager'].includes(normRole) ? 'HR' : 'Admin');
     const reasonText = (data.regularizationReason || '').trim();
-    const auditNote = `[TIMING_ADJUSTED by ${roleLabel} (${userDisplayName}): ${reasonText}]`;
+    const breakNotePart = hasExplicitBreak && explicitBreakMinutes !== (record.breakDurationMinutes || 0)
+      ? ` (Break: ${record.breakDurationMinutes || 0}m -> ${explicitBreakMinutes}m)`
+      : '';
+    const auditNote = `[TIMING_ADJUSTED by ${roleLabel} (${userDisplayName}): ${reasonText}${breakNotePart}]`;
     const combinedNotes = data.notes
       ? (record.notes ? `${record.notes} | ${data.notes} | ${auditNote}` : `${data.notes} | ${auditNote}`)
       : (record.notes ? `${record.notes} | ${auditNote}` : auditNote);
@@ -1150,6 +1194,9 @@ export const attendanceService = {
       totalHours,
       overtimeHours,
       breakDurationMinutes,
+      breakHistory,
+      isOnBreak,
+      currentBreakStart,
       status: finalStatus,
       isRegularized: true,
       regularizationReason: reasonText,

@@ -152,6 +152,19 @@ export const validateRegularize = (body) => {
     }
   }
 
+  if (body.breakDurationMinutes !== undefined && body.breakDurationMinutes !== null && body.breakDurationMinutes !== '') {
+    const breaks = Number(body.breakDurationMinutes);
+    if (isNaN(breaks) || breaks < 0 || breaks > 720) {
+      errors.push('breakDurationMinutes must be an integer between 0 and 720.');
+    }
+  }
+
+  if (body.isOnBreak !== undefined && body.isOnBreak !== null) {
+    if (typeof body.isOnBreak !== 'boolean') {
+      errors.push('isOnBreak must be a boolean.');
+    }
+  }
+
   return errors;
 };
 

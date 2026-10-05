@@ -365,6 +365,7 @@ export const attendanceRepository = {
     const conditions = [
       'a.employee_id = $1',
       'a.org_id = $2',
+      'EXTRACT(DOW FROM a.attendance_date) != 0', // Never show Sunday attendance data (weekly holiday)
     ];
     const values = [employeeId, orgId];
     let paramIndex = 3;
@@ -501,6 +502,7 @@ export const attendanceRepository = {
     const conditions = [
       'a.org_id = $1',
       CEO_ADMIN_EXCLUSION_SQL,
+      'EXTRACT(DOW FROM a.attendance_date) != 0', // Never show Sunday attendance data (weekly holiday)
     ];
     const values = [orgId];
     let paramIndex = 2;
@@ -595,6 +597,7 @@ export const attendanceRepository = {
     const conditions = [
       'a.org_id = $1',
       CEO_ADMIN_EXCLUSION_SQL,
+      'EXTRACT(DOW FROM a.attendance_date) != 0', // Never show Sunday attendance data (weekly holiday)
     ];
     const values = [orgId];
     let paramIndex = 2;
@@ -716,7 +719,9 @@ export const attendanceRepository = {
         while (curStr <= endStr) {
           const recordId = `att-lve-${row.employee_id}-${curStr}`;
           const leaveName = row.leave_name || 'Leave';
-          const notes = `${leaveName} (Approved)`;
+          const isHalfDay = Boolean(row.is_half_day);
+          const attStatus = isHalfDay ? 'HALF_DAY' : 'ON_LEAVE';
+          const notes = isHalfDay ? `${leaveName} (Half Day Approved)` : `${leaveName} (Approved)`;
 
           await pool.query(
             `INSERT INTO attendance_records (
@@ -724,17 +729,17 @@ export const attendanceRepository = {
               total_hours, status, notes, source, created_at, updated_at
             ) VALUES (
               $1, $2, $3, $4::date, 'Asia/Kolkata',
-              0.00, 'ON_LEAVE', $5, 'LEAVE_ASSIGNMENT', NOW(), NOW()
+              0.00, $5, $6, 'LEAVE_ASSIGNMENT', NOW(), NOW()
             )
             ON CONFLICT (employee_id, attendance_date)
             DO UPDATE SET
-              status = 'ON_LEAVE',
+              status = EXCLUDED.status,
               source = 'LEAVE_ASSIGNMENT',
               notes = EXCLUDED.notes,
               updated_at = NOW()
             WHERE attendance_records.status IN ('ABSENT', 'NOT_STARTED')
-               OR (attendance_records.check_in IS NULL AND attendance_records.status != 'ON_LEAVE');`,
-            [recordId, row.org_id, row.employee_id, curStr, notes]
+               OR (attendance_records.check_in IS NULL AND attendance_records.status NOT IN ('ON_LEAVE', 'HALF_DAY'));`,
+            [recordId, row.org_id, row.employee_id, curStr, attStatus, notes]
           );
 
           const [y, m, d] = curStr.split('-').map(Number);
@@ -757,14 +762,22 @@ export const attendanceRepository = {
    *   - If targetDate is a future date: 0 absences are marked.
    */
   async syncDailyAbsences(orgId, targetDate = new Date().toISOString().split('T')[0]) {
-    await this.syncApprovedLeaves(orgId, targetDate, targetDate);
+    const cleanTargetDate = typeof targetDate === 'string' ? targetDate.split('T')[0] : targetDate;
+    const [tY, tM, tD] = cleanTargetDate.split('-').map(Number);
+    const dayOfWeek = new Date(tY, tM - 1, tD).getDay();
+
+    // Sundays are weekly company holidays: strictly never mark absences for Sundays
+    if (dayOfWeek === 0) {
+      return 0;
+    }
+
+    await this.syncApprovedLeaves(orgId, cleanTargetDate, cleanTargetDate);
     const nowKolkata = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
     const todayStr = [
       nowKolkata.getFullYear(),
       String(nowKolkata.getMonth() + 1).padStart(2, '0'),
       String(nowKolkata.getDate()).padStart(2, '0'),
     ].join('-');
-    const cleanTargetDate = typeof targetDate === 'string' ? targetDate.split('T')[0] : targetDate;
 
     // Never mark absences for future dates
     if (cleanTargetDate > todayStr) {
@@ -916,6 +929,33 @@ export const attendanceRepository = {
    */
   async getDailySummary(orgId, date = null) {
     const targetDate = date || new Date().toISOString().split('T')[0];
+    const cleanDate = typeof targetDate === 'string' ? targetDate.split('T')[0] : targetDate;
+    const [y, m, d] = cleanDate.split('-').map(Number);
+    const isSunday = new Date(y, m - 1, d).getDay() === 0;
+
+    // If target date is a Sunday, it is a company holiday: no absences or active attendance
+    if (isSunday) {
+      const empRes = await pool.query(
+        `SELECT COUNT(*)::int AS "totalEmployees" FROM employees e WHERE e.org_id = $1 AND e.status = 'Active' AND ${CEO_ADMIN_EXCLUSION_SQL}`,
+        [orgId]
+      );
+      const totalEmployees = empRes.rows[0]?.totalEmployees || 0;
+      return {
+        date: cleanDate,
+        totalEmployees,
+        presentCount: 0,
+        halfDayCount: 0,
+        lateCount: 0,
+        onLeaveCount: 0,
+        absentCount: 0,
+        notStartedCount: 0,
+        onBreakCount: 0,
+        pendingCount: 0,
+        attendanceRate: 0.0,
+        isSunday: true,
+        isHoliday: true,
+      };
+    }
 
     // Query active employee count and attendance summary for the day
     // Exclude leave-based records (source = 'LEAVE_ASSIGNMENT') from attendance counts
@@ -1069,6 +1109,7 @@ export const attendanceRepository = {
         JOIN employees e ON e.id = a.employee_id
         WHERE a.org_id = $1
           AND a.attendance_date >= $2::date AND a.attendance_date <= $3::date
+          AND EXTRACT(DOW FROM a.attendance_date) != 0
           AND ${CEO_ADMIN_EXCLUSION_SQL}
           AND ($4 = '' OR e.dept_id = $4)
           AND ($5 = '' OR e.shift_timing ILIKE '%' || $5 || '%')
@@ -1090,10 +1131,11 @@ export const attendanceRepository = {
         return {
           label: dayName,
           date: dStr,
-          present: record?.present || 0,
-          late: record?.late || 0,
-          absent: record?.absent || 0,
-          totalHours: record ? Number(record.totalHours) : 0,
+          present: idx === 0 ? 0 : (record?.present || 0),
+          late: idx === 0 ? 0 : (record?.late || 0),
+          absent: idx === 0 ? 0 : (record?.absent || 0),
+          totalHours: idx === 0 ? 0 : (record ? Number(record.totalHours) : 0),
+          isSunday: idx === 0,
         };
       });
     } else if (normalizedView === 'daily') {
@@ -1140,6 +1182,7 @@ export const attendanceRepository = {
         JOIN employees e ON e.id = a.employee_id
         WHERE a.org_id = $1
           AND a.attendance_date >= $2::date AND a.attendance_date <= $3::date
+          AND EXTRACT(DOW FROM a.attendance_date) != 0
           AND ${CEO_ADMIN_EXCLUSION_SQL}
           AND ($4 = '' OR e.dept_id = $4)
           AND ($5 = '' OR e.shift_timing ILIKE '%' || $5 || '%')
@@ -1172,6 +1215,7 @@ export const attendanceRepository = {
         JOIN employees e ON e.id = a.employee_id
         WHERE a.org_id = $1
           AND EXTRACT(YEAR FROM a.attendance_date) = $2
+          AND EXTRACT(DOW FROM a.attendance_date) != 0
           AND ($3 = '' OR e.dept_id = $3)
           AND ($4 = '' OR e.shift_timing ILIKE '%' || $4 || '%')
         GROUP BY TO_CHAR(a.attendance_date, 'Mon'), EXTRACT(MONTH FROM a.attendance_date)

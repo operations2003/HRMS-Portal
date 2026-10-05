@@ -82,6 +82,12 @@ export const TeamManagementPage = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState(null);
 
+  const isSelectedDateSunday = React.useMemo(() => {
+    if (!selectedDate) return false;
+    const [y, m, d] = selectedDate.split('-').map(Number);
+    return new Date(y, m - 1, d).getDay() === 0;
+  }, [selectedDate]);
+
   // Modals state
   const [selectedMember, setSelectedMember] = useState(null);
   const [assigningMember, setAssigningMember] = useState(null);
@@ -1093,7 +1099,7 @@ export const TeamManagementPage = () => {
             <div className="p-3.5 bg-rose-50/70 border border-rose-100 rounded-2xl shadow-xs">
               <span className="text-[10px] uppercase font-bold text-rose-700 block">Absent / Un-punched</span>
               <span className="text-xl font-bold text-rose-900 mt-0.5 block">
-                {attendanceSummary.absentCount ?? safeAttendance.filter((a) => !a.attendance?.id || a.attendance?.status === 'ABSENT').length}
+                {isSelectedDateSunday ? 0 : (attendanceSummary.absentCount ?? safeAttendance.filter((a) => !a.attendance?.id || a.attendance?.status === 'ABSENT').length)}
               </span>
             </div>
           </div>
@@ -1139,8 +1145,8 @@ export const TeamManagementPage = () => {
             onPageChange={setAttendancePage}
             isLoading={isLoading}
             error={error}
-            emptyTitle="No attendance records"
-            emptyDescription={`No team member check-in records found for ${selectedDate}.`}
+            emptyTitle={isSelectedDateSunday ? "Sunday is a Weekly Holiday" : "No attendance records"}
+            emptyDescription={isSelectedDateSunday ? "Sundays are designated company holidays. Attendance records are not tracked for Sundays." : `No team member check-in records found for ${selectedDate}.`}
           />
         </div>
       )}

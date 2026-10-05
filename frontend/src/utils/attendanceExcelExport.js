@@ -95,6 +95,8 @@ const COLORS = {
   ABSENT_TXT: 'FF991B1B',    // Rose 800
   LEAVE_BG: 'FFFEF3C7',      // Amber 100
   LEAVE_TXT: 'FF92400E',     // Amber 800
+  HALF_DAY_BG: 'FFE0F2FE',   // Sky 100
+  HALF_DAY_TXT: 'FF0369A1',  // Sky 800
   WEEKEND_BG: 'FFF1F5F9',    // Slate 100
   WEEKEND_TXT: 'FF64748B',   // Slate 500
   HOLIDAY_BG: 'FFE0E7FF',    // Indigo 100
@@ -296,6 +298,7 @@ const buildMonthlyMatrixWorksheet = (
   // Summary headers at the end
   row4Values.push(
     'Days Present',
+    'Half Days',
     'Days Absent',
     'Days Leave',
     `Total Hours (${cleanMonthTitle})`,
@@ -303,6 +306,7 @@ const buildMonthlyMatrixWorksheet = (
   );
   row5Values.push(
     'Present',
+    'Half Day',
     'Absent',
     'Leaves',
     'HH:MM (Decimal)',
@@ -342,6 +346,7 @@ const buildMonthlyMatrixWorksheet = (
     let totalMonthHours = 0;
     let totalMonthOT = 0;
     let presentCount = 0;
+    let halfDayCount = 0;
     let absentCount = 0;
     let leaveCount = 0;
 
@@ -352,13 +357,14 @@ const buildMonthlyMatrixWorksheet = (
       const d = new Date(dStr);
       const dayOfWeek = d.getDay(); // 0 = Sun, 6 = Sat
 
+      if (dayOfWeek === 0) {
+        // Strictly Sunday only is the weekly holiday - never absent
+        rowData.push('HOLIDAY');
+        return;
+      }
+
       if (!rec) {
-        if (dayOfWeek === 0) {
-          // Strictly Sunday only is the weekend
-          rowData.push('WEEKEND');
-        } else {
-          rowData.push('—');
-        }
+        rowData.push('—');
         return;
       }
 
@@ -371,7 +377,20 @@ const buildMonthlyMatrixWorksheet = (
       totalMonthHours += hoursNum;
       totalMonthOT += otNum;
 
-      if (status === 'PRESENT' || status === 'LATE' || status === 'HALF_DAY' || status === 'REGULARIZED') {
+      const isHalfDay = status === 'HALF_DAY' || Boolean(rec.isHalfDay) || (rec.notes && rec.notes.toLowerCase().includes('half day'));
+
+      if (isHalfDay) {
+        halfDayCount++;
+        const lCode = getLeaveShortCode(rec);
+        const codeTag = lCode && lCode !== 'HDL' ? `HALF DAY (${lCode})` : 'HALF DAY';
+        if (inTime && outTime) {
+          rowData.push(`${codeTag}\n${inTime} – ${outTime}`);
+        } else if (inTime) {
+          rowData.push(`${codeTag}\n${inTime} – Active`);
+        } else {
+          rowData.push(codeTag);
+        }
+      } else if (status === 'PRESENT' || status === 'LATE' || status === 'REGULARIZED') {
         presentCount++;
         if (inTime && outTime) {
           rowData.push(`${inTime} – ${outTime}\n(${formatHoursToClock(hoursNum)})`);
@@ -401,6 +420,7 @@ const buildMonthlyMatrixWorksheet = (
     // Summary columns
     rowData.push(
       presentCount,
+      halfDayCount,
       absentCount,
       leaveCount,
       `${formatHoursToClock(totalMonthHours)}\n(${totalMonthHours.toFixed(2)}h)`,
@@ -441,6 +461,9 @@ const buildMonthlyMatrixWorksheet = (
         } else if (val === 'Shift Not Started') {
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.WEEKEND_BG } };
           cell.font = { name: 'Segoe UI', size: 8.5, italic: true, color: { argb: COLORS.WEEKEND_TXT } };
+        } else if (val.startsWith('HALF DAY') || val.includes('HALF DAY')) {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.HALF_DAY_BG } };
+          cell.font = { name: 'Segoe UI', size: 8.5, bold: true, color: { argb: COLORS.HALF_DAY_TXT } };
         } else if (val.startsWith('LEAVE') || val === 'LEAVE') {
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.LEAVE_BG } };
           cell.font = { name: 'Segoe UI', size: 8.5, bold: true, color: { argb: COLORS.LEAVE_TXT } };
@@ -535,7 +558,13 @@ const buildDailyLogsWorksheet = (workbook, exportRecords, cleanMonthTitle, orgNa
     cell.border = BORDERS.header;
   });
 
-  const sortedLogs = [...exportRecords].sort((a, b) => {
+  const sortedLogs = [...exportRecords]
+    .filter((rec) => {
+      if (!rec.attendanceDate) return false;
+      const [y, m, d] = String(rec.attendanceDate).split('T')[0].split('-').map(Number);
+      return new Date(y, m - 1, d).getDay() !== 0; // Strictly exclude Sunday logs
+    })
+    .sort((a, b) => {
     const da = new Date(a.attendanceDate || 0);
     const db = new Date(b.attendanceDate || 0);
     if (da - db !== 0) return da - db;
@@ -577,10 +606,13 @@ const buildDailyLogsWorksheet = (workbook, exportRecords, cleanMonthTitle, orgNa
     const shift =
       rec.employee?.shiftTiming || rec.shiftTiming || '11:00 AM - 07:00 PM';
 
-    const isLeave = (rec.status || '').toUpperCase() === 'ON_LEAVE';
+    const isHalfDay = (rec.status || '').toUpperCase() === 'HALF_DAY' || Boolean(rec.isHalfDay) || (rec.notes && rec.notes.toLowerCase().includes('half day'));
+    const isLeave = !isHalfDay && (rec.status || '').toUpperCase() === 'ON_LEAVE';
     const isNotStarted = (rec.status || '').toUpperCase() === 'NOT_STARTED' || (rec.status || '').toUpperCase() === 'YET_TO_CHECK_IN';
-    const lCode = isLeave ? getLeaveShortCode(rec) : null;
-    const statusDisplay = isLeave
+    const lCode = getLeaveShortCode(rec);
+    const statusDisplay = isHalfDay
+      ? `HALF_DAY (${lCode && lCode !== 'HDL' ? lCode : 'HD'})`
+      : isLeave
       ? `ON_LEAVE (${lCode})`
       : isNotStarted
       ? 'SHIFT_NOT_STARTED'
@@ -588,7 +620,9 @@ const buildDailyLogsWorksheet = (workbook, exportRecords, cleanMonthTitle, orgNa
 
     let remarks = '';
     if (rec.notes) remarks += rec.notes;
-    if (isLeave && rec.leaveName && !remarks.includes(rec.leaveName)) {
+    if (isHalfDay && rec.leaveName && !remarks.includes(rec.leaveName)) {
+      remarks = remarks ? `${remarks} | Half Day: ${rec.leaveName}` : `Half Day: ${rec.leaveName}`;
+    } else if (isLeave && rec.leaveName && !remarks.includes(rec.leaveName)) {
       remarks = remarks ? `${remarks} | Leave: ${rec.leaveName}` : `Leave: ${rec.leaveName}`;
     }
     if (rec.regularizationReason) {
@@ -640,6 +674,9 @@ const buildDailyLogsWorksheet = (workbook, exportRecords, cleanMonthTitle, orgNa
         } else if (st === 'ABSENT') {
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.ABSENT_BG } };
           cell.font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: COLORS.ABSENT_TXT } };
+        } else if (st.startsWith('HALF_DAY') || st === 'HALF_DAY') {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.HALF_DAY_BG } };
+          cell.font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: COLORS.HALF_DAY_TXT } };
         } else if (st.startsWith('ON_LEAVE') || st === 'LEAVE') {
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.LEAVE_BG } };
           cell.font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: COLORS.LEAVE_TXT } };
@@ -757,6 +794,7 @@ const buildMonthlySummaryWorksheet = (workbook, exportRecords, cleanMonthTitle, 
     'Assigned Shift',
     'Report Scope',
     'Days Present',
+    'Half Days',
     'Days Absent',
     'Days Leave',
     'Leave Breakdown (CL/PL/SL)',
@@ -783,6 +821,7 @@ const buildMonthlySummaryWorksheet = (workbook, exportRecords, cleanMonthTitle, 
     let totalHours = 0;
     let totalOT = 0;
     let presentDays = 0;
+    let halfDays = 0;
     let absentDays = 0;
     let leaveDays = 0;
     const leaveBreakdown = {};
@@ -794,7 +833,13 @@ const buildMonthlySummaryWorksheet = (workbook, exportRecords, cleanMonthTitle, 
       totalOT += o;
 
       const st = (rec.status || '').toUpperCase();
-      if (st === 'PRESENT' || st === 'LATE' || st === 'HALF_DAY' || st === 'REGULARIZED') {
+      const isHalf = st === 'HALF_DAY' || Boolean(rec.isHalfDay) || (rec.notes && rec.notes.toLowerCase().includes('half day'));
+      if (isHalf) {
+        halfDays++;
+        const lCode = getLeaveShortCode(rec);
+        const codeKey = lCode && lCode !== 'HDL' ? `0.5 ${lCode}` : '0.5 HD';
+        leaveBreakdown[codeKey] = (leaveBreakdown[codeKey] || 0) + 1;
+      } else if (st === 'PRESENT' || st === 'LATE' || st === 'REGULARIZED') {
         presentDays++;
       } else if (st === 'ABSENT') {
         absentDays++;
@@ -822,6 +867,7 @@ const buildMonthlySummaryWorksheet = (workbook, exportRecords, cleanMonthTitle, 
       emp.shiftTiming,
       cleanMonthTitle,
       presentDays,
+      halfDays,
       absentDays,
       leaveDays,
       leaveBreakdownStr,

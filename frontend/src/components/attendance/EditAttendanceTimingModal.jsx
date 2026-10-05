@@ -11,6 +11,7 @@ import {
   Info,
   RotateCcw,
   Moon,
+  Coffee,
 } from 'lucide-react';
 import { Modal } from '../common/Modal.jsx';
 import { Button } from '../common/Button.jsx';
@@ -137,6 +138,8 @@ export const EditAttendanceTimingModal = ({
   const [checkOutTime, setCheckOutTime] = useState({ hour: '09', minute: '00', period: 'PM' });
   const [isCheckOutEnabled, setIsCheckOutEnabled] = useState(false);
   const [isNextDayDeparture, setIsNextDayDeparture] = useState(false);
+  const [breakDurationMinutes, setBreakDurationMinutes] = useState(0);
+  const [isOnBreak, setIsOnBreak] = useState(false);
   const [status, setStatus] = useState('AUTO');
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -191,6 +194,8 @@ export const EditAttendanceTimingModal = ({
 
       setStatus(record.status === 'LATE' ? 'AUTO' : record.status || 'AUTO');
       setReason(record.regularizationReason || '');
+      setBreakDurationMinutes(record.breakDurationMinutes || 0);
+      setIsOnBreak(Boolean(record.isOnBreak));
       setError(null);
     }
   }, [record, parsedShift]);
@@ -207,12 +212,16 @@ export const EditAttendanceTimingModal = ({
       if (safeIn.period === 'AM' && inH === 12) inH = 0;
       const inDate = new Date(`${dateStr}T${String(inH).padStart(2, '0')}:${String(inM).padStart(2, '0')}:00`);
 
+      const breakMins = Math.max(0, parseInt(breakDurationMinutes, 10) || 0);
+      const breakHours = breakMins / 60;
+
       if (!isCheckOutEnabled) {
         return {
           valid: true,
           checkInDate: inDate,
           checkOutDate: null,
           totalHours: null,
+          breakMinutes: breakMins,
         };
       }
 
@@ -230,28 +239,33 @@ export const EditAttendanceTimingModal = ({
 
       const diffMs = outDate.getTime() - inDate.getTime();
       const grossHours = Math.max(0, diffMs / (1000 * 60 * 60));
+      const netHours = Math.max(0, grossHours - breakHours);
 
       return {
         valid: diffMs >= 0,
         checkInDate: inDate,
         checkOutDate: outDate,
-        totalHours: grossHours.toFixed(2),
+        grossHours: grossHours.toFixed(2),
+        breakMinutes: breakMins,
+        netHours: netHours.toFixed(2),
+        totalHours: netHours.toFixed(2),
         isNegative: diffMs < 0,
       };
     } catch {
       return { valid: false };
     }
-  }, [dateStr, checkInTime, checkOutTime, isCheckOutEnabled, isNextDayDeparture]);
+  }, [dateStr, checkInTime, checkOutTime, isCheckOutEnabled, isNextDayDeparture, breakDurationMinutes]);
 
   // ALL hooks above — early return is safe here
   if (!record) return null;
 
-  // Common quick reasons for late arrivals due to technical issues
+  // Common quick reasons for timings and break adjustments
   const quickReasons = [
     'Portal login delayed due to network / technical issue',
     'Biometric scanner failure; arrived on time',
+    'Break duration corrected (forgot to end break / timer mistake)',
+    'Accidental break punch removed per manager confirmation',
     'System downtime / authentication glitch during check-in',
-    'Hardware / work device malfunction during arrival',
     'Manager-approved delayed arrival due to transit issue',
   ];
 
@@ -337,6 +351,8 @@ export const EditAttendanceTimingModal = ({
       const payload = {
         checkIn: checkInDate.toISOString(),
         checkOut: checkOutDate ? checkOutDate.toISOString() : undefined,
+        breakDurationMinutes: Math.max(0, parseInt(breakDurationMinutes, 10) || 0),
+        isOnBreak,
         status: status === 'AUTO' ? undefined : status,
         regularizationReason: reason.trim(),
       };
@@ -530,14 +546,139 @@ export const EditAttendanceTimingModal = ({
               </span>
             </label>
 
-            {liveCalculation.totalHours && (
+            {liveCalculation.grossHours && (
               <span className="text-slate-600 font-medium">
-                Total Duration: <strong className="text-brand-700">{formatHoursToClock(liveCalculation.totalHours)}</strong>
-                <span className="text-xs text-slate-400 ml-1">({liveCalculation.totalHours} hrs)</span>
+                Gross Duration: <strong className="text-slate-800">{formatHoursToClock(liveCalculation.grossHours)}</strong>
+                <span className="text-xs text-slate-400 ml-1">({liveCalculation.grossHours} hrs)</span>
               </span>
             )}
           </div>
         )}
+
+        {/* Break Duration Adjustment Section for HR & Admin */}
+        <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-50/70 via-orange-50/30 to-amber-50/70 border border-amber-200/80 space-y-3.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-amber-100 flex items-center justify-center text-amber-700 shadow-2xs">
+                <Coffee className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-amber-950 uppercase tracking-wider flex items-center gap-1.5">
+                  Break Timing &amp; Duration
+                  {record.breakDurationMinutes > 0 && (
+                    <span className="text-[10px] font-normal normal-case text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded-full border border-amber-200">
+                      Originally: {record.breakDurationMinutes}m
+                    </span>
+                  )}
+                </h4>
+                <p className="text-[11px] text-amber-800">
+                  Correct break minutes if employee forgot to end break or had an accidental timer mistake.
+                </p>
+              </div>
+            </div>
+
+            {Number(breakDurationMinutes) !== (record.breakDurationMinutes || 0) && (
+              <span className="text-[10px] font-bold text-amber-900 bg-amber-200/80 px-2.5 py-0.5 rounded-full border border-amber-300">
+                Modified: {record.breakDurationMinutes || 0}m ➔ {breakDurationMinutes}m
+              </span>
+            )}
+          </div>
+
+          {/* Active break indicator / toggle if record is currently marked on break */}
+          {record.isOnBreak && (
+            <div className="p-2.5 rounded-xl bg-white/90 border border-amber-200 text-xs flex items-center justify-between gap-2">
+              <span className="text-amber-900 font-medium flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                Employee session is currently marked <strong>ON BREAK</strong>
+              </span>
+              <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-slate-700 select-none">
+                <input
+                  type="checkbox"
+                  checked={isOnBreak}
+                  onChange={(e) => setIsOnBreak(e.target.checked)}
+                  className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-slate-300 cursor-pointer"
+                />
+                <span>Keep Break Active</span>
+              </label>
+            </div>
+          )}
+
+          {/* Controls: Input + Quick Presets */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Total Break Duration (Minutes)
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  min="0"
+                  max="720"
+                  step="5"
+                  value={breakDurationMinutes}
+                  onChange={(e) => setBreakDurationMinutes(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                  className="w-full pl-3 pr-12 py-2 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 shadow-2xs"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400 pointer-events-none">
+                  mins
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <span className="block text-[11px] font-semibold text-slate-500">
+                Quick Presets:
+              </span>
+              <div className="flex flex-wrap gap-1">
+                {[
+                  { label: '0m (None)', val: 0 },
+                  { label: '15m', val: 15 },
+                  { label: '30m (Lunch)', val: 30 },
+                  { label: '45m', val: 45 },
+                  { label: '60m (1 hr)', val: 60 },
+                ].map((preset) => (
+                  <button
+                    key={preset.val}
+                    type="button"
+                    onClick={() => setBreakDurationMinutes(preset.val)}
+                    className={`text-[10px] px-2 py-1 rounded-lg font-semibold border transition-all cursor-pointer ${
+                      Number(breakDurationMinutes) === preset.val
+                        ? 'bg-amber-600 text-white border-amber-600 shadow-2xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-amber-100/60 hover:border-amber-300'
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Live Net Working Hours Breakdown */}
+          {isCheckOutEnabled && liveCalculation.grossHours && (
+            <div className="p-2.5 rounded-xl bg-white/90 border border-amber-200/60 grid grid-cols-3 gap-2 text-center text-xs">
+              <div>
+                <span className="text-[10px] text-slate-400 block font-medium">Gross Time</span>
+                <span className="font-bold text-slate-700">
+                  {formatHoursToClock(liveCalculation.grossHours)}
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 block font-medium">Break Deducted</span>
+                <span className="font-bold text-amber-700">
+                  -{breakDurationMinutes}m
+                </span>
+              </div>
+              <div className="border-l border-amber-100 pl-2">
+                <span className="text-[10px] text-slate-400 block font-medium">Net Work Time</span>
+                <span className="font-bold text-brand-700">
+                  {formatHoursToClock(liveCalculation.netHours)}
+                </span>
+                <span className="text-[10px] text-slate-400 ml-1">({liveCalculation.netHours}h)</span>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Wise Status Selection */}
         <div className="space-y-1.5">

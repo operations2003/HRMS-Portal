@@ -458,6 +458,12 @@ export const managerService = {
     }
 
     const queryDate = date || new Date().toISOString().split('T')[0];
+    const [qy, qm, qd] = queryDate.split('-').map(Number);
+    const isQuerySunday = new Date(qy, qm - 1, qd).getDay() === 0;
+    // Sundays are company holidays: do not show any attendance data for Sunday
+    if (isQuerySunday) {
+      return [];
+    }
 
     const query = `
       SELECT 
@@ -571,6 +577,7 @@ export const managerService = {
       JOIN employees e ON a.employee_id = e.id
       WHERE e.manager_id = $1 AND e.org_id = $2
         AND a.attendance_date >= $3::date AND a.attendance_date <= $4::date
+        AND EXTRACT(DOW FROM a.attendance_date) != 0
         AND ${CEO_ADMIN_EXCLUSION_SQL};
     `;
     const res = await pool.query(query, [targetManagerId, currentUser.orgId, start, end]);

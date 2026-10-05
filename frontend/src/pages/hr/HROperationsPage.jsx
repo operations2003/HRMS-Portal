@@ -46,6 +46,7 @@ import { TeamRosterModal } from '../../components/hr/TeamRosterModal.jsx';
 import { AssignManagerModal } from '../../components/team/AssignManagerModal.jsx';
 import { ApprovalActionModal } from '../../components/approvals/ApprovalActionModal.jsx';
 import { WorkforceAnalyticsTab } from '../../components/hr/WorkforceAnalyticsTab.jsx';
+import { EditAttendanceTimingModal } from '../../components/attendance/EditAttendanceTimingModal.jsx';
 
 export const HROperationsPage = () => {
   const { user } = useAuth();
@@ -83,6 +84,7 @@ export const HROperationsPage = () => {
   const [orgLeaves, setOrgLeaves] = useState([]);
   const [performanceSummary, setPerformanceSummary] = useState({});
   const [pendingApprovalsQueue, setPendingApprovalsQueue] = useState([]);
+  const [selectedEditTimingRecord, setSelectedEditTimingRecord] = useState(null);
 
   // Date and filter states
   const [selectedAttendanceDate, setSelectedAttendanceDate] = useState(
@@ -672,6 +674,30 @@ export const HROperationsPage = () => {
         const variant = s === 'PRESENT' ? 'success' : s === 'LATE' ? 'warning' : s === 'HALF-DAY' ? 'brand' : 'danger';
         return <Badge variant={variant} size="sm">{s}</Badge>;
       },
+    },
+    {
+      header: 'Break',
+      render: (row) => (
+        <span className="text-xs font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+          {row.breakDurationMinutes || 0}m
+        </span>
+      ),
+    },
+    {
+      header: 'Actions',
+      align: 'right',
+      render: (row) => (
+        <Button
+          variant="secondary"
+          size="sm"
+          icon={Clock}
+          className="!py-1 !px-2.5 !text-xs text-slate-700 hover:text-slate-900 border-slate-200"
+          onClick={() => setSelectedEditTimingRecord(row)}
+          title="Adjust timings or correct break minutes"
+        >
+          Edit Timing / Break
+        </Button>
+      ),
     },
   ];
 
@@ -1704,6 +1730,18 @@ export const HROperationsPage = () => {
           </div>
         </div>
       </Modal>
+
+      {/* Edit Attendance Timing & Break Modal */}
+      {selectedEditTimingRecord && (
+        <EditAttendanceTimingModal
+          isOpen={Boolean(selectedEditTimingRecord)}
+          onClose={() => setSelectedEditTimingRecord(null)}
+          record={selectedEditTimingRecord}
+          onSuccess={() => {
+            loadAttendanceData(selectedAttendanceDate);
+          }}
+        />
+      )}
     </div>
   );
 };

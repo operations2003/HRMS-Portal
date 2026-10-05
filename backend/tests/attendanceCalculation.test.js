@@ -182,6 +182,51 @@ it('calculateWorkingHoursAndOvertime: guards against inverted timestamps', () =>
   assert.strictEqual(result.overtimeHours, 0.0);
 });
 
+// -------------------------------------------------------------
+// 8. HR / Admin Break Timing Override (Mistake Correction)
+// -------------------------------------------------------------
+it('calculateWorkingHoursAndOvertime: allows HR to correct mistake break duration down (e.g. 120m down to 30m)', () => {
+  const login = new Date('2026-09-22T09:00:00');
+  const logout = new Date('2026-09-22T18:00:00'); // 9.0h gross
+  const breakHistory = [
+    { durationMinutes: 120 }, // Accidental 2h break
+  ];
+  const result = calculateWorkingHoursAndOvertime({
+    checkIn: login,
+    checkOut: logout,
+    breakHistory,
+    breakDurationMinutes: 30, // HR corrects it to 30 mins
+    overrideBreakDuration: true,
+    shiftTiming: '09:00 AM - 05:00 PM', // 8h standard shift
+  });
+
+  assert.strictEqual(result.grossHours, 9.0);
+  assert.strictEqual(result.breakDurationMinutes, 30);
+  assert.strictEqual(result.totalHours, 8.5); // 9h gross - 30m break = 8.5h
+  assert.strictEqual(result.overtimeHours, 0.5); // 8.5h - 8.0h shift = 0.5h OT
+});
+
+it('calculateWorkingHoursAndOvertime: allows HR to clear accidental breaks completely to 0m', () => {
+  const login = new Date('2026-09-22T09:00:00');
+  const logout = new Date('2026-09-22T17:00:00'); // 8.0h gross
+  const breakHistory = [
+    { durationMinutes: 45 }, // Accidental break punch
+  ];
+  const result = calculateWorkingHoursAndOvertime({
+    checkIn: login,
+    checkOut: logout,
+    breakHistory,
+    breakDurationMinutes: 0, // HR clears it to 0
+    overrideBreakDuration: true,
+    shiftTiming: '09:00 AM - 05:00 PM',
+  });
+
+  assert.strictEqual(result.grossHours, 8.0);
+  assert.strictEqual(result.breakDurationMinutes, 0);
+  assert.strictEqual(result.totalHours, 8.0);
+  assert.strictEqual(result.overtimeHours, 0.0);
+});
+
 console.log(`\n====================================================`);
 console.log(`Test Results: ${passedTests} Passed, ${failedTests} Failed.`);
 console.log(`====================================================\n`);

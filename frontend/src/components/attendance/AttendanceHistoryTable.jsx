@@ -59,6 +59,24 @@ export const AttendanceHistoryTable = ({
   const handleEditTiming = onEditTiming || onRegularize;
   const canEdit = canEditTiming || canRegularize;
 
+  // Company policy: Sunday is a weekly holiday. Strictly do not display Sunday records.
+  const displayRecords = React.useMemo(() => {
+    return (records || []).filter((r) => {
+      if (!r.attendanceDate) return false;
+      const dStr = typeof r.attendanceDate === 'string' ? r.attendanceDate.split('T')[0] : '';
+      if (!dStr) return true;
+      const [y, m, d] = dStr.split('-').map(Number);
+      return new Date(y, m - 1, d).getDay() !== 0;
+    });
+  }, [records]);
+
+  const isSelectedDateSunday = React.useMemo(() => {
+    if (!filters.startDate) return false;
+    if (filters.endDate && filters.startDate !== filters.endDate) return false;
+    const [y, m, d] = filters.startDate.split('-').map(Number);
+    return new Date(y, m - 1, d).getDay() === 0;
+  }, [filters.startDate, filters.endDate]);
+
   const getRemarkInfo = (row) => {
     const notes = row?.notes || '';
     const regReason = row?.regularizationReason || '';
@@ -296,12 +314,12 @@ export const AttendanceHistoryTable = ({
       )}
 
       {/* 3. Empty State */}
-      {!isLoading && !error && (!records || records.length === 0) && (
+      {!isLoading && !error && (!displayRecords || displayRecords.length === 0) && (
         <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm p-8">
           <EmptyState
-            icon={Inbox}
-            title="No Attendance Records Found"
-            description="No attendance punches match your current filters or date range. Check your search criteria or reset filters."
+            icon={isSelectedDateSunday ? Calendar : Inbox}
+            title={isSelectedDateSunday ? "Sunday is a Weekly Holiday" : "No Attendance Records Found"}
+            description={isSelectedDateSunday ? "Sundays are designated company holidays. Attendance records are not tracked for Sundays." : "No attendance punches match your current filters or date range. Check your search criteria or reset filters."}
             action={
               <Button variant="secondary" size="sm" icon={RotateCcw} onClick={onResetFilters}>
                 Reset Filter Parameters
@@ -312,11 +330,11 @@ export const AttendanceHistoryTable = ({
       )}
 
       {/* 4. Responsive Table / Card Layout */}
-      {!isLoading && !error && records && records.length > 0 && (
+      {!isLoading && !error && displayRecords && displayRecords.length > 0 && (
         <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
           {/* Mobile Card Layout (Visible on Small Screens) */}
           <div className="block md:hidden divide-y divide-slate-100">
-            {records.map((row, idx) => {
+            {displayRecords.map((row, idx) => {
               const d = row.attendanceDate ? new Date(row.attendanceDate) : null;
               const ot = Number(row.overtimeHours || 0);
               const remarkInfo = getRemarkInfo(row);
@@ -567,7 +585,7 @@ export const AttendanceHistoryTable = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
-                {records.map((row, index) => {
+                {displayRecords.map((row, index) => {
                   const d = row.attendanceDate ? new Date(row.attendanceDate) : null;
                   const ot = Number(row.overtimeHours || 0);
                   const remarkInfo = getRemarkInfo(row);
