@@ -59,6 +59,11 @@ export const AttendanceHistoryTable = ({
   const handleEditTiming = onEditTiming || onRegularize;
   const canEdit = canEditTiming || canRegularize;
 
+  // Authorization: Employees must not have access to export button
+  const userRoleStr = (currentUser?.roleName || currentUser?.role?.name || currentUser?.role || '').toLowerCase().trim();
+  const isEmployeeOnly = userRoleStr === 'employee' || (!['admin', 'superadmin', 'orgadmin', 'hr', 'hrmanager', 'manager'].some((r) => userRoleStr.includes(r)));
+  const canShowExport = Boolean(onExport) && !isEmployeeOnly;
+
   // Company policy: Sunday is a weekly holiday. Strictly do not display Sunday records.
   const displayRecords = React.useMemo(() => {
     return (records || []).filter((r) => {
@@ -226,7 +231,7 @@ export const AttendanceHistoryTable = ({
           </div>
 
           <div className="flex items-center gap-2">
-            {onExport && (
+            {canShowExport && (
               <Button
                 variant="primary"
                 size="md"

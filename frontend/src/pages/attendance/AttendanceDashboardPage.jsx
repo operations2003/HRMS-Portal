@@ -41,6 +41,8 @@ export const AttendanceDashboardPage = () => {
   const canEditTiming = hasRole(['HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin', 'Manager']) || hasPermission('attendance:regularize');
   // Tagging / remark option is authorized for HR Manager, Admin, and Manager
   const canRemark = hasRole(['HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin', 'Manager']);
+  // Export to Excel is strictly reserved for HR, Admin, and Manager (Employees must not have this button)
+  const canExportAttendance = hasRole(['HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin', 'Manager']);
 
   // Active view tab: Admin, HR, and Manager default to 'org', regular Employees have 'my'. CEO stays exclusively on 'org'
   const [activeTab, setActiveTab] = useState(() => (canViewOrg ? 'org' : 'my'));
@@ -296,6 +298,10 @@ export const AttendanceDashboardPage = () => {
    * Prevents two months from getting merged together.
    */
   const handleOpenExportModal = () => {
+    if (!canExportAttendance) {
+      toast.error('Access restricted: Employees are not authorized to export attendance records.');
+      return;
+    }
     setIsExportModalOpen(true);
   };
 
@@ -413,15 +419,17 @@ export const AttendanceDashboardPage = () => {
             Refresh Logs
           </Button>
 
-          <Button
-            variant="primary"
-            size="md"
-            icon={Download}
-            onClick={handleOpenExportModal}
-            title="Select Month to download single-month attendance report"
-          >
-            Export to Excel
-          </Button>
+          {canExportAttendance && (
+            <Button
+              variant="primary"
+              size="md"
+              icon={Download}
+              onClick={handleOpenExportModal}
+              title="Select Month to download single-month attendance report"
+            >
+              Export to Excel
+            </Button>
+          )}
         </div>
       </div>
 
@@ -548,7 +556,7 @@ export const AttendanceDashboardPage = () => {
         onFilterChange={handleFilterChange}
         onResetFilters={handleResetFilters}
         onRetry={() => fetchTableData(pagination?.page || 1)}
-        onExport={handleOpenExportModal}
+        onExport={canExportAttendance ? handleOpenExportModal : undefined}
         isExporting={isExporting}
       />
 
