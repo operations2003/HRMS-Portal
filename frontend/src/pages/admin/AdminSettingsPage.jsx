@@ -20,11 +20,13 @@ import {
   Building2,
   Eye,
   Key,
+  Layers,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { adminService } from '../../services/adminService.js';
 import { orgService } from '../../services/orgService.js';
+import { AppSumoLicenseManagement } from '../../components/admin/AppSumoLicenseManagement.jsx';
 import { Button } from '../../components/common/Button.jsx';
 import { Badge } from '../../components/common/Badge.jsx';
 import { DataTable } from '../../components/common/DataTable.jsx';
@@ -313,6 +315,7 @@ export const AdminSettingsPage = () => {
           { id: 'configs', label: 'Configurations & Policies', icon: Sliders },
           { id: 'users', label: 'User Administration', icon: Users, badge: usersList.length },
           { id: 'roles', label: 'Roles & Permissions', icon: KeyRound, badge: rolesList.length },
+          { id: 'appsumo', label: 'AppSumo Licenses', icon: Layers },
           { id: 'overview', label: 'Platform Health', icon: Activity },
           { id: 'audits', label: 'Audit Trail', icon: FileText },
         ].map((tab) => {
@@ -679,6 +682,11 @@ export const AdminSettingsPage = () => {
           <AuditLogsTable logs={auditLogs} isLoading={isLoadingAudits} />
         </div>
       )}
+
+      {/* ========================================================================= */}
+      {/* TAB 6: APPSUMO LICENSING & ENTITLEMENT REGISTRY */}
+      {/* ========================================================================= */}
+      {activeTab === 'appsumo' && <AppSumoLicenseManagement />}
 
       {/* ========================================================================= */}
       {/* MODALS */}

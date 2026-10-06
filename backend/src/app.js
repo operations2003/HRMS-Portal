@@ -90,8 +90,15 @@ if (config.nodeEnv !== 'test') {
   app.use(morgan('dev'));
 }
 
-// Body Parsing
-app.use(express.json({ limit: '10mb' }));
+// Body Parsing - Preserve rawBody for cryptographic signature verifications (e.g. AppSumo webhooks)
+app.use(
+  express.json({
+    limit: '10mb',
+    verify: (req, res, buf) => {
+      req.rawBody = buf ? buf.toString('utf8') : '';
+    },
+  })
+);
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Disable caching for API responses to prevent stale data

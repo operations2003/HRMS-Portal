@@ -34,4 +34,12 @@ export const config = {
     apiKey: process.env.CLOUDINARY_API_KEY || '',
     apiSecret: process.env.CLOUDINARY_API_SECRET || '',
   },
+  appsumo: {
+    apiKey: process.env.APPSUMO_API_KEY || '',
+    clientId: process.env.APPSUMO_CLIENT_ID || '',
+    clientSecret: process.env.APPSUMO_CLIENT_SECRET || '',
+    apiBaseUrl: (process.env.APPSUMO_API_BASE_URL || 'https://api.licensing.appsumo.com/v2/').replace(/\/+$/, '') + '/',
+    authBaseUrl: (process.env.APPSUMO_AUTH_BASE_URL || 'https://appsumo.com').replace(/\/+$/, ''),
+    redirectUri: process.env.APPSUMO_REDIRECT_URI || '',
+  },
 };

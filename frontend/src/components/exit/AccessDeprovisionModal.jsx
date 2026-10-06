@@ -25,13 +25,22 @@ export const AccessDeprovisionModal = ({ isOpen, onClose, onSuccess, record }) =
 
   const loadManagers = async () => {
     try {
-      const res = await employeeService.listEmployees({ status: 'Active' });
-      const empList = res.items || (Array.isArray(res) ? res : []);
+      const res = await employeeService.getAllEmployees({ status: 'Active' });
+      const empList = Array.isArray(res?.items)
+        ? res.items
+        : Array.isArray(res?.employees)
+        ? res.employees
+        : Array.isArray(res?.data)
+        ? res.data
+        : Array.isArray(res)
+        ? res
+        : [];
       // Filter out the exiting employee
-      const filtered = empList.filter((e) => e.id !== record?.employeeId);
+      const departingId = record?.employeeId || record?.employee?.id;
+      const filtered = empList.filter((e) => e.id !== departingId && e.employeeCode !== record?.employeeCode);
       setManagers(filtered);
-    } catch {
-      // Fallback
+    } catch (err) {
+      console.warn('Failed to load active employees for manager reassignment:', err);
     }
   };
 
@@ -45,10 +54,16 @@ export const AccessDeprovisionModal = ({ isOpen, onClose, onSuccess, record }) =
 
   const handleDeprovision = async (e) => {
     e.preventDefault();
+    const targetExitId = record.id || record.exitRequestId;
+    if (!targetExitId) {
+      setError('Invalid exit record reference. Please refresh and try again.');
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       setError(null);
-      const res = await exitService.removeAccess(record.id, {
+      const res = await exitService.removeAccess(targetExitId, {
         reassignManagerId: selectedManagerId || undefined,
         comments: comments.trim() || 'System credentials permanently deleted during exit offboarding.',
       });
@@ -90,13 +105,19 @@ export const AccessDeprovisionModal = ({ isOpen, onClose, onSuccess, record }) =
           label="Reassign Direct Reports (If Departing is a Manager)"
           value={selectedManagerId}
           onChange={(e) => setSelectedManagerId(e.target.value)}
+          placeholder="Select an option"
           options={[
-            { value: '', label: 'Select Interim Manager (Optional)' },
+            { value: '', label: 'None / No Direct Reports to Reassign (Optional)' },
             ...managers.map((m) => {
-              const desigStr = (typeof m.designation === 'object' ? (m.designation?.title || m.designation?.name) : m.designation) || 'Staff';
+              const desigStr =
+                (typeof m.designation === 'object' ? m.designation?.title || m.designation?.name : m.designation) ||
+                (typeof m.department === 'object' ? m.department?.name : m.department) ||
+                'Staff';
+              const nameStr = `${m.firstName || ''} ${m.lastName || ''}`.trim() || m.fullName || 'Employee';
+              const codeStr = m.employeeCode || m.empCode || '';
               return {
                 value: m.id,
-                label: `${m.fullName || `${m.firstName} ${m.lastName}`} (${m.empCode || desigStr})`,
+                label: `${nameStr} (${codeStr ? `${codeStr} • ` : ''}${desigStr})`,
               };
             }),
           ]}

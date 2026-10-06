@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import { ToastProvider } from './context/ToastContext.jsx';
 import { LoginPage } from './pages/auth/LoginPage.jsx';
+import { AppSumoActivatePage } from './pages/appsumo/AppSumoActivatePage.jsx';
 import { DashboardPage } from './pages/dashboard/DashboardPage.jsx';
 import { AttendanceDashboardPage } from './pages/attendance/AttendanceDashboardPage.jsx';
 import { LeaveManagementPage } from './pages/leaves/LeaveManagementPage.jsx';
@@ -87,8 +88,9 @@ export const App = () => {
       <ToastProvider>
         <BrowserRouter>
           <Routes>
-            {/* Public Authentication Route */}
+            {/* Public Authentication & Integration Routes */}
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/appsumo/activate" element={<AppSumoActivatePage />} />
 
             {/* Authenticated Application Layout */}
             <Route

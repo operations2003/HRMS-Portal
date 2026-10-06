@@ -5,6 +5,7 @@ import { roleRepository } from '../repositories/roleRepository.js';
 import { designationRepository } from '../repositories/designationRepository.js';
 import { leaveRepository } from '../repositories/leaveRepository.js';
 import { hashPassword } from '../utils/passwordUtils.js';
+import { appsumoService } from './appsumoService.js';
 import { pool } from '../config/db.js';
 
 /**
@@ -86,6 +87,30 @@ export const employeeService = {
       const error = new Error(`Organization with ID '${data.orgId}' does not exist.`);
       error.statusCode = 400;
       throw error;
+    }
+
+    // 1b. Enforce AppSumo Tier Quota if organization has an AppSumo entitlement
+    const entitlement = await appsumoService.getOrganizationEntitlement(data.orgId);
+    if (entitlement && entitlement.hasAppSumo) {
+      if (!entitlement.isEntitled) {
+        const error = new Error(
+          `Cannot add employee: Your organization's AppSumo license is currently ${entitlement.status}. Please reactivate your license to continue.`
+        );
+        error.statusCode = 403;
+        throw error;
+      }
+
+      if (entitlement.maxEmployees && entitlement.maxEmployees < Infinity) {
+        const currentEmployees = await employeeRepository.findAll({ orgId: data.orgId });
+        const currentCount = currentEmployees.pagination?.total ?? (currentEmployees.employees?.length || 0);
+        if (currentCount >= entitlement.maxEmployees) {
+          const error = new Error(
+            `Employee limit reached (${currentCount}/${entitlement.maxEmployees}) for your AppSumo tier (${entitlement.planName}). Please upgrade your tier in AppSumo to add more employees.`
+          );
+          error.statusCode = 403;
+          throw error;
+        }
+      }
     }
 
     // 2. Pre-check duplicate email

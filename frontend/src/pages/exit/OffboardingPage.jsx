@@ -238,10 +238,17 @@ export const OffboardingPage = () => {
         const clearances = row.clearances || [];
         const total = clearances.length;
         const cleared = clearances.filter((c) =>
-          ['CLEARED', 'COMPLETED', 'WAIVED'].includes((c.status || '').toUpperCase())
+          ['CLEARED', 'COMPLETED', 'WAIVED', 'NOT_APPLICABLE'].includes((c.status || '').toUpperCase())
         ).length;
 
         if (total === 0) {
+          if (row.offboarding?.clearanceStatus === 'CLEARED' || ['FNF_PENDING', 'COMPLETED'].includes(row.currentStage)) {
+            return (
+              <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600">
+                <Check className="w-3.5 h-3.5" /> All Cleared
+              </span>
+            );
+          }
           return <span className="text-xs text-slate-400">Not initialized</span>;
         }
 
@@ -264,12 +271,23 @@ export const OffboardingPage = () => {
       header: 'Clearance Status',
       render: (row) => {
         const clearances = row.clearances || [];
-        const hasPending = clearances.some((c) => !['CLEARED', 'COMPLETED', 'WAIVED'].includes(c.status));
-        const allCleared = clearances.length > 0 && !hasPending;
+        const isOffboardingCleared =
+          row.offboarding?.clearanceStatus === 'CLEARED' ||
+          ['FNF_PENDING', 'COMPLETED'].includes(row.currentStage) ||
+          row.status === 'COMPLETED';
+        const hasPending = clearances.some((c) => !['CLEARED', 'COMPLETED', 'WAIVED', 'NOT_APPLICABLE'].includes((c.status || '').toUpperCase()));
+        const allCleared = (clearances.length > 0 && !hasPending) || (clearances.length === 0 && isOffboardingCleared);
+        const inProgress = (clearances.length > 0 && !allCleared) || row.currentStage === 'CLEARANCE_IN_PROGRESS' || row.offboarding?.clearanceStatus === 'IN_PROGRESS';
+
+        const label = allCleared
+          ? 'CLEARED'
+          : inProgress
+          ? 'IN_PROGRESS'
+          : (row.offboarding?.clearanceStatus || 'PENDING');
 
         return (
-          <Badge variant={allCleared ? 'success' : clearances.length > 0 ? 'warning' : 'neutral'} size="sm">
-            {allCleared ? 'CLEARED' : clearances.length > 0 ? 'IN_PROGRESS' : 'PENDING'}
+          <Badge variant={label === 'CLEARED' ? 'success' : label === 'IN_PROGRESS' ? 'warning' : 'neutral'} size="sm">
+            {label}
           </Badge>
         );
       },

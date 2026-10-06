@@ -288,8 +288,65 @@ export const exitRepository = {
     params.push(limit, offset);
 
     const { rows } = await pool.query(dataQuery, params);
+    if (!rows || rows.length === 0) {
+      return {
+        items: [],
+        total,
+        limit,
+        offset,
+      };
+    }
+
+    const requestIds = rows.map((r) => r.id);
+
+    // Fetch related clearances, offboardings, and F&F settlements in batch
+    const [clearanceRes, offboardingRes, fnfRes] = await Promise.all([
+      pool.query(
+        `SELECT c.*, u.first_name AS u_first_name, u.last_name AS u_last_name
+         FROM exit_clearance_checklists c
+         LEFT JOIN users u ON c.cleared_by = u.id
+         WHERE c.exit_request_id = ANY($1::varchar[])
+         ORDER BY c.department_scope ASC, c.created_at ASC;`,
+        [requestIds]
+      ),
+      pool.query(
+        `SELECT * FROM employee_offboardings WHERE exit_request_id = ANY($1::varchar[]);`,
+        [requestIds]
+      ),
+      pool.query(
+        `SELECT * FROM fnf_settlements WHERE exit_request_id = ANY($1::varchar[]);`,
+        [requestIds]
+      ),
+    ]);
+
+    const clearancesByExitId = {};
+    for (const cr of clearanceRes.rows) {
+      if (!clearancesByExitId[cr.exit_request_id]) clearancesByExitId[cr.exit_request_id] = [];
+      clearancesByExitId[cr.exit_request_id].push(mapClearanceRow(cr));
+    }
+
+    const offboardingsByExitId = {};
+    for (const obr of offboardingRes.rows) {
+      offboardingsByExitId[obr.exit_request_id] = mapOffboardingRow(obr);
+    }
+
+    const fnfsByExitId = {};
+    for (const fnf of fnfRes.rows) {
+      fnfsByExitId[fnf.exit_request_id] = mapFnfRow(fnf);
+    }
+
+    const items = rows.map((r) => {
+      const exit = mapExitRow(r);
+      return {
+        ...exit,
+        clearances: clearancesByExitId[exit.id] || [],
+        offboarding: offboardingsByExitId[exit.id] || null,
+        fnf: fnfsByExitId[exit.id] || null,
+      };
+    });
+
     return {
-      items: rows.map(mapExitRow),
+      items,
       total,
       limit,
       offset,

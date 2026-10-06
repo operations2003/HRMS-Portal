@@ -15,6 +15,8 @@ export const Select = ({
   className = '',
   ...props
 }) => {
+  const hasEmptyOption = options.some((opt) => (typeof opt === 'object' ? opt.value : opt) === '');
+
   return (
     <div className="w-full">
       {label && (
@@ -25,27 +27,27 @@ export const Select = ({
       <select
         id={id || name}
         name={name}
-        value={value}
+        value={value ?? ''}
         onChange={onChange}
         disabled={disabled}
         required={required}
-        className={`block w-full rounded-lg border text-sm py-2.5 px-3.5 bg-white transition-colors duration-150 ${
+        className={`block w-full rounded-lg border text-sm py-2.5 px-3.5 bg-white transition-colors duration-150 cursor-pointer ${
           error
             ? 'border-rose-400 text-rose-900 focus:border-rose-500 focus:ring-rose-500 bg-rose-50/20'
             : 'border-slate-300 text-slate-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500'
         } disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed ${className}`}
         {...props}
       >
-        {placeholder && (
-          <option value="" disabled>
+        {placeholder && !hasEmptyOption && (
+          <option value="" disabled={required}>
             {placeholder}
           </option>
         )}
-        {options.map((opt) => {
+        {options.map((opt, idx) => {
           const val = typeof opt === 'object' ? opt.value : opt;
           const lbl = typeof opt === 'object' ? opt.label : opt;
           return (
-            <option key={val} value={val}>
+            <option key={val !== '' && val !== undefined ? val : `empty-${idx}`} value={val}>
               {lbl}
             </option>
           );
