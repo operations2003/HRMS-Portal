@@ -19,11 +19,12 @@ export const dashboardController = {
 
       const activeEmployees = empData.employees.filter((e) => e.status === 'Active').length;
       const onLeaveEmployees = empData.employees.filter((e) => e.status === 'On Leave').length;
-      const ewsCount = empData.employees.filter((e) => Boolean(e.isEws)).length;
+      const activeOrOnLeave = empData.employees.filter((e) => e.status === 'Active' || e.status === 'On Leave');
+      const ewsCount = activeOrOnLeave.filter((e) => Boolean(e.isEws)).length;
 
-      // Group employees by department for dashboard breakdown
+      // Group active employees by department for dashboard breakdown
       const deptDistribution = departments.map((dept) => {
-        const count = empData.employees.filter((e) => e.deptId === dept.id).length;
+        const count = activeOrOnLeave.filter((e) => e.deptId === dept.id).length;
         return {
           id: dept.id,
           name: dept.name,
@@ -40,7 +41,7 @@ export const dashboardController = {
         ewsCount,
         totalDepartments: departments.length,
         totalUsers: users.length,
-        recentEmployees: empData.employees.slice(0, 5),
+        recentEmployees: activeOrOnLeave.slice(0, 5),
         departmentDistribution: deptDistribution,
       };
 

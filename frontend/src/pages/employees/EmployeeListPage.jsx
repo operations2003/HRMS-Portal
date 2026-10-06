@@ -500,7 +500,7 @@ export const EmployeeListPage = () => {
     fetchEmployees(1);
   }, [search, orgFilter, deptFilter, statusFilter, ewsFilter]);
 
-  // Handle URL action (e.g. ?action=new or ?isEws=true)
+  // Handle URL action (e.g. ?action=new, ?isEws=true, or ?status=Active)
   useEffect(() => {
     if (searchParams.get('action') === 'new') {
       handleOpenCreate();
@@ -508,6 +508,10 @@ export const EmployeeListPage = () => {
     }
     if (searchParams.get('isEws') === 'true') {
       setEwsFilter('true');
+    }
+    const statusParam = searchParams.get('status');
+    if (statusParam) {
+      setStatusFilter(statusParam);
     }
   }, [searchParams]);
 

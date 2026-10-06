@@ -87,14 +87,14 @@ export const DashboardPage = () => {
       action: () => navigate('/organizations'),
     },
     {
-      title: 'Total Employees',
-      value: stats?.totalEmployees || 0,
-      subtext: `${stats?.activeEmployees || 0} active, ${stats?.onLeaveEmployees || 0} on leave`,
+      title: 'Active Employees',
+      value: stats?.activeEmployees || 0,
+      subtext: `${stats?.onLeaveEmployees || 0} on leave`,
       icon: Users,
       color: 'text-emerald-600',
       bgLight: 'bg-emerald-50',
       border: 'border-emerald-200/70',
-      action: () => navigate('/employees'),
+      action: () => navigate('/employees?status=Active'),
     },
     {
       title: 'Early Warning (EWS)',
@@ -335,10 +335,8 @@ export const DashboardPage = () => {
               <div className="space-y-4 flex-1">
                 {stats?.departmentDistribution && stats.departmentDistribution.length > 0 ? (
                   stats.departmentDistribution.map((dept) => {
-                    const percentage =
-                      stats.totalEmployees > 0
-                        ? Math.round((dept.count / stats.totalEmployees) * 100)
-                        : 0;
+                    const totalActive = (stats?.activeEmployees || 0) + (stats?.onLeaveEmployees || 0) || stats?.totalEmployees || 1;
+                    const percentage = Math.round((dept.count / totalActive) * 100);
 
                     return (
                       <div key={dept.id}>
