@@ -78,7 +78,7 @@ export const exitService = {
     });
 
     // Initialize approval workflow
-    const wfId = `wf-exit-${exitRequest.id}`;
+    const wfId = exitRequest.id.startsWith('exit-') ? `wf-${exitRequest.id}` : `wf-exit-${exitRequest.id}`;
     await workflowRepository.createWorkflowInstance(
       {
         id: wfId,
@@ -751,18 +751,22 @@ export const exitService = {
     });
 
     // 3. Log workflow action
-    const wf = await workflowRepository.findByEntity('EXIT_REQUEST', id);
-    if (wf) {
-      await workflowRepository.recordAction(wf.id, {
-        stage: 'CLEARANCE_IN_PROGRESS',
-        actorUserId: currentUser.id,
-        actorRole: currentUser.roleName || 'HR',
-        action: 'APPROVE',
-        fromStatus: exit.status,
-        toStatus: 'EXIT_PROCESSING',
-        nextStage: 'CLEARANCE_IN_PROGRESS',
-        comments: remarks,
-      });
+    try {
+      const wf = await workflowRepository.findByEntity('EXIT_REQUEST', id);
+      if (wf) {
+        await workflowRepository.recordAction(wf.id, {
+          stage: 'CLEARANCE_IN_PROGRESS',
+          actorUserId: currentUser.id,
+          actorRole: currentUser.roleName || 'HR',
+          action: 'APPROVE',
+          fromStatus: exit.status,
+          toStatus: 'EXIT_PROCESSING',
+          nextStage: 'CLEARANCE_IN_PROGRESS',
+          comments: remarks,
+        });
+      }
+    } catch (wfErr) {
+      logger.warn('ExitService', `Workflow tracking update notice for clearNoticePeriod ${id}: ${wfErr.message}`);
     }
 
     return this.getExitById(currentUser, id);
@@ -1579,42 +1583,46 @@ export const exitService = {
     }
 
     // Record approval workflow instance / action
-    const wfId = `wf-exit-${exitRequest.id}`;
-    const existingWf = await workflowRepository.findByEntity('EXIT_REQUEST', exitRequest.id);
-    if (!existingWf) {
-      await workflowRepository.createWorkflowInstance(
-        {
-          id: wfId,
-          orgId: currentUser.orgId,
-          entityType: 'EXIT_REQUEST',
-          entityId: exitRequest.id,
-          workflowType: 'COMPANY_TERMINATION',
-          currentStage: currentStage,
-          currentStatus: initialStatus,
-          requesterId: emp.id,
-          managerId: emp.managerId || null,
-        },
-        {
+    try {
+      const wfId = exitRequest.id.startsWith('exit-') ? `wf-${exitRequest.id}` : `wf-exit-${exitRequest.id}`;
+      const existingWf = await workflowRepository.findByEntity('EXIT_REQUEST', exitRequest.id);
+      if (!existingWf) {
+        await workflowRepository.createWorkflowInstance(
+          {
+            id: wfId,
+            orgId: currentUser.orgId,
+            entityType: 'EXIT_REQUEST',
+            entityId: exitRequest.id,
+            workflowType: 'COMPANY_TERMINATION',
+            currentStage: currentStage,
+            currentStatus: initialStatus,
+            requesterId: emp.id,
+            managerId: emp.managerId || null,
+          },
+          {
+            stage: 'HR_REVIEW',
+            actorUserId: currentUser.id,
+            actorRole: currentUser.roleName || 'HR',
+            action: 'APPROVE',
+            fromStatus: 'ACTIVE',
+            toStatus: initialStatus,
+            comments: `Company termination initiated. Grounds: ${data.terminationCategory || 'Company Decision'}`,
+          }
+        );
+      } else {
+        await workflowRepository.recordAction(existingWf.id, {
           stage: 'HR_REVIEW',
           actorUserId: currentUser.id,
           actorRole: currentUser.roleName || 'HR',
           action: 'APPROVE',
-          fromStatus: 'ACTIVE',
+          fromStatus: existingWf.currentStatus,
           toStatus: initialStatus,
+          nextStage: currentStage,
           comments: `Company termination initiated. Grounds: ${data.terminationCategory || 'Company Decision'}`,
-        }
-      );
-    } else {
-      await workflowRepository.recordAction(existingWf.id, {
-        stage: 'HR_REVIEW',
-        actorUserId: currentUser.id,
-        actorRole: currentUser.roleName || 'HR',
-        action: 'APPROVE',
-        fromStatus: existingWf.currentStatus,
-        toStatus: initialStatus,
-        nextStage: currentStage,
-        comments: `Company termination initiated. Grounds: ${data.terminationCategory || 'Company Decision'}`,
-      });
+        });
+      }
+    } catch (wfError) {
+      logger.warn('ExitService', `Approval workflow tracking notice during termination ${exitRequest.id}: ${wfError.message}`);
     }
 
     // Severance package recording if specified
