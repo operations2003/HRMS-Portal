@@ -8,6 +8,7 @@ coverage/
 backend/test_*.js
 test_*.js
 *.test.js
+!backend/tests/*.test.js
 *.spec.js
 
 # Production & Build outputs

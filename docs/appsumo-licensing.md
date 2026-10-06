@@ -65,7 +65,8 @@ TaskNera defines three centralized lifetime tiers as mapped in `backend/src/conf
 | **Tier 3** | Enterprise LTD | **250 Employees** | 100 GB | Everything in Tier 2 + Advanced Analytics, Custom Roles, Priority Support |
 
 ### Entitlement Enforcement
-- **Headcount Gating**: When creating new employees via `POST /api/v1/employees`, `employeeService.js` queries `getOrganizationEntitlements(organizationId)`. If current active employee count exceeds `maxEmployees`, the request is rejected with HTTP 403 (`ForbiddenError: Employee limit reached for your active AppSumo tier`).
+- **Headcount Gating**: When creating new employees via `POST /api/v1/employees`, `employeeService.js` queries `getOrganizationEntitlement(organizationId)`. If current active employee count reaches or exceeds `maxEmployees`, the request is rejected with HTTP 403 (`ForbiddenError: Employee limit reached for your active AppSumo tier`).
+- **Department Gating**: When creating new departments via `POST /api/v1/departments`, `departmentController.js` queries `getOrganizationEntitlement(organizationId)`. If current department count reaches or exceeds `maxDepartments`, the request is rejected with HTTP 403.
 - **Deactivation Handling**: When a license is deactivated or refunded, `status` is set to `deactivated`. Employees and organization records remain completely intact, but additions exceeding the baseline are blocked.
 
 ---
@@ -166,7 +167,7 @@ SuperAdmins and Admins can manage AppSumo licenses directly within the TaskNera 
 
 ## 10. Verification & Test Suite
 
-TaskNera includes an automated test suite verifying all 17 critical security, webhook, and entitlement scenarios.
+TaskNera includes an automated test suite verifying all 20 critical security, webhook, and entitlement scenarios.
 
 To run the suite:
 ```bash
@@ -174,31 +175,43 @@ cd backend
 npm test
 ```
 
-Expected output:
+Output:
 ```
 ====================================================
-🧪 Running TaskNera AppSumo Licensing v2 Test Suite
+🧪 Running AppSumo Licensing API v2 Test Suite
 ====================================================
 
-  ✅ PASS: Security: Valid HMAC SHA-256 signature passes verification
-  ✅ PASS: Security: Invalid HMAC signature is rejected
-  ✅ PASS: Security: Missing signature or timestamp is rejected
-  ✅ PASS: Security: Replay attack protection rejects expired timestamps
-  ✅ PASS: Tier Mapping: Tier 1 limits
-  ✅ PASS: Tier Mapping: Tier 2 limits
-  ✅ PASS: Tier Mapping: Tier 3 limits
-  ✅ PASS: Tier Mapping: Unknown tier falls back safely to Tier 1
-  ✅ PASS: Webhook: test=true does NOT mutate customer data
-  ✅ PASS: Webhook: PURCHASE stores pending license record
-  ✅ PASS: Webhook: ACTIVATE switches status to active even if license_status is inactive
-  ✅ PASS: Webhook: Idempotency returns success for duplicate events without error
-  ✅ PASS: Webhook: UPGRADE carries forward organization & updates tier without data loss
-  ✅ PASS: Webhook: DEACTIVATE sets status to deactivated without deleting tenant records
-  ✅ PASS: Entitlement: Organization without AppSumo returns unentitled fallback
-  ✅ PASS: Linking: Successfully links new license to organization
-  ✅ PASS: Linking: Collision protection prevents linking already assigned license to different org
+
+--- 1. Tier Configuration & Quotas ---
+  ✅ PASS: Tier 1 has 15 employees and 5 departments limit
+  ✅ PASS: Tier 2 has 50 employees and 15 departments limit
+  ✅ PASS: Tier 3 has 250 employees and enterprise quota
+  ✅ PASS: Fallback: unknown tier defaults safely to Tier 1
+  ✅ PASS: Feature flag gating per tier
+
+--- 2. Webhook HMAC-SHA256 Security & Replay Protection ---
+  ✅ PASS: Valid HMAC signature matches and passes verification
+  ✅ PASS: Valid HMAC signature with sha256= prefix passes verification
+  ✅ PASS: Tampered body fails signature verification
+  ✅ PASS: Missing signature header is rejected
+  ✅ PASS: Missing secret key is rejected
+  ✅ PASS: Expired timestamp (> 600s) is rejected by replay attack protection
+
+--- 3. OAuth Client URL & Validation ---
+  ✅ PASS: OAuth authorize URL contains required parameters
+  ✅ PASS: exchangeCodeForLicense rejects empty or missing code with 400
+
+--- 4. Webhook Event Processing & Lifecycle ---
+  ✅ PASS: Test Event (test: true): acknowledges with HTTP 200 and records test event
+  ✅ PASS: Purchase Event: stores license with inactive status and tier 1
+  ✅ PASS: Activate Event: marks license active even when AppSumo sends license_status: inactive
+  ✅ PASS: Link License to Organization & Query Entitlement
+  ✅ PASS: Upgrade Event: AppSumo provides new license_key & prev_license_key; links org and updates tier
+  ✅ PASS: Deactivate Event: deactivates entitlement WITHOUT deleting org or customer data
+  ✅ PASS: Duplicate Event Idempotency: re-sending event with identical timestamp returns HTTP 200 without error
 
 ====================================================
-Test Results: 17 Passed, 0 Failed.
+Test Results: 20 PASSED, 0 FAILED
 ====================================================
 ```
+

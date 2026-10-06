@@ -172,6 +172,33 @@ export const appsumoClient = {
   // =========================================================================
 
   /**
+   * Build the AppSumo OAuth OpenID authorization URL for redirecting users to AppSumo.
+   *
+   * @param {object} params
+   * @param {string} [params.state]
+   * @param {string} [params.redirectUri]
+   * @returns {string} Authorize URL
+   */
+  getOAuthAuthorizeUrl({ state, redirectUri } = {}) {
+    const authBase = config.appsumo.authBaseUrl || 'https://appsumo.com';
+    const clientId = config.appsumo.clientId || '';
+    const finalRedirectUri = redirectUri || config.appsumo.redirectUri || '';
+
+    const params = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: finalRedirectUri,
+      response_type: 'code',
+      scope: 'openid',
+    });
+
+    if (state) {
+      params.set('state', state);
+    }
+
+    return `${authBase}/openid/authorize/?${params.toString()}`;
+  },
+
+  /**
    * Exchange single-use authorization code for AppSumo access token.
    *
    * POST https://appsumo.com/openid/token/

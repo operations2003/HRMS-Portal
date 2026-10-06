@@ -1,4 +1,5 @@
 import { departmentRepository } from '../repositories/departmentRepository.js';
+import { appsumoService } from '../services/appsumoService.js';
 import { sendSuccess, sendError } from '../utils/apiResponse.js';
 
 export const departmentController = {
@@ -55,6 +56,29 @@ export const departmentController = {
       const existing = await departmentRepository.findByCode(finalCode, orgId);
       if (existing) {
         return sendError(res, `Department with code "${finalCode}" already exists.`, 409);
+      }
+
+      // Enforce AppSumo Tier Quota if organization has an AppSumo entitlement
+      const entitlement = await appsumoService.getOrganizationEntitlement(orgId);
+      if (entitlement && entitlement.hasAppSumo) {
+        if (!entitlement.isEntitled) {
+          return sendError(
+            res,
+            `Cannot create department: Your organization's AppSumo license is currently ${entitlement.status}. Please reactivate your license to continue.`,
+            403
+          );
+        }
+
+        if (entitlement.maxDepartments && entitlement.maxDepartments < Infinity) {
+          const currentDepts = await departmentRepository.findAll(orgId);
+          if (currentDepts.length >= entitlement.maxDepartments) {
+            return sendError(
+              res,
+              `Department limit reached (${currentDepts.length}/${entitlement.maxDepartments}) for your AppSumo tier (${entitlement.planName}). Please upgrade your tier in AppSumo to add more departments.`,
+              403
+            );
+          }
+        }
       }
 
       const created = await departmentRepository.create({

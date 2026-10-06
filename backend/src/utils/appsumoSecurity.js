@@ -85,3 +85,18 @@ export const verifyAppSumoWebhook = ({
     return { valid: false, error: `Signature comparison error: ${err.message}` };
   }
 };
+
+/**
+ * Computes AppSumo HMAC-SHA256 signature for testing or verification.
+ *
+ * @param {string} rawBody
+ * @param {string|number} timestamp
+ * @param {string} secretKey
+ * @returns {string} hex signature
+ */
+export const computeAppSumoSignature = (rawBody, timestamp, secretKey) => {
+  const payloadToSign = `${timestamp}${rawBody || ''}`;
+  const hmac = crypto.createHmac('sha256', secretKey);
+  hmac.update(payloadToSign, 'utf8');
+  return hmac.digest('hex');
+};

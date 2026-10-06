@@ -16,7 +16,7 @@ export const appsumoService = {
    * @param {object} params.headers - HTTP request headers
    * @returns {Promise<{ event: string, success: boolean, message?: string }>}
    */
-  async processWebhookEvent({ payload, rawBody, headers }) {
+  async processWebhookEvent({ payload, rawBody, headers, secretKey = config.appsumo.apiKey }) {
     const signature = headers['x-appsumo-signature'] || headers['X-Appsumo-Signature'];
     const timestamp = headers['x-appsumo-timestamp'] || headers['X-Appsumo-Timestamp'];
 
@@ -25,6 +25,7 @@ export const appsumoService = {
       rawBody,
       signature,
       timestamp,
+      secretKey,
     });
 
     if (!verification.valid) {
