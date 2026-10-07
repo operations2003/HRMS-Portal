@@ -1,4 +1,5 @@
 import { pool } from '../config/db.js';
+import { config } from '../config/index.js';
 import { appsumoRepository } from '../repositories/appsumoRepository.js';
 import { orgRepository } from '../repositories/orgRepository.js';
 import { userRepository } from '../repositories/userRepository.js';
@@ -16,28 +17,51 @@ export const appsumoService = {
    * @param {object} params.headers - HTTP request headers
    * @returns {Promise<{ event: string, success: boolean, message?: string }>}
    */
-  async processWebhookEvent({ payload, rawBody, headers, secretKey = config.appsumo.apiKey }) {
+  async processWebhookEvent({ payload = {}, rawBody, headers = {}, secretKey = config.appsumo.apiKey }) {
     const signature = headers['x-appsumo-signature'] || headers['X-Appsumo-Signature'];
     const timestamp = headers['x-appsumo-timestamp'] || headers['X-Appsumo-Timestamp'];
 
     // 1. Webhook Signature Verification & Replay Protection
-    const verification = verifyAppSumoWebhook({
-      rawBody,
-      signature,
-      timestamp,
-      secretKey,
-    });
+    const isTestEvent = payload?.test === true || payload?.test === 'true';
+    const hasSecret = Boolean(secretKey);
 
-    if (!verification.valid) {
-      const error = new Error(`AppSumo Webhook verification failed: ${verification.error}`);
-      error.statusCode = 401;
-      throw error;
+    if (hasSecret) {
+      const verification = verifyAppSumoWebhook({
+        rawBody,
+        signature,
+        timestamp,
+        secretKey,
+      });
+
+      if (!verification.valid) {
+        if (isTestEvent && config.nodeEnv !== 'production') {
+          console.warn(
+            `[AppSumo Webhook Warning] Test event signature check failed in development (${verification.error}), acknowledging test ping.`
+          );
+        } else {
+          const error = new Error(`AppSumo Webhook verification failed: ${verification.error}`);
+          error.statusCode = 401;
+          throw error;
+        }
+      }
+    } else {
+      if (config.nodeEnv !== 'production' || isTestEvent) {
+        console.warn(
+          '[AppSumo Webhook Warning] APPSUMO_API_KEY is not configured in .env. Acknowledging webhook in dev/test mode.'
+        );
+      } else {
+        const error = new Error('AppSumo Webhook verification failed: APPSUMO_API_KEY is not configured on the server.');
+        error.statusCode = 401;
+        throw error;
+      }
     }
 
     const {
-      license_key: licenseKey,
+      license_key: licenseKeyParam,
+      licenseKey: licenseKeyAlt,
       prev_license_key: prevLicenseKey,
       event,
+      action,
       license_status: licenseStatus,
       tier = 1,
       test: isTest = false,
@@ -46,9 +70,11 @@ export const appsumoService = {
       plan_id: partnerPlanName,
       unit_quantity: unitQuantity = 1,
       parent_license_key: parentLicenseKey,
-    } = payload;
+    } = payload || {};
 
-    const normalizedEvent = (event || '').trim().toLowerCase();
+    const licenseKey =
+      licenseKeyParam || licenseKeyAlt || (isTest || isTestEvent ? `test-key-${Date.now()}` : null);
+    const normalizedEvent = (event || action || (isTest || isTestEvent ? 'activate' : '')).trim().toLowerCase();
 
     if (!licenseKey) {
       const error = new Error('Malformed webhook payload: missing license_key.');

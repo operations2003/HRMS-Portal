@@ -95,14 +95,12 @@ export const formatTime12Display = (isoString) => {
 
 /**
  * Extracts YYYY-MM-DD in local time
+ * Prioritizes rec.checkIn so check-in and check-out are locked to the exact same calendar day
  */
 export const getDateStr = (rec) => {
   if (!rec) return '';
-  if (rec.attendanceDate) {
-    if (typeof rec.attendanceDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rec.attendanceDate.trim())) {
-      return rec.attendanceDate.trim();
-    }
-    const d = new Date(rec.attendanceDate);
+  if (rec.checkIn) {
+    const d = new Date(rec.checkIn);
     if (!isNaN(d.getTime())) {
       const y = d.getFullYear();
       const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -110,8 +108,11 @@ export const getDateStr = (rec) => {
       return `${y}-${m}-${day}`;
     }
   }
-  if (rec.checkIn) {
-    const d = new Date(rec.checkIn);
+  if (rec.attendanceDate) {
+    if (typeof rec.attendanceDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rec.attendanceDate.trim())) {
+      return rec.attendanceDate.trim();
+    }
+    const d = new Date(rec.attendanceDate);
     if (!isNaN(d.getTime())) {
       const y = d.getFullYear();
       const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -183,14 +184,9 @@ export const EditAttendanceTimingModal = ({
         setIsCheckOutEnabled(false);
       }
 
-      // Check if original check-out is on the next day compared to check-in
-      if (record.checkIn && record.checkOut) {
-        const inD = new Date(record.checkIn);
-        const outD = new Date(record.checkOut);
-        setIsNextDayDeparture(outD.getDate() !== inD.getDate());
-      } else {
-        setIsNextDayDeparture(false);
-      }
+      // When adjusting timings, ALWAYS keep on the same day by default.
+      // Do NOT push to the next day unless the user explicitly checks the box.
+      setIsNextDayDeparture(false);
 
       setStatus(record.status === 'LATE' ? 'AUTO' : record.status || 'AUTO');
       setReason(record.regularizationReason || '');
@@ -232,7 +228,8 @@ export const EditAttendanceTimingModal = ({
       if (safeOut.period === 'PM' && outH < 12) outH += 12;
       if (safeOut.period === 'AM' && outH === 12) outH = 0;
 
-      const outDate = new Date(`${dateStr}T${String(outH).padStart(2, '0')}:${String(outM).padStart(2, '0')}:00`);
+      // Ensure checkout date is anchored on the exact same day as inDate
+      const outDate = new Date(inDate.getFullYear(), inDate.getMonth(), inDate.getDate(), outH, outM, 0);
       if (isNextDayDeparture) {
         outDate.setDate(outDate.getDate() + 1);
       }
@@ -335,7 +332,8 @@ export const EditAttendanceTimingModal = ({
         if (checkOutTime.period === 'PM' && outH < 12) outH += 12;
         if (checkOutTime.period === 'AM' && outH === 12) outH = 0;
 
-        checkOutDate = new Date(`${dateStr}T${String(outH).padStart(2, '0')}:${String(outM).padStart(2, '0')}:00`);
+        // Ensure checkout date is anchored on the exact same day as checkInDate
+        checkOutDate = new Date(checkInDate.getFullYear(), checkInDate.getMonth(), checkInDate.getDate(), outH, outM, 0);
         if (isNextDayDeparture) {
           checkOutDate.setDate(checkOutDate.getDate() + 1);
         }

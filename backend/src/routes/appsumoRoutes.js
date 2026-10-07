@@ -38,6 +38,11 @@ const optionalAuthenticate = async (req, res, next) => {
 // 1. AppSumo Public Webhook & OAuth Endpoints
 // =========================================================================
 
+// GET /api/v1/appsumo/webhook (Connectivity / health check)
+router.get('/webhook', (req, res) => {
+  res.status(200).json({ success: true, message: 'AppSumo Webhook endpoint is active and listening.' });
+});
+
 // POST /api/v1/appsumo/webhook
 router.post('/webhook', appsumoController.handleWebhook);
 

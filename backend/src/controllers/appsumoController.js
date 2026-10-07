@@ -16,6 +16,22 @@ export const appsumoController = {
    */
   async handleWebhook(req, res, next) {
     try {
+      // Handle partner portal "Validate" button pings or empty ping requests
+      const isValidatePing =
+        !req.body ||
+        Object.keys(req.body).length === 0 ||
+        req.body.action === 'ping' ||
+        req.body.action === 'validate' ||
+        req.body.event === 'ping';
+
+      if (isValidatePing) {
+        return res.status(200).json({
+          event: 'ping',
+          success: true,
+          message: 'AppSumo Webhook endpoint is active and listening.',
+        });
+      }
+
       const rawBody = req.rawBody || JSON.stringify(req.body);
       const result = await appsumoService.processWebhookEvent({
         payload: req.body,
