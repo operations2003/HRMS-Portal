@@ -147,7 +147,7 @@ export const managerService = {
     if (targetManagerId) {
       const summaryQuery = `
         SELECT 
-          COUNT(e.id)::int AS "totalMembers",
+          COUNT(e.id) FILTER (WHERE LOWER(e.status) NOT IN ('exited', 'terminated', 'inactive', 'suspended', 'archived'))::int AS "totalMembers",
           COUNT(e.id) FILTER (WHERE LOWER(e.status) = 'active')::int AS "activeMembers",
           COUNT(e.id) FILTER (WHERE LOWER(e.status) = 'on leave')::int AS "onLeaveToday",
           COUNT(DISTINCT a.id) FILTER (WHERE a.status IN ('PRESENT', 'HALF_DAY'))::int AS "presentToday",
@@ -158,7 +158,8 @@ export const managerService = {
         LEFT JOIN attendance_records a 
           ON a.employee_id = e.id 
           AND a.attendance_date = $2
-        WHERE e.manager_id = $1 AND e.org_id = $3;
+        WHERE e.manager_id = $1 AND e.org_id = $3
+          AND LOWER(e.status) NOT IN ('exited', 'terminated', 'inactive', 'suspended', 'archived');
       `;
       const res = await pool.query(summaryQuery, [targetManagerId, todayStr, currentUser.orgId]);
       const row = res.rows[0] || {};
@@ -218,7 +219,7 @@ export const managerService = {
       // HR/Admin organization metrics
       const orgRes = await pool.query(
         `SELECT 
-          COUNT(*)::int AS "totalMembers",
+          COUNT(*) FILTER (WHERE LOWER(status) NOT IN ('exited', 'terminated', 'inactive', 'suspended', 'archived'))::int AS "totalMembers",
           COUNT(*) FILTER (WHERE LOWER(status) = 'active')::int AS "activeMembers"
          FROM employees WHERE org_id = $1;`,
         [currentUser.orgId]

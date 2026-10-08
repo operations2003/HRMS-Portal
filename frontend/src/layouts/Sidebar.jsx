@@ -226,16 +226,10 @@ export const Sidebar = ({ isOpen, onClose }) => {
           permission: ['exit:read', 'exit:write', 'employee:read'],
         },
         {
-          name: 'Exit Checklist',
+          name: 'Exit Checklist & Clearances',
           path: '/exit-checklist',
           icon: ClipboardList,
           permission: ['exit:read', 'exit:write', 'employee:read'],
-        },
-        {
-          name: 'Offboarding & Clearances',
-          path: '/offboarding',
-          icon: UserMinus,
-          roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
         },
         {
           name: 'Employee Termination',

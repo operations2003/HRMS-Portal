@@ -37,12 +37,13 @@ export const hrOperationsService = {
       // 1. Employee headcount & attendance overview
       pool.query(
         `SELECT 
-          COUNT(*)::int AS "totalEmployees",
+          COUNT(*) FILTER (WHERE LOWER(status) NOT IN ('exited', 'terminated', 'inactive', 'suspended', 'archived'))::int AS "totalEmployees",
           COUNT(*) FILTER (WHERE LOWER(status) = 'active')::int AS "activeEmployees",
           COUNT(*) FILTER (WHERE LOWER(status) = 'on leave')::int AS "onLeaveCount",
-          COUNT(*) FILTER (WHERE is_ews = TRUE)::int AS "ewsCount"
+          COUNT(*) FILTER (WHERE is_ews = TRUE AND LOWER(status) NOT IN ('exited', 'terminated', 'inactive', 'suspended', 'archived'))::int AS "ewsCount"
         FROM employees
-        WHERE org_id = $1 ${assignedHrId ? 'AND hr_id = $2' : ''};`,
+        WHERE org_id = $1 ${assignedHrId ? 'AND hr_id = $2' : ''}
+          AND LOWER(status) NOT IN ('exited', 'terminated', 'inactive', 'suspended', 'archived');`,
         assignedHrId ? [orgId, assignedHrId] : [orgId]
       ),
 
@@ -559,12 +560,12 @@ export const hrOperationsService = {
         m.first_name AS "managerFirstName",
         m.last_name AS "managerLastName",
         d.name AS "departmentName",
-        COUNT(e.id)::int AS "teamSize",
+        COUNT(e.id) FILTER (WHERE LOWER(e.status) NOT IN ('exited', 'terminated', 'inactive', 'suspended', 'archived'))::int AS "teamSize",
         COUNT(e.id) FILTER (WHERE LOWER(e.status) = 'active')::int AS "activeMembers"
       FROM employees m
-      JOIN employees e ON e.manager_id = m.id
+      JOIN employees e ON e.manager_id = m.id AND LOWER(e.status) NOT IN ('exited', 'terminated', 'inactive', 'suspended', 'archived')
       LEFT JOIN departments d ON m.dept_id = d.id
-      WHERE m.org_id = $1
+      WHERE m.org_id = $1 AND LOWER(m.status) NOT IN ('exited', 'terminated', 'inactive', 'suspended', 'archived')
       GROUP BY m.id, m.employee_code, m.first_name, m.last_name, d.name
       ORDER BY "teamSize" DESC;`,
       [orgId]
@@ -618,6 +619,7 @@ export const hrOperationsService = {
       LEFT JOIN departments d ON e.dept_id = d.id
       LEFT JOIN designations ds ON e.desig_id = ds.id
       WHERE e.manager_id = $1 AND e.org_id = $2
+        AND LOWER(e.status) NOT IN ('exited', 'terminated', 'inactive', 'suspended', 'archived')
       ORDER BY e.first_name ASC;`,
       [managerId, orgId]
     );

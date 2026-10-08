@@ -50,9 +50,9 @@ export const InitiateExitModal = ({ isOpen, onClose, onSuccess }) => {
         ? res
         : [];
 
-      // Filter only employees eligible for exit (not already Exited or Terminated)
+      // Filter only employees eligible for exit (not already Exited, Terminated, or Inactive)
       const eligible = list.filter(
-        (e) => !['Exited', 'Terminated'].includes(e.status)
+        (e) => !['Exited', 'Terminated', 'Inactive'].includes(e.status)
       );
       setEmployees(eligible);
       if (eligible.length > 0 && !selectedEmployeeId) {

@@ -134,7 +134,7 @@ export const employeeRepository = {
   /**
    * Find all employees with filtering and pagination
    */
-  async findAll({ search = '', orgId = '', deptId = '', status = '', managerId = '', hrId = '', isEws = '', page = 1, limit = 20 } = {}) {
+  async findAll({ search = '', orgId = '', deptId = '', status = '', managerId = '', hrId = '', isEws = '', includeExited = false, page = 1, limit = 20 } = {}) {
     const conditions = [];
     const values = [];
     let paramIndex = 1;
@@ -149,9 +149,15 @@ export const employeeRepository = {
       values.push(deptId);
     }
 
-    if (status) {
+    if (status && status !== 'ALL' && status !== 'all') {
       conditions.push(`LOWER(e.status) = LOWER($${paramIndex++})`);
       values.push(status);
+      if (!includeExited && !['exited', 'terminated', 'inactive'].includes(status.toLowerCase())) {
+        conditions.push(`LOWER(e.status) NOT IN ('exited', 'terminated', 'inactive', 'suspended', 'archived')`);
+      }
+    } else if (!includeExited) {
+      // Exited/resigned employees are hidden across all operational modules by default
+      conditions.push(`LOWER(e.status) NOT IN ('exited', 'terminated', 'inactive', 'suspended', 'archived')`);
     }
 
     if (managerId) {
@@ -618,13 +624,16 @@ export const employeeRepository = {
   /**
    * Find direct reports belonging to a manager
    */
-  async findDirectReports(managerId, orgId = null) {
+  async findDirectReports(managerId, orgId = null, { includeExited = false } = {}) {
     if (!managerId) return [];
     let sql = `${BASE_EMPLOYEE_SELECT} WHERE e.manager_id = $1`;
     const values = [managerId];
     if (orgId) {
       sql += ' AND e.org_id = $2';
       values.push(orgId);
+    }
+    if (!includeExited) {
+      sql += " AND LOWER(e.status) NOT IN ('exited', 'terminated', 'inactive', 'suspended', 'archived')";
     }
     sql += ' ORDER BY e.first_name ASC, e.last_name ASC;';
     const res = await pool.query(sql, values);
@@ -687,7 +696,7 @@ export const employeeRepository = {
     if (!managerId) return { totalReports: 0, activeCount: 0, onLeaveCount: 0 };
     let sql = `
       SELECT 
-        COUNT(*)::int AS "totalReports",
+        COUNT(*) FILTER (WHERE LOWER(status) NOT IN ('exited', 'terminated', 'inactive', 'suspended', 'archived'))::int AS "totalReports",
         COUNT(*) FILTER (WHERE LOWER(status) = 'active')::int AS "activeCount",
         COUNT(*) FILTER (WHERE LOWER(status) = 'on leave')::int AS "onLeaveCount"
       FROM employees

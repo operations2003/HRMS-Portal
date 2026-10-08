@@ -475,7 +475,12 @@ export const EmployeeListPage = () => {
         page,
         limit: 10,
       });
-      setEmployees(res.employees);
+      const rawEmployees = res.employees || [];
+      // Completely hide resigned, exited, and terminated staff from active employee directory
+      const activeOnly = rawEmployees.filter(
+        (e) => !['exited', 'terminated', 'inactive'].includes((e.status || '').toLowerCase())
+      );
+      setEmployees(activeOnly);
       setPagination(res.pagination);
     } catch (err) {
       setError(err.message || 'Failed to load employee directory.');
@@ -1319,7 +1324,6 @@ export const EmployeeListPage = () => {
                 { value: '', label: 'All Statuses' },
                 { value: 'Active', label: 'Active' },
                 { value: 'On Leave', label: 'On Leave' },
-                { value: 'Inactive', label: 'Inactive' },
               ]}
             />
           </div>

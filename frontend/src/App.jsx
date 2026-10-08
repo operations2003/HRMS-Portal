@@ -361,7 +361,7 @@ export const App = () => {
                 path="offboarding"
                 element={
                   <PermissionRoute permission={['exit:read', 'exit:admin', 'employee:read']}>
-                    <OffboardingPage />
+                    <Navigate to="/exit-checklist?tab=offboarding" replace />
                   </PermissionRoute>
                 }
               />

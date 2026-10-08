@@ -13,7 +13,7 @@ export const employeeController = {
    */
   async list(req, res, next) {
     try {
-      const { search, deptId, status, page, limit, isEws } = req.query;
+      const { search, deptId, status, page, limit, isEws, includeExited } = req.query;
       const isSuperAdmin = (req.user?.roleName || '').toLowerCase().includes('admin') && !req.user?.orgId;
       const orgId = isSuperAdmin ? (req.query.orgId || null) : (req.user?.orgId || req.query.orgId);
 
@@ -23,6 +23,7 @@ export const employeeController = {
         deptId,
         status,
         isEws,
+        includeExited: includeExited === 'true' || includeExited === true,
         page: page ? parseInt(page, 10) : 1,
         limit: limit ? parseInt(limit, 10) : 20,
       });

@@ -15,6 +15,7 @@ const mapExitRow = (row) => {
     designation: row.designation_title || '',
     managerId: row.manager_id,
     managerName: row.m_first_name ? `${row.m_first_name} ${row.m_last_name || ''}`.trim() : '',
+    employeeStatus: row.employee_status,
     employee: {
       id: row.employee_id,
       empCode: row.employee_code,
@@ -25,6 +26,7 @@ const mapExitRow = (row) => {
       email: row.email,
       avatarUrl: row.avatar_url || null,
       avatar_url: row.avatar_url || null,
+      status: row.employee_status,
       department: { id: row.dept_id, name: row.department_name || '', title: row.department_name || '' },
       designation: { id: row.desig_id, title: row.designation_title || '', name: row.designation_title || '' },
     },
@@ -141,6 +143,7 @@ const BASE_EXIT_SELECT = `
     e.avatar_url,
     e.manager_id,
     e.dept_id,
+    e.status AS employee_status,
     d.name AS department_name,
     ds.title AS designation_title,
     m.first_name AS m_first_name,

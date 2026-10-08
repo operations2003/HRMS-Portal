@@ -163,7 +163,11 @@ export const TeamManagementPage = () => {
           deptId: selectedDept || undefined,
           status: selectedStatus || undefined,
         });
-        setMembers(res.items || res.data || (Array.isArray(res) ? res : []));
+        const raw = res.items || res.data || (Array.isArray(res) ? res : []);
+        const activeMembers = raw.filter(
+          (m) => !['exited', 'terminated', 'inactive'].includes((m.status || '').toLowerCase())
+        );
+        setMembers(activeMembers);
       } else if (activeTab === 'attendance') {
         const [attRes, sumRes] = await Promise.allSettled([
           teamService.getTeamAttendance({

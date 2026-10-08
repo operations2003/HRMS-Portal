@@ -40,7 +40,7 @@ import { AccessDeprovisionModal } from '../../components/exit/AccessDeprovisionM
 import { AddClearanceTaskModal } from '../../components/exit/AddClearanceTaskModal.jsx';
 import { ClearNoticePeriodModal } from '../../components/exit/ClearNoticePeriodModal.jsx';
 
-export const OffboardingPage = () => {
+export const OffboardingPage = ({ embedded = false }) => {
   const { user, hasRole, hasPermission } = useAuth();
   const toast = useToast();
 
@@ -235,21 +235,31 @@ export const OffboardingPage = () => {
     {
       header: 'Checklist Progress',
       render: (row) => {
+        const isCompletedSeparation =
+          ['COMPLETED'].includes((row.status || '').toUpperCase()) ||
+          ['COMPLETED'].includes((row.currentStage || '').toUpperCase()) ||
+          ['EXITED', 'TERMINATED', 'INACTIVE'].includes((row.employeeStatus || row.employee?.status || '').toUpperCase()) ||
+          row.offboarding?.clearanceStatus === 'CLEARED';
+
         const clearances = row.clearances || [];
         const total = clearances.length;
-        const cleared = clearances.filter((c) =>
-          ['CLEARED', 'COMPLETED', 'WAIVED', 'NOT_APPLICABLE'].includes((c.status || '').toUpperCase())
-        ).length;
+        const cleared = isCompletedSeparation
+          ? total || 5
+          : clearances.filter((c) =>
+              ['CLEARED', 'COMPLETED', 'WAIVED', 'NOT_APPLICABLE'].includes((c.status || '').toUpperCase())
+            ).length;
 
-        if (total === 0) {
-          if (row.offboarding?.clearanceStatus === 'CLEARED' || ['FNF_PENDING', 'COMPLETED'].includes(row.currentStage)) {
-            return (
-              <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600">
+        if (total === 0 || isCompletedSeparation) {
+          return (
+            <div className="text-xs">
+              <span className="inline-flex items-center gap-1 font-semibold text-emerald-600">
                 <Check className="w-3.5 h-3.5" /> All Cleared
               </span>
-            );
-          }
-          return <span className="text-xs text-slate-400">Not initialized</span>;
+              <div className="w-20 bg-slate-100 rounded-full h-1.5 mt-1 overflow-hidden">
+                <div className="h-1.5 rounded-full bg-emerald-600" style={{ width: '100%' }} />
+              </div>
+            </div>
+          );
         }
 
         return (
@@ -270,14 +280,21 @@ export const OffboardingPage = () => {
     {
       header: 'Clearance Status',
       render: (row) => {
+        const isCompletedSeparation =
+          ['COMPLETED'].includes((row.status || '').toUpperCase()) ||
+          ['COMPLETED'].includes((row.currentStage || '').toUpperCase()) ||
+          ['EXITED', 'TERMINATED', 'INACTIVE'].includes((row.employeeStatus || row.employee?.status || '').toUpperCase()) ||
+          row.offboarding?.clearanceStatus === 'CLEARED';
+
         const clearances = row.clearances || [];
         const isOffboardingCleared =
           row.offboarding?.clearanceStatus === 'CLEARED' ||
           ['FNF_PENDING', 'COMPLETED'].includes(row.currentStage) ||
-          row.status === 'COMPLETED';
+          row.status === 'COMPLETED' ||
+          isCompletedSeparation;
         const hasPending = clearances.some((c) => !['CLEARED', 'COMPLETED', 'WAIVED', 'NOT_APPLICABLE'].includes((c.status || '').toUpperCase()));
-        const allCleared = (clearances.length > 0 && !hasPending) || (clearances.length === 0 && isOffboardingCleared);
-        const inProgress = (clearances.length > 0 && !allCleared) || row.currentStage === 'CLEARANCE_IN_PROGRESS' || row.offboarding?.clearanceStatus === 'IN_PROGRESS';
+        const allCleared = isCompletedSeparation || (clearances.length > 0 && !hasPending) || (clearances.length === 0 && isOffboardingCleared);
+        const inProgress = !allCleared && ((clearances.length > 0) || row.currentStage === 'CLEARANCE_IN_PROGRESS' || row.offboarding?.clearanceStatus === 'IN_PROGRESS');
 
         const label = allCleared
           ? 'CLEARED'
@@ -418,28 +435,30 @@ export const OffboardingPage = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Offboarding Operations Center</h1>
-          <p className="text-xs text-slate-500 mt-1">
-            Complete employee offboarding governance: Resignation → Review → Notice Period → Checklist → Access Removal → Full & Final → Completed
-          </p>
-        </div>
+      {!embedded && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Offboarding Operations Center</h1>
+            <p className="text-xs text-slate-500 mt-1">
+              Complete employee offboarding governance: Resignation → Review → Notice Period → Checklist → Access Removal → Full & Final → Completed
+            </p>
+          </div>
 
-        <div className="flex items-center gap-2">
-          <Button
-            variant="secondary"
-            icon={RefreshCw}
-            isLoading={isRefreshing}
-            onClick={() => {
-              fetchStats();
-              fetchExits(pagination.page);
-            }}
-          >
-            Refresh
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              icon={RefreshCw}
+              isLoading={isRefreshing}
+              onClick={() => {
+                fetchStats();
+                fetchExits(pagination.page);
+              }}
+            >
+              Refresh
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Role View Toggle if Employee has active exit and is also HR/Manager */}
       {(isHrOrAdmin || isManager) && myExit && (

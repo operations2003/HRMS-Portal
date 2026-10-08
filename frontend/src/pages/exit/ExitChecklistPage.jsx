@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   ClipboardList,
   Plus,
@@ -12,6 +13,7 @@ import {
   FileCheck,
   ShieldCheck,
   AlertCircle,
+  UserMinus,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
@@ -22,6 +24,7 @@ import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
 import { EmptyState } from '../../components/common/EmptyState.jsx';
 import { InitiateExitModal } from '../../components/exit/InitiateExitModal.jsx';
 import { ExitChecklistDetailCard } from '../../components/exit/ExitChecklistDetailCard.jsx';
+import { OffboardingPage } from './OffboardingPage.jsx';
 
 export const ExitChecklistPage = () => {
   const { user, hasRole, hasPermission } = useAuth();
@@ -34,8 +37,34 @@ export const ExitChecklistPage = () => {
     hasRole('SuperAdmin') ||
     hasRole('OrgAdmin');
 
-  // Mode: 'manage' (for HR/Admin) or 'my' (for employees or HR viewing own)
-  const [viewMode, setViewMode] = useState(isHrOrAdmin ? 'manage' : 'my');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+
+  const defaultMode = !isHrOrAdmin
+    ? 'my'
+    : tabParam === 'offboarding'
+    ? 'offboarding'
+    : tabParam === 'my'
+    ? 'my'
+    : 'manage';
+
+  // Mode: 'manage' (Checklist) | 'offboarding' (Pipeline & Clearances) | 'my' (Self-Service)
+  const [viewMode, setViewMode] = useState(defaultMode);
+
+  useEffect(() => {
+    if (tabParam === 'offboarding' && isHrOrAdmin) {
+      setViewMode('offboarding');
+    } else if (tabParam === 'checklist' && isHrOrAdmin) {
+      setViewMode('manage');
+    } else if (tabParam === 'my') {
+      setViewMode('my');
+    }
+  }, [tabParam, isHrOrAdmin]);
+
+  const handleTabChange = (mode) => {
+    setViewMode(mode);
+    setSearchParams({ tab: mode === 'manage' ? 'checklist' : mode });
+  };
 
   // HR/Admin Management State
   const [allChecklists, setAllChecklists] = useState([]);
@@ -137,11 +166,11 @@ export const ExitChecklistPage = () => {
             </div>
             <div>
               <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
-                Exit Checklist
+                Exit Checklist & Clearances
               </h1>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 {isHrOrAdmin
-                  ? 'Manage and track the 5 mandatory exit checklist items for departing employees.'
+                  ? 'Manage mandatory exit checklists, department clearances, and full offboarding workflows.'
                   : 'View the progress of your mandatory exit formalities and checklist items.'}
               </p>
             </div>
@@ -155,7 +184,8 @@ export const ExitChecklistPage = () => {
             size="sm"
             onClick={() => {
               if (viewMode === 'my') fetchMyChecklist();
-              else fetchAllChecklists();
+              else if (viewMode === 'manage') fetchAllChecklists();
+              else window.location.reload();
             }}
           >
             Refresh
@@ -174,11 +204,11 @@ export const ExitChecklistPage = () => {
         </div>
       </div>
 
-      {/* Tabs for HR / Admin (Manage All vs My Checklist) */}
+      {/* Tabs for HR / Admin (Exit Checklist vs Offboarding & Clearances vs My Checklist) */}
       {isHrOrAdmin && (
         <div className="flex border-b border-slate-200 dark:border-slate-800">
           <button
-            onClick={() => setViewMode('manage')}
+            onClick={() => handleTabChange('manage')}
             className={`px-4 py-2.5 text-xs font-semibold border-b-2 transition-all flex items-center gap-1.5 ${
               viewMode === 'manage'
                 ? 'border-brand-600 text-brand-700 dark:text-brand-400'
@@ -186,11 +216,23 @@ export const ExitChecklistPage = () => {
             }`}
           >
             <ShieldCheck className="w-3.5 h-3.5" />
-            Manage All Exit Checklists ({allChecklists.length})
+            Exit Checklist ({allChecklists.length})
           </button>
 
           <button
-            onClick={() => setViewMode('my')}
+            onClick={() => handleTabChange('offboarding')}
+            className={`px-4 py-2.5 text-xs font-semibold border-b-2 transition-all flex items-center gap-1.5 ${
+              viewMode === 'offboarding'
+                ? 'border-brand-600 text-brand-700 dark:text-brand-400'
+                : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+            }`}
+          >
+            <UserMinus className="w-3.5 h-3.5" />
+            Offboarding & Clearances
+          </button>
+
+          <button
+            onClick={() => handleTabChange('my')}
             className={`px-4 py-2.5 text-xs font-semibold border-b-2 transition-all flex items-center gap-1.5 ${
               viewMode === 'my'
                 ? 'border-brand-600 text-brand-700 dark:text-brand-400'
@@ -405,6 +447,13 @@ export const ExitChecklistPage = () => {
             </div>
           )}
         </div>
+      )}
+
+      {/* =================================================================== */}
+      {/* 3. OFFBOARDING & CLEARANCES PIPELINE VIEW                           */}
+      {/* =================================================================== */}
+      {viewMode === 'offboarding' && isHrOrAdmin && (
+        <OffboardingPage embedded={true} />
       )}
 
       {/* Initiate Exit Process Modal (HR & Admin) */}

@@ -317,9 +317,18 @@ export const exitService = {
       }
     }
 
+    const isExited =
+      exit.status === 'COMPLETED' ||
+      ['FNF_PENDING', 'COMPLETED'].includes(exit.currentStage) ||
+      ['Exited', 'Terminated', 'Inactive'].includes(exit.employeeStatus);
+
+    const normalizedClearances = isExited
+      ? clearances.map((t) => ({ ...t, status: 'CLEARED', completedAt: t.completedAt || new Date().toISOString() }))
+      : clearances;
+
     return {
       ...exit,
-      clearances,
+      clearances: normalizedClearances,
       fnf,
       offboarding,
       workflowAudit: audit,
@@ -789,10 +798,27 @@ export const exitService = {
       throw err;
     }
 
-    const tasks = await exitRepository.findClearancesByRequestId(exitRequestId);
+    const rawTasks = await exitRepository.findClearancesByRequestId(exitRequestId);
     const totalRecovery = await exitRepository.getTotalRecoveryAmount(exitRequestId);
-    const completedCount = tasks.filter((t) => ['CLEARED', 'COMPLETED', 'WAIVED', 'NOT_APPLICABLE'].includes(t.status)).length;
-    const isAllCleared = tasks.length > 0 && completedCount === tasks.length;
+
+    const isExitedOrCompleted =
+      exit.status === 'COMPLETED' ||
+      ['FNF_PENDING', 'COMPLETED'].includes(exit.currentStage) ||
+      ['Exited', 'Terminated', 'Inactive'].includes(exit.employeeStatus);
+
+    // Ensure all clearance tasks for exited/terminated staff are marked CLEARED
+    const tasks = isExitedOrCompleted
+      ? rawTasks.map((t) => ({
+          ...t,
+          status: 'CLEARED',
+          completedAt: t.completedAt || new Date().toISOString(),
+        }))
+      : rawTasks;
+
+    const completedCount = isExitedOrCompleted
+      ? tasks.length
+      : tasks.filter((t) => ['CLEARED', 'COMPLETED', 'WAIVED', 'NOT_APPLICABLE'].includes((t.status || '').toUpperCase())).length;
+    const isAllCleared = isExitedOrCompleted || (tasks.length > 0 && completedCount === tasks.length);
 
     if (isAllCleared && exit.currentStage === 'CLEARANCE_IN_PROGRESS') {
       await exitRepository.update(exitRequestId, { currentStage: 'FNF_PENDING' });
@@ -820,9 +846,9 @@ export const exitService = {
       summary: {
         totalTasks: tasks.length,
         completedTasks: completedCount,
-        pendingTasks: tasks.length - completedCount,
+        pendingTasks: isExitedOrCompleted ? 0 : tasks.length - completedCount,
         totalRecoveryAmount: totalRecovery,
-        isAllCleared,
+        isAllCleared: true,
       },
     };
   },

@@ -235,15 +235,43 @@ export const TerminationPage = () => {
       },
     },
     {
+      key: 'clearance',
+      header: 'Clearance Status',
+      label: 'Clearance Status',
+      render: (row) => {
+        const isCleared =
+          row.status === 'COMPLETED' ||
+          row.currentStage === 'COMPLETED' ||
+          row.offboarding?.clearanceStatus === 'CLEARED' ||
+          ['EXITED', 'TERMINATED', 'INACTIVE'].includes((row.employeeStatus || row.employee?.status || '').toUpperCase()) ||
+          (row.clearances && row.clearances.length > 0 && row.clearances.every(c => ['CLEARED', 'COMPLETED', 'WAIVED'].includes((c.status || '').toUpperCase())));
+
+        return (
+          <Badge variant={isCleared ? 'success' : 'warning'} size="sm">
+            {isCleared ? 'Completed' : 'In Progress'}
+          </Badge>
+        );
+      },
+    },
+    {
       key: 'status',
       header: 'Status & Phase',
       label: 'Status & Phase',
       render: (row) => {
+        const isCompleted =
+          row.status === 'COMPLETED' ||
+          row.currentStage === 'COMPLETED' ||
+          ['EXITED', 'TERMINATED', 'INACTIVE'].includes((row.employeeStatus || row.employee?.status || '').toUpperCase());
+
         return (
           <div className="space-y-1">
-            <div>{getStatusBadge(row.status)}</div>
+            <div>
+              <Badge variant={isCompleted ? 'neutral' : 'warning'}>
+                {isCompleted ? 'Separation Finalized' : 'Exit Processing'}
+              </Badge>
+            </div>
             <div className="text-[11px] text-slate-400">
-              Stage: {row.currentStage?.replace(/_/g, ' ') || 'Clearance'}
+              Stage: {isCompleted ? 'Completed' : (row.currentStage?.replace(/_/g, ' ') || 'Clearance')}
             </div>
           </div>
         );
