@@ -3,6 +3,58 @@ import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import './styles/index.css';
 
+// Unregister any stale service workers that might intercept network requests or cache assets
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then((registrations) => {
+    registrations.forEach((reg) => reg.unregister());
+  }).catch(() => {});
+}
+
+// Global Vite chunk load error & cache mismatch handler
+const handleChunkOrCacheError = (errorMsg) => {
+  const msg = (errorMsg || '').toLowerCase();
+  const isChunkError =
+    msg.includes('dynamically imported module') ||
+    msg.includes('loading chunk') ||
+    msg.includes('chunkloaderror') ||
+    msg.includes('importing a module script failed') ||
+    msg.includes("unexpected token '<'") ||
+    msg.includes('failed to fetch');
+
+  if (isChunkError) {
+    const lastReload = parseInt(sessionStorage.getItem('hrms_chunk_reload_ts') || '0', 10);
+    // Reload at most once every 10 seconds to avoid infinite loops
+    if (Date.now() - lastReload > 10000) {
+      sessionStorage.setItem('hrms_chunk_reload_ts', String(Date.now()));
+      window.location.reload();
+      return true;
+    }
+  }
+  return false;
+};
+
+// Catch Vite dynamic import failure event
+window.addEventListener('vite:preloadError', (event) => {
+  console.warn('Vite preload error detected, auto-reloading to fetch newest application build:', event);
+  const lastReload = parseInt(sessionStorage.getItem('hrms_chunk_reload_ts') || '0', 10);
+  if (Date.now() - lastReload > 10000) {
+    sessionStorage.setItem('hrms_chunk_reload_ts', String(Date.now()));
+    window.location.reload();
+  }
+});
+
+// Catch unhandled script/chunk loading errors
+window.addEventListener('error', (event) => {
+  handleChunkOrCacheError(event?.message || event?.error?.message);
+});
+
+// Catch unhandled promise rejections (e.g., dynamic import() promises)
+window.addEventListener('unhandledrejection', (event) => {
+  const reason = event?.reason;
+  const msg = typeof reason === 'string' ? reason : reason?.message || '';
+  handleChunkOrCacheError(msg);
+});
+
 class ErrorBoundary extends Component {
   constructor(props) {
     super(props);
@@ -15,7 +67,34 @@ class ErrorBoundary extends Component {
 
   componentDidCatch(error, errorInfo) {
     console.error('TaskNera HRMS Uncaught UI Exception:', error, errorInfo);
+    // Auto-recover if it is a chunk/cache error
+    const recovered = handleChunkOrCacheError(error?.message);
+    if (recovered) {
+      return;
+    }
   }
+
+  handleHardRefresh = () => {
+    // Clear browser caches if Cache API exists
+    if (typeof caches !== 'undefined') {
+      caches.keys().then((names) => {
+        names.forEach((name) => caches.delete(name));
+      }).catch(() => {});
+    }
+    sessionStorage.clear();
+    window.location.reload();
+  };
+
+  handleFullReset = () => {
+    if (typeof caches !== 'undefined') {
+      caches.keys().then((names) => {
+        names.forEach((name) => caches.delete(name));
+      }).catch(() => {});
+    }
+    localStorage.clear();
+    sessionStorage.clear();
+    window.location.href = '/login';
+  };
 
   render() {
     if (this.state.hasError) {
@@ -32,17 +111,14 @@ class ErrorBoundary extends Component {
             <div className="space-y-2">
               <button
                 type="button"
-                onClick={() => window.location.reload()}
+                onClick={this.handleHardRefresh}
                 className="w-full py-2.5 px-4 rounded-xl bg-brand-500 text-white font-semibold text-sm hover:bg-brand-600 transition-colors shadow-md shadow-brand-500/20"
               >
-                Reload Application
+                Refresh Application
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  localStorage.clear();
-                  window.location.href = '/login';
-                }}
+                onClick={this.handleFullReset}
                 className="w-full py-2.5 px-4 rounded-xl bg-slate-100 text-slate-700 font-medium text-xs hover:bg-slate-200 transition-colors"
               >
                 Clear Cache & Go to Login

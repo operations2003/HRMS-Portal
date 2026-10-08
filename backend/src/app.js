@@ -83,7 +83,7 @@ if (!fs.existsSync(avatarsDir)) {
     // Ignore error
   }
 }
-app.use('/uploads/avatars', express.static(avatarsDir, { maxAge: '7d' }));
+app.use('/uploads/avatars', express.static(avatarsDir, { etag: true, maxAge: 0, mustRevalidate: true }));
 
 // Request Logging
 if (config.nodeEnv !== 'test') {

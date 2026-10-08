@@ -5,6 +5,9 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
+    headers: {
+      'Cache-Control': 'no-store, no-cache, must-revalidate',
+    },
     proxy: {
       '/api': {
         target: 'http://localhost:5000',

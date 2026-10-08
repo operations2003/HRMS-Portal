@@ -17,10 +17,14 @@ export const apiClient = async (endpoint, options = {}) => {
   const headers = {
     ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    Pragma: 'no-cache',
+    Expires: '0',
     ...options.headers,
   };
 
   const config = {
+    cache: 'no-store',
     ...options,
     headers,
   };
@@ -68,7 +72,12 @@ export const http = {
     const token = localStorage.getItem('hrms_token');
     const url = `${BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
     const response = await fetch(url, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      cache: 'no-store',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        Pragma: 'no-cache',
+      },
     });
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));
@@ -96,7 +105,12 @@ export const http = {
     const inlineEndpoint = endpoint.includes('inline=') ? endpoint : `${endpoint}${separator}inline=true`;
     const url = `${BASE_URL}${inlineEndpoint.startsWith('/') ? inlineEndpoint : `/${inlineEndpoint}`}`;
     const response = await fetch(url, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      cache: 'no-store',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        Pragma: 'no-cache',
+      },
     });
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));
