@@ -17,9 +17,7 @@ const handleChunkOrCacheError = (errorMsg) => {
     msg.includes('dynamically imported module') ||
     msg.includes('loading chunk') ||
     msg.includes('chunkloaderror') ||
-    msg.includes('importing a module script failed') ||
-    msg.includes("unexpected token '<'") ||
-    msg.includes('failed to fetch');
+    msg.includes('importing a module script failed');
 
   if (isChunkError) {
     const lastReload = parseInt(sessionStorage.getItem('hrms_chunk_reload_ts') || '0', 10);
@@ -48,11 +46,16 @@ window.addEventListener('error', (event) => {
   handleChunkOrCacheError(event?.message || event?.error?.message);
 });
 
-// Catch unhandled promise rejections (e.g., dynamic import() promises)
+// Catch unhandled promise rejections specifically for dynamic script chunk import failures
 window.addEventListener('unhandledrejection', (event) => {
   const reason = event?.reason;
   const msg = typeof reason === 'string' ? reason : reason?.message || '';
-  handleChunkOrCacheError(msg);
+  if (
+    msg.toLowerCase().includes('dynamically imported module') ||
+    msg.toLowerCase().includes('loading chunk')
+  ) {
+    handleChunkOrCacheError(msg);
+  }
 });
 
 class ErrorBoundary extends Component {

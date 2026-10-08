@@ -17,9 +17,6 @@ export const apiClient = async (endpoint, options = {}) => {
   const headers = {
     ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    'Cache-Control': 'no-cache, no-store, must-revalidate',
-    Pragma: 'no-cache',
-    Expires: '0',
     ...options.headers,
   };
 
@@ -75,8 +72,6 @@ export const http = {
       cache: 'no-store',
       headers: {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        Pragma: 'no-cache',
       },
     });
     if (!response.ok) {
@@ -108,8 +103,6 @@ export const http = {
       cache: 'no-store',
       headers: {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        Pragma: 'no-cache',
       },
     });
     if (!response.ok) {

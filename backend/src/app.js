@@ -66,6 +66,12 @@ const corsOptions = {
     'X-Idempotency-Key',
     'x-request-id',
     'X-Request-Id',
+    'Cache-Control',
+    'cache-control',
+    'Pragma',
+    'pragma',
+    'Expires',
+    'expires',
   ],
 };
 
