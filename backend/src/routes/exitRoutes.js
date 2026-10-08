@@ -17,10 +17,76 @@ import {
   validateTermination,
 } from '../validators/exitValidator.js';
 
+import { exitChecklistController } from '../controllers/exitChecklistController.js';
+import {
+  validateInitiateExitChecklist,
+  validateUpdateItemStatus,
+} from '../validators/exitChecklistValidator.js';
+
 const router = Router();
 
 // All exit routes require authenticated session
 router.use(authenticate);
+
+// =========================================================================
+// 0. Simple Exit Checklist Feature (TaskNera HRMS)
+// =========================================================================
+
+// Employee Self-Service: view own exit checklist (resignation initiated)
+router.get(
+  ['/checklists/my', '/checklist/my'],
+  authorize(['exit:read']),
+  exitChecklistController.getMyChecklist
+);
+
+// HR & Admin: Initiate exit process & automatically generate 5 checklist items
+router.post(
+  ['/checklists', '/checklist'],
+  requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']),
+  authorize(['exit:admin']),
+  validate(validateInitiateExitChecklist),
+  exitChecklistController.initiateExit
+);
+
+// HR & Admin: List all organization exit checklists
+router.get(
+  ['/checklists', '/checklists/all'],
+  requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']),
+  authorize(['exit:admin', 'exit:read']),
+  exitChecklistController.getAllChecklists
+);
+
+// View exit checklist by ID (HR/Admin can view all; Employee can only view own)
+router.get(
+  '/checklists/:id',
+  authorize(['exit:read']),
+  exitChecklistController.getChecklistById
+);
+
+// HR & Admin: Update checklist item status (Pending <-> Completed)
+router.patch(
+  '/checklists/:id/items/:itemId',
+  requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']),
+  authorize(['exit:admin']),
+  validate(validateUpdateItemStatus),
+  exitChecklistController.updateItemStatus
+);
+
+// HR & Admin: Mark entire exit process as completed (all 5 items must be Completed!)
+router.post(
+  '/checklists/:id/complete',
+  requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']),
+  authorize(['exit:admin']),
+  exitChecklistController.completeExit
+);
+
+// HR & Admin: Delete / cancel exit checklist
+router.delete(
+  '/checklists/:id',
+  requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']),
+  authorize(['exit:admin']),
+  exitChecklistController.deleteChecklist
+);
 
 // =========================================================================
 // 1. Employee Self-Service Exit Operations

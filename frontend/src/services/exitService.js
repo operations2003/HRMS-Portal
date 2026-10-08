@@ -232,4 +232,85 @@ export const exitService = {
     const res = await http.post('/v1/exit/terminate', data);
     return res.data;
   },
+
+  // =========================================================================
+  // Simple Exit Checklist Feature Methods
+  // =========================================================================
+
+  /**
+   * Initiate exit process & create exit checklist with 5 items (HR & Admin)
+   */
+  async initiateExitChecklist(data) {
+    const res = await http.post('/v1/exit/checklists', data);
+    return res.data;
+  },
+
+  /**
+   * Get all organization exit checklists (HR & Admin)
+   */
+  async getAllExitChecklists(params = {}) {
+    const query = new URLSearchParams();
+    Object.entries(params).forEach(([key, val]) => {
+      if (val !== undefined && val !== null && val !== '') {
+        query.append(key, val);
+      }
+    });
+    const queryString = query.toString() ? `?${query.toString()}` : '';
+    const res = await http.get(`/v1/exit/checklists${queryString}`);
+    const raw = res?.data || {};
+    const items = Array.isArray(raw)
+      ? raw
+      : Array.isArray(raw.items)
+      ? raw.items
+      : Array.isArray(res)
+      ? res
+      : [];
+    return {
+      items,
+      data: items,
+      total: raw.total || items.length,
+      limit: raw.limit || 50,
+      offset: raw.offset || 0,
+    };
+  },
+
+  /**
+   * Get employee's own exit checklist (Employee self-service)
+   */
+  async getMyExitChecklist() {
+    const res = await http.get('/v1/exit/checklists/my');
+    return res.data;
+  },
+
+  /**
+   * Get exit checklist by ID
+   */
+  async getExitChecklistById(id) {
+    const res = await http.get(`/v1/exit/checklists/${id}`);
+    return res.data;
+  },
+
+  /**
+   * Update checklist item status (Pending <-> Completed) (HR & Admin)
+   */
+  async updateChecklistItemStatus(checklistId, itemId, data) {
+    const res = await http.patch(`/v1/exit/checklists/${checklistId}/items/${itemId}`, data);
+    return res.data;
+  },
+
+  /**
+   * Mark exit process as completed (HR & Admin - all 5 items must be Completed!)
+   */
+  async completeExitChecklist(checklistId, data = {}) {
+    const res = await http.post(`/v1/exit/checklists/${checklistId}/complete`, data);
+    return res.data;
+  },
+
+  /**
+   * Delete / cancel exit checklist (HR & Admin)
+   */
+  async deleteExitChecklist(checklistId) {
+    const res = await http.delete(`/v1/exit/checklists/${checklistId}`);
+    return res.data;
+  },
 };
