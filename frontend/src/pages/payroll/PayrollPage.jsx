@@ -840,9 +840,9 @@ export const PayrollPage = () => {
                   icon={Send}
                   onClick={() => setDisburseAllModalOpen(true)}
                   className="shrink-0"
-                  title="Run organization payroll and disburse salaries to all active employees"
+                  title="Disburse salaries to all active employees"
                 >
-                  Disburse Org Payroll
+                  Disburse Payroll
                 </Button>
               )}
 
@@ -1791,7 +1791,7 @@ export const PayrollPage = () => {
         isOpen={disburseAllModalOpen}
         onClose={() => setDisburseAllModalOpen(false)}
         maxWidth="max-w-md"
-        title="Run Organization-Wide Payroll"
+        title="Disburse Payroll"
         subtitle="Disburse monthly compensation to all salaried employees"
       >
         <div className="space-y-4">
@@ -1844,7 +1844,7 @@ export const PayrollPage = () => {
               icon={CheckCircle2}
               onClick={handleConfirmDisburseAll}
             >
-              Execute Batch Disbursement
+              Disburse Payroll
             </Button>
           </div>
         </div>
