@@ -129,6 +129,7 @@ export const EmployeeListPage = () => {
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [viewingEmployee, setViewingEmployee] = useState(null);
   const [loadingViewProfile, setLoadingViewProfile] = useState(false);
+  const [timelineEmployee, setTimelineEmployee] = useState(null);
   const [reassigningEmployee, setReassigningEmployee] = useState(null);
 
   // HR cannot update her own shift timing (Admin retains full permission)
