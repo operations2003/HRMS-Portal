@@ -18,6 +18,7 @@ import { Badge } from '../common/Badge.jsx';
 import { Avatar } from '../common/Avatar.jsx';
 import { attendanceService } from '../../services/attendanceService.js';
 import { useToast } from '../../context/ToastContext.jsx';
+import { useAuth } from '../../context/AuthContext.jsx';
 import { formatHoursToClock } from '../../utils/timeUtils.js';
 
 export const AttendanceRemarkModal = ({
@@ -26,7 +27,23 @@ export const AttendanceRemarkModal = ({
   record = null,
   onSuccess,
 }) => {
+  const { user } = useAuth();
   const toast = useToast();
+
+  const normRole = (user?.roleName || user?.role?.name || user?.role || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const isHR = normRole === 'hr' || normRole === 'hrmanager';
+  const isAdmin = normRole === 'admin' || normRole === 'superadmin' || normRole === 'orgadmin';
+
+  const isOwnRecord = Boolean(
+    record &&
+      user &&
+      ((user.employeeId && (record.employeeId === user.employeeId || record.employee?.id === user.employeeId)) ||
+        (user.id && (record.employee?.userId === user.id || record.employeeId === user.id)) ||
+        (record.employee?.email && user.email && record.employee.email.toLowerCase() === user.email.toLowerCase()))
+  );
+
+  const isHRSelfRemarkDisabled = isHR && !isAdmin && isOwnRecord;
+
   const [remarkType, setRemarkType] = useState('OT');
   const [comments, setComments] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -75,6 +92,10 @@ export const AttendanceRemarkModal = ({
 
   const handleSubmit = async (e) => {
     e?.preventDefault();
+    if (isHRSelfRemarkDisabled) {
+      setError('HR cannot modify remarks on her own attendance records. Please contact an Administrator.');
+      return;
+    }
     if (!comments.trim()) {
       setError('Please provide a brief reason or explanation for this classification.');
       return;
@@ -139,6 +160,13 @@ export const AttendanceRemarkModal = ({
       maxWidth="max-w-xl"
     >
       <form onSubmit={handleSubmit} className="space-y-5">
+        {isHRSelfRemarkDisabled && (
+          <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>HR attendance records cannot be self-modified. Please contact an Administrator to update this record.</span>
+          </div>
+        )}
+
         {/* Info Banner */}
         <div className="p-3.5 rounded-2xl bg-amber-50/90 border border-amber-200/80 flex items-start gap-3 text-xs text-amber-900">
           <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
@@ -359,7 +387,7 @@ export const AttendanceRemarkModal = ({
             variant="primary"
             size="md"
             isLoading={isSubmitting}
-            disabled={isSubmitting || !comments.trim()}
+            disabled={isSubmitting || !comments.trim() || isHRSelfRemarkDisabled}
             icon={ShieldCheck}
             className={
               remarkType === 'MISTAKE'

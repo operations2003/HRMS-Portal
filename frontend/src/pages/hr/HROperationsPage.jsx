@@ -73,6 +73,18 @@ export const HROperationsPage = () => {
   // Active HR filter ID
   const activeHrId = hrScope === 'mine' ? (user?.employeeId || selectedHrFilter) : selectedHrFilter;
 
+  const normRole = (user?.roleName || user?.role?.name || user?.role || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const isHR = normRole === 'hr' || normRole === 'hrmanager';
+  const isAdmin = normRole === 'admin' || normRole === 'superadmin' || normRole === 'orgadmin';
+
+  const isRowOwnRecord = (row) => {
+    if (!row || !user) return false;
+    if (user.employeeId && (row.employeeId === user.employeeId || row.employee?.id === user.employeeId || row.employee?.employeeId === user.employeeId)) return true;
+    if (user.id && (row.employee?.userId === user.id || row.employeeId === user.id || row.userId === user.id)) return true;
+    if (user.email && (row.employee?.email || row.email) && (row.employee?.email || row.email).toLowerCase() === user.email.toLowerCase()) return true;
+    return false;
+  };
+
   // Overview & Operational Data States
   const [overview, setOverview] = useState({});
   const [teams, setTeams] = useState([]);
@@ -686,18 +698,28 @@ export const HROperationsPage = () => {
     {
       header: 'Actions',
       align: 'right',
-      render: (row) => (
-        <Button
-          variant="secondary"
-          size="sm"
-          icon={Clock}
-          className="!py-1 !px-2.5 !text-xs text-slate-700 hover:text-slate-900 border-slate-200"
-          onClick={() => setSelectedEditTimingRecord(row)}
-          title="Adjust timings or correct break minutes"
-        >
-          Edit Timing / Break
-        </Button>
-      ),
+      render: (row) => {
+        const isOwn = isHR && !isAdmin && isRowOwnRecord(row);
+        if (isOwn) {
+          return (
+            <span className="text-xs text-slate-400 italic font-medium px-2 py-1">
+              Read-only
+            </span>
+          );
+        }
+        return (
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={Clock}
+            className="!py-1 !px-2.5 !text-xs text-slate-700 hover:text-slate-900 border-slate-200"
+            onClick={() => setSelectedEditTimingRecord(row)}
+            title="Adjust timings or correct break minutes"
+          >
+            Edit Timing / Break
+          </Button>
+        );
+      },
     },
   ];
 

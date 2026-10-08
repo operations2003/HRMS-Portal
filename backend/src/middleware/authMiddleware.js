@@ -2,6 +2,7 @@ import { verifyToken } from '../utils/tokenUtils.js';
 import { userRepository } from '../repositories/userRepository.js';
 import { employeeRepository } from '../repositories/employeeRepository.js';
 import { sendError } from '../utils/apiResponse.js';
+import { enforceActiveWorkday } from './workdayMiddleware.js';
 
 /**
  * Authentication Middleware
@@ -69,9 +70,10 @@ export const authenticate = async (req, res, next) => {
       departmentName: emp?.department?.name || null,
       departmentCode: emp?.department?.code || null,
       managerId: emp ? emp.managerId : null,
+      timezone: emp?.timezone || 'Asia/Kolkata',
     };
 
-    next();
+    return enforceActiveWorkday(req, res, next);
   } catch (error) {
     next(error);
   }

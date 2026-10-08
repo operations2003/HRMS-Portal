@@ -144,7 +144,31 @@ export const employeeController = {
           throw error;
         }
       }
-      const updated = await employeeService.updateEmployee(req.params.id, req.body);
+
+      // HR cannot update her own shift timing (Admin retains full permission)
+      const normRole = (req.user?.roleName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const isHr = ['hr', 'hrmanager'].includes(normRole);
+      const isAdmin = ['admin', 'superadmin', 'orgadmin'].includes(normRole);
+
+      if (isHr && !isAdmin) {
+        const isSelf =
+          (req.user?.employeeId && (existing.id === req.user.employeeId || req.params.id === req.user.employeeId)) ||
+          (req.user?.id && (existing.userId === req.user.id || existing.id === req.user.id || req.params.id === req.user.id)) ||
+          (req.user?.email && existing.email && req.user.email.toLowerCase() === existing.email.toLowerCase());
+
+        if (isSelf && req.body.shiftTiming !== undefined) {
+          const existingShift = (existing.shiftTiming || '11:00 AM - 07:00 PM').trim();
+          const newShift = (req.body.shiftTiming || '').trim();
+          if (newShift && newShift !== existingShift) {
+            const error = new Error('Access denied: HR is not authorized to modify her own shift timing. Please contact an Administrator.');
+            error.statusCode = 403;
+            throw error;
+          }
+          delete req.body.shiftTiming;
+        }
+      }
+
+      const updated = await employeeService.updateEmployee(req.params.id, req.body, req.user);
       return sendSuccess(res, 'Employee updated successfully.', updated);
     } catch (error) {
       next(error);

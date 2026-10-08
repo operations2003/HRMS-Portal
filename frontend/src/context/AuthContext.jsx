@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { authService } from '../services/authService.js';
+import { attendanceService } from '../services/attendanceService.js';
 
 const AuthContext = createContext(null);
 
@@ -14,6 +15,7 @@ export const AuthProvider = ({ children }) => {
   });
   const [token, setToken] = useState(() => localStorage.getItem('hrms_token') || null);
   const [loading, setLoading] = useState(true);
+  const [todayAttendanceRecord, setTodayAttendanceRecord] = useState(null);
 
   useEffect(() => {
     // Check session on mount if token exists
@@ -40,10 +42,46 @@ export const AuthProvider = ({ children }) => {
     const handleExpired = () => {
       setUser(null);
       setToken(null);
+      setTodayAttendanceRecord(null);
     };
     window.addEventListener('hrms:auth:expired', handleExpired);
     return () => window.removeEventListener('hrms:auth:expired', handleExpired);
   }, [token]);
+
+  const refreshWorkdayStatus = useCallback(async () => {
+    if (!token) {
+      setTodayAttendanceRecord(null);
+      return;
+    }
+    try {
+      const res = await attendanceService.getMyTodayRecord();
+      if (res && res.record !== undefined) {
+        setTodayAttendanceRecord(res.record);
+      } else if (res && res.todayRecord !== undefined) {
+        setTodayAttendanceRecord(res.todayRecord);
+      }
+    } catch {
+      // Non-blocking
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (token) {
+      refreshWorkdayStatus();
+    } else {
+      setTodayAttendanceRecord(null);
+    }
+
+    const handleAttendanceUpdated = (e) => {
+      if (e?.detail) {
+        setTodayAttendanceRecord(e.detail);
+      } else {
+        refreshWorkdayStatus();
+      }
+    };
+    window.addEventListener('hrms:attendance:updated', handleAttendanceUpdated);
+    return () => window.removeEventListener('hrms:attendance:updated', handleAttendanceUpdated);
+  }, [token, refreshWorkdayStatus]);
 
   const login = async (email, password) => {
     const data = await authService.login(email, password);
@@ -62,6 +100,7 @@ export const AuthProvider = ({ children }) => {
     } finally {
       setToken(null);
       setUser(null);
+      setTodayAttendanceRecord(null);
       localStorage.removeItem('hrms_token');
       localStorage.removeItem('hrms_user');
     }
@@ -139,6 +178,20 @@ export const AuthProvider = ({ children }) => {
     });
   };
 
+  const userRoleStr = (user?.roleName || user?.role?.name || user?.role || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const isAdmin = ['admin', 'superadmin', 'orgadmin'].includes(userRoleStr);
+
+  const hasCheckedInToday = Boolean(todayAttendanceRecord?.checkIn);
+  const hasCheckedOutToday = Boolean(todayAttendanceRecord?.checkOut);
+
+  // When HR, Employee, or Manager logs out for the day (or has not logged in):
+  // isLoggedOutForDay: true if employee has punched out today
+  // isWorkdayActive: true if Admin OR actively checked in and not checked out
+  // canOperate: true if Admin OR actively checked in and not checked out
+  const isLoggedOutForDay = !isAdmin && hasCheckedOutToday;
+  const isWorkdayActive = isAdmin || (hasCheckedInToday && !hasCheckedOutToday);
+  const canOperate = isWorkdayActive;
+
   return (
     <AuthContext.Provider
       value={{
@@ -152,6 +205,11 @@ export const AuthProvider = ({ children }) => {
         hasRole,
         canManageTraining,
         updateUser,
+        todayAttendanceRecord,
+        isLoggedOutForDay,
+        isWorkdayActive,
+        canOperate,
+        refreshWorkdayStatus,
       }}
     >
       {children}

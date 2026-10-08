@@ -129,8 +129,20 @@ export const EmployeeListPage = () => {
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [viewingEmployee, setViewingEmployee] = useState(null);
   const [loadingViewProfile, setLoadingViewProfile] = useState(false);
-  const [timelineEmployee, setTimelineEmployee] = useState(null);
   const [reassigningEmployee, setReassigningEmployee] = useState(null);
+
+  // HR cannot update her own shift timing (Admin retains full permission)
+  const isEditingSelf = Boolean(
+    editingEmployee && user && (
+      (user.employeeId && (editingEmployee.id === user.employeeId || editingEmployee.employeeId === user.employeeId)) ||
+      (user.id && (editingEmployee.userId === user.id || editingEmployee.id === user.id)) ||
+      (user.email && editingEmployee.email && user.email.toLowerCase() === editingEmployee.email.toLowerCase())
+    )
+  );
+  const currentUserRoleStr = (user?.roleName || user?.role?.name || user?.role || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const isCurrentUserHR = currentUserRoleStr === 'hr' || currentUserRoleStr === 'hrmanager';
+  const isCurrentUserAdmin = ['admin', 'superadmin', 'orgadmin'].includes(currentUserRoleStr);
+  const isHRSelfShiftDisabled = isCurrentUserHR && !isCurrentUserAdmin && isEditingSelf;
 
   // Quick EWS Modal State
   const [ewsTarget, setEwsTarget] = useState(null);
@@ -815,6 +827,10 @@ export const EmployeeListPage = () => {
       if (editingEmployee && !canViewSalary(editingEmployee)) {
         delete payload.salary;
         delete payload.salaryStructure;
+      }
+
+      if (isHRSelfShiftDisabled) {
+        delete payload.shiftTiming;
       }
 
       if (editingEmployee) {
@@ -2075,6 +2091,7 @@ export const EmployeeListPage = () => {
                     <input
                       type="text"
                       value={shiftFromTime}
+                      disabled={isHRSelfShiftDisabled}
                       onChange={(e) => {
                         const val = e.target.value;
                         setShiftFromTime(val);
@@ -2084,12 +2101,17 @@ export const EmployeeListPage = () => {
                         }));
                       }}
                       placeholder="e.g. 11:00"
-                      className="block w-full rounded-lg border text-sm py-2.5 px-3.5 bg-white border-slate-300 text-slate-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors"
+                      className={`block w-full rounded-lg border text-sm py-2.5 px-3.5 ${
+                        isHRSelfShiftDisabled
+                          ? 'bg-slate-100 text-slate-500 cursor-not-allowed border-slate-200'
+                          : 'bg-white border-slate-300 text-slate-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500'
+                      } transition-colors`}
                       required
                     />
                   </div>
                   <select
                     value={shiftFromPeriod}
+                    disabled={isHRSelfShiftDisabled}
                     onChange={(e) => {
                       const period = e.target.value;
                       setShiftFromPeriod(period);
@@ -2098,7 +2120,11 @@ export const EmployeeListPage = () => {
                         shiftTiming: `${shiftFromTime.trim()} ${period} - ${shiftToTime.trim()} ${shiftToPeriod}`,
                       }));
                     }}
-                    className="rounded-lg border text-sm py-2.5 px-3 bg-white border-slate-300 text-slate-900 font-bold focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors"
+                    className={`rounded-lg border text-sm py-2.5 px-3 font-bold ${
+                      isHRSelfShiftDisabled
+                        ? 'bg-slate-100 text-slate-500 cursor-not-allowed border-slate-200'
+                        : 'bg-white border-slate-300 text-slate-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500'
+                    } transition-colors`}
                   >
                     <option value="AM">AM</option>
                     <option value="PM">PM</option>
@@ -2116,6 +2142,7 @@ export const EmployeeListPage = () => {
                     <input
                       type="text"
                       value={shiftToTime}
+                      disabled={isHRSelfShiftDisabled}
                       onChange={(e) => {
                         const val = e.target.value;
                         setShiftToTime(val);
@@ -2125,12 +2152,17 @@ export const EmployeeListPage = () => {
                         }));
                       }}
                       placeholder="e.g. 07:00"
-                      className="block w-full rounded-lg border text-sm py-2.5 px-3.5 bg-white border-slate-300 text-slate-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors"
+                      className={`block w-full rounded-lg border text-sm py-2.5 px-3.5 ${
+                        isHRSelfShiftDisabled
+                          ? 'bg-slate-100 text-slate-500 cursor-not-allowed border-slate-200'
+                          : 'bg-white border-slate-300 text-slate-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500'
+                      } transition-colors`}
                       required
                     />
                   </div>
                   <select
                     value={shiftToPeriod}
+                    disabled={isHRSelfShiftDisabled}
                     onChange={(e) => {
                       const period = e.target.value;
                       setShiftToPeriod(period);
@@ -2139,7 +2171,11 @@ export const EmployeeListPage = () => {
                         shiftTiming: `${shiftFromTime.trim()} ${shiftFromPeriod} - ${shiftToTime.trim()} ${period}`,
                       }));
                     }}
-                    className="rounded-lg border text-sm py-2.5 px-3 bg-white border-slate-300 text-slate-900 font-bold focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors"
+                    className={`rounded-lg border text-sm py-2.5 px-3 font-bold ${
+                      isHRSelfShiftDisabled
+                        ? 'bg-slate-100 text-slate-500 cursor-not-allowed border-slate-200'
+                        : 'bg-white border-slate-300 text-slate-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500'
+                    } transition-colors`}
                   >
                     <option value="AM">AM</option>
                     <option value="PM">PM</option>
@@ -2147,6 +2183,12 @@ export const EmployeeListPage = () => {
                 </div>
               </div>
             </div>
+            {isHRSelfShiftDisabled && (
+              <p className="text-[11px] text-amber-600 font-medium flex items-center gap-1.5 mt-1">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                HR shift timing cannot be self-modified. Please contact an Administrator to update your shift timing.
+              </p>
+            )}
             <p className="text-[11px] text-slate-500">
               Type the exact working hours manually. Active shift displays on employee's clock in/out timer.
             </p>

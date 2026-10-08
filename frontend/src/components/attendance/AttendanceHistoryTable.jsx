@@ -59,6 +59,36 @@ export const AttendanceHistoryTable = ({
   const handleEditTiming = onEditTiming || onRegularize;
   const canEdit = canEditTiming || canRegularize;
 
+  // HR own attendance modification restriction (Admin retains full permission)
+  const normRole = (currentUser?.roleName || currentUser?.role?.name || currentUser?.role || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const isHR = normRole === 'hr' || normRole === 'hrmanager';
+  const isAdmin = ['admin', 'superadmin', 'orgadmin'].includes(normRole);
+
+  const isRowOwnRecord = (row) => {
+    if (!currentUser || !row) return false;
+    return Boolean(
+      (currentUser.employeeId && (row.employeeId === currentUser.employeeId || row.employee?.id === currentUser.employeeId)) ||
+      (currentUser.id && (row.employee?.userId === currentUser.id || row.employeeId === currentUser.id)) ||
+      (row.employee?.email && currentUser.email && row.employee.email.toLowerCase() === currentUser.email.toLowerCase())
+    );
+  };
+
+  const canEditRow = (row) => {
+    if (!canEdit) return false;
+    if (isHR && !isAdmin && isRowOwnRecord(row)) {
+      return false; // HR cannot edit her own attendance records
+    }
+    return true;
+  };
+
+  const canRemarkRow = (row) => {
+    if (!canRemark) return false;
+    if (isHR && !isAdmin && isRowOwnRecord(row)) {
+      return false; // HR cannot edit remarks on her own attendance records
+    }
+    return true;
+  };
+
   // Authorization: Employees must not have access to export button
   const userRoleStr = (currentUser?.roleName || currentUser?.role?.name || currentUser?.role || '').toLowerCase().trim();
   const isEmployeeOnly = userRoleStr === 'employee' || (!['admin', 'superadmin', 'orgadmin', 'hr', 'hrmanager', 'manager'].some((r) => userRoleStr.includes(r)));
@@ -459,7 +489,7 @@ export const AttendanceHistoryTable = ({
                   <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 flex-wrap">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       {remarkInfo.isPending && (
-                        canRemark ? (
+                        canRemarkRow(row) ? (
                           <button
                             type="button"
                             onClick={() => onAddRemark && onAddRemark(row)}
@@ -499,7 +529,7 @@ export const AttendanceHistoryTable = ({
                       )}
                     </div>
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      {canEdit && (
+                      {canEditRow(row) && (
                         <Button
                           variant={row.status === 'LATE' ? 'primary' : 'secondary'}
                           size="sm"
@@ -515,7 +545,7 @@ export const AttendanceHistoryTable = ({
                           {row.status === 'LATE' ? 'Adjust Late Arrival' : 'Edit Timing'}
                         </Button>
                       )}
-                      {canRemark && (remarkInfo.isPending || remarkInfo.hasRemark || ot > 0) && (
+                      {canRemarkRow(row) && (remarkInfo.isPending || remarkInfo.hasRemark || ot > 0) && (
                         <Button
                           variant={remarkInfo.isPending ? 'primary' : 'secondary'}
                           size="sm"
@@ -675,7 +705,7 @@ export const AttendanceHistoryTable = ({
                             </span>
                           )}
                           {remarkInfo.isPending && (
-                            canRemark ? (
+                            canRemarkRow(row) ? (
                               <button
                                 type="button"
                                 onClick={() => onAddRemark && onAddRemark(row)}
@@ -811,7 +841,7 @@ export const AttendanceHistoryTable = ({
                               Convert to Leave
                             </Button>
                           )}
-                          {canEdit && (
+                          {canEditRow(row) && (
                             <Button
                               variant={row.status === 'LATE' ? 'primary' : 'secondary'}
                               size="sm"
@@ -827,7 +857,7 @@ export const AttendanceHistoryTable = ({
                               {row.status === 'LATE' ? 'Adjust Late Arrival' : 'Edit Timing'}
                             </Button>
                           )}
-                          {canRemark && (remarkInfo.isPending || remarkInfo.hasRemark || ot > 0) && (
+                          {canRemarkRow(row) && (remarkInfo.isPending || remarkInfo.hasRemark || ot > 0) && (
                             <Button
                               variant={remarkInfo.isPending ? 'primary' : 'secondary'}
                               size="sm"

@@ -12,6 +12,7 @@ import {
   RotateCcw,
   Moon,
   Coffee,
+  AlertTriangle,
 } from 'lucide-react';
 import { Modal } from '../common/Modal.jsx';
 import { Button } from '../common/Button.jsx';
@@ -19,6 +20,7 @@ import { Badge } from '../common/Badge.jsx';
 import { TimePicker12 } from '../common/TimePicker12.jsx';
 import { attendanceService } from '../../services/attendanceService.js';
 import { useToast } from '../../context/ToastContext.jsx';
+import { useAuth } from '../../context/AuthContext.jsx';
 import { formatHoursToClock } from '../../utils/timeUtils.js';
 
 /**
@@ -133,7 +135,22 @@ export const EditAttendanceTimingModal = ({
   record,
   onSuccess,
 }) => {
+  const { user } = useAuth();
   const toast = useToast();
+
+  const normRole = (user?.roleName || user?.role?.name || user?.role || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const isHR = normRole === 'hr' || normRole === 'hrmanager';
+  const isAdmin = normRole === 'admin' || normRole === 'superadmin' || normRole === 'orgadmin';
+
+  const isOwnRecord = Boolean(
+    record &&
+      user &&
+      ((user.employeeId && (record.employeeId === user.employeeId || record.employee?.id === user.employeeId)) ||
+        (user.id && (record.employee?.userId === user.id || record.employeeId === user.id)) ||
+        (record.employee?.email && user.email && record.employee.email.toLowerCase() === user.email.toLowerCase()))
+  );
+
+  const isHRSelfAttendanceDisabled = isHR && !isAdmin && isOwnRecord;
 
   const [checkInTime, setCheckInTime] = useState({ hour: '02', minute: '00', period: 'PM' });
   const [checkOutTime, setCheckOutTime] = useState({ hour: '09', minute: '00', period: 'PM' });
@@ -304,6 +321,11 @@ export const EditAttendanceTimingModal = ({
     e.preventDefault();
     setError(null);
 
+    if (isHRSelfAttendanceDisabled) {
+      setError('HR cannot modify her own attendance records. Please contact an Administrator.');
+      return;
+    }
+
     if (!reason || reason.trim().length < 5) {
       setError('Please provide a descriptive reason / text message (minimum 5 characters) explaining why timings were changed.');
       return;
@@ -381,6 +403,13 @@ export const EditAttendanceTimingModal = ({
       maxWidth="max-w-2xl"
     >
       <form onSubmit={handleSubmit} className="space-y-5">
+        {isHRSelfAttendanceDisabled && (
+          <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>HR attendance records cannot be self-modified. Please contact an Administrator to update this record.</span>
+          </div>
+        )}
+
         {/* Employee & Record Context Header */}
         <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-50 via-brand-50/30 to-slate-50 border border-slate-200/80">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -759,7 +788,7 @@ export const EditAttendanceTimingModal = ({
             variant="primary"
             size="md"
             icon={CheckCircle2}
-            disabled={submitting}
+            disabled={submitting || isHRSelfAttendanceDisabled}
             isLoading={submitting}
           >
             Save &amp; Update Timing

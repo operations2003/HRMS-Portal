@@ -223,6 +223,7 @@ export const AttendanceDashboardPage = () => {
       // Refresh backend attendance state
       fetchTodayRecord();
       fetchTableData(1);
+      window.dispatchEvent(new CustomEvent('hrms:attendance:updated', { detail: record }));
     } catch (err) {
       const msg = err.message || 'Login failed. Please try again.';
       setPunchError(msg);
@@ -246,6 +247,7 @@ export const AttendanceDashboardPage = () => {
       // Refresh backend attendance state
       fetchTodayRecord();
       fetchTableData(1);
+      window.dispatchEvent(new CustomEvent('hrms:attendance:updated', { detail: record }));
     } catch (err) {
       const msg = err.message || 'Logout failed. Please try again.';
       setPunchError(msg);

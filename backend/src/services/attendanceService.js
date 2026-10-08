@@ -407,6 +407,21 @@ export const attendanceService = {
         error.statusCode = 403;
         throw error;
       }
+
+      // HR cannot manually override or record attendance on her own behalf
+      if ((normRole === 'hr' || normRole === 'hrmanager') && normRole !== 'admin' && normRole !== 'superadmin' && normRole !== 'orgadmin') {
+        const requesterEmp = await resolveRequesterEmployee(user);
+        const isSelf =
+          (requesterEmp && targetEmployee.id === requesterEmp.id) ||
+          (user.employeeId && targetEmployee.id === user.employeeId) ||
+          (user.id && (targetEmployee.userId === user.id || targetEmployee.id === user.id)) ||
+          (targetEmployee.email && user.email && targetEmployee.email.toLowerCase() === user.email.toLowerCase());
+        if (isSelf) {
+          const error = new Error('Access denied: HR cannot manually record or modify attendance on her own behalf.');
+          error.statusCode = 403;
+          throw error;
+        }
+      }
     } else {
       targetEmployee = await resolveRequesterEmployee(user);
       if (!targetEmployee) {
@@ -520,6 +535,21 @@ export const attendanceService = {
         const error = new Error('Access denied: Cannot record attendance for an employee in a different organization.');
         error.statusCode = 403;
         throw error;
+      }
+
+      // HR cannot manually override or record attendance on her own behalf
+      if ((normRole === 'hr' || normRole === 'hrmanager') && normRole !== 'admin' && normRole !== 'superadmin' && normRole !== 'orgadmin') {
+        const requesterEmp = await resolveRequesterEmployee(user);
+        const isSelf =
+          (requesterEmp && targetEmployee.id === requesterEmp.id) ||
+          (user.employeeId && targetEmployee.id === user.employeeId) ||
+          (user.id && (targetEmployee.userId === user.id || targetEmployee.id === user.id)) ||
+          (targetEmployee.email && user.email && targetEmployee.email.toLowerCase() === user.email.toLowerCase());
+        if (isSelf) {
+          const error = new Error('Access denied: HR cannot manually record or modify attendance on her own behalf.');
+          error.statusCode = 403;
+          throw error;
+        }
       }
     } else {
       targetEmployee = await resolveRequesterEmployee(user);
@@ -1091,6 +1121,24 @@ export const attendanceService = {
       throw error;
     }
 
+    // HR cannot edit or regularize her own attendance records (Admin retains full permission)
+    const isHr = ['hr', 'hrmanager'].includes(normRole);
+    const isAdmin = ['admin', 'superadmin', 'orgadmin'].includes(normRole);
+    if (isHr && !isAdmin) {
+      const requesterEmp = await resolveRequesterEmployee(user);
+      const isSelf =
+        (requesterEmp && record.employeeId === requesterEmp.id) ||
+        (user.employeeId && record.employeeId === user.employeeId) ||
+        (user.id && (record.employee?.userId === user.id || record.employeeId === user.id)) ||
+        (record.employee?.email && user.email && record.employee.email.toLowerCase() === user.email.toLowerCase());
+
+      if (isSelf) {
+        const error = new Error('Access denied: HR is not authorized to edit or regularize her own attendance records.');
+        error.statusCode = 403;
+        throw error;
+      }
+    }
+
     // Manager boundary check: can regularize only department members
     if (normRole === 'manager') {
       const managerEmp = await resolveRequesterEmployee(user);
@@ -1231,6 +1279,24 @@ export const attendanceService = {
       const error = new Error('Access denied: Attendance record belongs to a different organization.');
       error.statusCode = 403;
       throw error;
+    }
+
+    // HR cannot edit or modify remarks on her own attendance records (Admin retains full permission)
+    const isHr = ['hr', 'hrmanager'].includes(normRole);
+    const isAdmin = ['admin', 'superadmin', 'orgadmin'].includes(normRole);
+    if (isHr && !isAdmin) {
+      const requesterEmp = await resolveRequesterEmployee(user);
+      const isSelf =
+        (requesterEmp && record.employeeId === requesterEmp.id) ||
+        (user.employeeId && record.employeeId === user.employeeId) ||
+        (user.id && (record.employee?.userId === user.id || record.employeeId === user.id)) ||
+        (record.employee?.email && user.email && record.employee.email.toLowerCase() === user.email.toLowerCase());
+
+      if (isSelf) {
+        const error = new Error('Access denied: HR is not authorized to edit or modify remarks on her own attendance records.');
+        error.statusCode = 403;
+        throw error;
+      }
     }
 
     const typeNormalized = (remarkType || '').trim().toUpperCase();
@@ -1437,6 +1503,21 @@ export const attendanceService = {
       const isHrOfEmp = ['hr', 'hrmanager'].includes(callerRole) &&
         (targetEmp.hrId === callerEmp?.id || targetEmp.orgId === user.orgId);
       isAuthorized = isManagerOfEmp || isHrOfEmp;
+    }
+
+    const isCallerHr = ['hr', 'hrmanager'].includes(callerRole);
+    if (isCallerHr && !isAdmin) {
+      const isSelf =
+        (callerEmp && record.employeeId === callerEmp.id) ||
+        (user.employeeId && record.employeeId === user.employeeId) ||
+        (targetEmp.userId === user.id) ||
+        (targetEmp.email && user.email && targetEmp.email.toLowerCase() === user.email.toLowerCase());
+
+      if (isSelf) {
+        const err = new Error('Access denied: HR is not authorized to convert her own absence record into leave.');
+        err.statusCode = 403;
+        throw err;
+      }
     }
 
     if (!isAuthorized) {

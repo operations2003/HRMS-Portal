@@ -23,6 +23,7 @@ import { Modal } from '../common/Modal.jsx';
 import { Badge } from '../common/Badge.jsx';
 import { Button } from '../common/Button.jsx';
 import { formatHoursToClock } from '../../utils/timeUtils.js';
+import { useAuth } from '../../context/AuthContext.jsx';
 
 export const AttendanceDetailModal = ({
   isOpen,
@@ -33,7 +34,23 @@ export const AttendanceDetailModal = ({
   onEditTiming,
   canEditTiming = false,
 }) => {
+  const { user } = useAuth();
   if (!record) return null;
+
+  const normRole = (user?.roleName || user?.role?.name || user?.role || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const isHR = normRole === 'hr' || normRole === 'hrmanager';
+  const isAdmin = normRole === 'admin' || normRole === 'superadmin' || normRole === 'orgadmin';
+
+  const isOwnRecord = Boolean(
+    record &&
+      user &&
+      ((user.employeeId && (record.employeeId === user.employeeId || record.employee?.id === user.employeeId)) ||
+        (user.id && (record.employee?.userId === user.id || record.employeeId === user.id)) ||
+        (record.employee?.email && user.email && record.employee.email.toLowerCase() === user.email.toLowerCase()))
+  );
+
+  const effectiveCanEditTiming = canEditTiming && !(isHR && !isAdmin && isOwnRecord);
+  const effectiveCanRemark = canRemark && !(isHR && !isAdmin && isOwnRecord);
 
   const formatTimestamp = (ts) => {
     if (!ts) return 'Not recorded';
@@ -100,7 +117,7 @@ export const AttendanceDetailModal = ({
                 Timing Adjusted
               </Badge>
             )}
-            {canEditTiming && (
+            {effectiveCanEditTiming && (
               <Button
                 variant={record.status === 'LATE' ? 'primary' : 'secondary'}
                 size="sm"
@@ -176,7 +193,7 @@ export const AttendanceDetailModal = ({
                 <Coffee className="w-4 h-4 text-amber-600" />
                 Break Sessions {Array.isArray(record.breakHistory) && record.breakHistory.length > 0 ? `(${record.breakHistory.length})` : ''} — Total {record.breakDurationMinutes || 0} mins
               </div>
-              {canEditTiming && (
+              {effectiveCanEditTiming && (
                 <button
                   type="button"
                   onClick={() => onEditTiming && onEditTiming(record)}
@@ -286,7 +303,7 @@ export const AttendanceDetailModal = ({
                   )}
                 </div>
 
-                {canRemark && (
+                {effectiveCanRemark && (
                   <Button
                     variant={isEmergency || isOT || isMistake ? 'secondary' : 'primary'}
                     size="sm"
@@ -365,7 +382,7 @@ export const AttendanceDetailModal = ({
                 <Clock className="w-4 h-4 text-brand-600" />
                 Timing Adjustment Audit Trail
               </div>
-              {canEditTiming && (
+              {effectiveCanEditTiming && (
                 <button
                   type="button"
                   onClick={() => onEditTiming && onEditTiming(record)}
@@ -419,7 +436,7 @@ export const AttendanceDetailModal = ({
         {/* Footer Actions */}
         <div className="flex items-center justify-between pt-4 border-t border-slate-100 flex-wrap gap-2">
           <div>
-            {canEditTiming && (
+            {effectiveCanEditTiming && (
               <Button
                 variant={record.status === 'LATE' ? 'primary' : 'secondary'}
                 size="md"
