@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { Badge } from '../common/Badge.jsx';
 import { Button } from '../common/Button.jsx';
+import { Avatar } from '../common/Avatar.jsx';
 import { exitService } from '../../services/exitService.js';
 import { useToast } from '../../context/ToastContext.jsx';
 
@@ -91,17 +92,13 @@ export const ExitChecklistDetailCard = ({
       <div className="p-6 border-b border-slate-100 dark:border-slate-800 bg-gradient-to-r from-slate-50/70 via-white to-slate-50/70 dark:from-slate-850 dark:via-slate-900 dark:to-slate-850">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
-            {checklist.avatarUrl ? (
-              <img
-                src={checklist.avatarUrl}
-                alt={checklist.employeeName}
-                className="w-13 h-13 rounded-2xl object-cover border border-slate-200 dark:border-slate-700 shadow-sm"
-              />
-            ) : (
-              <div className="w-13 h-13 rounded-2xl bg-gradient-to-br from-brand-500 to-indigo-600 text-white font-bold flex items-center justify-center text-base shadow-sm">
-                {getInitials(checklist.employeeName)}
-              </div>
-            )}
+            <Avatar
+              src={checklist.avatarUrl}
+              name={checklist.employeeName}
+              size="xl"
+              shape="rounded-2xl"
+              className="w-14 h-14 min-w-[3.5rem] min-h-[3.5rem] max-w-[3.5rem] max-h-[3.5rem] shrink-0 border border-slate-200 dark:border-slate-700 shadow-sm"
+            />
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-lg font-bold text-slate-900 dark:text-white">
