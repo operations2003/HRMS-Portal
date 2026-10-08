@@ -174,8 +174,9 @@ export const TerminationPage = () => {
   const tableColumns = [
     {
       key: 'employee',
+      header: 'Exiting Employee',
       label: 'Exiting Employee',
-      render: (_, row) => {
+      render: (row) => {
         const name = row.employeeName || row.employee?.fullName || 'Staff Member';
         const code = row.employeeCode || row.employee?.empCode || '—';
         const dept = row.department || row.employee?.department?.name || 'General';
@@ -199,8 +200,9 @@ export const TerminationPage = () => {
     },
     {
       key: 'type',
+      header: 'Separation Type & Grounds',
       label: 'Separation Type & Grounds',
-      render: (_, row) => {
+      render: (row) => {
         return (
           <div className="space-y-1 max-w-xs">
             <div>{getExitTypeBadge(row.exitType)}</div>
@@ -213,8 +215,9 @@ export const TerminationPage = () => {
     },
     {
       key: 'timeline',
+      header: 'Timeline & Effective Date',
       label: 'Timeline & Effective Date',
-      render: (_, row) => {
+      render: (row) => {
         const isImmediate = row.noticePeriodDays === 0;
         const lwd = row.approvedLastWorkingDay || row.requestedLastWorkingDay || 'Immediate';
         return (
@@ -225,7 +228,7 @@ export const TerminationPage = () => {
             </div>
             <div className="text-slate-500 flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5 text-slate-400" />
-              <span>{isImmediate ? 'Immediate Departure (0d notice)' : `${row.noticePeriodDays} Days Notice`}</span>
+              <span>{isImmediate ? 'Immediate Departure (0d notice)' : `${row.noticePeriodDays || 0} Days Notice`}</span>
             </div>
           </div>
         );
@@ -233,8 +236,9 @@ export const TerminationPage = () => {
     },
     {
       key: 'status',
+      header: 'Status & Phase',
       label: 'Status & Phase',
-      render: (_, row) => {
+      render: (row) => {
         return (
           <div className="space-y-1">
             <div>{getStatusBadge(row.status)}</div>
@@ -247,9 +251,10 @@ export const TerminationPage = () => {
     },
     {
       key: 'actions',
+      header: 'Actions',
       label: 'Actions',
       align: 'right',
-      render: (_, row) => {
+      render: (row) => {
         return (
           <div className="flex items-center justify-end gap-1.5">
             <Button

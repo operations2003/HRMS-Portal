@@ -66,7 +66,7 @@ export const DataTable = ({
                   scope="col"
                   className={`px-6 py-4 whitespace-nowrap ${col.className || ''}`}
                 >
-                  {col.header}
+                  {col.header || col.label || col.title}
                 </th>
               ))}
             </tr>
