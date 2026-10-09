@@ -4,13 +4,13 @@ import { logger } from '../utils/logger.js';
 let cronTimer = null;
 
 /**
- * Executes a single sweep to auto-checkout unclosed attendance records exceeding shift + 10 hours
+ * Executes a single sweep to auto-checkout unclosed attendance records exceeding shift + 20-minute grace period
  */
 export const runAttendanceAutoLogoutSweep = async () => {
   try {
     const closedCount = await autoCheckoutStaleRecords(null);
     if (closedCount > 0) {
-      logger.info('AttendanceCronService', `Auto-logout job finalized ${closedCount} stale attendance record(s) exceeding shift + 10h.`);
+      logger.info('AttendanceCronService', `Auto-logout job finalized ${closedCount} attendance record(s) exceeding shift + 20-minute grace period.`);
     }
   } catch (err) {
     logger.error('AttendanceCronService', `Error in auto-logout job sweep: ${err.message}`);
@@ -19,9 +19,9 @@ export const runAttendanceAutoLogoutSweep = async () => {
 
 /**
  * Starts recurring background timer for attendance auto-logout
- * Default interval: 10 minutes (600,000 ms)
+ * Default interval: 1 minute (60,000 ms)
  */
-export const startAttendanceAutoLogoutJob = (intervalMs = 10 * 60 * 1000) => {
+export const startAttendanceAutoLogoutJob = (intervalMs = 60 * 1000) => {
   if (cronTimer) {
     clearInterval(cronTimer);
   }
@@ -36,7 +36,7 @@ export const startAttendanceAutoLogoutJob = (intervalMs = 10 * 60 * 1000) => {
     runAttendanceAutoLogoutSweep();
   }, intervalMs);
 
-  logger.info('AttendanceCronService', `Attendance auto-logout background job started (interval: ${intervalMs / 60000} mins).`);
+  logger.info('AttendanceCronService', `Attendance auto-logout background job started (interval: ${intervalMs / 1000}s).`);
 };
 
 /**

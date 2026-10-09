@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { attendanceController } from '../controllers/attendanceController.js';
+import { overtimeController } from '../controllers/overtimeController.js';
 import { authenticate } from '../middleware/authMiddleware.js';
 import { authorize, requireRoles } from '../middleware/rbacMiddleware.js';
 import { validate } from '../middleware/validateMiddleware.js';
@@ -57,6 +58,38 @@ router.get(
   '/my/today',
   authorize('attendance:read'),
   attendanceController.getMyTodayAttendance
+);
+
+// 3b. Overtime APIs (Separated from regular attendance)
+router.post(
+  '/overtime/login',
+  authorize('attendance:write'),
+  overtimeController.loginOvertime
+);
+
+router.post(
+  '/overtime/logout',
+  authorize('attendance:write'),
+  overtimeController.logoutOvertime
+);
+
+router.get(
+  '/overtime/today',
+  authorize('attendance:read'),
+  overtimeController.getTodayOvertime
+);
+
+router.get(
+  '/overtime/history',
+  authorize('attendance:read'),
+  overtimeController.getOvertimeHistory
+);
+
+// 3c. Shift grace auto-logout sweep API
+router.post(
+  '/cron/auto-logout',
+  requireRoles(['Admin', 'SuperAdmin', 'OrgAdmin', 'HR', 'HRManager']),
+  overtimeController.triggerAutoLogoutSweep
 );
 
 // 4. Team attendance API (HR, Admin, and Manager)

@@ -189,5 +189,47 @@ export const attendanceService = {
     const res = await http.post('/v1/attendance/sync-absences', data);
     return res.data;
   },
+
+  /**
+   * Get employee's today overtime status and active record
+   */
+  async getTodayOvertime() {
+    const res = await http.get('/v1/attendance/overtime/today');
+    return res.data;
+  },
+
+  /**
+   * Start an Overtime session
+   * @param {Object} data - { notes?: string }
+   */
+  async loginOvertime(data = {}) {
+    const res = await http.post('/v1/attendance/overtime/login', data);
+    return res.data;
+  },
+
+  /**
+   * End an Overtime session
+   * @param {Object} data - { notes?: string }
+   */
+  async logoutOvertime(data = {}) {
+    const res = await http.post('/v1/attendance/overtime/logout', data);
+    return res.data;
+  },
+
+  /**
+   * Get employee's overtime history
+   * @param {Object} params - { page, limit, startDate, endDate }
+   */
+  async getOvertimeHistory(params = {}) {
+    const query = new URLSearchParams();
+    if (params.page) query.append('page', params.page);
+    if (params.limit) query.append('limit', params.limit);
+    if (params.startDate) query.append('startDate', params.startDate);
+    if (params.endDate) query.append('endDate', params.endDate);
+    const queryString = query.toString();
+    const url = `/v1/attendance/overtime/history${queryString ? `?${queryString}` : ''}`;
+    const res = await http.get(url);
+    return res.data;
+  },
 };
 

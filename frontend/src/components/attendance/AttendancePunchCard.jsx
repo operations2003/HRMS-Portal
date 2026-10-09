@@ -239,7 +239,7 @@ export const AttendancePunchCard = ({
     statusBadge = (
       <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-200 shadow-2xs">
         <CheckCircle2 className="w-3.5 h-3.5 text-sky-600" />
-        {isAutoLoggedOut ? 'Auto-Logged Out (10h Post-Shift)' : `Completed (${todayRecord.status || 'HALF_DAY'})`}
+        {isAutoLoggedOut ? 'Auto-Logged Out (Shift Grace Period)' : `Completed (${todayRecord.status || 'HALF_DAY'})`}
       </span>
     );
   }
@@ -485,7 +485,7 @@ export const AttendancePunchCard = ({
         <div className="mx-6 mb-2 p-3 rounded-xl bg-amber-50 border border-amber-200/80 flex items-start gap-2.5 text-xs text-amber-800 animate-fadeIn">
           <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
           <div>
-            <span className="font-bold">System Auto-Logout:</span> This session was automatically closed 10 hours after your shift ended. Total work and overtime hours have been finalized up to the cutoff.
+            <span className="font-bold">System Auto-Logout:</span> This session was automatically closed after your shift's 20-minute grace period ended. Total hours have been finalized up to the scheduled cutoff.
           </div>
         </div>
       )}

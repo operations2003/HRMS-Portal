@@ -45,6 +45,8 @@ export const enforceActiveWorkday = async (req, res, next) => {
       rawPath.includes('/attendance/check-out') ||
       rawPath.includes('/attendance/pause-break') ||
       rawPath.includes('/attendance/resume-break') ||
+      rawPath.includes('/attendance/overtime') ||
+      rawPath.includes('/attendance/cron/auto-logout') ||
       rawPath.includes('/v1/auth/') ||
       rawPath.includes('/auth/logout') ||
       rawPath.includes('/auth/login') ||
@@ -71,20 +73,29 @@ export const enforceActiveWorkday = async (req, res, next) => {
       todayDate = new Date().toISOString().split('T')[0];
     }
 
-    // Query employee's latest attendance for today or active unclosed record
+    // Query employee's latest attendance for today or active unclosed record,
+    // along with any active in-progress overtime session count in a single query
     const query = `
-      SELECT id, check_in, check_out, attendance_date
-      FROM attendance_records
-      WHERE employee_id = $1
-        AND (attendance_date = $2::date OR check_out IS NULL)
-      ORDER BY attendance_date DESC, created_at DESC
+      SELECT 
+        a.id, a.check_in, a.check_out, a.attendance_date,
+        (SELECT COUNT(*)::int FROM overtime_records o WHERE o.employee_id = $1 AND o.status = 'IN_PROGRESS') AS active_ot_count
+      FROM attendance_records a
+      WHERE a.employee_id = $1
+        AND (a.attendance_date = $2::date OR a.check_out IS NULL)
+      ORDER BY a.attendance_date DESC, a.created_at DESC
       LIMIT 1;
     `;
     const result = await pool.query(query, [employeeId, todayDate]);
     const record = result.rows[0];
 
-    // Case 1: Record exists and has check_out => Logged out for the day
+    // Case 1: Record exists and has check_out => Check if active in overtime session
     if (record && record.check_out) {
+      const activeOtCount = parseInt(record.active_ot_count, 10) || 0;
+      if (activeOtCount > 0) {
+        // Employee has an active overtime session -> allow work operations
+        return next();
+      }
+
       return sendError(
         res,
         'Access denied: You have logged out for the day. You cannot make any changes or perform operations once your workday is completed.',

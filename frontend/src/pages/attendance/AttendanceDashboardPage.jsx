@@ -16,6 +16,7 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { attendanceService } from '../../services/attendanceService.js';
 import { AttendancePunchCard } from '../../components/attendance/AttendancePunchCard.jsx';
+import { OvertimeCard } from '../../components/attendance/OvertimeCard.jsx';
 import { AttendanceStatsBar } from '../../components/attendance/AttendanceStatsBar.jsx';
 import { AttendanceHistoryTable } from '../../components/attendance/AttendanceHistoryTable.jsx';
 import { AttendanceDetailModal } from '../../components/attendance/AttendanceDetailModal.jsx';
@@ -485,56 +486,67 @@ export const AttendanceDashboardPage = () => {
           onDeptChange={(dId) => handleFilterChange('deptId', dId)}
         />
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-          {/* Punch In/Out Card */}
-          <div className="lg:col-span-5 flex flex-col">
-            <AttendancePunchCard
-              todayRecord={todayRecord}
-              assignedShift={employeeProfile?.shiftTiming || todayRecord?.employee?.shiftTiming || '11:00 AM - 07:00 PM'}
-              onCheckIn={handleCheckIn}
-              onCheckOut={handleCheckOut}
-              onPauseBreak={handlePauseBreak}
-              onResumeBreak={handleResumeBreak}
-              isPunchingIn={isPunchingIn}
-              isPunchingOut={isPunchingOut}
-              isBreakLoading={isBreakLoading}
-              error={punchError}
-              onClearError={() => setPunchError(null)}
-            />
-          </div>
-
-          {/* Dynamic Metric Cards */}
-          <div className="lg:col-span-7 flex flex-col justify-between space-y-4">
-            <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-3xl p-6 text-white shadow-md border border-slate-700 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div>
-                <div className="text-xs font-semibold text-brand-400 uppercase tracking-wider">
-                  Assigned Shift & Policy Overview
-                </div>
-                <h2 className="text-lg font-bold text-white mt-1">
-                  {employeeProfile?.shiftTiming
-                    ? `Assigned Shift: ${employeeProfile.shiftTiming}`
-                    : 'Standard Shift (11:00 AM – 07:00 PM)'}
-                </h2>
-                <p className="text-xs text-slate-300 mt-1 max-w-md">
-                  Standard schedule with live break tracking. Work beyond scheduled hours is counted as Overtime (OT). Unclosed sessions automatically log out 10 hours after shift end.
-                </p>
-              </div>
-              <div className="shrink-0 flex flex-col items-start sm:items-end gap-1.5">
-                <span className="px-3.5 py-1.5 rounded-xl bg-white/10 text-xs font-bold text-slate-200 border border-white/10 backdrop-blur-sm">
-                  Universal Shift Policy
-                </span>
-                <span className="px-2.5 py-0.5 rounded-lg bg-brand-500/20 text-[11px] font-semibold text-brand-300 border border-brand-500/30">
-                  +10h Auto-Logout Cap
-                </span>
-              </div>
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+            {/* Punch In/Out Card */}
+            <div className="lg:col-span-5 flex flex-col">
+              <AttendancePunchCard
+                todayRecord={todayRecord}
+                assignedShift={employeeProfile?.shiftTiming || todayRecord?.employee?.shiftTiming || '11:00 AM - 07:00 PM'}
+                onCheckIn={handleCheckIn}
+                onCheckOut={handleCheckOut}
+                onPauseBreak={handlePauseBreak}
+                onResumeBreak={handleResumeBreak}
+                isPunchingIn={isPunchingIn}
+                isPunchingOut={isPunchingOut}
+                isBreakLoading={isBreakLoading}
+                error={punchError}
+                onClearError={() => setPunchError(null)}
+              />
             </div>
 
-            <AttendanceStatsBar
-              statistics={statistics}
-              summary={summary}
-              isOrgView={false}
-            />
+            {/* Dynamic Metric Cards */}
+            <div className="lg:col-span-7 flex flex-col justify-between space-y-4">
+              <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-3xl p-6 text-white shadow-md border border-slate-700 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                  <div className="text-xs font-semibold text-brand-400 uppercase tracking-wider">
+                    Assigned Shift & Policy Overview
+                  </div>
+                  <h2 className="text-lg font-bold text-white mt-1">
+                    {employeeProfile?.shiftTiming
+                      ? `Assigned Shift: ${employeeProfile.shiftTiming}`
+                      : 'Standard Shift (11:00 AM – 07:00 PM)'}
+                  </h2>
+                  <p className="text-xs text-slate-300 mt-1 max-w-md">
+                    Standard schedule with live break tracking. Unclosed sessions automatically log out after a 20-minute shift grace period. Overtime can be logged separately after regular shift completion.
+                  </p>
+                </div>
+                <div className="shrink-0 flex flex-col items-start sm:items-end gap-1.5">
+                  <span className="px-3.5 py-1.5 rounded-xl bg-white/10 text-xs font-bold text-slate-200 border border-white/10 backdrop-blur-sm">
+                    Universal Shift Policy
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-lg bg-brand-500/20 text-[11px] font-semibold text-brand-300 border border-brand-500/30">
+                    +20m Auto-Logout Grace
+                  </span>
+                </div>
+              </div>
+
+              <AttendanceStatsBar
+                statistics={statistics}
+                summary={summary}
+                isOrgView={false}
+              />
+            </div>
           </div>
+
+          {/* Dedicated Overtime (OT) Section */}
+          <OvertimeCard
+            todayRecord={todayRecord}
+            onOvertimeUpdated={() => {
+              fetchTodayRecord();
+              fetchTableData(pagination?.page || 1);
+            }}
+          />
         </div>
       )}
 

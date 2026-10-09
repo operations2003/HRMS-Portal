@@ -13,7 +13,7 @@ const normalizeRole = (r) => (r || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 /**
  * Resolves the employee profile corresponding to an authenticated user
  */
-const resolveRequesterEmployee = async (user) => {
+export const resolveRequesterEmployee = async (user) => {
   if (!user || !user.id) return null;
 
   // 1. Try finding by user_id
@@ -203,9 +203,11 @@ export const createDateInTimezone = (y, m, d, h, min, s = 0, timezone = 'Asia/Ko
 
 /**
  * Calculate the auto-logout cutoff time for a given check-in and shift timing.
- * Cutoff: 10 hours after the scheduled shift end.
+ * Requirement: Cutoff is exactly 20 minutes after scheduled shift end.
+ * E.g. Shift ends at 7:00 PM -> Auto-logout at 7:20 PM.
+ * E.g. Shift ends at 5:00 PM -> Auto-logout at 5:20 PM.
  */
-export const calculateAutoLogoutCutoff = (record, shiftTiming, timezone = 'Asia/Kolkata') => {
+export const calculateAutoLogoutCutoff = (record, shiftTiming, timezone = 'Asia/Kolkata', graceMinutes = 20) => {
   if (!record || !record.checkIn) return null;
 
   const checkInDate = new Date(record.checkIn);
@@ -232,23 +234,22 @@ export const calculateAutoLogoutCutoff = (record, shiftTiming, timezone = 'Asia/
   }
 
   const [year, month, day] = dateStr.split('-').map(Number);
-  const shiftStartDate = createDateInTimezone(year, month, day, shift.startHour, shift.startMinute, 0, tz);
   const shiftEndDate = createDateInTimezone(year, month, shift.isOvernight ? day + 1 : day, shift.endHour, shift.endMinute, 0, tz);
 
-  let effectiveShiftEnd = shiftEndDate;
-  // If employee checked in late (after scheduled shift start), extend dynamically
-  if (checkInDate.getTime() > shiftStartDate.getTime()) {
-    const dynamicShiftEnd = new Date(checkInDate.getTime() + Math.round(shift.scheduledDurationHours * 3600 * 1000));
-    effectiveShiftEnd = new Date(Math.max(shiftEndDate.getTime(), dynamicShiftEnd.getTime()));
+  // Auto-logout cutoff is exactly 20 minutes after the scheduled shift end time
+  const effectiveGraceMs = (Number(graceMinutes) || 20) * 60 * 1000;
+  let cutoff = new Date(shiftEndDate.getTime() + effectiveGraceMs);
+
+  // In case check-in occurred after scheduled cutoff (e.g. late punch), ensure cutoff is after check-in
+  if (cutoff.getTime() <= checkInDate.getTime()) {
+    cutoff = new Date(checkInDate.getTime() + effectiveGraceMs);
   }
 
-  // Auto-logout cutoff is exactly 10 hours after shift ends
-  const cutoff = new Date(effectiveShiftEnd.getTime() + 10 * 3600 * 1000);
   return cutoff;
 };
 
 /**
- * Checks an unclosed attendance record and automatically logs out the employee if 10h post-shift passed
+ * Checks an unclosed attendance record and automatically logs out the employee if the 20-minute post-shift grace period has passed.
  * @param {Object} record - The attendance record
  * @param {string|null} shiftTimingOverride - Optional shift timing string
  * @param {boolean} forceCheckout - If true, immediately finalizes the unclosed record (e.g. when checking in on a new day)
@@ -259,7 +260,7 @@ export const checkAndAutoLogoutRecord = async (record, shiftTimingOverride = nul
   }
 
   const shiftTiming = shiftTimingOverride || record.employee?.shiftTiming || '11:00 AM - 07:00 PM';
-  const cutoff = calculateAutoLogoutCutoff(record, shiftTiming, record.timezone);
+  const cutoff = calculateAutoLogoutCutoff(record, shiftTiming, record.timezone, 20);
   if (!cutoff) return record;
 
   const now = new Date();
@@ -267,10 +268,10 @@ export const checkAndAutoLogoutRecord = async (record, shiftTimingOverride = nul
     return record;
   }
 
-  // Finalize checkout timestamp at cutoff (or now if forced earlier)
-  const effectiveCheckOut = new Date(Math.min(now.getTime(), cutoff.getTime()));
+  // Record the scheduled automatic logout time as the attendance logout timestamp
+  const effectiveCheckOut = cutoff;
 
-  // If currently on break, close open break at effective check-out time
+  // If currently on break, close open break cleanly at effective check-out time
   let breakHistory = Array.isArray(record.breakHistory) ? [...record.breakHistory] : [];
   if (record.isOnBreak && record.currentBreakStart) {
     const breakStart = new Date(record.currentBreakStart);
@@ -292,7 +293,9 @@ export const checkAndAutoLogoutRecord = async (record, shiftTimingOverride = nul
     shiftTiming,
   });
 
-  const autoLogoutNote = '[SYSTEM_AUTO_LOGOUT] Automatically logged out 10 hours after shift completed. [NEEDS_POST_SHIFT_REMARK]';
+  const scheduledIso = cutoff.toISOString();
+  const processedIso = now.toISOString();
+  const autoLogoutNote = `[SYSTEM_AUTO_LOGOUT] Automatically logged out after 20-minute shift grace period (scheduled: ${scheduledIso}, processed: ${processedIso})`;
   const updatedNotes = record.notes
     ? `${record.notes} | ${autoLogoutNote}`
     : autoLogoutNote;
