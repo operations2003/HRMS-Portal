@@ -43,6 +43,7 @@ export const RosterPreviewPage = () => {
   const [selectedAmbiguousMapping, setSelectedAmbiguousMapping] = useState(null);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
   const [resolvingAmbiguity, setResolvingAmbiguity] = useState(false);
+  const [isAiResolving, setIsAiResolving] = useState(false);
 
   // Search, filter, and pagination states
   const [searchQuery, setSearchQuery] = useState('');
@@ -93,6 +94,22 @@ export const RosterPreviewPage = () => {
       toast.error(err.response?.data?.message || err.message || 'Failed to resolve employee mapping.');
     } finally {
       setResolvingAmbiguity(false);
+    }
+  };
+
+  const handleAiAutoResolve = async () => {
+    try {
+      setIsAiResolving(true);
+      const res = await rosterService.aiAutoResolve(jobId);
+      if (res.success) {
+        toast.success(res.message || 'AI successfully automated employee resolutions!');
+        await fetchPreview();
+      }
+    } catch (err) {
+      console.error('AI auto-resolve error:', err);
+      toast.error(err.response?.data?.message || err.message || 'Failed to auto-resolve mappings with AI.');
+    } finally {
+      setIsAiResolving(false);
     }
   };
 
@@ -299,6 +316,19 @@ export const RosterPreviewPage = () => {
           >
             Refresh
           </Button>
+          {unresolvedAmbiguous.length > 0 && (
+            <Button
+              variant="primary"
+              size="md"
+              icon={Sparkles}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs"
+              onClick={handleAiAutoResolve}
+              disabled={isAiResolving}
+              isLoading={isAiResolving}
+            >
+              {isAiResolving ? 'Resolving with AI...' : '✨ AI Auto-Resolve'}
+            </Button>
+          )}
           <Button
             variant="primary"
             size="md"
@@ -383,13 +413,27 @@ export const RosterPreviewPage = () => {
           <div className="flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
             <div className="flex-1">
-              <h3 className="font-bold text-amber-900 text-sm">
-                Action Required: {unresolvedAmbiguous.length} Ambiguous Employee Mapping(s)
-              </h3>
-              <p className="text-xs text-amber-800 mt-0.5">
-                Multiple active HRMS employees share similar names with the roster entries. Please select
-                the correct employee for each entry below before confirming the import.
-              </p>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-bold text-amber-900 text-sm">
+                    Action Required: {unresolvedAmbiguous.length} Ambiguous Employee Mapping(s)
+                  </h3>
+                  <p className="text-xs text-amber-800 mt-0.5">
+                    Multiple active HRMS employees share similar names with the roster entries. You can manually select matches or let AI auto-disambiguate them.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="primary"
+                  icon={Sparkles}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white shrink-0 self-start sm:self-auto shadow-xs"
+                  onClick={handleAiAutoResolve}
+                  disabled={isAiResolving}
+                  isLoading={isAiResolving}
+                >
+                  {isAiResolving ? 'AI Resolving...' : '✨ Automate with AI'}
+                </Button>
+              </div>
 
               <div className="mt-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                 {unresolvedAmbiguous.map((amb) => (

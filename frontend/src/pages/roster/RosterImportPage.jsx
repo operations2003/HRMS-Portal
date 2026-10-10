@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Info, Download } from 'lucide-react';
+import { Calendar, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Info, Download, Sparkles, Bot } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Select } from '../../components/common/Select';
 import { Alert } from '../../components/common/Alert';
@@ -17,6 +17,7 @@ export const RosterImportPage = () => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [useAiAutomation, setUseAiAutomation] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState(null);
 
@@ -99,6 +100,7 @@ export const RosterImportPage = () => {
       formData.append('roster', selectedFile);
       formData.append('month', selectedMonth);
       formData.append('year', selectedYear);
+      formData.append('aiMode', useAiAutomation);
 
       const response = await rosterService.uploadRoster(formData);
 
@@ -230,6 +232,35 @@ export const RosterImportPage = () => {
                   required
                 />
               </div>
+            </div>
+
+            {/* AI Automation Mode Card */}
+            <div className="bg-gradient-to-r from-indigo-50/90 via-purple-50/70 to-blue-50/80 border border-indigo-200/80 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-2xs">
+              <div className="flex items-start gap-3">
+                <div className="p-2.5 bg-indigo-600 text-white rounded-xl shadow-xs shrink-0">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-bold text-slate-900">AI Roster Automation Engine</h3>
+                    <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-indigo-100 text-indigo-700 rounded-full border border-indigo-200">
+                      OpenAI Integrated
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 mt-0.5">
+                    Intelligently adapts to any spreadsheet layout (horizontal/vertical), understands custom shift abbreviations (e.g. Morning, WFH, Split, M1), and auto-matches staff.
+                  </p>
+                </div>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                <input
+                  type="checkbox"
+                  checked={useAiAutomation}
+                  onChange={(e) => setUseAiAutomation(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+              </label>
             </div>
 
             {/* File Upload Area */}

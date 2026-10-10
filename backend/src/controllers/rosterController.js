@@ -1,7 +1,9 @@
 import { pool } from '../config/db.js';
 import { nanoid } from 'nanoid';
+import XLSX from 'xlsx';
 import rosterParserService from '../services/rosterParserService.js';
 import employeeMatchingService from '../services/employeeMatchingService.js';
+import aiRosterService from '../services/aiRosterService.js';
 
 const sendSuccess = (res, message, data = {}) => {
   return res.status(200).json({ success: true, message, data });
@@ -43,17 +45,52 @@ export const uploadRoster = async (req, res, next) => {
     // Parse roster file
     const fileBuffer = req.file.buffer;
     const filename = req.file.originalname;
+    const useAiMode = req.body.aiMode === 'true' || req.body.aiMode === true;
 
-    const parsedRoster = rosterParserService.parseRosterFile(
-      fileBuffer,
-      filename,
-      selectedMonth,
-      selectedYear
-    );
+    let parsedRoster = null;
+    let isAiProcessed = false;
+
+    try {
+      if (useAiMode) {
+        const workbook = XLSX.read(fileBuffer, { type: 'buffer', cellDates: false, cellText: true });
+        const sheetName = workbook.SheetNames[0];
+        const data = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], {
+          header: 1,
+          raw: false,
+          defval: '',
+          blankrows: false,
+        });
+        parsedRoster = await aiRosterService.parseArbitraryRoster(data, selectedMonth, selectedYear, filename);
+        isAiProcessed = true;
+      } else {
+        parsedRoster = rosterParserService.parseRosterFile(
+          fileBuffer,
+          filename,
+          selectedMonth,
+          selectedYear
+        );
+      }
+    } catch (parseErr) {
+      console.warn('Standard parser failed, engaging AI adaptive roster parser:', parseErr.message);
+      try {
+        const workbook = XLSX.read(fileBuffer, { type: 'buffer', cellDates: false, cellText: true });
+        const sheetName = workbook.SheetNames[0];
+        const data = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], {
+          header: 1,
+          raw: false,
+          defval: '',
+          blankrows: false,
+        });
+        parsedRoster = await aiRosterService.parseArbitraryRoster(data, selectedMonth, selectedYear, filename);
+        isAiProcessed = true;
+      } catch (aiErr) {
+        return sendError(res, `Failed to parse roster file: ${parseErr.message}`);
+      }
+    }
 
     // Validate roster
     const validation = rosterParserService.validateRoster(parsedRoster);
-    if (!validation.isValid) {
+    if (!validation.isValid && !isAiProcessed) {
       return sendError(res, 'Roster spreadsheet contains syntax or format errors.', 400, validation.errors);
     }
 
@@ -369,6 +406,127 @@ export const resolveAmbiguity = async (req, res, next) => {
   } catch (err) {
     console.error('Resolve ambiguity error:', err);
     return sendError(res, 'Failed to resolve employee mapping.', 500);
+  }
+};
+
+/**
+ * POST /api/v1/roster/ai-auto-resolve/:jobId
+ * Automatically resolve ambiguous or unmatched mappings using AI
+ */
+export const aiAutoResolve = async (req, res, next) => {
+  try {
+    const { jobId } = req.params;
+    const orgId = req.user?.orgId || req.user?.org?.id || 'org-1';
+    const userId = req.user?.id;
+
+    // Check job exists
+    const jobRes = await pool.query(
+      `SELECT * FROM roster_import_jobs WHERE id = $1 AND org_id = $2`,
+      [jobId, orgId]
+    );
+
+    if (jobRes.rows.length === 0) {
+      return sendError(res, 'Roster import job not found.', 404);
+    }
+
+    const job = jobRes.rows[0];
+
+    // Fetch unresolved ambiguous or unmatched mappings
+    const mappingsRes = await pool.query(
+      `SELECT * FROM roster_employee_mappings 
+       WHERE import_job_id = $1 AND (is_ambiguous = TRUE OR matched_employee_id IS NULL)`,
+      [jobId]
+    );
+
+    if (mappingsRes.rows.length === 0) {
+      return sendSuccess(res, 'All employees are already matched and resolved.', {
+        resolvedCount: 0,
+        mappings: [],
+      });
+    }
+
+    // Fetch active employees for this org
+    const employeesRes = await pool.query(
+      `SELECT e.id, e.first_name, e.last_name, e.employee_code, d.title as designation, dept.name as department
+       FROM employees e
+       LEFT JOIN designations d ON e.desig_id = d.id
+       LEFT JOIN departments dept ON e.dept_id = dept.id
+       WHERE e.org_id = $1 AND e.status = 'Active'`,
+      [orgId]
+    );
+
+    const orgEmployees = employeesRes.rows;
+
+    // Call AI Roster Service to auto-resolve
+    const aiResult = await aiRosterService.autoResolveAmbiguities(
+      mappingsRes.rows,
+      orgEmployees
+    );
+
+    // Apply resolutions in DB
+    const updatedMappings = [];
+    for (const item of aiResult.resolvedMappings) {
+      const updateRes = await pool.query(
+        `UPDATE roster_employee_mappings
+         SET matched_employee_id = $1,
+             match_method = 'AI_AUTO',
+             is_ambiguous = FALSE,
+             match_confidence = $2,
+             resolved_by = $3,
+             resolved_at = NOW()
+         WHERE id = $4
+         RETURNING *`,
+        [item.matchedEmployeeId, item.confidence / 100, userId, item.mappingId]
+      );
+
+      if (updateRes.rows.length > 0) {
+        updatedMappings.push({
+          ...updateRes.rows[0],
+          aiReasoning: item.reasoning,
+          matchedEmployeeName: item.matchedEmployeeName,
+        });
+      }
+    }
+
+    // Update job import_summary
+    const importSummary = job.import_summary || {};
+    if (importSummary.matchingResult) {
+      const allJobMappings = await pool.query(
+        `SELECT * FROM roster_employee_mappings WHERE import_job_id = $1`,
+        [jobId]
+      );
+      const matched = allJobMappings.rows.filter((m) => m.matched_employee_id && !m.is_ambiguous);
+      const ambiguous = allJobMappings.rows.filter((m) => m.is_ambiguous);
+      const unmatched = allJobMappings.rows.filter((m) => !m.matched_employee_id && !m.is_ambiguous);
+
+      importSummary.matchingResult.matchedCount = matched.length;
+      importSummary.matchingResult.ambiguousCount = ambiguous.length;
+      importSummary.matchingResult.unmatchedCount = unmatched.length;
+      importSummary.matchingResult.ambiguous = ambiguous;
+
+      await pool.query(
+        `UPDATE roster_import_jobs
+         SET import_summary = $1,
+             matched_employees = $2,
+             unmatched_employees = $3
+         WHERE id = $4`,
+        [JSON.stringify(importSummary), matched.length, unmatched.length, jobId]
+      );
+    }
+
+    return sendSuccess(
+      res,
+      `Successfully automated resolutions for ${updatedMappings.length} employee(s) using AI.`,
+      {
+        resolvedCount: updatedMappings.length,
+        aiProvider: aiResult.aiProvider,
+        quotaNotice: aiResult.quotaNotice,
+        updatedMappings,
+      }
+    );
+  } catch (err) {
+    console.error('AI auto-resolve error:', err);
+    return sendError(res, err.message || 'Failed to auto-resolve mappings with AI.', 500);
   }
 };
 
@@ -791,6 +949,7 @@ export default {
   uploadRoster,
   getPreview,
   resolveAmbiguity,
+  aiAutoResolve,
   confirmImport,
   getImportHistory,
   getAssignments

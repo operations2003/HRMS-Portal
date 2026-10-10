@@ -37,6 +37,12 @@ router.post(
 );
 
 router.post(
+  '/ai-auto-resolve/:jobId',
+  authorize(['employee:write', 'attendance:write']),
+  rosterController.aiAutoResolve
+);
+
+router.post(
   '/confirm/:jobId',
   authorize(['employee:write', 'attendance:write']),
   rosterController.confirmImport

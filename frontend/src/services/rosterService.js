@@ -33,6 +33,14 @@ export const rosterService = {
   },
 
   /**
+   * Automatically resolve all ambiguous mappings using AI
+   */
+  async aiAutoResolve(jobId) {
+    const res = await http.post(`/v1/roster/ai-auto-resolve/${jobId}`);
+    return res.data;
+  },
+
+  /**
    * Confirm and apply roster import
    */
   async confirmImport(jobId) {
