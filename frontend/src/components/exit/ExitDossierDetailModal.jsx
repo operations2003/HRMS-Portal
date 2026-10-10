@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   FileText,
   User,
@@ -10,6 +11,7 @@ import {
   Building2,
   Layers,
   Award,
+  ExternalLink,
 } from 'lucide-react';
 import { Modal } from '../common/Modal.jsx';
 import { Button } from '../common/Button.jsx';
@@ -30,6 +32,7 @@ export const ExitDossierDetailModal = ({
   onOpenDeprovision,
   onSuccess,
 }) => {
+  const navigate = useNavigate();
   const [dossier, setDossier] = useState(null);
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'clearances' | 'fnf' | 'audit'
   const [loading, setLoading] = useState(true);
@@ -166,6 +169,21 @@ export const ExitDossierDetailModal = ({
                     {dossier?.manager?.fullName || dossier?.managerName || 'Direct to Org'}
                   </span>
                 </div>
+                {(emp?.id || dossier?.employeeId) && (
+                  <div className="pt-2 border-t border-slate-200/80 flex justify-end">
+                    <Button
+                      size="xs"
+                      variant="outline"
+                      icon={ExternalLink}
+                      onClick={() => {
+                        onClose();
+                        navigate(`/profile?employeeId=${emp?.id || dossier?.employeeId}`);
+                      }}
+                    >
+                      View & Edit Profile
+                    </Button>
+                  </div>
+                )}
               </div>
 
               <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 text-xs space-y-2">

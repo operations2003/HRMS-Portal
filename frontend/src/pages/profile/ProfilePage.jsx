@@ -52,9 +52,15 @@ export const ProfilePage = () => {
   const targetEmployeeId = searchParams.get('employeeId') || searchParams.get('id');
   const isViewingOther = Boolean(targetEmployeeId && targetEmployeeId !== user?.employeeId && targetEmployeeId !== user?.id);
 
-  const isAdmin = ['admin', 'superadmin', 'orgadmin'].includes(
-    (user?.roleName || user?.role?.name || '').toLowerCase()
-  );
+  const allRoles = (Array.isArray(user?.roles) ? user.roles : [user?.roleName || user?.role?.name || user?.role || ''])
+    .filter(Boolean)
+    .map((r) => String(r).toLowerCase());
+  const isAdmin =
+    allRoles.some((r) => ['admin', 'superadmin', 'orgadmin', 'hr', 'hrmanager'].some((adm) => r.includes(adm))) ||
+    (user?.email || '').toLowerCase() === 'sheetalbedi@tasknera.com';
+
+  // Admin has full authority to edit their own details as well as any employee's details & profile picture
+  const canEdit = !isViewingOther || isAdmin;
 
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -76,6 +82,8 @@ export const ProfilePage = () => {
   // Edit Modal State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [formData, setFormData] = useState({
+    firstName: '',
+    lastName: '',
     phone: '',
     personalEmail: '',
     emergencyContact: '',
@@ -110,6 +118,8 @@ export const ProfilePage = () => {
       }
       setProfile(res);
       setFormData({
+        firstName: res.firstName || '',
+        lastName: res.lastName || '',
         phone: res.phone || '',
         personalEmail: res.personalEmail || '',
         emergencyContact: res.emergencyContact || '',
@@ -212,6 +222,8 @@ export const ProfilePage = () => {
 
   const handleOpenEdit = () => {
     setFormData({
+      firstName: profile?.firstName || '',
+      lastName: profile?.lastName || '',
       phone: profile?.phone || '',
       personalEmail: profile?.personalEmail || '',
       emergencyContact: profile?.emergencyContact || '',
@@ -228,8 +240,28 @@ export const ProfilePage = () => {
     try {
       setSaving(true);
       setSaveError(null);
-      await profileService.updateMyProfile(formData);
-      toast.success('Personal details updated successfully.');
+      if (isViewingOther && targetEmployeeId) {
+        await profileService.updateProfileById(targetEmployeeId, {
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          phone: formData.phone,
+          personalEmail: formData.personalEmail,
+          emergencyContact: formData.emergencyContact,
+          address: formData.address,
+          fatherName: formData.fatherName,
+          motherName: formData.motherName,
+        });
+        toast.success(`Profile for '${formData.firstName || ''} ${formData.lastName || ''}'.trim() updated successfully.`);
+      } else {
+        await profileService.updateMyProfile(formData);
+        if (formData.firstName || formData.lastName) {
+          updateUser?.({
+            firstName: formData.firstName || user?.firstName,
+            lastName: formData.lastName || user?.lastName,
+          });
+        }
+        toast.success('Personal details updated successfully.');
+      }
       setIsEditModalOpen(false);
       fetchProfile(true);
     } catch (err) {
@@ -426,13 +458,20 @@ export const ProfilePage = () => {
     try {
       setUploadingPhoto(true);
       setPhotoError(null);
-      const res = await profileService.uploadAvatar(photoFile);
+      let res;
+      if (isViewingOther && targetEmployeeId) {
+        res = await profileService.uploadAvatarForEmployee(targetEmployeeId, photoFile);
+      } else {
+        res = await profileService.uploadAvatar(photoFile);
+      }
       const newUrl = res?.avatarUrl || res?.data?.avatarUrl || (typeof res === 'string' ? res : '');
       if (newUrl) {
         setProfile((prev) => ({ ...prev, avatarUrl: newUrl }));
-        updateUser?.({ avatarUrl: newUrl });
+        if (!isViewingOther) {
+          updateUser?.({ avatarUrl: newUrl });
+        }
       }
-      toast.success('Profile photo updated successfully.');
+      toast.success(isViewingOther ? 'Employee profile photo updated successfully.' : 'Profile photo updated successfully.');
       handleClosePhotoModal();
       // Silently refresh profile in background so all pages and state stay aligned
       fetchProfile(true);
@@ -448,10 +487,16 @@ export const ProfilePage = () => {
     try {
       setRemovingPhoto(true);
       setPhotoError(null);
-      await profileService.removeAvatar();
+      if (isViewingOther && targetEmployeeId) {
+        await profileService.removeAvatarForEmployee(targetEmployeeId);
+      } else {
+        await profileService.removeAvatar();
+      }
       setProfile((prev) => ({ ...prev, avatarUrl: null }));
-      updateUser?.({ avatarUrl: null });
-      toast.success('Profile photo removed.');
+      if (!isViewingOther) {
+        updateUser?.({ avatarUrl: null });
+      }
+      toast.success(isViewingOther ? 'Employee profile photo removed.' : 'Profile photo removed.');
       handleClosePhotoModal();
       fetchProfile(true);
     } catch (err) {
@@ -527,7 +572,7 @@ export const ProfilePage = () => {
             Refresh
           </Button>
 
-          {!isViewingOther && (
+          {canEdit && (
             <Button
               variant="primary"
               size="sm"
@@ -557,7 +602,7 @@ export const ProfilePage = () => {
               />
 
               {/* Hover overlay for quick change */}
-              {!isViewingOther && (
+              {canEdit && (
                 <button
                   type="button"
                   onClick={handleOpenPhotoModal}
@@ -571,7 +616,7 @@ export const ProfilePage = () => {
             </div>
 
             {/* Camera badge action button */}
-            {!isViewingOther && (
+            {canEdit && (
               <button
                 type="button"
                 onClick={handleOpenPhotoModal}
@@ -596,7 +641,7 @@ export const ProfilePage = () => {
               <Badge variant="success" size="sm">
                 {profile?.status || 'Active'}
               </Badge>
-              {!isViewingOther && (
+              {canEdit && (
                 <button
                   type="button"
                   onClick={handleOpenPhotoModal}
@@ -641,7 +686,7 @@ export const ProfilePage = () => {
                 Personal & Family Information
               </h3>
             </div>
-            {!isViewingOther && (
+            {canEdit && (
               <button
                 type="button"
                 onClick={handleOpenEdit}
@@ -692,7 +737,7 @@ export const ProfilePage = () => {
                 Contact & Address
               </h3>
             </div>
-            {!isViewingOther && (
+            {canEdit && (
               <button
                 type="button"
                 onClick={handleOpenEdit}
@@ -1049,12 +1094,68 @@ export const ProfilePage = () => {
       <Modal
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
-        title="Edit Personal Information"
-        subtitle="Update your contact phone, emergency contacts, parents' names, and residential address."
+        title={isViewingOther ? `Edit Profile — ${profile?.fullName || 'Employee'}` : 'Edit Personal Information'}
+        subtitle="Update profile details, contact phone, emergency contacts, parents' names, and residential address."
         maxWidth="max-w-xl"
       >
         <form onSubmit={handleSaveProfile} className="space-y-4">
           {saveError && <Alert variant="danger" message={saveError} />}
+
+          {/* Profile Photo Quick Preview & Trigger */}
+          <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+            <div className="flex items-center gap-3">
+              <Avatar
+                src={profile?.avatarUrl}
+                name={profile?.fullName || `${formData.firstName} ${formData.lastName}`}
+                firstName={formData.firstName || profile?.firstName}
+                lastName={formData.lastName || profile?.lastName}
+                size="md"
+                shape="rounded-xl"
+              />
+              <div>
+                <p className="text-xs font-semibold text-slate-900 dark:text-white">Profile Picture</p>
+                <p className="text-[11px] text-slate-400">JPG, PNG, WEBP, GIF up to 25MB</p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              icon={Camera}
+              onClick={() => {
+                setIsEditModalOpen(false);
+                handleOpenPhotoModal();
+              }}
+            >
+              {profile?.avatarUrl ? 'Change Photo' : 'Upload Photo'}
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                First Name
+              </label>
+              <Input
+                type="text"
+                placeholder="First Name"
+                value={formData.firstName}
+                onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Last Name
+              </label>
+              <Input
+                type="text"
+                placeholder="Last Name"
+                value={formData.lastName}
+                onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+              />
+            </div>
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>

@@ -24,7 +24,7 @@ export const dailyReportController = {
    */
   async getMyTodayReport(req, res, next) {
     try {
-      const result = await dailyReportService.getMyTodayReport(req.user);
+      const result = await dailyReportService.getMyTodayReport(req.user, req.query);
       return sendSuccess(res, "Today's daily report fetched successfully.", result);
     } catch (error) {
       if (error.statusCode) {

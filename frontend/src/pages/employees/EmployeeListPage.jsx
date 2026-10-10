@@ -4,6 +4,7 @@ import { employeeService } from '../../services/employeeService.js';
 import { designationService } from '../../services/designationService.js';
 import { departmentService } from '../../services/departmentService.js';
 import { leaveService } from '../../services/leaveService.js';
+import { profileService } from '../../services/profileService.js';
 import {
   Users,
   Plus,
@@ -38,6 +39,7 @@ import {
   GraduationCap,
   ExternalLink,
   Upload,
+  Camera,
 } from 'lucide-react';
 import { DataTable } from '../../components/common/DataTable.jsx';
 import { Button } from '../../components/common/Button.jsx';
@@ -137,6 +139,45 @@ export const EmployeeListPage = () => {
   // Upload Photo Modal State  
   const [uploadPhotoEmployee, setUploadPhotoEmployee] = useState(null);
   const [isUploadPhotoOpen, setIsUploadPhotoOpen] = useState(false);
+
+  // Avatar Upload State in Employee Edit Modal
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const avatarFileInputRef = React.useRef(null);
+
+  const handleAvatarChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !editingEmployee) return;
+    try {
+      setUploadingAvatar(true);
+      const res = await profileService.uploadAvatarForEmployee(editingEmployee.id, file);
+      const newUrl = res?.avatarUrl || res?.data?.avatarUrl || '';
+      if (newUrl) {
+        setEditingEmployee((prev) => ({ ...prev, avatarUrl: newUrl }));
+        setEmployees((prev) => prev.map((emp) => (emp.id === editingEmployee.id ? { ...emp, avatarUrl: newUrl } : emp)));
+        toast.success('Profile picture updated successfully.');
+      }
+    } catch (err) {
+      toast.error(err.message || 'Failed to update profile picture.');
+    } finally {
+      setUploadingAvatar(false);
+      if (e.target) e.target.value = '';
+    }
+  };
+
+  const handleAvatarRemove = async () => {
+    if (!editingEmployee) return;
+    try {
+      setUploadingAvatar(true);
+      await profileService.removeAvatarForEmployee(editingEmployee.id);
+      setEditingEmployee((prev) => ({ ...prev, avatarUrl: null }));
+      setEmployees((prev) => prev.map((emp) => (emp.id === editingEmployee.id ? { ...emp, avatarUrl: null } : emp)));
+      toast.success('Profile picture removed.');
+    } catch (err) {
+      toast.error(err.message || 'Failed to remove profile picture.');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
 
   // HR cannot update her own shift timing (Admin retains full permission)
   const isEditingSelf = Boolean(
@@ -1435,6 +1476,61 @@ export const EmployeeListPage = () => {
         )}
 
         <form onSubmit={handleFormSubmit} className="space-y-4">
+          {/* Profile Picture Upload Section (for Editing Employee) */}
+          {editingEmployee && (
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <Avatar
+                  src={editingEmployee.avatarUrl}
+                  name={`${formData.firstName || ''} ${formData.lastName || ''}`}
+                  firstName={formData.firstName}
+                  lastName={formData.lastName}
+                  size="lg"
+                  shape="rounded-xl"
+                  className="ring-2 ring-brand-500/20 shadow-xs"
+                />
+                <div>
+                  <h5 className="text-xs font-bold text-slate-800">Profile Picture</h5>
+                  <p className="text-[11px] text-slate-500">
+                    {editingEmployee.avatarUrl ? 'Photo set & verified' : 'No photo uploaded yet'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="file"
+                  ref={avatarFileInputRef}
+                  onChange={handleAvatarChange}
+                  accept="image/*,.jpg,.jpeg,.png,.webp,.gif"
+                  className="hidden"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  icon={Camera}
+                  isLoading={uploadingAvatar}
+                  onClick={() => avatarFileInputRef.current?.click()}
+                >
+                  {editingEmployee.avatarUrl ? 'Change Photo' : 'Upload Photo'}
+                </Button>
+                {editingEmployee.avatarUrl && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    icon={Trash2}
+                    disabled={uploadingAvatar}
+                    onClick={handleAvatarRemove}
+                    className="text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                  >
+                    Remove
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
               label="First Name"

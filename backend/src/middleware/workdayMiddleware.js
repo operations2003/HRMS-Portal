@@ -47,6 +47,7 @@ export const enforceActiveWorkday = async (req, res, next) => {
       rawPath.includes('/attendance/resume-break') ||
       rawPath.includes('/attendance/overtime') ||
       rawPath.includes('/attendance/cron/auto-logout') ||
+      rawPath.includes('/daily-reports') ||
       rawPath.includes('/v1/auth/') ||
       rawPath.includes('/auth/logout') ||
       rawPath.includes('/auth/login') ||

@@ -70,7 +70,8 @@ const ReportCard = ({ report, canFeedback, onFeedback }) => {
       setShowFeedback(false);
       addToast("Feedback submitted and report acknowledged!", "success");
     } catch (e) {
-      addToast(e.message || "Failed to submit feedback.", "error");
+      const msg = e?.message || (typeof e === "string" ? e : "Failed to submit feedback.");
+      addToast(msg, "error");
     } finally {
       setSubmitting(false);
     }
@@ -250,7 +251,8 @@ export const DailyReportPage = () => {
       addToast(todayReport ? "Daily report updated successfully!" : "Daily report submitted successfully!", "success");
       fetchToday(); fetchMyHistory();
     } catch (e) {
-      addToast(e.message || "Failed to submit report.", "error");
+      const msg = e?.message || (typeof e === "string" ? e : "Failed to submit report.");
+      addToast(msg, "error");
     } finally {
       setSubmitting(false);
     }

@@ -334,7 +334,7 @@ export const employeeService = {
         });
         userId = newUser.id;
       }
-    } else if (userId && (data.email || data.firstName || data.lastName || data.status || data.roleId)) {
+    } else if (userId && (data.email || data.firstName || data.lastName || data.status || data.roleId || data.avatarUrl !== undefined)) {
       // Sync basic profile updates to user account if linked
       await userRepository.update(userId, {
         ...(data.email ? { email: data.email } : {}),
@@ -342,6 +342,7 @@ export const employeeService = {
         ...(data.lastName ? { lastName: data.lastName } : {}),
         ...(data.status ? { status: data.status } : {}),
         ...(data.roleId ? { roleId: data.roleId } : {}),
+        ...(data.avatarUrl !== undefined ? { avatarUrl: data.avatarUrl } : {}),
       });
     }
 

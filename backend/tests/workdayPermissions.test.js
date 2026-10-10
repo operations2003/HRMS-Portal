@@ -145,6 +145,16 @@ async function runTests() {
     assert.strictEqual(isNextCalled(), true);
   });
 
+  await test('POST /daily-reports is exempt (allows submitting daily work report even when logged out)', async () => {
+    const { req, res, next, isNextCalled } = createMockReqRes({
+      method: 'POST',
+      url: '/api/v1/daily-reports',
+      user: { id: 'emp-1', employeeId: 'emp-1', roleName: 'Employee' },
+    });
+    await enforceActiveWorkday(req, res, next);
+    assert.strictEqual(isNextCalled(), true);
+  });
+
   // --- 4. Workday Status Enforcement for HR / Manager / Employee ---
   console.log('\n--- 4. Workday Status Enforcement for HR, Manager, Employee ---');
 

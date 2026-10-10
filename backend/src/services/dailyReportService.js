@@ -7,17 +7,22 @@ import { logger } from '../utils/logger.js';
 const normalizeRole = (r) => (r || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
 const resolveRequesterEmployee = async (user) => {
-  if (!user || !user.id) return null;
+  if (!user || (!user.id && !user.employeeId)) return null;
+
+  if (user.employeeId) {
+    const emp = await employeeRepository.findById(user.employeeId);
+    if (emp) return emp;
+  }
 
   let emp = await employeeRepository.findByUserId(user.id, user.orgId);
+  if (emp) return emp;
+
+  emp = await employeeRepository.findByUserId(user.id);
   if (emp) return emp;
 
   if (user.email) {
     emp = await employeeRepository.findByEmail(user.email, user.orgId);
     if (emp) return emp;
-  }
-
-  if (user.email && (normalizeRole(user.roleName) === 'superadmin' || normalizeRole(user.roleName) === 'admin')) {
     emp = await employeeRepository.findByEmail(user.email);
     if (emp) return emp;
   }

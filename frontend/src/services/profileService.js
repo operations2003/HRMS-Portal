@@ -27,4 +27,22 @@ export const profileService = {
     const res = await http.delete('/v1/employees/me/avatar');
     return res.data;
   },
+
+  async uploadAvatarForEmployee(employeeId, file) {
+    const formData = new FormData();
+    formData.append('avatar', file);
+    const res = await http.upload(`/v1/employees/${employeeId}/avatar`, formData);
+    return res.data;
+  },
+
+  async removeAvatarForEmployee(employeeId) {
+    const res = await http.delete(`/v1/employees/${employeeId}/avatar`);
+    return res.data;
+  },
+
+  async updateProfileById(employeeId, data) {
+    const res = await http.put(`/v1/employees/${employeeId}`, data);
+    return res.data;
+  },
 };
+

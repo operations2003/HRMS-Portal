@@ -6,7 +6,34 @@ const ToastContext = createContext(null);
 export const ToastProvider = ({ children }) => {
   const [toasts, setToasts] = useState([]);
 
-  const addToast = useCallback(({ type = 'info', title, message, duration = 4000 }) => {
+  const addToast = useCallback((firstArg, secondArg) => {
+    let type = 'info';
+    let title = '';
+    let message = '';
+    let duration = 4000;
+
+    if (typeof firstArg === 'string') {
+      message = firstArg;
+      if (typeof secondArg === 'string') {
+        type = secondArg;
+      } else if (secondArg && typeof secondArg === 'object') {
+        title = secondArg.title || '';
+        duration = secondArg.duration !== undefined ? secondArg.duration : 4000;
+        if (secondArg.type) type = secondArg.type;
+      }
+    } else if (firstArg && typeof firstArg === 'object') {
+      type = firstArg.type || 'info';
+      title = firstArg.title || '';
+      message = firstArg.message || firstArg.description || '';
+      duration = firstArg.duration !== undefined ? firstArg.duration : 4000;
+    } else if (firstArg != null) {
+      message = String(firstArg);
+    }
+
+    if (!title && !message) {
+      message = 'Notification';
+    }
+
     const id = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const newToast = { id, type, title, message };
 

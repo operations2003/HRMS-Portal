@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   LogOut,
   Clock,
@@ -42,6 +43,7 @@ import { FnFSettlementModal } from '../../components/exit/FnFSettlementModal.jsx
 import { ExitDossierDetailModal } from '../../components/exit/ExitDossierDetailModal.jsx';
 
 export const ResignationPage = () => {
+  const navigate = useNavigate();
   const { user, hasRole } = useAuth();
   const toast = useToast();
 
@@ -175,18 +177,31 @@ export const ResignationPage = () => {
           row.employeeName || emp?.fullName || `${emp?.firstName || ''} ${emp?.lastName || ''}`.trim() || 'Staff';
         const avatarUrl = row.avatarUrl || emp?.avatarUrl || emp?.avatar_url || row.employeeAvatar;
         const empCode = row.employeeCode || emp?.empCode || emp?.employeeCode || 'EMP';
+        const targetId = row.employeeId || emp?.id;
+
         return (
           <div className="flex items-center gap-2.5">
-            <Avatar
-              src={avatarUrl}
-              alt={name}
-              name={name}
-              size="sm"
-            />
-            <div>
-              <p className="font-semibold text-xs text-slate-900">{name}</p>
-              <p className="text-[10px] text-slate-400 font-mono">{empCode}</p>
-            </div>
+            <button
+              type="button"
+              onClick={() => targetId && navigate(`/profile?employeeId=${targetId}`)}
+              className="flex items-center gap-2.5 text-left group cursor-pointer focus:outline-hidden"
+              title="View & Edit Profile / Picture"
+            >
+              <Avatar
+                src={avatarUrl}
+                alt={name}
+                name={name}
+                size="sm"
+                className="group-hover:ring-2 group-hover:ring-brand-500 transition-all shrink-0"
+              />
+              <div>
+                <p className="font-semibold text-xs text-slate-900 group-hover:text-brand-600 transition-colors flex items-center gap-1">
+                  <span>{name}</span>
+                  <ExternalLink className="w-3 h-3 text-slate-400 group-hover:text-brand-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </p>
+                <p className="text-[10px] text-slate-400 font-mono">{empCode}</p>
+              </div>
+            </button>
           </div>
         );
       },
@@ -276,20 +291,33 @@ export const ResignationPage = () => {
         const avatarUrl = row.avatarUrl || emp?.avatarUrl || emp?.avatar_url || row.employeeAvatar;
         const empCode = row.employeeCode || emp?.empCode || emp?.employeeCode || 'EMP';
         const dept = row.department || emp?.department?.name || 'Dept';
+        const targetId = row.employeeId || emp?.id;
+
         return (
           <div className="flex items-center gap-2.5">
-            <Avatar
-              src={avatarUrl}
-              alt={name}
-              name={name}
-              size="sm"
-            />
-            <div>
-              <p className="font-semibold text-xs text-slate-900">{name}</p>
-              <p className="text-[10px] text-slate-400 font-mono">
-                {empCode} • {dept}
-              </p>
-            </div>
+            <button
+              type="button"
+              onClick={() => targetId && navigate(`/profile?employeeId=${targetId}`)}
+              className="flex items-center gap-2.5 text-left group cursor-pointer focus:outline-hidden"
+              title="View & Edit Profile / Picture"
+            >
+              <Avatar
+                src={avatarUrl}
+                alt={name}
+                name={name}
+                size="sm"
+                className="group-hover:ring-2 group-hover:ring-brand-500 transition-all shrink-0"
+              />
+              <div>
+                <p className="font-semibold text-xs text-slate-900 group-hover:text-brand-600 transition-colors flex items-center gap-1">
+                  <span>{name}</span>
+                  <ExternalLink className="w-3 h-3 text-slate-400 group-hover:text-brand-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </p>
+                <p className="text-[10px] text-slate-400 font-mono">
+                  {empCode} • {dept}
+                </p>
+              </div>
+            </button>
           </div>
         );
       },
