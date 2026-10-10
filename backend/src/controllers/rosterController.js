@@ -143,6 +143,9 @@ export const uploadRoster = async (req, res, next) => {
     let previewChangedCount = 0;
     let previewUnchangedCount = 0;
     let attendanceConflictCount = 0;
+    let previewLeaveCount = 0;
+
+    const ROSTER_LEAVE_TYPES = ['CL', 'PL', 'SL', 'HD', 'HDL', 'LOP', 'LWP', 'ML', 'PTL', 'SBL', 'AWOL'];
 
     for (const emp of parsedRoster.employees) {
       const mapping = matchingResult.mappings.find(
@@ -151,6 +154,11 @@ export const uploadRoster = async (req, res, next) => {
       const matchedEmpId = mapping?.matchedEmployeeId;
 
       for (const day of emp.dailyAssignments) {
+        if (ROSTER_LEAVE_TYPES.includes(day.shiftType)) {
+          previewLeaveCount++;
+          day.isLeave = true;
+        }
+
         if (day.shiftType === 'BLANK') {
           day.diffStatus = 'UNSPECIFIED';
           continue;
@@ -210,6 +218,7 @@ export const uploadRoster = async (req, res, next) => {
       changedAssignments: previewChangedCount,
       unchangedAssignments: previewUnchangedCount,
       attendanceConflicts: attendanceConflictCount,
+      leavesDetected: previewLeaveCount,
       workingDaysDiscrepancies: parsedRoster.employees.filter((e) => e.hasWorkingDaysDiscrepancy).length
     };
 
