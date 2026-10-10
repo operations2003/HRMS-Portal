@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Clock,
   Calendar,
@@ -10,6 +11,7 @@ import {
   ShieldCheck,
   AlertCircle,
   Download,
+  Upload,
 } from 'lucide-react';
 import { exportAttendanceToExcel } from '../../utils/attendanceExcelExport.js';
 import { useAuth } from '../../context/AuthContext.jsx';
@@ -33,6 +35,7 @@ import { isCeoOrAdmin } from '../../utils/roleUtils.js';
 import { formatHoursToClock } from '../../utils/timeUtils.js';
 
 export const AttendanceDashboardPage = () => {
+  const navigate = useNavigate();
   const { user, hasRole, hasPermission } = useAuth();
   const toast = useToast();
   const isCeo = isCeoOrAdmin(user);
@@ -44,6 +47,8 @@ export const AttendanceDashboardPage = () => {
   const canRemark = hasRole(['HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin', 'Manager']);
   // Export to Excel is strictly reserved for HR, Admin, and Manager (Employees must not have this button)
   const canExportAttendance = hasRole(['HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin', 'Manager']);
+  // Roster import is authorized for Admin and HR
+  const canImportRoster = hasRole(['HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin']) || hasPermission('employee:write');
 
   // Active view tab: Admin, HR, and Manager default to 'org', regular Employees have 'my'. CEO stays exclusively on 'org'
   const [activeTab, setActiveTab] = useState(() => (canViewOrg ? 'org' : 'my'));
@@ -446,6 +451,19 @@ export const AttendanceDashboardPage = () => {
           >
             Refresh Logs
           </Button>
+
+          {canImportRoster && (
+            <Button
+              variant="secondary"
+              size="md"
+              icon={Upload}
+              onClick={() => navigate('/roster/import')}
+              title="Import and synchronize monthly roster spreadsheet"
+              className="border-brand-300 text-brand-700 hover:bg-brand-50"
+            >
+              Import Roster
+            </Button>
+          )}
 
           {canExportAttendance && (
             <Button

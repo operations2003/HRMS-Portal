@@ -80,6 +80,14 @@ export const TeamRosterModal = ({ isOpen, onClose, managerId, managerName }) => 
       ),
     },
     {
+      header: 'Assigned Shift',
+      render: (row) => (
+        <span className="text-xs font-medium text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+          {row.shiftTiming || '11:00 AM - 07:00 PM'}
+        </span>
+      ),
+    },
+    {
       header: 'Status',
       render: (row) => (
         <Badge variant={row.status === 'ACTIVE' ? 'success' : 'neutral'} size="sm">

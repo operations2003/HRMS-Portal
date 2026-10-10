@@ -472,8 +472,11 @@ export const managerService = {
         e.employee_code AS "employeeCode",
         e.first_name AS "firstName",
         e.last_name AS "lastName",
-        e.email,
-        e.shift_timing AS "shiftTiming",
+        COALESCE(
+          (SELECT sa.shift_label FROM shift_assignments sa WHERE sa.employee_id = e.id AND sa.assignment_date = $2 LIMIT 1),
+          e.shift_timing
+        ) AS "shiftTiming",
+        (SELECT sa.shift_type FROM shift_assignments sa WHERE sa.employee_id = e.id AND sa.assignment_date = $2 LIMIT 1) AS "rosterShiftType",
         d.name AS "department",
         ds.title AS "designation",
         e.avatar_url AS "avatarUrl",

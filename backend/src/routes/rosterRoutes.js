@@ -6,26 +6,46 @@ import { uploadSingleDocument } from '../middleware/uploadMiddleware.js';
 
 const router = Router();
 
-// All roster routes require authentication and employee:write permission (Admin/HR only)
+// Authentication required for all roster routes
 router.use(authenticate);
-router.use(authorize('employee:write'));
 
-// Upload and parse roster file (preview mode)
-router.post('/upload', uploadSingleDocument('roster'), rosterController.uploadRoster);
+// Get shift assignments for employees (Employee: self, Manager: team, HR/Admin: all)
+router.get(
+  '/assignments',
+  authorize(['employee:read', 'attendance:read', 'team:read']),
+  rosterController.getAssignments
+);
 
-// Get preview of uploaded roster
-router.get('/preview/:jobId', rosterController.getPreview);
+// Admin & HR management routes (upload, preview, resolve, confirm, history)
+router.post(
+  '/upload',
+  authorize(['employee:write', 'attendance:write']),
+  uploadSingleDocument('roster'),
+  rosterController.uploadRoster
+);
 
-// Resolve ambiguous employee mapping
-router.post('/resolve-ambiguity', rosterController.resolveAmbiguity);
+router.get(
+  '/preview/:jobId',
+  authorize(['employee:write', 'attendance:write']),
+  rosterController.getPreview
+);
 
-// Confirm and apply roster import
-router.post('/confirm/:jobId', rosterController.confirmImport);
+router.post(
+  '/resolve-ambiguity',
+  authorize(['employee:write', 'attendance:write']),
+  rosterController.resolveAmbiguity
+);
 
-// Get roster import history
-router.get('/history', rosterController.getImportHistory);
+router.post(
+  '/confirm/:jobId',
+  authorize(['employee:write', 'attendance:write']),
+  rosterController.confirmImport
+);
 
-// Get shift assignments for employees
-router.get('/assignments', rosterController.getAssignments);
+router.get(
+  '/history',
+  authorize(['employee:write', 'attendance:write']),
+  rosterController.getImportHistory
+);
 
 export default router;

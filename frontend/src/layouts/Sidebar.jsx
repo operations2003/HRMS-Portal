@@ -65,6 +65,12 @@ export const Sidebar = ({ isOpen, onClose }) => {
           icon: CalendarDays,
           permission: 'leave:read',
         },
+        {
+          name: 'Monthly Roster',
+          path: '/roster/history',
+          icon: CalendarCheck,
+          roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
+        },
       ],
     },
     {

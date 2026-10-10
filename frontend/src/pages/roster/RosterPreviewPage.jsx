@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import {
   Calendar,
@@ -10,16 +10,24 @@ import {
   UserX,
   Clock,
   ChevronLeft,
+  ChevronRight,
   Download,
   Upload,
+  Search,
+  Filter,
+  RefreshCw,
+  Sparkles,
+  Info,
+  CalendarCheck,
 } from 'lucide-react';
-import { Button } from '../../components/common/Button';
-import { Alert } from '../../components/common/Alert';
-import { LoadingSpinner } from '../../components/common/LoadingSpinner';
-import { Modal } from '../../components/common/Modal';
-import { Select } from '../../components/common/Select';
-import { rosterService } from '../../services/rosterService';
-import { useToast } from '../../context/ToastContext';
+import { Button } from '../../components/common/Button.jsx';
+import { Alert } from '../../components/common/Alert.jsx';
+import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
+import { Modal } from '../../components/common/Modal.jsx';
+import { Select } from '../../components/common/Select.jsx';
+import { Badge } from '../../components/common/Badge.jsx';
+import { rosterService } from '../../services/rosterService.js';
+import { useToast } from '../../context/ToastContext.jsx';
 
 export const RosterPreviewPage = () => {
   const { jobId } = useParams();
@@ -36,6 +44,12 @@ export const RosterPreviewPage = () => {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
   const [resolvingAmbiguity, setResolvingAmbiguity] = useState(false);
 
+  // Search, filter, and pagination states
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL'); // ALL, MATCHED, AMBIGUOUS, UNMATCHED, MISMATCH, CHANGED, NEW
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20); // 10, 20, 50, ALL (-1)
+
   useEffect(() => {
     if (!previewData && jobId) {
       fetchPreview();
@@ -45,11 +59,12 @@ export const RosterPreviewPage = () => {
   const fetchPreview = async () => {
     try {
       setLoading(true);
+      setError(null);
       const response = await rosterService.getPreview(jobId);
       setPreviewData(response.data);
     } catch (err) {
       console.error('Preview error:', err);
-      setError(err.response?.data?.message || 'Failed to load roster preview.');
+      setError(err.response?.data?.message || err.message || 'Failed to load roster preview.');
     } finally {
       setLoading(false);
     }
@@ -63,7 +78,7 @@ export const RosterPreviewPage = () => {
 
   const handleConfirmResolution = async () => {
     if (!selectedEmployeeId) {
-      toast.error('Please select an employee.');
+      toast.error('Please select an employee to map.');
       return;
     }
 
@@ -72,48 +87,56 @@ export const RosterPreviewPage = () => {
       await rosterService.resolveAmbiguity(selectedAmbiguousMapping.id, selectedEmployeeId);
       toast.success('Employee mapping resolved successfully.');
       setShowAmbiguityModal(false);
-      
-      // Refresh preview
+      // Re-fetch preview to refresh states
       await fetchPreview();
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to resolve mapping.');
+      toast.error(err.response?.data?.message || err.message || 'Failed to resolve employee mapping.');
     } finally {
       setResolvingAmbiguity(false);
     }
   };
 
   const handleConfirmImport = async () => {
-    // Check for unresolved ambiguities
-    const unresolvedAmbiguous = previewData.matchingResult?.ambiguous?.filter(
-      m => !m.resolvedAt
-    ) || [];
+    const unresolvedAmbiguous =
+      previewData.matchingResult?.ambiguous?.filter((m) => !m.resolvedAt && m.isAmbiguous) || [];
 
     if (unresolvedAmbiguous.length > 0) {
-      toast.error(`Please resolve ${unresolvedAmbiguous.length} ambiguous employee mapping(s) before confirming.`);
+      toast.error(
+        `Action required: Please resolve ${unresolvedAmbiguous.length} ambiguous employee mapping(s) before importing.`
+      );
       return;
     }
 
-    if (!window.confirm(
-      `Are you sure you want to import this roster?\n\n` +
-      `This will create/update ${previewData.matchingResult.matchedCount} employee schedules for ` +
-      `${getMonthName(previewData.parsedRoster.selectedMonth)} ${previewData.parsedRoster.selectedYear}.`
-    )) {
+    const matchedCount = previewData.matchingResult?.matchedCount || 0;
+    const monthName = getMonthName(previewData.parsedRoster?.selectedMonth);
+    const year = previewData.parsedRoster?.selectedYear;
+
+    if (
+      !window.confirm(
+        `Confirm Monthly Roster Import?\n\n` +
+          `• Target Period: ${monthName} ${year}\n` +
+          `• Matched Employees: ${matchedCount}\n` +
+          `• Shifts Added: ${previewData.diffSummary?.newAssignments || 0}\n` +
+          `• Shifts Changed: ${previewData.diffSummary?.changedAssignments || 0}\n\n` +
+          `Existing attendance punches, approved leaves, and payroll records will be preserved.`
+      )
+    ) {
       return;
     }
 
     try {
       setIsConfirming(true);
       const response = await rosterService.confirmImport(jobId);
-      
+
       if (response.success) {
-        toast.success('Roster imported and synchronized successfully!');
+        toast.success('Roster synchronized successfully with HRMS!');
         navigate('/roster/history', {
           state: { importResult: response.data }
         });
       }
     } catch (err) {
       console.error('Confirm error:', err);
-      toast.error(err.response?.data?.message || 'Failed to confirm roster import.');
+      toast.error(err.response?.data?.message || err.message || 'Failed to confirm roster import.');
     } finally {
       setIsConfirming(false);
     }
@@ -127,39 +150,105 @@ export const RosterPreviewPage = () => {
     return months[month - 1] || month;
   };
 
-  const getShiftTypeColor = (shiftType) => {
+  const getShiftTypeBadge = (day) => {
+    const shiftType = day.shiftType;
     switch (shiftType) {
       case 'SHIFT':
-        return 'bg-blue-50 text-blue-700 border-blue-200';
+        return {
+          bg: 'bg-blue-50 text-blue-700 border-blue-200',
+          label: day.shiftLabel || 'Shift'
+        };
       case 'WO':
-        return 'bg-slate-100 text-slate-700 border-slate-300';
+        return {
+          bg: 'bg-slate-100 text-slate-700 border-slate-300 font-semibold',
+          label: 'WO'
+        };
       case 'CL':
-        return 'bg-amber-50 text-amber-700 border-amber-200';
+        return {
+          bg: 'bg-amber-50 text-amber-700 border-amber-300 font-semibold',
+          label: 'CL'
+        };
       case 'HD':
-        return 'bg-purple-50 text-purple-700 border-purple-200';
+        return {
+          bg: 'bg-purple-50 text-purple-700 border-purple-300 font-semibold',
+          label: 'HD'
+        };
       case 'NA':
-        return 'bg-gray-50 text-gray-600 border-gray-200';
+        return {
+          bg: 'bg-gray-100 text-gray-500 border-gray-200',
+          label: 'NA'
+        };
       case 'BLANK':
-        return 'bg-white text-gray-400 border-gray-100';
+        return {
+          bg: 'bg-transparent text-gray-300 border-transparent',
+          label: '—'
+        };
       default:
-        return 'bg-gray-50 text-gray-600 border-gray-200';
+        return {
+          bg: 'bg-red-50 text-red-600 border-red-200',
+          label: day.originalValue || '?'
+        };
     }
   };
 
+  // Filtered employees list
+  const filteredEmployees = useMemo(() => {
+    if (!previewData?.parsedRoster?.employees) return [];
+
+    let list = previewData.parsedRoster.employees;
+    const mappings = previewData.matchingResult?.mappings || [];
+
+    // Search query filter
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter(
+        (emp) =>
+          emp.rosterEmployeeName.toLowerCase().includes(q) ||
+          (emp.designation && emp.designation.toLowerCase().includes(q))
+      );
+    }
+
+    // Status filter
+    if (statusFilter !== 'ALL') {
+      list = list.filter((emp) => {
+        const mapping = mappings.find((m) => m.rosterEmployeeName === emp.rosterEmployeeName);
+        if (statusFilter === 'MATCHED') return mapping && mapping.matchedEmployeeId && !mapping.isAmbiguous;
+        if (statusFilter === 'AMBIGUOUS') return mapping && mapping.isAmbiguous && !mapping.resolvedAt;
+        if (statusFilter === 'UNMATCHED') return !mapping || !mapping.matchedEmployeeId;
+        if (statusFilter === 'MISMATCH') return emp.hasWorkingDaysDiscrepancy;
+        if (statusFilter === 'CHANGED') return emp.dailyAssignments.some((d) => d.diffStatus === 'CHANGED');
+        if (statusFilter === 'NEW') return emp.dailyAssignments.some((d) => d.diffStatus === 'NEW');
+        return true;
+      });
+    }
+
+    return list;
+  }, [previewData, searchQuery, statusFilter]);
+
+  // Paginated employees
+  const paginatedEmployees = useMemo(() => {
+    if (pageSize === -1) return filteredEmployees;
+    const start = (currentPage - 1) * pageSize;
+    return filteredEmployees.slice(start, start + pageSize);
+  }, [filteredEmployees, currentPage, pageSize]);
+
+  const totalPages = pageSize === -1 ? 1 : Math.ceil(filteredEmployees.length / pageSize);
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
         <LoadingSpinner size="lg" />
+        <p className="text-sm font-medium text-slate-500">Loading roster preview...</p>
       </div>
     );
   }
 
-  if (error) {
+  if (error || !previewData) {
     return (
-      <div className="max-w-4xl mx-auto p-6">
-        <Alert variant="error">{error}</Alert>
-        <div className="mt-4">
-          <Button onClick={() => navigate('/roster/import')}>
+      <div className="max-w-4xl mx-auto p-6 space-y-4">
+        <Alert variant="error">{error || 'No preview data available.'}</Alert>
+        <div>
+          <Button onClick={() => navigate('/roster/import')} icon={ChevronLeft}>
             Back to Import
           </Button>
         </div>
@@ -167,273 +256,460 @@ export const RosterPreviewPage = () => {
     );
   }
 
-  if (!previewData) {
-    return (
-      <div className="max-w-4xl mx-auto p-6">
-        <Alert variant="error">No preview data available.</Alert>
-        <div className="mt-4">
-          <Button onClick={() => navigate('/roster/import')}>
-            Back to Import
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  const { parsedRoster, matchingResult, validation } = previewData;
-  const unresolvedAmbiguous = matchingResult.ambiguous.filter(m => !m.resolvedAt);
+  const { parsedRoster, matchingResult, validation, diffSummary = {} } = previewData;
+  const unresolvedAmbiguous =
+    matchingResult?.ambiguous?.filter((m) => !m.resolvedAt && m.isAmbiguous) || [];
 
   return (
-    <div className="max-w-full mx-auto p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className="max-w-full mx-auto p-4 sm:p-6 space-y-6">
+      {/* Top Banner Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex items-center gap-4">
           <Button
             variant="ghost"
+            size="sm"
             icon={ChevronLeft}
             onClick={() => navigate('/roster/import')}
           >
             Back
           </Button>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-              <Calendar className="w-7 h-7 text-brand-600" />
-              Roster Preview - {getMonthName(parsedRoster.selectedMonth)} {parsedRoster.selectedYear}
+            <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-brand-50 text-brand-700 text-xs font-semibold border border-brand-200 mb-1">
+              <Sparkles className="w-3.5 h-3.5 text-brand-600" />
+              <span>Roster Synchronization Preview</span>
+            </div>
+            <h1 className="text-xl sm:text-2xl font-black text-slate-900 flex items-center gap-2">
+              <Calendar className="w-6 h-6 text-brand-600" />
+              {getMonthName(parsedRoster.selectedMonth)} {parsedRoster.selectedYear} Roster
             </h1>
-            <p className="text-sm text-slate-600 mt-1">
-              {parsedRoster.filename} • {parsedRoster.totalEmployees} employees • {parsedRoster.daysInMonth} days
+            <p className="text-xs text-slate-500 mt-0.5">
+              File: <span className="font-semibold text-slate-700">{parsedRoster.filename}</span> •{' '}
+              {parsedRoster.totalEmployees} employees detected • {parsedRoster.daysInMonth} calendar days
             </p>
           </div>
         </div>
-        <Button
-          onClick={handleConfirmImport}
-          disabled={unresolvedAmbiguous.length > 0 || isConfirming}
-          isLoading={isConfirming}
-          icon={CheckCircle2}
+
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            size="md"
+            icon={RefreshCw}
+            onClick={fetchPreview}
+            title="Refresh preview data"
+          >
+            Refresh
+          </Button>
+          <Button
+            variant="primary"
+            size="md"
+            icon={CheckCircle2}
+            onClick={handleConfirmImport}
+            disabled={unresolvedAmbiguous.length > 0 || isConfirming}
+            isLoading={isConfirming}
+          >
+            {isConfirming ? 'Synchronizing...' : 'Confirm & Apply Roster'}
+          </Button>
+        </div>
+      </div>
+
+      {/* Summary KPI Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+        {/* Total Employees */}
+        <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs">
+          <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Total Staff</p>
+          <p className="text-xl font-black text-slate-900 mt-1">{matchingResult.totalRosterEmployees}</p>
+        </div>
+
+        {/* Matched */}
+        <div className="bg-white border border-emerald-200 rounded-xl p-3 shadow-xs bg-emerald-50/30">
+          <p className="text-[11px] font-semibold text-emerald-700 uppercase tracking-wider">Matched</p>
+          <p className="text-xl font-black text-emerald-800 mt-1">{matchingResult.matchedCount}</p>
+        </div>
+
+        {/* Ambiguous */}
+        <div
+          className={`border rounded-xl p-3 shadow-xs ${
+            unresolvedAmbiguous.length > 0
+              ? 'bg-amber-50 border-amber-300 ring-2 ring-amber-300/50'
+              : 'bg-white border-slate-200'
+          }`}
         >
-          {isConfirming ? 'Importing...' : 'Confirm & Import'}
-        </Button>
-      </div>
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-4 gap-4">
-        <div className="bg-white border border-slate-200 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-slate-600">Total Employees</p>
-              <p className="text-2xl font-bold text-slate-900">{matchingResult.totalRosterEmployees}</p>
-            </div>
-            <Users className="w-8 h-8 text-slate-400" />
-          </div>
+          <p className="text-[11px] font-semibold text-amber-700 uppercase tracking-wider">Ambiguous</p>
+          <p className="text-xl font-black text-amber-800 mt-1">{matchingResult.ambiguousCount || 0}</p>
         </div>
 
-        <div className="bg-white border border-green-200 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-green-700">Matched</p>
-              <p className="text-2xl font-bold text-green-900">{matchingResult.matchedCount}</p>
-            </div>
-            <UserCheck className="w-8 h-8 text-green-600" />
-          </div>
+        {/* Unmatched */}
+        <div className="bg-white border border-rose-200 rounded-xl p-3 shadow-xs bg-rose-50/30">
+          <p className="text-[11px] font-semibold text-rose-700 uppercase tracking-wider">Unmatched</p>
+          <p className="text-xl font-black text-rose-800 mt-1">{matchingResult.unmatchedCount || 0}</p>
         </div>
 
-        <div className="bg-white border border-amber-200 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-amber-700">Ambiguous</p>
-              <p className="text-2xl font-bold text-amber-900">{matchingResult.ambiguousCount}</p>
-            </div>
-            <AlertTriangle className="w-8 h-8 text-amber-600" />
-          </div>
+        {/* Shifts Added (New) */}
+        <div className="bg-white border border-blue-200 rounded-xl p-3 shadow-xs bg-blue-50/30">
+          <p className="text-[11px] font-semibold text-blue-700 uppercase tracking-wider">Shifts Added</p>
+          <p className="text-xl font-black text-blue-800 mt-1">{diffSummary.newAssignments || 0}</p>
         </div>
 
-        <div className="bg-white border border-red-200 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-red-700">Unmatched</p>
-              <p className="text-2xl font-bold text-red-900">{matchingResult.unmatchedCount}</p>
-            </div>
-            <UserX className="w-8 h-8 text-red-600" />
-          </div>
+        {/* Shifts Changed */}
+        <div className="bg-white border border-indigo-200 rounded-xl p-3 shadow-xs bg-indigo-50/30">
+          <p className="text-[11px] font-semibold text-indigo-700 uppercase tracking-wider">Shifts Changed</p>
+          <p className="text-xl font-black text-indigo-800 mt-1">{diffSummary.changedAssignments || 0}</p>
+        </div>
+
+        {/* Unchanged */}
+        <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs">
+          <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Unchanged</p>
+          <p className="text-xl font-black text-slate-700 mt-1">{diffSummary.unchangedAssignments || 0}</p>
+        </div>
+
+        {/* Working Days Discrepancies */}
+        <div
+          className={`border rounded-xl p-3 shadow-xs ${
+            diffSummary.workingDaysDiscrepancies > 0
+              ? 'bg-amber-50 border-amber-300'
+              : 'bg-white border-slate-200'
+          }`}
+        >
+          <p className="text-[11px] font-semibold text-amber-800 uppercase tracking-wider">Discrepancy</p>
+          <p className="text-xl font-black text-amber-900 mt-1">
+            {diffSummary.workingDaysDiscrepancies || 0}
+          </p>
         </div>
       </div>
+
+      {/* Action Required: Ambiguities Banner */}
+      {unresolvedAmbiguous.length > 0 && (
+        <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 shadow-xs">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h3 className="font-bold text-amber-900 text-sm">
+                Action Required: {unresolvedAmbiguous.length} Ambiguous Employee Mapping(s)
+              </h3>
+              <p className="text-xs text-amber-800 mt-0.5">
+                Multiple active HRMS employees share similar names with the roster entries. Please select
+                the correct employee for each entry below before confirming the import.
+              </p>
+
+              <div className="mt-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                {unresolvedAmbiguous.map((amb) => (
+                  <div
+                    key={amb.id}
+                    className="p-3 bg-white rounded-xl border border-amber-200 flex items-center justify-between gap-2 shadow-2xs"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-slate-900 truncate">
+                        {amb.roster_employee_name || amb.rosterEmployeeName}
+                      </p>
+                      <p className="text-[11px] text-slate-500 truncate">
+                        {amb.roster_designation || amb.rosterDesignation || 'No designation'}
+                      </p>
+                      <span className="text-[10px] text-amber-700 font-medium">
+                        {amb.alternativeMatches?.length || amb.alternative_matches?.length || 0} candidate
+                        matches
+                      </span>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      className="text-xs shrink-0"
+                      onClick={() => handleResolveAmbiguity(amb)}
+                    >
+                      Resolve
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Validation Warnings */}
       {validation.warnings && validation.warnings.length > 0 && (
         <Alert variant="warning">
-          <div className="font-semibold mb-2">Validation Warnings:</div>
-          <ul className="list-disc list-inside text-sm space-y-1">
-            {validation.warnings.slice(0, 5).map((warning, idx) => (
-              <li key={idx}>{warning}</li>
+          <div className="font-bold text-xs uppercase tracking-wider mb-1">Roster Consistency Notes:</div>
+          <ul className="list-disc list-inside text-xs space-y-0.5">
+            {validation.warnings.slice(0, 5).map((w, i) => (
+              <li key={i}>{w}</li>
             ))}
             {validation.warnings.length > 5 && (
-              <li>...and {validation.warnings.length - 5} more warnings</li>
+              <li>...and {validation.warnings.length - 5} more notes</li>
             )}
           </ul>
         </Alert>
       )}
 
-      {/* Unresolved Ambiguities Warning */}
-      {unresolvedAmbiguous.length > 0 && (
-        <Alert variant="error">
-          <div className="font-semibold mb-2">
-            Action Required: {unresolvedAmbiguous.length} employee mapping(s) need to be resolved
-          </div>
-          <p className="text-sm">
-            Multiple HRMS employees match some roster names. Please review and select the correct employee for each ambiguous entry below.
-          </p>
-        </Alert>
-      )}
+      {/* Calendar Grid & Filter Controls */}
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+        {/* Controls Toolbar */}
+        <div className="p-4 border-b border-slate-200 bg-slate-50/70 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Search */}
+            <div className="relative min-w-[240px]">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setCurrentPage(1);
+                }}
+                placeholder="Search employee or designation..."
+                className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+              />
+            </div>
 
-      {/* Ambiguous Mappings */}
-      {matchingResult.ambiguous && matchingResult.ambiguous.length > 0 && (
-        <div className="bg-white border border-amber-200 rounded-xl p-4">
-          <h3 className="font-semibold text-amber-900 mb-3 flex items-center gap-2">
-            <AlertTriangle className="w-5 h-5" />
-            Ambiguous Employee Mappings ({matchingResult.ambiguous.length})
-          </h3>
-          <div className="space-y-2">
-            {matchingResult.ambiguous.map((mapping) => (
-              <div
-                key={mapping.id}
-                className={`flex items-center justify-between p-3 rounded-lg border ${
-                  mapping.resolvedAt
-                    ? 'bg-green-50 border-green-200'
-                    : 'bg-amber-50 border-amber-300'
-                }`}
+            {/* Status Filter */}
+            <div className="flex items-center gap-1.5 text-xs">
+              <Filter className="w-3.5 h-3.5 text-slate-500" />
+              <select
+                value={statusFilter}
+                onChange={(e) => {
+                  setStatusFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="py-1.5 px-2.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 font-medium"
               >
-                <div className="flex-1">
-                  <p className="font-medium text-slate-900">
-                    {mapping.rosterEmployeeName}
-                    {mapping.rosterDesignation && (
-                      <span className="text-sm text-slate-600 ml-2">({mapping.rosterDesignation})</span>
-                    )}
-                  </p>
-                  {mapping.resolvedAt ? (
-                    <p className="text-sm text-green-700">
-                      ✓ Resolved: Matched to {mapping.matchedEmployeeName}
-                    </p>
-                  ) : (
-                    <p className="text-sm text-amber-700">
-                      {mapping.alternativeMatches.length} possible matches found
-                    </p>
-                  )}
-                </div>
-                {!mapping.resolvedAt && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleResolveAmbiguity(mapping)}
-                    className="border-amber-400 text-amber-700 hover:bg-amber-100"
-                  >
-                    Resolve
-                  </Button>
-                )}
+                <option value="ALL">All Employees ({parsedRoster.employees.length})</option>
+                <option value="MATCHED">Matched Only ({matchingResult.matchedCount})</option>
+                <option value="AMBIGUOUS">Ambiguous ({matchingResult.ambiguousCount || 0})</option>
+                <option value="UNMATCHED">Unmatched ({matchingResult.unmatchedCount || 0})</option>
+                <option value="MISMATCH">
+                  Working Days Mismatch ({diffSummary.workingDaysDiscrepancies || 0})
+                </option>
+                <option value="CHANGED">Has Changed Shifts</option>
+                <option value="NEW">Has New Shifts</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Pagination Controls */}
+          <div className="flex items-center gap-3 text-xs text-slate-600">
+            <div className="flex items-center gap-1">
+              <span>Show:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(parseInt(e.target.value, 10));
+                  setCurrentPage(1);
+                }}
+                className="py-1 px-2 text-xs bg-white border border-slate-300 rounded-md focus:outline-none"
+              >
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={-1}>All</option>
+              </select>
+            </div>
+
+            <span>
+              Showing {filteredEmployees.length === 0 ? 0 : (currentPage - 1) * pageSize + 1} -{' '}
+              {pageSize === -1
+                ? filteredEmployees.length
+                : Math.min(currentPage * pageSize, filteredEmployees.length)}{' '}
+              of {filteredEmployees.length}
+            </span>
+
+            {pageSize !== -1 && totalPages > 1 && (
+              <div className="flex items-center gap-1">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  icon={ChevronLeft}
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  className="p-1 h-7 w-7"
+                />
+                <span className="font-semibold text-slate-700">
+                  {currentPage} / {totalPages}
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  icon={ChevronRight}
+                  disabled={currentPage === totalPages}
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  className="p-1 h-7 w-7"
+                />
               </div>
-            ))}
+            )}
           </div>
         </div>
-      )}
 
-      {/* Unmatched Employees */}
-      {matchingResult.unmatched && matchingResult.unmatched.length > 0 && (
-        <div className="bg-white border border-red-200 rounded-xl p-4">
-          <h3 className="font-semibold text-red-900 mb-3 flex items-center gap-2">
-            <UserX className="w-5 h-5" />
-            Unmatched Employees ({matchingResult.unmatched.length})
-          </h3>
-          <p className="text-sm text-red-700 mb-3">
-            These roster entries could not be matched to any HRMS employee and will be skipped.
-          </p>
-          <div className="grid grid-cols-2 gap-2">
-            {matchingResult.unmatched.map((mapping) => (
-              <div key={mapping.id} className="p-2 bg-red-50 rounded border border-red-200">
-                <p className="text-sm font-medium text-slate-900">{mapping.rosterEmployeeName}</p>
-                {mapping.rosterDesignation && (
-                  <p className="text-xs text-slate-600">{mapping.rosterDesignation}</p>
-                )}
-              </div>
-            ))}
-          </div>
+        {/* Legend */}
+        <div className="px-4 py-2 border-b border-slate-200 bg-slate-50/30 flex flex-wrap items-center gap-4 text-[11px] text-slate-600">
+          <span className="font-bold text-slate-700">Legend:</span>
+          <span className="flex items-center gap-1">
+            <span className="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block" /> Shift
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2.5 h-2.5 rounded-full bg-slate-400 inline-block" /> WO (Weekly Off)
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" /> CL (Casual Leave)
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2.5 h-2.5 rounded-full bg-purple-500 inline-block" /> HD (Holiday)
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" /> ● New Shift
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" /> ▲ Changed Shift
+          </span>
         </div>
-      )}
 
-      {/* Roster Calendar Preview - Show first 5 employees as sample */}
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-        <div className="bg-slate-50 px-6 py-4 border-b border-slate-200">
-          <h3 className="font-semibold text-slate-900 flex items-center gap-2">
-            <Clock className="w-5 h-5 text-brand-600" />
-            Roster Preview (First 5 Employees)
-          </h3>
-        </div>
-        <div className="p-4 overflow-x-auto">
-          <table className="min-w-full text-xs">
-            <thead>
-              <tr className="border-b border-slate-200">
-                <th className="sticky left-0 bg-white px-3 py-2 text-left font-semibold text-slate-700 border-r border-slate-200">
-                  Employee
+        {/* Scrollable Calendar Table */}
+        <div className="overflow-x-auto max-h-[650px] relative">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead className="bg-slate-100 text-slate-700 sticky top-0 z-20 shadow-2xs">
+              <tr>
+                <th className="sticky left-0 bg-slate-100 px-3 py-2.5 font-bold border-r border-b border-slate-200 min-w-[200px] z-30">
+                  Employee / HRMS Match
+                </th>
+                <th className="px-3 py-2.5 font-bold border-r border-b border-slate-200 min-w-[140px]">
+                  Designation
                 </th>
                 {parsedRoster.dayColumns.map((day) => (
-                  <th key={day.dayNumber} className="px-2 py-2 text-center font-medium text-slate-600">
-                    <div>{day.dayNumber}</div>
-                    <div className="text-[10px] text-slate-400">{day.weekday}</div>
+                  <th
+                    key={day.dayNumber}
+                    className={`px-2 py-2 text-center border-r border-b border-slate-200 min-w-[70px] ${
+                      day.weekday === 'Sun' ? 'bg-red-50/50' : day.weekday === 'Sat' ? 'bg-slate-50/80' : ''
+                    }`}
+                  >
+                    <div className="font-black text-slate-800">{day.dayNumber}</div>
+                    <div className="text-[10px] font-medium text-slate-500 uppercase">{day.weekday}</div>
                   </th>
                 ))}
-                <th className="px-3 py-2 text-center font-semibold text-slate-700 border-l border-slate-200">
-                  Days
+                <th className="sticky right-0 bg-slate-100 px-3 py-2.5 text-center font-bold border-l border-b border-slate-200 min-w-[110px] z-30">
+                  Working Days
                 </th>
               </tr>
             </thead>
-            <tbody>
-              {parsedRoster.employees.slice(0, 5).map((emp) => {
-                const mapping = matchingResult.mappings.find(
-                  m => m.rosterEmployeeName === emp.rosterEmployeeName
-                );
-                
-                return (
-                  <tr key={emp.id} className="border-b border-slate-100 hover:bg-slate-50">
-                    <td className="sticky left-0 bg-white px-3 py-2 border-r border-slate-200">
-                      <div className="font-medium text-slate-900 text-xs">{emp.rosterEmployeeName}</div>
-                      {mapping && (
-                        <div className="text-[10px] text-slate-500">
-                          {mapping.matchedEmployeeName || 'Unmatched'}
+            <tbody className="divide-y divide-slate-100">
+              {paginatedEmployees.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={parsedRoster.dayColumns.length + 3}
+                    className="p-8 text-center text-slate-500"
+                  >
+                    No employee rows match the current search or filter.
+                  </td>
+                </tr>
+              ) : (
+                paginatedEmployees.map((emp) => {
+                  const mapping = matchingResult.mappings?.find(
+                    (m) => m.rosterEmployeeName === emp.rosterEmployeeName
+                  );
+                  const isAmbiguous = mapping?.isAmbiguous && !mapping?.resolvedAt;
+                  const isUnmatched = !mapping || !mapping.matchedEmployeeId;
+
+                  return (
+                    <tr key={emp.id} className="hover:bg-slate-50/80 transition-colors">
+                      {/* Sticky Employee Name Column */}
+                      <td className="sticky left-0 bg-white px-3 py-2.5 border-r border-slate-200 z-10 shadow-2xs">
+                        <div className="flex items-center justify-between gap-1">
+                          <p className="font-bold text-slate-900 text-xs truncate" title={emp.rosterEmployeeName}>
+                            {emp.rosterEmployeeName}
+                          </p>
+                          {isAmbiguous ? (
+                            <Badge variant="warning" size="xs">
+                              Ambiguous
+                            </Badge>
+                          ) : isUnmatched ? (
+                            <Badge variant="danger" size="xs">
+                              Unmatched
+                            </Badge>
+                          ) : (
+                            <Badge variant="success" size="xs">
+                              Matched
+                            </Badge>
+                          )}
                         </div>
-                      )}
-                    </td>
-                    {emp.dailyAssignments.map((day, idx) => (
-                      <td key={idx} className="px-1 py-1 text-center">
-                        {day.shiftType !== 'BLANK' && (
-                          <div
-                            className={`text-[10px] px-1 py-1 rounded border ${getShiftTypeColor(day.shiftType)}`}
-                            title={day.originalValue}
-                          >
-                            {day.shiftType === 'SHIFT'
-                              ? day.shiftLabel
-                              : day.shiftType}
-                          </div>
+                        {mapping?.matchedEmployeeName && (
+                          <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                            ➔ {mapping.matchedEmployeeName}{' '}
+                            {mapping.matchedEmployeeCode && `(${mapping.matchedEmployeeCode})`}
+                          </p>
                         )}
                       </td>
-                    ))}
-                    <td className="px-3 py-2 text-center border-l border-slate-200">
-                      <span className={emp.hasWorkingDaysDiscrepancy ? 'text-red-600 font-semibold' : 'text-slate-700'}>
-                        {emp.calculatedWorkingDays}
-                        {emp.declaredWorkingDays > 0 && emp.hasWorkingDaysDiscrepancy && (
-                          <span className="text-[10px] block text-red-500">
-                            (≠{emp.declaredWorkingDays})
+
+                      {/* Designation */}
+                      <td className="px-3 py-2.5 border-r border-slate-200 text-slate-600 text-xs">
+                        <p className="truncate max-w-[140px]" title={emp.designation || '—'}>
+                          {emp.designation || '—'}
+                        </p>
+                      </td>
+
+                      {/* Day Columns */}
+                      {emp.dailyAssignments.map((day, idx) => {
+                        const style = getShiftTypeBadge(day);
+                        const isNew = day.diffStatus === 'NEW';
+                        const isChanged = day.diffStatus === 'CHANGED';
+
+                        return (
+                          <td
+                            key={idx}
+                            className={`p-1 text-center border-r border-slate-100 ${
+                              day.weekday === 'Sun' ? 'bg-red-50/20' : ''
+                            }`}
+                          >
+                            {day.shiftType !== 'BLANK' ? (
+                              <div
+                                className={`text-[10px] px-1 py-1 rounded border leading-tight relative font-medium ${style.bg} ${
+                                  isChanged ? 'ring-1 ring-amber-400' : ''
+                                }`}
+                                title={
+                                  isChanged
+                                    ? `Changed from: ${day.previousAssignment?.shiftLabel || day.previousAssignment?.shiftType}\nTo: ${day.shiftLabel}`
+                                    : day.shiftLabel || day.shiftType
+                                }
+                              >
+                                {isNew && (
+                                  <span
+                                    className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-500 border border-white"
+                                    title="New Shift Assignment"
+                                  />
+                                )}
+                                {isChanged && (
+                                  <span
+                                    className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-500 border border-white"
+                                    title="Changed Assignment"
+                                  />
+                                )}
+                                <span className="block truncate">{style.label}</span>
+                              </div>
+                            ) : (
+                              <span className="text-slate-300 text-[10px]">—</span>
+                            )}
+                          </td>
+                        );
+                      })}
+
+                      {/* Working Days Column */}
+                      <td className="sticky right-0 bg-white px-3 py-2 text-center border-l border-slate-200 z-10 shadow-2xs">
+                        <div className="flex flex-col items-center">
+                          <span
+                            className={`font-black text-xs ${
+                              emp.hasWorkingDaysDiscrepancy ? 'text-amber-700' : 'text-slate-800'
+                            }`}
+                          >
+                            {emp.calculatedWorkingDays}
                           </span>
-                        )}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
+                          {emp.declaredWorkingDays > 0 && emp.hasWorkingDaysDiscrepancy && (
+                            <span className="text-[10px] text-amber-600 font-semibold" title="Declared in spreadsheet">
+                              (≠ {emp.declaredWorkingDays})
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
-          {parsedRoster.employees.length > 5 && (
-            <p className="text-center text-sm text-slate-500 mt-4">
-              ...and {parsedRoster.employees.length - 5} more employees
-            </p>
-          )}
         </div>
       </div>
 
@@ -441,53 +717,80 @@ export const RosterPreviewPage = () => {
       <Modal
         isOpen={showAmbiguityModal}
         onClose={() => setShowAmbiguityModal(false)}
-        title="Resolve Employee Mapping"
-        maxWidth="max-w-2xl"
+        title="Resolve Ambiguous Employee Mapping"
+        maxWidth="max-w-xl"
       >
         {selectedAmbiguousMapping && (
-          <div className="space-y-4">
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-              <p className="font-semibold text-amber-900">Roster Employee:</p>
-              <p className="text-lg">{selectedAmbiguousMapping.rosterEmployeeName}</p>
-              {selectedAmbiguousMapping.rosterDesignation && (
-                <p className="text-sm text-amber-700">Designation: {selectedAmbiguousMapping.rosterDesignation}</p>
-              )}
+          <div className="space-y-4 text-sm">
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5">
+              <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide">
+                Spreadsheet Entry:
+              </p>
+              <p className="text-base font-bold text-slate-900 mt-0.5">
+                {selectedAmbiguousMapping.roster_employee_name ||
+                  selectedAmbiguousMapping.rosterEmployeeName}
+              </p>
+              <p className="text-xs text-slate-600 mt-0.5">
+                Designation in Roster:{' '}
+                <span className="font-medium text-slate-800">
+                  {selectedAmbiguousMapping.roster_designation ||
+                    selectedAmbiguousMapping.rosterDesignation ||
+                    'Not specified'}
+                </span>
+              </p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
-                Select Matching HRMS Employee: <span className="text-red-500">*</span>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wide">
+                Select Matching HRMS Employee <span className="text-red-500">*</span>
               </label>
-              <Select
+              <select
                 value={selectedEmployeeId}
                 onChange={(e) => setSelectedEmployeeId(e.target.value)}
-                required
+                className="w-full py-2 px-3 text-sm bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500"
               >
-                <option value="">-- Select Employee --</option>
-                {selectedAmbiguousMapping.alternativeMatches?.map((alt) => (
+                <option value="">-- Choose matching employee --</option>
+                {/* Suggested Alternatives */}
+                {(
+                  selectedAmbiguousMapping.alternativeMatches ||
+                  selectedAmbiguousMapping.alternative_matches ||
+                  []
+                ).map((alt) => (
                   <option key={alt.employeeId} value={alt.employeeId}>
-                    {alt.fullName}
-                    {alt.designation && ` (${alt.designation})`}
-                    {' - '}Confidence: {(alt.confidence * 100).toFixed(0)}%
+                    ★ {alt.fullName} ({alt.employeeCode}) — {alt.designation || 'Staff'} [
+                    {(alt.confidence * 100).toFixed(0)}% Match]
                   </option>
                 ))}
-              </Select>
+                {/* Full Active Employee List Fallback */}
+                {previewData.matchingResult?.hrmsEmployees && (
+                  <optgroup label="All Active HRMS Employees">
+                    {previewData.matchingResult.hrmsEmployees.map((emp) => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.fullName} ({emp.employeeCode}) — {emp.designation || 'Staff'}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
             </div>
 
-            <div className="flex justify-end gap-2 pt-4">
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
               <Button
                 variant="outline"
+                size="sm"
                 onClick={() => setShowAmbiguityModal(false)}
                 disabled={resolvingAmbiguity}
               >
                 Cancel
               </Button>
               <Button
+                variant="primary"
+                size="sm"
                 onClick={handleConfirmResolution}
                 disabled={!selectedEmployeeId || resolvingAmbiguity}
                 isLoading={resolvingAmbiguity}
               >
-                Confirm Selection
+                Confirm Mapping
               </Button>
             </div>
           </div>

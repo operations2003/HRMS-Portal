@@ -102,7 +102,11 @@ const BASE_ATTENDANCE_SELECT = `
     e.last_name AS emp_last_name,
     e.email AS emp_email,
     e.dept_id AS emp_dept_id,
-    e.shift_timing AS emp_shift_timing,
+    COALESCE(
+      (SELECT sa.shift_label FROM shift_assignments sa WHERE sa.employee_id = e.id AND sa.assignment_date = a.attendance_date LIMIT 1),
+      e.shift_timing
+    ) AS emp_shift_timing,
+    (SELECT sa.shift_type FROM shift_assignments sa WHERE sa.employee_id = e.id AND sa.assignment_date = a.attendance_date LIMIT 1) AS emp_roster_shift_type,
     e.avatar_url AS emp_avatar_url,
     e.manager_id AS emp_manager_id,
     e.hr_id AS emp_hr_id,
@@ -787,7 +791,11 @@ export const attendanceRepository = {
     // 1. For today: Fix any premature 'ABSENT' records where shift hasn't even started yet
     if (cleanTargetDate === todayStr) {
       const prematureRes = await pool.query(
-        `SELECT a.id, a.employee_id, e.shift_timing
+        `SELECT a.id, a.employee_id, 
+           COALESCE(
+             (SELECT sa.shift_label FROM shift_assignments sa WHERE sa.employee_id = e.id AND sa.assignment_date = $2::date LIMIT 1),
+             e.shift_timing
+           ) AS shift_timing
          FROM attendance_records a
          JOIN employees e ON e.id = a.employee_id
          WHERE a.org_id = $1
@@ -814,7 +822,11 @@ export const attendanceRepository = {
       // 2. Also, if any records for today are 'NOT_STARTED', but their shift has now started and check_in is NULL,
       // transition them to ABSENT!
       const pendingRes = await pool.query(
-        `SELECT a.id, a.employee_id, e.shift_timing
+        `SELECT a.id, a.employee_id, 
+           COALESCE(
+             (SELECT sa.shift_label FROM shift_assignments sa WHERE sa.employee_id = e.id AND sa.assignment_date = $2::date LIMIT 1),
+             e.shift_timing
+           ) AS shift_timing
          FROM attendance_records a
          JOIN employees e ON e.id = a.employee_id
          WHERE a.org_id = $1
@@ -841,7 +853,12 @@ export const attendanceRepository = {
 
     // 3. Find active employees who don't have an attendance record for this date
     const candidateSql = `
-      SELECT e.id, e.shift_timing
+      SELECT e.id, 
+        COALESCE(
+          (SELECT sa.shift_label FROM shift_assignments sa WHERE sa.employee_id = e.id AND sa.assignment_date = $2::date LIMIT 1),
+          e.shift_timing
+        ) AS shift_timing,
+        (SELECT sa.shift_type FROM shift_assignments sa WHERE sa.employee_id = e.id AND sa.assignment_date = $2::date LIMIT 1) AS roster_shift_type
       FROM employees e
       WHERE e.org_id = $1
         AND e.status = 'Active'
@@ -866,6 +883,13 @@ export const attendanceRepository = {
             AND h.status = 'Active'
             AND h.is_optional = FALSE
             AND h.holiday_date = $2::date
+        )
+        -- Exclude if employee has a scheduled Weekly Off (WO) or Holiday (HD) in roster
+        AND NOT EXISTS (
+          SELECT 1 FROM shift_assignments sa
+          WHERE sa.employee_id = e.id
+            AND sa.assignment_date = $2::date
+            AND sa.shift_type IN ('WO', 'HD')
         );
     `;
 

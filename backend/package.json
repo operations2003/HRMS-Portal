@@ -13,7 +13,7 @@
     "db:clean": "node src/scripts/clean_dummy_data.js",
     "db:clean:dry": "node src/scripts/clean_dummy_data.js --dry-run",
     "sync:cloudinary": "node src/scripts/sync_pdfs_to_cloudinary.js",
-    "test": "node tests/appsumoLicensing.test.js && node tests/hrShiftAndAttendancePermissions.test.js && node tests/workdayPermissions.test.js && node tests/exitChecklistPermissions.test.js && node tests/overtimeAndAutoLogout.test.js"
+    "test": "node tests/appsumoLicensing.test.js && node tests/hrShiftAndAttendancePermissions.test.js && node tests/workdayPermissions.test.js && node tests/exitChecklistPermissions.test.js && node tests/overtimeAndAutoLogout.test.js && node tests/rosterParserAndSync.test.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

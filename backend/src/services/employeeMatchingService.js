@@ -4,7 +4,7 @@ import { nanoid } from 'nanoid';
 /**
  * Employee Matching Service
  * Matches roster employee names to HRMS employee records
- * Supports fuzzy matching and ambiguity resolution
+ * Supports normalized name matching, fuzzy matching, and ambiguity resolution
  */
 class EmployeeMatchingService {
   /**
@@ -22,19 +22,28 @@ class EmployeeMatchingService {
         e.first_name,
         e.last_name,
         e.email,
-        d.title as designation_title
+        d.title as designation_title,
+        dep.name as department_name
       FROM employees e
       LEFT JOIN designations d ON e.desig_id = d.id
+      LEFT JOIN departments dep ON e.dept_id = dep.id
       WHERE e.org_id = $1 AND e.status = 'Active'
       ORDER BY e.last_name, e.first_name`,
       [orgId]
     );
 
-    const hrmsEmployees = employeesResult.rows.map(emp => ({
-      ...emp,
-      fullName: `${emp.first_name} ${emp.last_name}`.trim(),
-      searchName: this.normalizeForMatching(`${emp.first_name} ${emp.last_name}`)
-    }));
+    const hrmsEmployees = employeesResult.rows.map((emp) => {
+      const first = (emp.first_name || '').trim();
+      const last = (emp.last_name || '').trim();
+      const fullName = `${first} ${last}`.trim();
+      return {
+        ...emp,
+        fullName,
+        normalizedFullName: this.normalizeForMatching(fullName),
+        normalizedInvertedName: this.normalizeForMatching(`${last} ${first}`),
+        normalizedCode: this.normalizeForMatching(emp.employee_code || '')
+      };
+    });
 
     const mappings = [];
     const matched = [];
@@ -43,14 +52,15 @@ class EmployeeMatchingService {
 
     for (const rosterEmp of rosterEmployees) {
       const matchResult = this.findBestMatch(rosterEmp, hrmsEmployees);
-      
+
       const mapping = {
         id: nanoid(),
         rosterEmployeeName: rosterEmp.rosterEmployeeName,
         rosterDesignation: rosterEmp.designation,
         matchedEmployeeId: matchResult.employee?.id || null,
         matchedEmployeeName: matchResult.employee?.fullName || null,
-        matchConfidence: matchResult.confidence,
+        matchedEmployeeCode: matchResult.employee?.employee_code || null,
+        matchConfidence: parseFloat(matchResult.confidence.toFixed(2)),
         matchMethod: matchResult.method,
         isAmbiguous: matchResult.isAmbiguous,
         alternativeMatches: matchResult.alternatives || [],
@@ -59,12 +69,10 @@ class EmployeeMatchingService {
 
       mappings.push(mapping);
 
-      if (matchResult.employee) {
-        if (matchResult.isAmbiguous) {
-          ambiguous.push(mapping);
-        } else {
-          matched.push(mapping);
-        }
+      if (matchResult.isAmbiguous) {
+        ambiguous.push(mapping);
+      } else if (matchResult.employee) {
+        matched.push(mapping);
       } else {
         unmatched.push(mapping);
       }
@@ -79,7 +87,13 @@ class EmployeeMatchingService {
       matched,
       unmatched,
       ambiguous,
-      hrmsEmployees
+      hrmsEmployees: hrmsEmployees.map(e => ({
+        id: e.id,
+        employeeCode: e.employee_code,
+        fullName: e.fullName,
+        designation: e.designation_title,
+        department: e.department_name
+      }))
     };
   }
 
@@ -87,21 +101,73 @@ class EmployeeMatchingService {
    * Find best matching HRMS employee for roster employee
    */
   findBestMatch(rosterEmployee, hrmsEmployees) {
-    const rosterName = this.normalizeForMatching(rosterEmployee.rosterEmployeeName);
+    const rawRosterName = rosterEmployee.rosterEmployeeName || '';
+    const rosterName = this.normalizeForMatching(rawRosterName);
     const rosterDesignation = this.normalizeForMatching(rosterEmployee.designation || '');
 
+    // Check if name contains an employee code like (EMP001) or TNK-123
+    const codeMatch = rawRosterName.match(/\(([A-Za-z0-9_-]+)\)/);
+    if (codeMatch) {
+      const extractedCode = this.normalizeForMatching(codeMatch[1]);
+      const exactCodeEmp = hrmsEmployees.find(e => e.normalizedCode === extractedCode);
+      if (exactCodeEmp) {
+        return {
+          employee: exactCodeEmp,
+          confidence: 1.0,
+          method: 'EXACT_ID',
+          isAmbiguous: false,
+          alternatives: []
+        };
+      }
+    }
+
+    // Direct exact name match
+    const exactMatches = hrmsEmployees.filter(
+      e => e.normalizedFullName === rosterName || e.normalizedInvertedName === rosterName
+    );
+
+    if (exactMatches.length === 1) {
+      return {
+        employee: exactMatches[0],
+        confidence: 1.0,
+        method: 'EXACT',
+        isAmbiguous: false,
+        alternatives: []
+      };
+    } else if (exactMatches.length > 1) {
+      // Multiple employees with the EXACT identical name: ambiguous!
+      return {
+        employee: exactMatches[0],
+        confidence: 0.9,
+        method: 'AMBIGUOUS',
+        isAmbiguous: true,
+        alternatives: exactMatches.map(c => ({
+          employeeId: c.id,
+          employeeCode: c.employee_code,
+          fullName: c.fullName,
+          designation: c.designation_title,
+          department: c.department_name,
+          confidence: 0.9
+        }))
+      };
+    }
+
+    // Similarity scoring across all active employees
     const candidates = [];
 
     for (const hrmsEmp of hrmsEmployees) {
-      const nameScore = this.calculateNameSimilarity(rosterName, hrmsEmp.searchName);
+      const nameScoreDirect = this.calculateSimilarity(rosterName, hrmsEmp.normalizedFullName);
+      const nameScoreInverted = this.calculateSimilarity(rosterName, hrmsEmp.normalizedInvertedName);
+      const nameScore = Math.max(nameScoreDirect, nameScoreInverted);
+
       const designationScore = rosterDesignation && hrmsEmp.designation_title
         ? this.calculateSimilarity(rosterDesignation, this.normalizeForMatching(hrmsEmp.designation_title))
         : 0;
 
-      // Combined score: name is weighted more heavily (70%) vs designation (30%)
-      const combinedScore = (nameScore * 0.7) + (designationScore * 0.3);
+      // Primary weight on name (85%), slight consideration for designation (15%) for ranking only
+      const combinedScore = (nameScore * 0.85) + (designationScore * 0.15);
 
-      if (nameScore >= 0.7) { // Only consider if name similarity is decent
+      if (nameScore >= 0.70) {
         candidates.push({
           employee: hrmsEmp,
           nameScore,
@@ -111,7 +177,6 @@ class EmployeeMatchingService {
       }
     }
 
-    // Sort by combined score descending
     candidates.sort((a, b) => b.combinedScore - a.combinedScore);
 
     if (candidates.length === 0) {
@@ -125,149 +190,121 @@ class EmployeeMatchingService {
     }
 
     const best = candidates[0];
+    const second = candidates[1];
 
-    // Exact match (confidence >= 0.98)
-    if (best.nameScore >= 0.98) {
+    // Check for ambiguity: multiple candidates with close scores
+    const isAmbiguous = second && (
+      (best.combinedScore - second.combinedScore) < 0.12 ||
+      (best.nameScore >= 0.80 && second.nameScore >= 0.80)
+    );
+
+    if (isAmbiguous) {
       return {
-        employee: best.employee,
+        employee: null, // Require manual resolution
         confidence: best.combinedScore,
-        method: 'EXACT',
-        isAmbiguous: false,
-        alternatives: candidates.slice(1, 3).map(c => ({
+        method: 'AMBIGUOUS',
+        isAmbiguous: true,
+        alternatives: candidates.slice(0, 4).map(c => ({
           employeeId: c.employee.id,
+          employeeCode: c.employee.employee_code,
           fullName: c.employee.fullName,
           designation: c.employee.designation_title,
-          confidence: c.combinedScore
+          department: c.employee.department_name,
+          confidence: parseFloat(c.combinedScore.toFixed(2))
         }))
       };
     }
 
-    // Check for ambiguity: multiple candidates with similar scores
-    const secondBest = candidates[1];
-    const isAmbiguous = secondBest && (best.combinedScore - secondBest.combinedScore) < 0.1;
+    // Single decent match
+    if (best.nameScore >= 0.75) {
+      return {
+        employee: best.employee,
+        confidence: best.combinedScore,
+        method: 'FUZZY',
+        isAmbiguous: false,
+        alternatives: candidates.slice(1, 3).map(c => ({
+          employeeId: c.employee.id,
+          employeeCode: c.employee.employee_code,
+          fullName: c.employee.fullName,
+          designation: c.employee.designation_title,
+          confidence: parseFloat(c.combinedScore.toFixed(2))
+        }))
+      };
+    }
 
     return {
-      employee: best.employee,
+      employee: null,
       confidence: best.combinedScore,
-      method: isAmbiguous ? 'AMBIGUOUS' : 'FUZZY',
-      isAmbiguous,
-      alternatives: candidates.slice(1, 4).map(c => ({
+      method: 'UNMATCHED',
+      isAmbiguous: false,
+      alternatives: candidates.slice(0, 3).map(c => ({
         employeeId: c.employee.id,
+        employeeCode: c.employee.employee_code,
         fullName: c.employee.fullName,
         designation: c.employee.designation_title,
-        confidence: c.combinedScore
+        confidence: parseFloat(c.combinedScore.toFixed(2))
       }))
     };
   }
 
   /**
-   * Calculate name similarity with special handling for common patterns
-   */
-  calculateNameSimilarity(name1, name2) {
-    if (name1 === name2) return 1.0;
-
-    // Try different name orderings (first last vs last first)
-    const parts1 = name1.split(/\s+/).filter(p => p.length > 0);
-    const parts2 = name2.split(/\s+/).filter(p => p.length > 0);
-
-    if (parts1.length === 0 || parts2.length === 0) return 0;
-
-    // Direct comparison
-    const directScore = this.calculateSimilarity(name1, name2);
-
-    // Try reversed name order
-    let reversedScore = 0;
-    if (parts1.length >= 2 && parts2.length >= 2) {
-      const reversed1 = [...parts1].reverse().join(' ');
-      const reversed2 = [...parts2].reverse().join(' ');
-      reversedScore = Math.max(
-        this.calculateSimilarity(reversed1, name2),
-        this.calculateSimilarity(name1, reversed2)
-      );
-    }
-
-    // Try partial matches (initials + last name, etc.)
-    let partialScore = 0;
-    if (parts1.length > 1 && parts2.length > 1) {
-      const lastName1 = parts1[parts1.length - 1];
-      const lastName2 = parts2[parts2.length - 1];
-      if (lastName1 === lastName2) {
-        partialScore = 0.7 + (this.calculateSimilarity(parts1[0], parts2[0]) * 0.3);
-      }
-    }
-
-    return Math.max(directScore, reversedScore, partialScore);
-  }
-
-  /**
-   * Calculate Levenshtein-based similarity score (0-1)
+   * Calculate string similarity (0 to 1) using Levenshtein distance & token overlap
    */
   calculateSimilarity(str1, str2) {
     if (str1 === str2) return 1.0;
-    if (!str1 || !str2) return 0;
+    if (!str1 || !str2) return 0.0;
 
+    const tokens1 = str1.split(' ').filter(Boolean);
+    const tokens2 = str2.split(' ').filter(Boolean);
+
+    // Token set overlap
+    const intersection = tokens1.filter(t => tokens2.includes(t));
+    const tokenScore = (2 * intersection.length) / (tokens1.length + tokens2.length);
+
+    // Levenshtein distance
     const distance = this.levenshteinDistance(str1, str2);
     const maxLength = Math.max(str1.length, str2.length);
-    
-    return 1 - (distance / maxLength);
+    const editScore = 1 - (distance / maxLength);
+
+    return Math.max(tokenScore, editScore);
   }
 
   /**
-   * Calculate Levenshtein distance between two strings
+   * Levenshtein distance algorithm
    */
-  levenshteinDistance(str1, str2) {
+  levenshteinDistance(a, b) {
     const matrix = [];
+    for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+    for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
 
-    for (let i = 0; i <= str2.length; i++) {
-      matrix[i] = [i];
-    }
-
-    for (let j = 0; j <= str1.length; j++) {
-      matrix[0][j] = j;
-    }
-
-    for (let i = 1; i <= str2.length; i++) {
-      for (let j = 1; j <= str1.length; j++) {
-        if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+    for (let i = 1; i <= b.length; i++) {
+      for (let j = 1; j <= a.length; j++) {
+        if (b.charAt(i - 1) === a.charAt(j - 1)) {
           matrix[i][j] = matrix[i - 1][j - 1];
         } else {
           matrix[i][j] = Math.min(
-            matrix[i - 1][j - 1] + 1, // substitution
-            matrix[i][j - 1] + 1,     // insertion
-            matrix[i - 1][j] + 1      // deletion
+            matrix[i - 1][j - 1] + 1,
+            matrix[i][j - 1] + 1,
+            matrix[i - 1][j] + 1
           );
         }
       }
     }
-
-    return matrix[str2.length][str1.length];
+    return matrix[b.length][a.length];
   }
 
   /**
-   * Normalize name for matching (lowercase, trim, remove extra spaces)
+   * Normalize name: lowercase, trim, remove honorary titles (Mr, Ms, Mrs, Dr, Shri, etc.)
    */
   normalizeForMatching(name) {
-    return String(name || '')
+    if (!name) return '';
+    return String(name)
       .toLowerCase()
       .trim()
+      .replace(/^(mr|mrs|ms|dr|er|shri|smt)\.?\s+/i, '')
+      .replace(/[^a-z0-9\s]/g, '')
       .replace(/\s+/g, ' ')
-      .replace(/[^a-z0-9\s]/g, ''); // Remove special characters
-  }
-
-  /**
-   * Manually resolve ambiguous mapping
-   */
-  async resolveMapping(mappingId, selectedEmployeeId, resolvedBy) {
-    // This would update the mapping in database
-    // For now, return the resolution
-    return {
-      mappingId,
-      matchedEmployeeId: selectedEmployeeId,
-      matchMethod: 'MANUAL',
-      isAmbiguous: false,
-      resolvedBy,
-      resolvedAt: new Date().toISOString()
-    };
+      .trim();
   }
 }
 
