@@ -281,6 +281,12 @@ export const Sidebar = ({ isOpen, onClose }) => {
           icon: Sliders,
           roles: ['Admin', 'SuperAdmin', 'OrgAdmin'],
         },
+        {
+          name: 'Monthly Roster Management',
+          path: '/roster/history',
+          icon: CalendarCheck,
+          roles: ['Admin', 'SuperAdmin', 'OrgAdmin'],
+        },
       ],
     },
   ];

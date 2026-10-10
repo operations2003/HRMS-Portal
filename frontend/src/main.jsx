@@ -3,11 +3,18 @@ import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import './styles/index.css';
 
-// Unregister any stale service workers that might intercept network requests or cache assets
-if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then((registrations) => {
-    registrations.forEach((reg) => reg.unregister());
-  }).catch(() => {});
+// Unregister any stale service workers and clear browser caches on startup
+if (typeof window !== 'undefined') {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then((registrations) => {
+      registrations.forEach((reg) => reg.unregister());
+    }).catch(() => {});
+  }
+  if (typeof caches !== 'undefined') {
+    caches.keys().then((names) => {
+      names.forEach((name) => caches.delete(name));
+    }).catch(() => {});
+  }
 }
 
 // Global Vite chunk load error & cache mismatch handler
@@ -17,14 +24,21 @@ const handleChunkOrCacheError = (errorMsg) => {
     msg.includes('dynamically imported module') ||
     msg.includes('loading chunk') ||
     msg.includes('chunkloaderror') ||
-    msg.includes('importing a module script failed');
+    msg.includes('importing a module script failed') ||
+    msg.includes('cache') ||
+    msg.includes('outdated optimize dep');
 
   if (isChunkError) {
+    if (typeof caches !== 'undefined') {
+      caches.keys().then((names) => {
+        names.forEach((name) => caches.delete(name));
+      }).catch(() => {});
+    }
     const lastReload = parseInt(sessionStorage.getItem('hrms_chunk_reload_ts') || '0', 10);
     // Reload at most once every 10 seconds to avoid infinite loops
     if (Date.now() - lastReload > 10000) {
       sessionStorage.setItem('hrms_chunk_reload_ts', String(Date.now()));
-      window.location.reload();
+      window.location.href = window.location.pathname + '?_reload=' + Date.now();
       return true;
     }
   }
@@ -85,7 +99,7 @@ class ErrorBoundary extends Component {
       }).catch(() => {});
     }
     sessionStorage.clear();
-    window.location.reload();
+    window.location.href = window.location.pathname + '?_t=' + Date.now();
   };
 
   handleFullReset = () => {
@@ -96,7 +110,7 @@ class ErrorBoundary extends Component {
     }
     localStorage.clear();
     sessionStorage.clear();
-    window.location.href = '/login';
+    window.location.href = '/login?_reset=' + Date.now();
   };
 
   render() {

@@ -181,7 +181,10 @@ export const App = () => {
               <Route
                 path="roster/import"
                 element={
-                  <PermissionRoute permission="employee:write">
+                  <PermissionRoute
+                    roles={['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']}
+                    permission={['employee:write', 'attendance:write']}
+                  >
                     <RosterImportPage />
                   </PermissionRoute>
                 }
@@ -190,7 +193,10 @@ export const App = () => {
               <Route
                 path="roster/preview/:jobId"
                 element={
-                  <PermissionRoute permission="employee:write">
+                  <PermissionRoute
+                    roles={['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']}
+                    permission={['employee:write', 'attendance:write']}
+                  >
                     <RosterPreviewPage />
                   </PermissionRoute>
                 }
@@ -199,7 +205,10 @@ export const App = () => {
               <Route
                 path="roster/history"
                 element={
-                  <PermissionRoute permission="employee:write">
+                  <PermissionRoute
+                    roles={['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']}
+                    permission={['employee:write', 'attendance:write', 'attendance:read']}
+                  >
                     <RosterHistoryPage />
                   </PermissionRoute>
                 }
