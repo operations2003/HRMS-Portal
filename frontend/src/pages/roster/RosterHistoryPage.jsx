@@ -45,12 +45,14 @@ export const RosterHistoryPage = () => {
   const fetchHistory = async () => {
     try {
       setLoading(true);
+      setError(null);
       const response = await rosterService.getImportHistory({ page, limit: 20 });
-      setImports(response.data.imports);
-      setPagination(response.data.pagination);
+      const payload = response?.data || response || {};
+      setImports(Array.isArray(payload.imports) ? payload.imports : []);
+      setPagination(payload.pagination || null);
     } catch (err) {
       console.error('History error:', err);
-      setError(err.response?.data?.message || 'Failed to load import history.');
+      setError(err.response?.data?.message || err.message || 'Failed to load import history.');
     } finally {
       setLoading(false);
     }
@@ -217,6 +219,11 @@ export const RosterHistoryPage = () => {
                             {importJob.updated_assignments > 0 && (
                               <div className="text-blue-700">
                                 {importJob.updated_assignments} updated
+                              </div>
+                            )}
+                            {importJob.import_summary?.autoAppliedLeaves > 0 && (
+                              <div className="text-xs text-purple-700 font-semibold mt-0.5">
+                                {importJob.import_summary.autoAppliedLeaves} leaves synced
                               </div>
                             )}
                           </div>

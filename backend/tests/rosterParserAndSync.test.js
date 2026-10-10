@@ -32,17 +32,17 @@ for (const tc of testCases) {
 
 // 2. Status Codes
 console.log('\n--- 2. Roster Status Codes & Blank Cells ---');
-const codes = ['WO', 'CL', 'HD', 'NA', ''];
+const codes = ['WO', 'CL', 'PL', 'SL', 'HD', 'HDL', 'LOP', 'LWP', 'ML', 'PTL', 'SBL', 'AWOL', 'HL', 'OFF', 'NA', ''];
 for (const code of codes) {
   const res = rosterParserService.parseShiftCell(code, '2026-10-01', 'Test User');
   if (!code) {
     assert.strictEqual(res.shiftType, 'BLANK');
     console.log(`  ✅ PASS: Empty cell parsed as BLANK (unspecified)`);
   } else {
-    assert.strictEqual(res.shiftType, code);
+    assert.strictEqual(res.isValid, true);
     assert.strictEqual(res.shiftStartTime, null);
     assert.strictEqual(res.shiftEndTime, null);
-    console.log(`  ✅ PASS: "${code}" recognized as roster status code`);
+    console.log(`  ✅ PASS: "${code}" recognized as roster status / leave code (mapped to ${res.shiftType})`);
   }
 }
 

@@ -62,7 +62,7 @@ export const RosterPreviewPage = () => {
       setLoading(true);
       setError(null);
       const response = await rosterService.getPreview(jobId);
-      setPreviewData(response.data);
+      setPreviewData(response?.data || response);
     } catch (err) {
       console.error('Preview error:', err);
       setError(err.response?.data?.message || err.message || 'Failed to load roster preview.');
@@ -128,14 +128,18 @@ export const RosterPreviewPage = () => {
     const monthName = getMonthName(previewData.parsedRoster?.selectedMonth);
     const year = previewData.parsedRoster?.selectedYear;
 
+    const leavesCount = previewData.diffSummary?.leavesDetected || 0;
+
     if (
       !window.confirm(
         `Confirm Monthly Roster Import?\n\n` +
           `• Target Period: ${monthName} ${year}\n` +
           `• Matched Employees: ${matchedCount}\n` +
           `• Shifts Added: ${previewData.diffSummary?.newAssignments || 0}\n` +
-          `• Shifts Changed: ${previewData.diffSummary?.changedAssignments || 0}\n\n` +
-          `Existing attendance punches, approved leaves, and payroll records will be preserved.`
+          `• Shifts Changed: ${previewData.diffSummary?.changedAssignments || 0}\n` +
+          `• Leaves Auto-Synced: ${leavesCount}\n\n` +
+          `Shift schedules and planned leaves will be automatically updated.\n` +
+          `Emergency/ad-hoc leaves occurring outside this roster will follow the regular manual request workflow.`
       )
     ) {
       return;
@@ -343,7 +347,7 @@ export const RosterPreviewPage = () => {
       </div>
 
       {/* Summary KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-9 gap-3">
         {/* Total Employees */}
         <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs">
           <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Total Staff</p>
@@ -386,6 +390,12 @@ export const RosterPreviewPage = () => {
           <p className="text-xl font-black text-indigo-800 mt-1">{diffSummary.changedAssignments || 0}</p>
         </div>
 
+        {/* Leaves Auto-Synced */}
+        <div className="bg-white border border-purple-200 rounded-xl p-3 shadow-xs bg-purple-50/30">
+          <p className="text-[11px] font-semibold text-purple-700 uppercase tracking-wider">Leaves Detected</p>
+          <p className="text-xl font-black text-purple-800 mt-1">{diffSummary.leavesDetected || 0}</p>
+        </div>
+
         {/* Unchanged */}
         <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs">
           <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Unchanged</p>
@@ -404,6 +414,14 @@ export const RosterPreviewPage = () => {
           <p className="text-xl font-black text-amber-900 mt-1">
             {diffSummary.workingDaysDiscrepancies || 0}
           </p>
+        </div>
+      </div>
+
+      {/* Auto Synchronization Info Box */}
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/80 rounded-2xl p-4 text-xs text-blue-900 flex items-start gap-3">
+        <Sparkles className="w-4 h-4 text-brand-600 mt-0.5 shrink-0" />
+        <div>
+          <span className="font-semibold">Automatic System Synchronization:</span> Upon confirming this import, shift schedules and planned leaves (CL, PL, SL, Half-Day, LOP, etc.) will be automatically updated across all matched employees. Any emergency or ad-hoc leaves arising outside this roster will continue to be requested and approved manually as needed.
         </div>
       </div>
 

@@ -597,9 +597,33 @@ export const confirmImport = async (req, res, next) => {
       );
     }
 
+    // Retrieve active leave types for auto-synchronizing roster leaves with HRMS
+    const leaveTypesRes = await client.query(
+      `SELECT id, name, code, is_paid, days_per_year 
+       FROM leave_types 
+       WHERE org_id = $1 AND status = 'Active'`,
+      [orgId]
+    );
+    const orgLeaveTypes = leaveTypesRes.rows;
+
+    const LEAVE_MAPPINGS = {
+      'CL': { code: 'CL', name: 'Casual Leave', isHalf: false },
+      'PL': { code: 'PL', name: 'Planned Leave', isHalf: false },
+      'SL': { code: 'SL', name: 'Sick Leave', isHalf: false },
+      'HD': { code: 'HDL', name: 'Half Day', isHalf: true },
+      'HDL': { code: 'HDL', name: 'Half Day', isHalf: true },
+      'LOP': { code: 'LOP', name: 'Leave without pay (LOP)', isHalf: false },
+      'LWP': { code: 'LOP', name: 'Leave without pay (LOP)', isHalf: false },
+      'ML': { code: 'ML', name: 'Maternity Leave', isHalf: false },
+      'PTL': { code: 'PTL', name: 'Paternity Leave', isHalf: false },
+      'SBL': { code: 'SBL', name: 'Sabbatical Leave', isHalf: false },
+      'AWOL': { code: 'AWOL', name: 'Absent Without Leave(AWOL)', isHalf: false }
+    };
+
     let newAssignments = 0;
     let updatedAssignments = 0;
     let unchangedAssignments = 0;
+    let autoAppliedLeaves = 0;
     const errors = [];
     const flaggedReviewRecords = [];
 
@@ -615,6 +639,29 @@ export const confirmImport = async (req, res, next) => {
       );
 
       if (!rosterEmp) continue;
+
+      // Automatically update employee default shift timing if working shifts are defined in roster
+      const workingShifts = rosterEmp.dailyAssignments.filter(
+        (d) => d.shiftType === 'SHIFT' && d.shiftLabel && d.isValid
+      );
+      if (workingShifts.length > 0) {
+        const counts = {};
+        for (const ws of workingShifts) {
+          counts[ws.shiftLabel] = (counts[ws.shiftLabel] || 0) + 1;
+        }
+        let primaryShift = workingShifts[0].shiftLabel;
+        let maxCount = 0;
+        for (const [label, count] of Object.entries(counts)) {
+          if (count > maxCount) {
+            maxCount = count;
+            primaryShift = label;
+          }
+        }
+        await client.query(
+          `UPDATE employees SET shift_timing = $1, updated_at = NOW() WHERE id = $2`,
+          [primaryShift, employeeId]
+        );
+      }
 
       for (const day of rosterEmp.dailyAssignments) {
         // Skip blank / unspecified cells - do NOT remove or alter existing assignments
@@ -766,6 +813,88 @@ export const confirmImport = async (req, res, next) => {
               unchangedAssignments++;
             }
           }
+
+          // Auto-synchronize leave requests and balances if the day represents a leave
+          if (LEAVE_MAPPINGS[day.shiftType]) {
+            const leaveMeta = LEAVE_MAPPINGS[day.shiftType];
+            const matchedLt = orgLeaveTypes.find(
+              (lt) => lt.code.toUpperCase() === leaveMeta.code.toUpperCase() ||
+                      lt.name.toLowerCase().includes(leaveMeta.name.toLowerCase())
+            );
+
+            if (matchedLt) {
+              const existingLeaveRes = await client.query(
+                `SELECT id, status FROM leave_requests
+                 WHERE employee_id = $1 
+                   AND start_date <= $2::date 
+                   AND end_date >= $2::date
+                   AND status IN ('APPROVED', 'PENDING')
+                 LIMIT 1`,
+                [employeeId, day.date]
+              );
+
+              if (existingLeaveRes.rows.length === 0) {
+                const isHalfDay = leaveMeta.isHalf;
+                const totalDays = isHalfDay ? 0.5 : 1.0;
+                const halfDayPeriod = isHalfDay ? 'FIRST_HALF' : null;
+                const leaveId = `lr-roster-${nanoid()}`;
+                const dateDecisions = JSON.stringify([
+                  {
+                    date: day.date,
+                    decision: 'APPROVED',
+                    status: 'APPROVED',
+                    approvedBy: userId,
+                    approvedAt: new Date().toISOString(),
+                    source: 'ROSTER_IMPORT'
+                  }
+                ]);
+
+                await client.query(
+                  `INSERT INTO leave_requests (
+                    id, org_id, employee_id, leave_type_id,
+                    start_date, end_date, is_half_day, half_day_period,
+                    total_days, reason, status, applied_date,
+                    approver_user_id, action_date, date_decisions
+                  ) VALUES ($1, $2, $3, $4, $5::date, $5::date, $6, $7, $8, $9, 'APPROVED', NOW(), $10, NOW(), $11::jsonb)`,
+                  [
+                    leaveId,
+                    orgId,
+                    employeeId,
+                    matchedLt.id,
+                    day.date,
+                    isHalfDay,
+                    halfDayPeriod,
+                    totalDays,
+                    `Auto-applied from monthly roster import (${day.shiftType})`,
+                    userId,
+                    dateDecisions
+                  ]
+                );
+
+                // Update / record in leave_balances
+                const leaveYear = parseInt(day.date.split('-')[0], 10);
+                await client.query(
+                  `INSERT INTO leave_balances (
+                    id, org_id, employee_id, leave_type_id, year,
+                    allocated_days, used_days, pending_days
+                  ) VALUES ($1, $2, $3, $4, $5, $6, $7, 0.0)
+                  ON CONFLICT (employee_id, leave_type_id, year)
+                  DO UPDATE SET used_days = leave_balances.used_days + $7, updated_at = NOW()`,
+                  [
+                    `lb-${nanoid()}`,
+                    orgId,
+                    employeeId,
+                    matchedLt.id,
+                    leaveYear,
+                    parseFloat(matchedLt.days_per_year) || 0.0,
+                    totalDays
+                  ]
+                );
+
+                autoAppliedLeaves++;
+              }
+            }
+          }
         } catch (err) {
           console.error(`Assignment error for ${mapping.roster_employee_name} on ${day.date}:`, err);
           errors.push(`${mapping.roster_employee_name} (${day.date}): ${err.message}`);
@@ -777,7 +906,8 @@ export const confirmImport = async (req, res, next) => {
     const finalStatus = errors.length > 0 ? 'PARTIAL' : 'CONFIRMED';
     const updatedSummary = {
       ...importSummary,
-      flaggedReviewRecords
+      flaggedReviewRecords,
+      autoAppliedLeaves
     };
 
     await client.query(
@@ -813,6 +943,7 @@ export const confirmImport = async (req, res, next) => {
       newAssignments,
       updatedAssignments,
       unchangedAssignments,
+      autoAppliedLeaves,
       totalProcessed: newAssignments + updatedAssignments + unchangedAssignments,
       flaggedReviewCount: flaggedReviewRecords.length,
       flaggedReviewRecords,
@@ -833,22 +964,24 @@ export const confirmImport = async (req, res, next) => {
  */
 export const getImportHistory = async (req, res, next) => {
   try {
-    const orgId = req.user?.orgId || req.user?.org?.id;
+    const orgId = req.user?.orgId || req.user?.org?.id || 'org-1';
     const { page = 1, limit = 20 } = req.query;
-    const offset = (Math.max(1, parseInt(page, 10)) - 1) * parseInt(limit, 10);
+    const parsedLimit = Math.max(1, parseInt(limit, 10) || 20);
+    const parsedPage = Math.max(1, parseInt(page, 10) || 1);
+    const offset = (parsedPage - 1) * parsedLimit;
 
     const result = await pool.query(
       `SELECT 
         rij.*,
-        u.first_name || ' ' || u.last_name as uploaded_by_name,
-        cu.first_name || ' ' || cu.last_name as confirmed_by_name
+        COALESCE(NULLIF(TRIM(u.first_name || ' ' || u.last_name), ''), u.email, 'Admin') as uploaded_by_name,
+        COALESCE(NULLIF(TRIM(cu.first_name || ' ' || cu.last_name), ''), cu.email, null) as confirmed_by_name
        FROM roster_import_jobs rij
        LEFT JOIN users u ON rij.uploaded_by = u.id
        LEFT JOIN users cu ON rij.confirmed_by = cu.id
        WHERE rij.org_id = $1
        ORDER BY rij.created_at DESC
        LIMIT $2 OFFSET $3`,
-      [orgId, limit, offset]
+      [orgId, parsedLimit, offset]
     );
 
     const countResult = await pool.query(
@@ -856,13 +989,15 @@ export const getImportHistory = async (req, res, next) => {
       [orgId]
     );
 
+    const total = parseInt(countResult.rows[0]?.count || 0, 10);
+
     return sendSuccess(res, 'Import history retrieved successfully.', {
       imports: result.rows,
       pagination: {
-        total: parseInt(countResult.rows[0].count, 10),
-        page: parseInt(page, 10),
-        limit: parseInt(limit, 10),
-        totalPages: Math.ceil(parseInt(countResult.rows[0].count, 10) / limit)
+        total,
+        page: parsedPage,
+        limit: parsedLimit,
+        totalPages: Math.ceil(total / parsedLimit) || 1
       }
     });
   } catch (err) {
