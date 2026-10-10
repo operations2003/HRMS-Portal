@@ -48,6 +48,18 @@ router.post(
   rosterController.confirmImport
 );
 
+router.post(
+  '/cell-override/:jobId',
+  authorize(['employee:write', 'attendance:write']),
+  rosterController.overrideCell
+);
+
+router.put(
+  '/assignment',
+  authorize(['employee:write', 'attendance:write']),
+  rosterController.updateAssignment
+);
+
 router.get(
   '/history',
   authorize(['employee:write', 'attendance:write']),

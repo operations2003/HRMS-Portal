@@ -13,6 +13,34 @@ const sendError = (res, message, statusCode = 400, errors = []) => {
   return res.status(statusCode).json({ success: false, message, errors });
 };
 
+export const LEAVE_MAPPINGS = {
+  'CL': { code: 'CL', name: 'Casual Leave', isHalf: false },
+  'PL': { code: 'PL', name: 'Planned Leave', isHalf: false },
+  'SL': { code: 'SL', name: 'Sick Leave', isHalf: false },
+  'HD': { code: 'HDL', name: 'Half Day', isHalf: true },
+  'HDL': { code: 'HDL', name: 'Half Day', isHalf: true },
+  'LOP': { code: 'LOP', name: 'Leave without pay (LOP)', isHalf: false },
+  'LWP': { code: 'LOP', name: 'Leave without pay (LOP)', isHalf: false },
+  'ML': { code: 'ML', name: 'Maternity Leave', isHalf: false },
+  'PTL': { code: 'PTL', name: 'Paternity Leave', isHalf: false },
+  'SBL': { code: 'SBL', name: 'Sabbatical Leave', isHalf: false },
+  'HL': { code: 'HL', name: 'Holiday', isHalf: false },
+  'AWOL': { code: 'AWOL', name: 'Absent Without Leave(AWOL)', isHalf: false }
+};
+
+export const DEFAULT_LEAVE_QUOTAS = {
+  'PL': 15.0,  // Planned Leave
+  'CL': 12.0,  // Casual Leave
+  'SL': 10.0,  // Sick Leave
+  'HDL': 6.0,  // Half Day
+  'ML': 180.0, // Maternity Leave
+  'PTL': 15.0, // Paternity Leave
+  'SBL': 30.0, // Sabbatical Leave
+  'HL': 10.0,  // Holiday
+  'AWOL': 0.0, // Absent Without Leave
+  'LOP': 0.0   // Leave Without Pay
+};
+
 /**
  * POST /api/v1/roster/upload
  * Upload and parse roster file (preview mode)
@@ -606,32 +634,7 @@ export const confirmImport = async (req, res, next) => {
     );
     const orgLeaveTypes = leaveTypesRes.rows;
 
-    const LEAVE_MAPPINGS = {
-      'CL': { code: 'CL', name: 'Casual Leave', isHalf: false },
-      'PL': { code: 'PL', name: 'Planned Leave', isHalf: false },
-      'SL': { code: 'SL', name: 'Sick Leave', isHalf: false },
-      'HD': { code: 'HDL', name: 'Half Day', isHalf: true },
-      'HDL': { code: 'HDL', name: 'Half Day', isHalf: true },
-      'LOP': { code: 'LOP', name: 'Leave without pay (LOP)', isHalf: false },
-      'LWP': { code: 'LOP', name: 'Leave without pay (LOP)', isHalf: false },
-      'ML': { code: 'ML', name: 'Maternity Leave', isHalf: false },
-      'PTL': { code: 'PTL', name: 'Paternity Leave', isHalf: false },
-      'SBL': { code: 'SBL', name: 'Sabbatical Leave', isHalf: false },
-      'AWOL': { code: 'AWOL', name: 'Absent Without Leave(AWOL)', isHalf: false }
-    };
-
-    const DEFAULT_LEAVE_QUOTAS = {
-      'PL': 15.0,  // Planned Leave
-      'CL': 12.0,  // Casual Leave
-      'SL': 10.0,  // Sick Leave
-      'HDL': 6.0,  // Half Day
-      'ML': 180.0, // Maternity Leave
-      'PTL': 15.0, // Paternity Leave
-      'SBL': 30.0, // Sabbatical Leave
-      'HL': 10.0,  // Holiday
-      'AWOL': 0.0, // Absent Without Leave
-      'LOP': 0.0   // Leave Without Pay
-    };
+    // Using module-level LEAVE_MAPPINGS and DEFAULT_LEAVE_QUOTAS
 
     let newAssignments = 0;
     let updatedAssignments = 0;
@@ -1155,6 +1158,494 @@ export const getAssignments = async (req, res, next) => {
   }
 };
 
+/**
+ * Synchronize a single day's assignment to shift_assignments, leave_requests,
+ * leave_balances (deducting/refunding), and attendance_records
+ */
+async function syncSingleDayAssignment({
+  client,
+  orgId,
+  userId,
+  jobId,
+  employeeId,
+  rosterEmployeeName,
+  day
+}) {
+  const leaveYear = parseInt(day.date.split('-')[0], 10);
+
+  // 1. Check existing assignment
+  const existingAssign = await client.query(
+    `SELECT * FROM shift_assignments WHERE employee_id = $1 AND assignment_date = $2`,
+    [employeeId, day.date]
+  );
+  const prevShiftType = existingAssign.rows.length > 0 ? existingAssign.rows[0].shift_type : null;
+
+  // 2. Upsert shift_assignments if not BLANK
+  if (day.shiftType !== 'BLANK') {
+    const assignId = existingAssign.rows.length > 0 ? existingAssign.rows[0].id : `assign-${nanoid()}`;
+    await client.query(
+      `INSERT INTO shift_assignments (
+        id, org_id, employee_id, assignment_date, shift_type,
+        shift_start_time, shift_end_time, shift_label, is_overnight,
+        source, import_job_id, created_by
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'MANUAL_OVERRIDE', $10, $11)
+      ON CONFLICT (employee_id, assignment_date)
+      DO UPDATE SET
+        shift_type = EXCLUDED.shift_type,
+        shift_start_time = EXCLUDED.shift_start_time,
+        shift_end_time = EXCLUDED.shift_end_time,
+        shift_label = EXCLUDED.shift_label,
+        is_overnight = EXCLUDED.is_overnight,
+        source = 'MANUAL_OVERRIDE',
+        updated_by = EXCLUDED.created_by,
+        updated_at = NOW()`,
+      [
+        assignId,
+        orgId,
+        employeeId,
+        day.date,
+        day.shiftType,
+        day.shiftStartTime,
+        day.shiftEndTime,
+        day.shiftLabel,
+        !!day.isOvernight,
+        jobId,
+        userId
+      ]
+    );
+
+    // Audit trail
+    await client.query(
+      `INSERT INTO shift_assignment_audit (
+        id, shift_assignment_id, employee_id, assignment_date,
+        change_type, new_value, changed_by, change_source, import_job_id
+      ) VALUES ($1, $2, $3, $4, 'UPDATED', $5, $6, 'MANUAL_OVERRIDE', $7)`,
+      [
+        `audit-${nanoid()}`,
+        assignId,
+        employeeId,
+        day.date,
+        JSON.stringify(day),
+        userId,
+        jobId
+      ]
+    );
+  }
+
+  // 3. Fetch active leave types for this organization
+  const leaveTypesRes = await client.query(
+    `SELECT id, name, code, is_paid, days_per_year FROM leave_types WHERE org_id = $1 AND status = 'Active'`,
+    [orgId]
+  );
+  const orgLeaveTypes = leaveTypesRes.rows;
+
+  // 4. If previous assignment was a leave and current is no longer that leave, refund leave bucket & cancel request
+  if (prevShiftType && LEAVE_MAPPINGS[prevShiftType] && prevShiftType !== day.shiftType) {
+    const prevMeta = LEAVE_MAPPINGS[prevShiftType];
+    const prevLt = orgLeaveTypes.find(
+      (lt) => lt.code.toUpperCase() === prevMeta.code.toUpperCase() ||
+              lt.name.toLowerCase().includes(prevMeta.name.toLowerCase())
+    );
+    if (prevLt) {
+      const prevDays = prevMeta.isHalf ? 0.5 : 1.0;
+      await client.query(
+        `UPDATE leave_requests
+         SET status = 'CANCELLED', updated_at = NOW()
+         WHERE employee_id = $1 AND start_date = $2::date AND leave_type_id = $3 AND status = 'APPROVED'`,
+        [employeeId, day.date, prevLt.id]
+      );
+
+      // Refund used_days from candidate's leave bucket
+      await client.query(
+        `UPDATE leave_balances
+         SET used_days = GREATEST(0.0, used_days - $1), updated_at = NOW()
+         WHERE employee_id = $2 AND leave_type_id = $3 AND year = $4`,
+        [prevDays, employeeId, prevLt.id, leaveYear]
+      );
+    }
+  }
+
+  // 5. If new assignment is a leave, apply approved leave and deduct from candidate's leave bucket
+  if (LEAVE_MAPPINGS[day.shiftType]) {
+    const leaveMeta = LEAVE_MAPPINGS[day.shiftType];
+    const matchedLt = orgLeaveTypes.find(
+      (lt) => lt.code.toUpperCase() === leaveMeta.code.toUpperCase() ||
+              lt.name.toLowerCase().includes(leaveMeta.name.toLowerCase())
+    );
+
+    if (matchedLt) {
+      const isHalfDay = leaveMeta.isHalf;
+      const totalDays = isHalfDay ? 0.5 : 1.0;
+      const halfDayPeriod = isHalfDay ? 'FIRST_HALF' : null;
+      const leaveId = `lr-roster-${nanoid()}`;
+      const dateDecisions = JSON.stringify([
+        {
+          date: day.date,
+          decision: 'APPROVED',
+          status: 'APPROVED',
+          approvedBy: userId,
+          approvedAt: new Date().toISOString(),
+          source: 'ROSTER_EDIT'
+        }
+      ]);
+
+      const existingLeave = await client.query(
+        `SELECT id FROM leave_requests WHERE employee_id = $1 AND start_date = $2::date AND status IN ('APPROVED', 'PENDING')`,
+        [employeeId, day.date]
+      );
+
+      if (existingLeave.rows.length === 0) {
+        await client.query(
+          `INSERT INTO leave_requests (
+            id, org_id, employee_id, leave_type_id,
+            start_date, end_date, is_half_day, half_day_period,
+            total_days, reason, status, applied_date,
+            approver_user_id, action_date, date_decisions
+          ) VALUES ($1, $2, $3, $4, $5::date, $5::date, $6, $7, $8, $9, 'APPROVED', NOW(), $10, NOW(), $11::jsonb)`,
+          [
+            leaveId,
+            orgId,
+            employeeId,
+            matchedLt.id,
+            day.date,
+            isHalfDay,
+            halfDayPeriod,
+            totalDays,
+            `Leave assigned via roster edit (${day.shiftType})`,
+            userId,
+            dateDecisions
+          ]
+        );
+
+        // Deduct from candidate's leave bucket in leave_balances
+        const ltCode = matchedLt.code.toUpperCase();
+        const stdQuota = DEFAULT_LEAVE_QUOTAS[ltCode] !== undefined 
+          ? DEFAULT_LEAVE_QUOTAS[ltCode] 
+          : (parseFloat(matchedLt.days_per_year) || 0.0);
+
+        const existingBal = await client.query(
+          `SELECT id, allocated_days, used_days FROM leave_balances 
+           WHERE employee_id = $1 AND leave_type_id = $2 AND year = $3 FOR UPDATE`,
+          [employeeId, matchedLt.id, leaveYear]
+        );
+
+        if (existingBal.rows.length === 0) {
+          const initialAlloc = Math.max(stdQuota, totalDays);
+          await client.query(
+            `INSERT INTO leave_balances (
+              id, org_id, employee_id, leave_type_id, year,
+              allocated_days, used_days, pending_days, updated_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, 0.0, NOW())`,
+            [`lb-${nanoid()}`, orgId, employeeId, matchedLt.id, leaveYear, initialAlloc, totalDays]
+          );
+        } else {
+          const curAlloc = parseFloat(existingBal.rows[0].allocated_days) || 0.0;
+          const curUsed = parseFloat(existingBal.rows[0].used_days) || 0.0;
+          const targetAlloc = curAlloc > 0 
+            ? Math.max(curAlloc, curUsed + totalDays) 
+            : Math.max(stdQuota, totalDays);
+
+          await client.query(
+            `UPDATE leave_balances
+             SET allocated_days = $1, used_days = used_days + $2, updated_at = NOW()
+             WHERE id = $3`,
+            [targetAlloc, totalDays, existingBal.rows[0].id]
+          );
+        }
+
+        // Sync to attendance_records
+        const attStatus = isHalfDay ? 'HALF_DAY' : 'ON_LEAVE';
+        const totalHours = isHalfDay ? 4.00 : 0.00;
+        await client.query(
+          `INSERT INTO attendance_records (
+            id, org_id, employee_id, attendance_date, status, total_hours,
+            source, notes, created_at, updated_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, 'ROSTER_EDIT', $7, NOW(), NOW())
+          ON CONFLICT (employee_id, attendance_date)
+          DO UPDATE SET status = EXCLUDED.status, source = 'ROSTER_EDIT', notes = EXCLUDED.notes, updated_at = NOW()`,
+          [`att-${nanoid()}`, orgId, employeeId, day.date, attStatus, totalHours, `${matchedLt.name} (Roster edit)`]
+        );
+      }
+    }
+  } else if (day.shiftType === 'SHIFT') {
+    // If working shift, update employee's shift_timing directly
+    if (day.shiftLabel) {
+      await client.query(
+        `UPDATE employees SET shift_timing = $1, updated_at = NOW() WHERE id = $2`,
+        [day.shiftLabel, employeeId]
+      );
+    }
+  }
+}
+
+/**
+ * POST /api/v1/roster/cell-override/:jobId
+ * Override shift timing or assign leave for a cell in the roster preview
+ */
+export const overrideCell = async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const { jobId } = req.params;
+    const orgId = req.user?.orgId || req.user?.org?.id || 'org-1';
+    const userId = req.user?.id;
+    const {
+      rosterEmployeeName,
+      employeeId,
+      date,
+      shiftType,
+      shiftStartTime,
+      shiftEndTime,
+      shiftLabel,
+      syncImmediate
+    } = req.body;
+
+    if (!jobId || !date) {
+      return sendError(res, 'Job ID and date are required.');
+    }
+    if (!rosterEmployeeName && !employeeId) {
+      return sendError(res, 'rosterEmployeeName or employeeId is required.');
+    }
+
+    const jobRes = await client.query(
+      `SELECT * FROM roster_import_jobs WHERE id = $1 AND org_id = $2`,
+      [jobId, orgId]
+    );
+
+    if (jobRes.rows.length === 0) {
+      return sendError(res, 'Roster import job not found.', 404);
+    }
+
+    const job = jobRes.rows[0];
+    const importSummary = typeof job.import_summary === 'string'
+      ? JSON.parse(job.import_summary)
+      : (job.import_summary || {});
+    const parsedRoster = importSummary.parsedRoster;
+
+    if (!parsedRoster || !Array.isArray(parsedRoster.employees)) {
+      return sendError(res, 'No roster employee data found in this import job.', 400);
+    }
+
+    // Locate the target employee in parsedRoster
+    const targetEmp = parsedRoster.employees.find(
+      (e) => (rosterEmployeeName && e.rosterEmployeeName === rosterEmployeeName) ||
+             (employeeId && (e.id === employeeId || e.matchedEmployeeId === employeeId))
+    );
+
+    if (!targetEmp) {
+      return sendError(res, `Employee "${rosterEmployeeName || employeeId}" not found in roster.`, 404);
+    }
+
+    // Locate target day assignment
+    const targetDay = targetEmp.dailyAssignments.find((d) => d.date === date);
+    if (!targetDay) {
+      return sendError(res, `Date ${date} not found for employee.`, 404);
+    }
+
+    // Normalize shift/leave parameters
+    let normalizedType = (shiftType || '').toUpperCase().trim();
+    let normStartTime = shiftStartTime || null;
+    let normEndTime = shiftEndTime || null;
+    let normLabel = shiftLabel || null;
+    let isOvernight = false;
+    let isValid = true;
+
+    if (LEAVE_MAPPINGS[normalizedType]) {
+      normStartTime = null;
+      normEndTime = null;
+      normLabel = normalizedType;
+    } else if (['WO', 'NA', 'BLANK'].includes(normalizedType)) {
+      normStartTime = null;
+      normEndTime = null;
+      normLabel = normalizedType === 'BLANK' ? null : normalizedType;
+    } else {
+      normalizedType = 'SHIFT';
+      if (normLabel && (!normStartTime || !normEndTime)) {
+        const parsed = rosterParserService.parseShiftCell(normLabel, date, targetEmp.rosterEmployeeName);
+        if (parsed.isValid && parsed.shiftType === 'SHIFT') {
+          normStartTime = parsed.shiftStartTime;
+          normEndTime = parsed.shiftEndTime;
+          normLabel = parsed.shiftLabel;
+          isOvernight = !!parsed.isOvernight;
+        }
+      }
+      if (!normLabel && normStartTime && normEndTime) {
+        normLabel = `${normStartTime.slice(0, 5)} - ${normEndTime.slice(0, 5)}`;
+      }
+    }
+
+    // Update target day in parsed roster
+    targetDay.shiftType = normalizedType;
+    targetDay.shiftStartTime = normStartTime;
+    targetDay.shiftEndTime = normEndTime;
+    targetDay.shiftLabel = normLabel;
+    targetDay.originalValue = normLabel || normalizedType;
+    targetDay.isOvernight = isOvernight;
+    targetDay.isValid = isValid;
+    targetDay.isOverridden = true;
+
+    // Recalculate diffStatus
+    if (targetDay.previousAssignment) {
+      const prev = targetDay.previousAssignment;
+      const changed = prev.shiftType !== targetDay.shiftType ||
+        (prev.shiftLabel || '') !== (targetDay.shiftLabel || '');
+      targetDay.diffStatus = changed ? 'CHANGED' : 'UNCHANGED';
+    } else {
+      targetDay.diffStatus = targetDay.shiftType !== 'BLANK' ? 'NEW' : null;
+    }
+
+    // Recalculate employee calculatedWorkingDays
+    let workingDaysCount = 0;
+    for (const d of targetEmp.dailyAssignments) {
+      if (d.shiftType === 'SHIFT' && d.isValid) {
+        workingDaysCount++;
+      }
+    }
+    targetEmp.calculatedWorkingDays = workingDaysCount;
+    targetEmp.hasWorkingDaysDiscrepancy =
+      targetEmp.declaredWorkingDays > 0 && targetEmp.calculatedWorkingDays !== targetEmp.declaredWorkingDays;
+
+    // Recalculate diffSummary counts
+    let newAssignments = 0;
+    let updatedAssignments = 0;
+    let unchangedAssignments = 0;
+    let leavesDetected = 0;
+
+    for (const emp of parsedRoster.employees) {
+      for (const d of emp.dailyAssignments) {
+        if (d.diffStatus === 'NEW') newAssignments++;
+        else if (d.diffStatus === 'CHANGED') updatedAssignments++;
+        else if (d.diffStatus === 'UNCHANGED') unchangedAssignments++;
+        if (LEAVE_MAPPINGS[d.shiftType]) leavesDetected++;
+      }
+    }
+
+    importSummary.diffSummary = {
+      ...(importSummary.diffSummary || {}),
+      newAssignments,
+      updatedAssignments,
+      unchangedAssignments,
+      leavesDetected
+    };
+    importSummary.parsedRoster = parsedRoster;
+
+    // Check matched employee ID
+    const mappings = importSummary.matchingResult?.mappings || [];
+    const empMapping = mappings.find(
+      (m) => m.rosterEmployeeName === targetEmp.rosterEmployeeName ||
+             (m.matchedEmployeeId && m.matchedEmployeeId === employeeId)
+    );
+    const matchedEmployeeId = empMapping?.matchedEmployeeId || employeeId;
+
+    // If job was already CONFIRMED or immediate sync is requested, sync to database tables
+    if (matchedEmployeeId && (job.status === 'CONFIRMED' || job.status === 'PARTIAL' || syncImmediate === true)) {
+      await syncSingleDayAssignment({
+        client,
+        orgId,
+        userId,
+        jobId,
+        employeeId: matchedEmployeeId,
+        rosterEmployeeName: targetEmp.rosterEmployeeName,
+        day: targetDay
+      });
+    }
+
+    // Persist updated import_summary
+    await client.query(
+      `UPDATE roster_import_jobs
+       SET import_summary = $1, updated_at = NOW()
+       WHERE id = $2`,
+      [JSON.stringify(importSummary), jobId]
+    );
+
+    return sendSuccess(res, 'Shift & leave schedule updated successfully.', {
+      parsedRoster,
+      diffSummary: importSummary.diffSummary,
+      updatedDay: targetDay,
+      employee: {
+        id: targetEmp.id,
+        rosterEmployeeName: targetEmp.rosterEmployeeName,
+        calculatedWorkingDays: targetEmp.calculatedWorkingDays,
+        hasWorkingDaysDiscrepancy: targetEmp.hasWorkingDaysDiscrepancy
+      }
+    });
+  } catch (err) {
+    console.error('Cell override error:', err);
+    return sendError(res, `Failed to override cell: ${err.message}`, 500);
+  } finally {
+    client.release();
+  }
+};
+
+/**
+ * PUT /api/v1/roster/assignment
+ * Directly update daily shift schedule and leave buckets for any employee & date
+ */
+export const updateAssignment = async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const orgId = req.user?.orgId || req.user?.org?.id || 'org-1';
+    const userId = req.user?.id;
+    const { employeeId, date, shiftType, shiftStartTime, shiftEndTime, shiftLabel } = req.body;
+
+    if (!employeeId || !date || !shiftType) {
+      return sendError(res, 'employeeId, date, and shiftType are required.');
+    }
+
+    let normalizedType = shiftType.toUpperCase().trim();
+    let normStartTime = shiftStartTime || null;
+    let normEndTime = shiftEndTime || null;
+    let normLabel = shiftLabel || null;
+    let isOvernight = false;
+
+    if (LEAVE_MAPPINGS[normalizedType]) {
+      normStartTime = null;
+      normEndTime = null;
+      normLabel = normalizedType;
+    } else if (['WO', 'NA', 'BLANK'].includes(normalizedType)) {
+      normStartTime = null;
+      normEndTime = null;
+      normLabel = normalizedType;
+    } else {
+      normalizedType = 'SHIFT';
+      if (normLabel && (!normStartTime || !normEndTime)) {
+        const parsed = rosterParserService.parseShiftCell(normLabel, date, employeeId);
+        if (parsed.isValid && parsed.shiftType === 'SHIFT') {
+          normStartTime = parsed.shiftStartTime;
+          normEndTime = parsed.shiftEndTime;
+          normLabel = parsed.shiftLabel;
+          isOvernight = !!parsed.isOvernight;
+        }
+      }
+    }
+
+    const day = {
+      date,
+      shiftType: normalizedType,
+      shiftStartTime: normStartTime,
+      shiftEndTime: normEndTime,
+      shiftLabel: normLabel,
+      isOvernight
+    };
+
+    await syncSingleDayAssignment({
+      client,
+      orgId,
+      userId,
+      jobId: null,
+      employeeId,
+      rosterEmployeeName: null,
+      day
+    });
+
+    return sendSuccess(res, 'Daily shift schedule and leave bucket updated successfully.', { day });
+  } catch (err) {
+    console.error('Update assignment error:', err);
+    return sendError(res, `Failed to update assignment: ${err.message}`, 500);
+  } finally {
+    client.release();
+  }
+};
+
 export default {
   uploadRoster,
   getPreview,
@@ -1162,5 +1653,7 @@ export default {
   aiAutoResolve,
   confirmImport,
   getImportHistory,
-  getAssignments
+  getAssignments,
+  overrideCell,
+  updateAssignment
 };

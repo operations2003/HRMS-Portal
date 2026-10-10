@@ -19,6 +19,7 @@ import {
   Sparkles,
   Info,
   CalendarCheck,
+  Edit3,
 } from 'lucide-react';
 import { Button } from '../../components/common/Button.jsx';
 import { Alert } from '../../components/common/Alert.jsx';
@@ -50,6 +51,95 @@ export const RosterPreviewPage = () => {
   const [statusFilter, setStatusFilter] = useState('ALL'); // ALL, MATCHED, AMBIGUOUS, UNMATCHED, MISMATCH, CHANGED, NEW
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20); // 10, 20, 50, ALL (-1)
+
+  // Cell Editing Modal State
+  const [editingCell, setEditingCell] = useState(null);
+  const [isSavingCell, setIsSavingCell] = useState(false);
+
+  const formatTo12Hr = (time24) => {
+    if (!time24) return '';
+    const parts = time24.split(':');
+    let h = parseInt(parts[0], 10);
+    const m = parts[1] || '00';
+    if (isNaN(h)) return time24;
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    return `${h}:${m} ${ampm}`;
+  };
+
+  const handleOpenCellEditor = (emp, day, empIndex, dayIndex) => {
+    const shiftType = (day.shiftType || '').toUpperCase();
+    const isLeave = ['CL', 'PL', 'SL', 'HD', 'HDL', 'LOP', 'LWP', 'ML', 'PTL', 'HL'].includes(shiftType);
+    const isOther = ['WO', 'OFF', 'NA', 'BLANK'].includes(shiftType);
+
+    let initialMode = 'SHIFT';
+    if (isLeave) initialMode = 'LEAVE';
+    else if (isOther) initialMode = 'OTHER';
+
+    setEditingCell({
+      emp,
+      day,
+      empIndex,
+      dayIndex,
+      mode: initialMode,
+      shiftLabel: day.shiftType === 'SHIFT' && day.shiftLabel ? day.shiftLabel : '2 - 8 PM',
+      useCustomTime: false,
+      customStart: day.shiftStartTime ? day.shiftStartTime.slice(0, 5) : '14:00',
+      customEnd: day.shiftEndTime ? day.shiftEndTime.slice(0, 5) : '20:00',
+      leaveType: isLeave ? (shiftType === 'HDL' ? 'HD' : shiftType) : 'CL',
+      otherType: isOther ? (shiftType === 'OFF' ? 'WO' : shiftType) : 'WO'
+    });
+  };
+
+  const handleSaveCellOverride = async () => {
+    if (!editingCell) return;
+    setIsSavingCell(true);
+    try {
+      const payload = {
+        rosterEmployeeName: editingCell.emp.rosterEmployeeName,
+        employeeId: editingCell.emp.matchedEmployeeId || editingCell.emp.id,
+        date: editingCell.day.date,
+      };
+
+      if (editingCell.mode === 'SHIFT') {
+        payload.shiftType = 'SHIFT';
+        if (editingCell.useCustomTime) {
+          payload.shiftStartTime = `${editingCell.customStart}:00`;
+          payload.shiftEndTime = `${editingCell.customEnd}:00`;
+          payload.shiftLabel = `${formatTo12Hr(editingCell.customStart)} - ${formatTo12Hr(editingCell.customEnd)}`;
+        } else {
+          payload.shiftLabel = editingCell.shiftLabel;
+        }
+      } else if (editingCell.mode === 'LEAVE') {
+        payload.shiftType = editingCell.leaveType;
+        payload.shiftLabel = editingCell.leaveType;
+      } else {
+        payload.shiftType = editingCell.otherType;
+        payload.shiftLabel = editingCell.otherType === 'BLANK' ? null : editingCell.otherType;
+      }
+
+      const res = await rosterService.overrideCell(jobId, payload);
+      const resData = res?.data || res;
+
+      if (resData?.parsedRoster) {
+        setPreviewData((prev) => ({
+          ...prev,
+          parsedRoster: resData.parsedRoster,
+          diffSummary: resData.diffSummary || prev.diffSummary
+        }));
+      }
+
+      toast.success(
+        `Updated ${editingCell.emp.rosterEmployeeName} on ${editingCell.day.date} (${payload.shiftLabel || payload.shiftType})`
+      );
+      setEditingCell(null);
+    } catch (err) {
+      console.error('Failed to override cell:', err);
+      toast.error(err.response?.data?.message || err.message || 'Failed to update shift/leave cell.');
+    } finally {
+      setIsSavingCell(false);
+    }
+  };
 
   useEffect(() => {
     if (!previewData && jobId) {
@@ -172,42 +262,78 @@ export const RosterPreviewPage = () => {
   };
 
   const getShiftTypeBadge = (day) => {
-    const shiftType = day.shiftType;
+    const shiftType = (day.shiftType || '').toUpperCase();
     switch (shiftType) {
       case 'SHIFT':
         return {
-          bg: 'bg-blue-50 text-blue-700 border-blue-200',
+          bg: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100/90',
           label: day.shiftLabel || 'Shift'
         };
       case 'WO':
+      case 'OFF':
         return {
-          bg: 'bg-slate-100 text-slate-700 border-slate-300 font-semibold',
+          bg: 'bg-slate-100 text-slate-700 border-slate-300 font-semibold hover:bg-slate-200/90',
           label: 'WO'
         };
       case 'CL':
         return {
-          bg: 'bg-amber-50 text-amber-700 border-amber-300 font-semibold',
+          bg: 'bg-amber-50 text-amber-700 border-amber-300 font-semibold hover:bg-amber-100/90',
           label: 'CL'
         };
-      case 'HD':
+      case 'PL':
+      case 'EL':
+      case 'AL':
         return {
-          bg: 'bg-purple-50 text-purple-700 border-purple-300 font-semibold',
+          bg: 'bg-emerald-50 text-emerald-700 border-emerald-300 font-semibold hover:bg-emerald-100/90',
+          label: 'PL'
+        };
+      case 'SL':
+        return {
+          bg: 'bg-rose-50 text-rose-700 border-rose-300 font-semibold hover:bg-rose-100/90',
+          label: 'SL'
+        };
+      case 'HD':
+      case 'HDL':
+        return {
+          bg: 'bg-purple-50 text-purple-700 border-purple-300 font-semibold hover:bg-purple-100/90',
           label: 'HD'
+        };
+      case 'LOP':
+      case 'LWP':
+        return {
+          bg: 'bg-slate-200 text-slate-800 border-slate-400 font-semibold hover:bg-slate-300',
+          label: 'LOP'
+        };
+      case 'ML':
+        return {
+          bg: 'bg-pink-50 text-pink-700 border-pink-300 font-semibold hover:bg-pink-100/90',
+          label: 'ML'
+        };
+      case 'PTL':
+        return {
+          bg: 'bg-cyan-50 text-cyan-700 border-cyan-300 font-semibold hover:bg-cyan-100/90',
+          label: 'PTL'
+        };
+      case 'HL':
+      case 'HOLIDAY':
+        return {
+          bg: 'bg-orange-50 text-orange-700 border-orange-300 font-semibold hover:bg-orange-100/90',
+          label: 'HL'
         };
       case 'NA':
         return {
-          bg: 'bg-gray-100 text-gray-500 border-gray-200',
+          bg: 'bg-gray-100 text-gray-500 border-gray-200 hover:bg-gray-200/70',
           label: 'NA'
         };
       case 'BLANK':
         return {
-          bg: 'bg-transparent text-gray-300 border-transparent',
+          bg: 'bg-slate-50/50 text-gray-300 border-dashed border-gray-200 hover:bg-slate-100 hover:text-gray-500',
           label: '—'
         };
       default:
         return {
-          bg: 'bg-red-50 text-red-600 border-red-200',
-          label: day.originalValue || '?'
+          bg: 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100',
+          label: day.originalValue || day.shiftLabel || '?'
         };
     }
   };
@@ -660,7 +786,7 @@ export const RosterPreviewPage = () => {
                   </td>
                 </tr>
               ) : (
-                paginatedEmployees.map((emp) => {
+                paginatedEmployees.map((emp, empIdx) => {
                   const mapping = matchingResult.mappings?.find(
                     (m) => m.rosterEmployeeName === emp.rosterEmployeeName
                   );
@@ -709,42 +835,42 @@ export const RosterPreviewPage = () => {
                         const style = getShiftTypeBadge(day);
                         const isNew = day.diffStatus === 'NEW';
                         const isChanged = day.diffStatus === 'CHANGED';
+                        const isOverridden = day.isOverridden;
 
                         return (
                           <td
                             key={idx}
-                            className={`p-1 text-center border-r border-slate-100 ${
+                            onClick={() => handleOpenCellEditor(emp, day, empIdx, idx)}
+                            className={`p-1 text-center border-r border-slate-100 cursor-pointer select-none transition-all group relative hover:bg-brand-50/40 ${
                               day.weekday === 'Sun' ? 'bg-red-50/20' : ''
                             }`}
+                            title={`Click to edit shift timing or assign leave for ${emp.rosterEmployeeName} on ${day.date}`}
                           >
-                            {day.shiftType !== 'BLANK' ? (
-                              <div
-                                className={`text-[10px] px-1 py-1 rounded border leading-tight relative font-medium ${style.bg} ${
-                                  isChanged ? 'ring-1 ring-amber-400' : ''
-                                }`}
-                                title={
-                                  isChanged
-                                    ? `Changed from: ${day.previousAssignment?.shiftLabel || day.previousAssignment?.shiftType}\nTo: ${day.shiftLabel}`
-                                    : day.shiftLabel || day.shiftType
-                                }
-                              >
-                                {isNew && (
-                                  <span
-                                    className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-500 border border-white"
-                                    title="New Shift Assignment"
-                                  />
-                                )}
-                                {isChanged && (
-                                  <span
-                                    className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-500 border border-white"
-                                    title="Changed Assignment"
-                                  />
-                                )}
-                                <span className="block truncate">{style.label}</span>
-                              </div>
-                            ) : (
-                              <span className="text-slate-300 text-[10px]">—</span>
-                            )}
+                            <div
+                              className={`text-[10px] px-1 py-1 rounded border leading-tight relative font-medium transition-all group-hover:scale-105 group-hover:shadow-xs group-hover:ring-1 group-hover:ring-brand-400 ${style.bg} ${
+                                isChanged ? 'ring-1 ring-amber-400' : ''
+                              } ${isOverridden ? 'ring-2 ring-purple-500 font-bold' : ''}`}
+                            >
+                              {isNew && (
+                                <span
+                                  className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-500 border border-white"
+                                  title="New Shift Assignment"
+                                />
+                              )}
+                              {isChanged && (
+                                <span
+                                  className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-500 border border-white"
+                                  title="Changed Assignment"
+                                />
+                              )}
+                              {isOverridden && (
+                                <span
+                                  className="absolute -top-1 -left-1 w-2 h-2 rounded-full bg-purple-600 border border-white"
+                                  title="Manually Overridden"
+                                />
+                              )}
+                              <span className="block truncate">{style.label}</span>
+                            </div>
                           </td>
                         );
                       })}
@@ -853,6 +979,270 @@ export const RosterPreviewPage = () => {
                 isLoading={resolvingAmbiguity}
               >
                 Confirm Mapping
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Edit Cell Modal (Shift Timing & Leave Management) */}
+      <Modal
+        isOpen={!!editingCell}
+        onClose={() => setEditingCell(null)}
+        title="Edit Shift or Leave Assignment"
+        subtitle={
+          editingCell
+            ? `${editingCell.emp.rosterEmployeeName} • ${editingCell.day.date} (${editingCell.day.weekday})`
+            : ''
+        }
+        maxWidth="max-w-xl"
+      >
+        {editingCell && (
+          <div className="space-y-5">
+            {/* Context Header Card */}
+            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
+              <div>
+                <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider">Current Scheduled Value</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="font-black text-slate-800 text-sm">
+                    {editingCell.day.shiftLabel || editingCell.day.shiftType}
+                  </span>
+                  <span className="text-[11px] text-slate-400">
+                    ({editingCell.day.originalValue || editingCell.day.shiftType})
+                  </span>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-[11px] text-slate-500 font-medium">Employee Match</p>
+                <p className="text-xs font-bold text-slate-700">
+                  {matchingResult.mappings?.find(m => m.rosterEmployeeName === editingCell.emp.rosterEmployeeName)?.matchedEmployeeName || 'Auto-mapping'}
+                </p>
+              </div>
+            </div>
+
+            {/* Mode Switcher Tabs */}
+            <div className="flex border-b border-slate-200 bg-slate-100/70 p-1 rounded-xl">
+              <button
+                type="button"
+                onClick={() => setEditingCell(prev => ({ ...prev, mode: 'SHIFT' }))}
+                className={`flex-1 py-2 px-3 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                  editingCell.mode === 'SHIFT'
+                    ? 'bg-white text-blue-700 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5 text-blue-600" />
+                Shift Timing
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditingCell(prev => ({ ...prev, mode: 'LEAVE' }))}
+                className={`flex-1 py-2 px-3 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                  editingCell.mode === 'LEAVE'
+                    ? 'bg-white text-amber-700 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <CalendarCheck className="w-3.5 h-3.5 text-amber-600" />
+                Add Leave (Bucket Sync)
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditingCell(prev => ({ ...prev, mode: 'OTHER' }))}
+                className={`flex-1 py-2 px-3 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                  editingCell.mode === 'OTHER'
+                    ? 'bg-white text-slate-800 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <span>Week Off / Clear</span>
+              </button>
+            </div>
+
+            {/* Mode 1: SHIFT */}
+            {editingCell.mode === 'SHIFT' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">
+                    Select Standard Shift Preset
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {[
+                      { label: '12 - 6 PM', desc: '12:00 PM – 06:00 PM (6 hrs)' },
+                      { label: '2 - 8 PM', desc: '02:00 PM – 08:00 PM (6 hrs)' },
+                      { label: '11 - 8 PM', desc: '11:00 AM – 08:00 PM (9 hrs)' },
+                      { label: '1 - 7 PM', desc: '01:00 PM – 07:00 PM (6 hrs)' },
+                      { label: '9:30 AM - 6:30 PM', desc: '09:30 AM – 06:30 PM (9 hrs)' },
+                      { label: '10 PM - 6 AM', desc: '10:00 PM – 06:00 AM (Overnight)' },
+                    ].map((preset) => {
+                      const isSelected = !editingCell.useCustomTime && editingCell.shiftLabel === preset.label;
+                      return (
+                        <button
+                          key={preset.label}
+                          type="button"
+                          onClick={() =>
+                            setEditingCell(prev => ({
+                              ...prev,
+                              shiftLabel: preset.label,
+                              useCustomTime: false
+                            }))
+                          }
+                          className={`p-2.5 rounded-xl border text-left transition-all ${
+                            isSelected
+                              ? 'border-blue-500 bg-blue-50/70 text-blue-900 ring-2 ring-blue-500/20'
+                              : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                          }`}
+                        >
+                          <p className="font-bold text-xs">{preset.label}</p>
+                          <p className="text-[10px] text-slate-500 mt-0.5">{preset.desc}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Custom Shift Toggle & Inputs */}
+                <div className="pt-2 border-t border-slate-100">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold text-slate-700">Custom Shift Timing</span>
+                    <button
+                      type="button"
+                      onClick={() => setEditingCell(prev => ({ ...prev, useCustomTime: !prev.useCustomTime }))}
+                      className="text-xs font-bold text-brand-600 hover:text-brand-700"
+                    >
+                      {editingCell.useCustomTime ? 'Use Presets Instead' : 'Enter Custom Hours'}
+                    </button>
+                  </div>
+
+                  {editingCell.useCustomTime && (
+                    <div className="grid grid-cols-2 gap-3 p-3 bg-blue-50/40 rounded-xl border border-blue-100">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">Start Time</label>
+                        <input
+                          type="time"
+                          value={editingCell.customStart}
+                          onChange={(e) => setEditingCell(prev => ({ ...prev, customStart: e.target.value }))}
+                          className="w-full px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">End Time</label>
+                        <input
+                          type="time"
+                          value={editingCell.customEnd}
+                          onChange={(e) => setEditingCell(prev => ({ ...prev, customEnd: e.target.value }))}
+                          className="w-full px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div className="col-span-2 text-center text-xs text-blue-800 font-semibold">
+                        Preview: {formatTo12Hr(editingCell.customStart)} - {formatTo12Hr(editingCell.customEnd)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Mode 2: LEAVE */}
+            {editingCell.mode === 'LEAVE' && (
+              <div className="space-y-4">
+                <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-xl text-xs text-amber-800">
+                  <p className="font-bold flex items-center gap-1.5 mb-1">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                    Automatic Leave Bucket Deduction
+                  </p>
+                  <p className="text-[11px] leading-relaxed">
+                    Selecting a leave type creates an official approved leave record for this date and automatically minuses/deducts from the candidate's remaining leave bucket days.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {[
+                    { code: 'CL', label: 'Casual Leave', desc: '12.0 days quota' },
+                    { code: 'PL', label: 'Planned / Privilege Leave', desc: '15.0 days quota' },
+                    { code: 'SL', label: 'Sick Leave', desc: '10.0 days quota' },
+                    { code: 'HD', label: 'Half Day (HDL)', desc: '0.5 day deduction' },
+                    { code: 'LOP', label: 'Loss of Pay (LOP)', desc: 'Unpaid leave' },
+                    { code: 'ML', label: 'Maternity Leave', desc: '180.0 days quota' },
+                    { code: 'PTL', label: 'Paternity Leave', desc: '15.0 days quota' },
+                    { code: 'HL', label: 'Holiday (HL)', desc: 'Company holiday' },
+                  ].map((lt) => {
+                    const isSelected = editingCell.leaveType === lt.code;
+                    return (
+                      <button
+                        key={lt.code}
+                        type="button"
+                        onClick={() => setEditingCell(prev => ({ ...prev, leaveType: lt.code }))}
+                        className={`p-2.5 rounded-xl border text-left transition-all ${
+                          isSelected
+                            ? 'border-amber-500 bg-amber-50/90 text-amber-900 ring-2 ring-amber-500/20'
+                            : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-black bg-slate-900 text-white mb-1">
+                          {lt.code}
+                        </span>
+                        <p className="font-bold text-xs leading-tight">{lt.label}</p>
+                        <p className="text-[10px] text-slate-500 mt-0.5">{lt.desc}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Mode 3: OTHER / WEEK OFF */}
+            {editingCell.mode === 'OTHER' && (
+              <div className="space-y-3">
+                <p className="text-xs text-slate-500">
+                  Select week-off or clear the day assignment for this employee:
+                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { code: 'WO', label: 'Week Off (WO)', desc: 'Standard non-working day' },
+                    { code: 'NA', label: 'Not Applicable (NA)', desc: 'Not scheduled / ineligible' },
+                    { code: 'BLANK', label: 'Clear (—)', desc: 'Remove assignment' },
+                  ].map((item) => {
+                    const isSelected = editingCell.otherType === item.code;
+                    return (
+                      <button
+                        key={item.code}
+                        type="button"
+                        onClick={() => setEditingCell(prev => ({ ...prev, otherType: item.code }))}
+                        className={`p-3 rounded-xl border text-left transition-all ${
+                          isSelected
+                            ? 'border-slate-800 bg-slate-100 text-slate-900 ring-2 ring-slate-800/20 font-bold'
+                            : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                        }`}
+                      >
+                        <p className="font-bold text-xs">{item.label}</p>
+                        <p className="text-[10px] text-slate-500 mt-1">{item.desc}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Modal Actions */}
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setEditingCell(null)}
+                disabled={isSavingCell}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                icon={CheckCircle2}
+                onClick={handleSaveCellOverride}
+                disabled={isSavingCell}
+                isLoading={isSavingCell}
+              >
+                Save & Update Schedule
               </Button>
             </div>
           </div>

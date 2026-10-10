@@ -72,4 +72,20 @@ export const rosterService = {
     const res = await http.get(`/v1/roster/assignments${queryString}`);
     return res;
   },
+
+  /**
+   * Override a specific cell (shift timing or leave) in a roster job
+   */
+  async overrideCell(jobId, data) {
+    const res = await http.post(`/v1/roster/cell-override/${jobId}`, data);
+    return res;
+  },
+
+  /**
+   * Update employee daily shift assignment directly
+   */
+  async updateAssignment(data) {
+    const res = await http.put('/v1/roster/assignment', data);
+    return res;
+  },
 };
