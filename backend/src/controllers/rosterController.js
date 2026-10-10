@@ -620,6 +620,19 @@ export const confirmImport = async (req, res, next) => {
       'AWOL': { code: 'AWOL', name: 'Absent Without Leave(AWOL)', isHalf: false }
     };
 
+    const DEFAULT_LEAVE_QUOTAS = {
+      'PL': 15.0,  // Planned Leave
+      'CL': 12.0,  // Casual Leave
+      'SL': 10.0,  // Sick Leave
+      'HDL': 6.0,  // Half Day
+      'ML': 180.0, // Maternity Leave
+      'PTL': 15.0, // Paternity Leave
+      'SBL': 30.0, // Sabbatical Leave
+      'HL': 10.0,  // Holiday
+      'AWOL': 0.0, // Absent Without Leave
+      'LOP': 0.0   // Leave Without Pay
+    };
+
     let newAssignments = 0;
     let updatedAssignments = 0;
     let unchangedAssignments = 0;
@@ -871,25 +884,78 @@ export const confirmImport = async (req, res, next) => {
                   ]
                 );
 
-                // Update / record in leave_balances
+                // Update / deduct from candidate's leave bucket in leave_balances
                 const leaveYear = parseInt(day.date.split('-')[0], 10);
-                await client.query(
-                  `INSERT INTO leave_balances (
-                    id, org_id, employee_id, leave_type_id, year,
-                    allocated_days, used_days, pending_days
-                  ) VALUES ($1, $2, $3, $4, $5, $6, $7, 0.0)
-                  ON CONFLICT (employee_id, leave_type_id, year)
-                  DO UPDATE SET used_days = leave_balances.used_days + $7, updated_at = NOW()`,
-                  [
-                    `lb-${nanoid()}`,
-                    orgId,
-                    employeeId,
-                    matchedLt.id,
-                    leaveYear,
-                    parseFloat(matchedLt.days_per_year) || 0.0,
-                    totalDays
-                  ]
+                const ltCode = matchedLt.code.toUpperCase();
+                const stdQuota = DEFAULT_LEAVE_QUOTAS[ltCode] !== undefined 
+                  ? DEFAULT_LEAVE_QUOTAS[ltCode] 
+                  : (parseFloat(matchedLt.days_per_year) || 0.0);
+
+                const existingBal = await client.query(
+                  `SELECT id, allocated_days, used_days, pending_days, remaining_days 
+                   FROM leave_balances 
+                   WHERE employee_id = $1 AND leave_type_id = $2 AND year = $3
+                   FOR UPDATE`,
+                  [employeeId, matchedLt.id, leaveYear]
                 );
+
+                if (existingBal.rows.length === 0) {
+                  // Initialize candidate's leave bucket with quota and minus the leaves taken
+                  const initialAlloc = Math.max(stdQuota, totalDays);
+                  await client.query(
+                    `INSERT INTO leave_balances (
+                      id, org_id, employee_id, leave_type_id, year,
+                      allocated_days, used_days, pending_days, updated_at
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, 0.0, NOW())`,
+                    [
+                      `lb-${nanoid()}`,
+                      orgId,
+                      employeeId,
+                      matchedLt.id,
+                      leaveYear,
+                      initialAlloc,
+                      totalDays
+                    ]
+                  );
+                } else {
+                  // Deduct from candidate's existing bucket: increment used_days and ensure allocated_days covers it
+                  const curAlloc = parseFloat(existingBal.rows[0].allocated_days) || 0.0;
+                  const curUsed = parseFloat(existingBal.rows[0].used_days) || 0.0;
+                  const targetAlloc = curAlloc > 0 
+                    ? Math.max(curAlloc, curUsed + totalDays) 
+                    : Math.max(stdQuota, totalDays);
+
+                  await client.query(
+                    `UPDATE leave_balances
+                     SET allocated_days = $1,
+                         used_days = used_days + $2,
+                         updated_at = NOW()
+                     WHERE id = $3`,
+                    [targetAlloc, totalDays, existingBal.rows[0].id]
+                  );
+                }
+
+                // Sync to attendance_records as ON_LEAVE / HALF_DAY
+                const attCheck = await client.query(
+                  `SELECT id, check_in FROM attendance_records WHERE employee_id = $1 AND attendance_date = $2`,
+                  [employeeId, day.date]
+                );
+                if (attCheck.rows.length === 0 || attCheck.rows[0].check_in === null) {
+                  const attId = `att-${nanoid()}`;
+                  const attStatus = (day.shiftType === 'HD' || day.shiftType === 'HDL') ? 'HALF_DAY' : 'ON_LEAVE';
+                  const totalHours = (day.shiftType === 'HD' || day.shiftType === 'HDL') ? 4.00 : 0.00;
+                  const notes = `${matchedLt.name} (Auto-synced from monthly roster)`;
+
+                  await client.query(
+                    `INSERT INTO attendance_records (
+                      id, org_id, employee_id, attendance_date, status, total_hours,
+                      source, notes, created_at, updated_at
+                    ) VALUES ($1, $2, $3, $4, $5, $6, 'ROSTER_IMPORT', $7, NOW(), NOW())
+                    ON CONFLICT (employee_id, attendance_date)
+                    DO UPDATE SET status = EXCLUDED.status, source = 'ROSTER_IMPORT', notes = EXCLUDED.notes, updated_at = NOW()`,
+                    [attId, orgId, employeeId, day.date, attStatus, totalHours, notes]
+                  );
+                }
 
                 autoAppliedLeaves++;
               }
