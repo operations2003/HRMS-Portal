@@ -38,6 +38,9 @@ import { EngagementPage } from './pages/engagement/EngagementPage.jsx';
 import { ProbationDashboardPage } from './pages/probation/ProbationDashboardPage.jsx';
 import { ReportsPage } from './pages/reports/ReportsPage.jsx';
 import { DailyReportPage } from './pages/daily-reports/DailyReportPage.jsx';
+import { RosterImportPage } from './pages/roster/RosterImportPage.jsx';
+import { RosterPreviewPage } from './pages/roster/RosterPreviewPage.jsx';
+import { RosterHistoryPage } from './pages/roster/RosterHistoryPage.jsx';
 import { ForbiddenPage } from './pages/common/ForbiddenPage.jsx';
 import { NotFoundPage } from './pages/common/NotFoundPage.jsx';
 import { AppLayout } from './layouts/AppLayout.jsx';
@@ -171,6 +174,33 @@ export const App = () => {
                 element={
                   <PermissionRoute permission="employee:read">
                     <PayrollPage />
+                  </PermissionRoute>
+                }
+              />
+
+              <Route
+                path="roster/import"
+                element={
+                  <PermissionRoute permission="employee:write">
+                    <RosterImportPage />
+                  </PermissionRoute>
+                }
+              />
+
+              <Route
+                path="roster/preview/:jobId"
+                element={
+                  <PermissionRoute permission="employee:write">
+                    <RosterPreviewPage />
+                  </PermissionRoute>
+                }
+              />
+
+              <Route
+                path="roster/history"
+                element={
+                  <PermissionRoute permission="employee:write">
+                    <RosterHistoryPage />
                   </PermissionRoute>
                 }
               />

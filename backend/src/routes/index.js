@@ -32,6 +32,7 @@ import payrollRoutes from './payrollRoutes.js';
 import policyRoutes from './policyRoutes.js';
 import dailyReportRoutes from './dailyReportRoutes.js';
 import appsumoRoutes from './appsumoRoutes.js';
+import rosterRoutes from './rosterRoutes.js';
 import { sendSuccess } from '../utils/apiResponse.js';
 import { config } from '../config/index.js';
 
@@ -87,6 +88,7 @@ router.use('/v1/analytics', analyticsRoutes);
 router.use('/v1/payroll', payrollRoutes);
 router.use('/v1/policies', policyRoutes);
 router.use('/v1/daily-reports', dailyReportRoutes);
+router.use('/v1/roster', rosterRoutes);
 
 // AppSumo Licensing v2 Integration
 router.use('/v1/appsumo', appsumoRoutes);

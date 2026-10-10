@@ -60,4 +60,13 @@ export const employeeService = {
     const res = await http.post(`/v1/employees/${id}/end-internship`, data);
     return res.data;
   },
+
+  async uploadAvatar(id, formData) {
+    const res = await http.post(`/v1/employees/${id}/avatar`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return res.data;
+  },
 };

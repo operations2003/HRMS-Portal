@@ -37,6 +37,7 @@ import {
   CheckCircle2,
   GraduationCap,
   ExternalLink,
+  Upload,
 } from 'lucide-react';
 import { DataTable } from '../../components/common/DataTable.jsx';
 import { Button } from '../../components/common/Button.jsx';
@@ -54,6 +55,7 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { EmployeeTimelineModal } from '../../components/employees/EmployeeTimelineModal.jsx';
 import { AssignManagerModal } from '../../components/team/AssignManagerModal.jsx';
+import UploadEmployeePhotoModal from '../../components/employees/UploadEmployeePhotoModal.jsx';
 const getProbationEndDate = (startDate) => {
   if (!startDate) return null;
   const d = new Date(startDate);
@@ -131,6 +133,10 @@ export const EmployeeListPage = () => {
   const [loadingViewProfile, setLoadingViewProfile] = useState(false);
   const [timelineEmployee, setTimelineEmployee] = useState(null);
   const [reassigningEmployee, setReassigningEmployee] = useState(null);
+
+  // Upload Photo Modal State  
+  const [uploadPhotoEmployee, setUploadPhotoEmployee] = useState(null);
+  const [isUploadPhotoOpen, setIsUploadPhotoOpen] = useState(false);
 
   // HR cannot update her own shift timing (Admin retains full permission)
   const isEditingSelf = Boolean(
@@ -949,6 +955,31 @@ export const EmployeeListPage = () => {
     setEwsFilter('');
   };
 
+  const handleOpenUploadPhoto = (emp) => {
+    setUploadPhotoEmployee(emp);
+    setIsUploadPhotoOpen(true);
+  };
+
+  const handleCloseUploadPhoto = () => {
+    setUploadPhotoEmployee(null);
+    setIsUploadPhotoOpen(false);
+  };
+
+  const handleUploadPhotoSuccess = async (response) => {
+    // Refresh the employee list to show updated avatar
+    await fetchEmployees(pagination?.page || 1);
+    
+    // Update viewing employee if it's the same employee
+    if (viewingEmployee && viewingEmployee.id === uploadPhotoEmployee?.id) {
+      setViewingEmployee((prev) => ({
+        ...prev,
+        avatarUrl: response.data?.avatarUrl || response.avatarUrl,
+      }));
+    }
+    
+    toast.success(`Profile picture uploaded successfully for ${uploadPhotoEmployee?.firstName} ${uploadPhotoEmployee?.lastName}`);
+  };
+
   const hasActiveFilters = Boolean(search || orgFilter || deptFilter || statusFilter || ewsFilter);
 
   // Determine if logged in user has salary view privilege (Admin/CEO, HR, or self only)
@@ -1220,6 +1251,18 @@ export const EmployeeListPage = () => {
               title={row.isEws ? `EWS Active: ${row.ewsReason || 'Under Review'}` : "Put on Early Warning System (EWS)"}
             >
               {row.isEws ? 'EWS Active' : 'EWS'}
+            </Button>
+          )}
+          {isCurrentUserAdmin && (
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={Upload}
+              onClick={() => handleOpenUploadPhoto(row)}
+              className="text-slate-500 hover:text-blue-600 hover:bg-blue-50"
+              title={`Upload profile picture for ${row.firstName} ${row.lastName}`}
+            >
+              Photo
             </Button>
           )}
           <Can permission="employee:write">
@@ -3327,6 +3370,15 @@ export const EmployeeListPage = () => {
         employee={reassigningEmployee}
         onClose={() => setReassigningEmployee(null)}
         onSuccess={() => fetchEmployees(pagination?.page || 1)}
+      />
+
+      {/* Upload Employee Photo Modal */}
+      <UploadEmployeePhotoModal
+        isOpen={isUploadPhotoOpen}
+        onClose={handleCloseUploadPhoto}
+        employee={uploadPhotoEmployee}
+        onUploadSuccess={handleUploadPhotoSuccess}
+        currentUser={user}
       />
 
       {/* Quick EWS Modal */}
