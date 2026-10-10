@@ -13,6 +13,7 @@ export const Select = ({
   required = false,
   disabled = false,
   className = '',
+  children,
   ...props
 }) => {
   const hasEmptyOption = options.some((opt) => (typeof opt === 'object' ? opt.value : opt) === '');
