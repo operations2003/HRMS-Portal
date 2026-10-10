@@ -16,7 +16,13 @@ import {
 } from 'lucide-react';
 import { Button } from '../common/Button.jsx';
 import { Alert } from '../common/Alert.jsx';
-import { formatHoursToClock } from '../../utils/timeUtils.js';
+import {
+  formatHoursToClock,
+  formatTimeWithTimezone,
+  getLiveBreakSeconds,
+  getLiveBreakMinutes,
+  formatLiveBreakDuration,
+} from '../../utils/timeUtils.js';
 
 /**
  * Parse scheduled duration hours from shift timing string (e.g. "11:00 AM - 07:00 PM" -> 8.0)
@@ -82,13 +88,8 @@ const formatBreakDuration = (totalSeconds) => {
   return `${secs}s`;
 };
 
-const formatTimeOnly = (dateStr) => {
-  if (!dateStr) return '';
-  try {
-    return new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
-  } catch {
-    return '';
-  }
+const formatTimeOnly = (dateStr, timezone = null) => {
+  return formatTimeWithTimezone(dateStr, timezone);
 };
 
 export const AttendancePunchCard = ({
@@ -109,6 +110,7 @@ export const AttendancePunchCard = ({
   const [overtimeElapsed, setOvertimeElapsed] = useState('00:00:00');
   const [isOvertimeActive, setIsOvertimeActive] = useState(false);
   const [breakElapsed, setBreakElapsed] = useState('00:00:00');
+  const [ongoingBreakSeconds, setOngoingBreakSeconds] = useState(0);
   const [totalBreakFormatted, setTotalBreakFormatted] = useState('0 mins');
   const [showBreakHistory, setShowBreakHistory] = useState(false);
 
@@ -157,6 +159,7 @@ export const AttendancePunchCard = ({
       }
 
       const totalBreakSecs = pastBreakSeconds + ongoingBreakSeconds;
+      setOngoingBreakSeconds(ongoingBreakSeconds);
       setBreakElapsed(formatHMS(ongoingBreakSeconds));
       setTotalBreakFormatted(formatBreakDuration(totalBreakSecs));
 
@@ -201,7 +204,7 @@ export const AttendancePunchCard = ({
     hour12: true,
   });
   const [timeDigits, timePeriod] = timeString.split(' ');
-  const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local';
+  const userTimezone = todayRecord?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Kolkata';
 
   // Status mapping
   let statusBadge = (
@@ -213,10 +216,17 @@ export const AttendancePunchCard = ({
 
   if (hasCheckedIn && !hasCheckedOut) {
     if (isOnBreak) {
+      const breakStartFormatted = formatTimeWithTimezone(todayRecord?.currentBreakStart, userTimezone);
+      const breakMins = Math.floor(ongoingBreakSeconds / 60);
+      const liveDurationText = breakMins >= 1 ? `${breakMins} mins` : `${ongoingBreakSeconds}s`;
+
       statusBadge = (
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-300 ring-1 ring-amber-500/20 animate-pulse">
-          <Coffee className="w-3.5 h-3.5 text-amber-600" />
-          On Break (Shift Paused)
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-900 border border-amber-300 ring-1 ring-amber-500/30 animate-pulse shadow-2xs">
+          <Coffee className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+          <span>On Break · {liveDurationText}</span>
+          <span className="text-[11px] font-normal text-amber-700/90 pl-0.5">
+            (Started at {breakStartFormatted})
+          </span>
         </span>
       );
     } else if (isOvertimeActive) {
@@ -322,26 +332,27 @@ export const AttendancePunchCard = ({
       <div className="p-6 space-y-4">
         {/* Active Break Banner */}
         {isOnBreak && (
-          <div className="p-4 rounded-2xl bg-amber-50/90 border border-amber-200 shadow-2xs flex items-center justify-between gap-3 text-amber-900 animate-in fade-in duration-200">
+          <div className="p-4 rounded-2xl bg-amber-50/95 border border-amber-200/90 shadow-2xs flex items-center justify-between gap-3 text-amber-900 animate-in fade-in duration-200">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 shadow-xs">
-                <Coffee className="w-5 h-5" />
+              <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 shadow-xs ring-1 ring-amber-300/40">
+                <Coffee className="w-5 h-5 animate-pulse" />
               </div>
               <div>
-                <div className="text-xs font-bold uppercase tracking-wider text-amber-800">
-                  Break in Progress
+                <div className="text-xs font-bold uppercase tracking-wider text-amber-800 flex items-center gap-1.5">
+                  <span>On Break</span>
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span>
+                  <span className="text-amber-700 font-bold lowercase">
+                    · {Math.floor(ongoingBreakSeconds / 60)} mins
+                  </span>
                 </div>
-                <div className="text-xs text-amber-700">
-                  Shift paused since{' '}
-                  {todayRecord?.currentBreakStart
-                    ? formatTimeOnly(todayRecord.currentBreakStart)
-                    : 'just now'}
+                <div className="text-xs text-amber-700 mt-0.5">
+                  Started at <strong className="font-semibold text-amber-950">{formatTimeWithTimezone(todayRecord?.currentBreakStart, userTimezone)}</strong>
                 </div>
               </div>
             </div>
             <div className="text-right">
-              <div className="text-[11px] text-amber-600 font-medium">Break Time</div>
-              <div className="text-base sm:text-lg font-black font-mono text-amber-900">{breakElapsed}</div>
+              <div className="text-[11px] text-amber-600 font-medium">Live Break Duration</div>
+              <div className="text-base sm:text-lg font-black font-mono text-amber-950">{breakElapsed}</div>
             </div>
           </div>
         )}
@@ -439,11 +450,11 @@ export const AttendancePunchCard = ({
         </div>
 
         {/* Break History expandable panel */}
-        {showBreakHistory && breakHistory.length > 0 && (
+        {showBreakHistory && (breakHistory.length > 0 || isOnBreak) && (
           <div className="mt-4 p-4 rounded-2xl bg-slate-50 border border-slate-200/80 transition-all animate-fadeIn">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-bold text-slate-700 tracking-wide uppercase">
-                Today's Break Sessions ({breakHistory.length})
+                Today's Break Sessions ({breakHistory.length + (isOnBreak ? 1 : 0)})
               </span>
               <span className="text-[11px] font-medium text-slate-500">
                 Total paused: <strong className="text-slate-800">{totalBreakFormatted}</strong>
@@ -451,30 +462,47 @@ export const AttendancePunchCard = ({
             </div>
             <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
               {breakHistory.map((b, idx) => {
-                const s = b.startTime ? formatTimeOnly(b.startTime) : '—';
-                const e = b.endTime ? formatTimeOnly(b.endTime) : (isOnBreak && idx === breakHistory.length - 1 ? 'Ongoing' : '—');
+                const s = b.startTime ? formatTimeOnly(b.startTime, userTimezone) : '—';
+                const e = b.endTime ? formatTimeOnly(b.endTime, userTimezone) : '—';
                 const dur = b.durationMinutes != null
                   ? `${b.durationMinutes} mins`
-                  : (isOnBreak && idx === breakHistory.length - 1 ? 'In progress' : '—');
+                  : (b.durationSeconds ? `${Math.round(b.durationSeconds / 60)} mins` : '—');
                 return (
                   <div
                     key={b.id || idx}
                     className="flex items-center justify-between text-xs px-3 py-2 rounded-xl bg-white border border-slate-200/60"
                   >
                     <div className="flex items-center gap-2 min-w-0">
-                      <span className="w-5 h-5 rounded-full bg-amber-50 text-amber-700 font-bold text-[10px] flex items-center justify-center shrink-0 border border-amber-200">
+                      <span className="w-5 h-5 rounded-full bg-slate-100 text-slate-700 font-bold text-[10px] flex items-center justify-center shrink-0 border border-slate-200">
                         {idx + 1}
                       </span>
                       <span className="text-slate-700 font-medium">
                         {s} → {e}
                       </span>
                     </div>
-                    <span className={`font-mono font-semibold shrink-0 ${!b.endTime ? 'text-amber-600' : 'text-slate-600'}`}>
+                    <span className="font-mono font-semibold shrink-0 text-slate-600">
                       {dur}
                     </span>
                   </div>
                 );
               })}
+
+              {/* Ongoing active break session in history panel */}
+              {isOnBreak && todayRecord?.currentBreakStart && (
+                <div className="flex items-center justify-between text-xs px-3 py-2 rounded-xl bg-amber-50/95 border border-amber-300 text-amber-900 animate-pulse">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="w-5 h-5 rounded-full bg-amber-200 text-amber-950 font-bold text-[10px] flex items-center justify-center shrink-0 border border-amber-300">
+                      {breakHistory.length + 1}
+                    </span>
+                    <span className="text-amber-900 font-semibold truncate">
+                      Started at {formatTimeWithTimezone(todayRecord.currentBreakStart, userTimezone)} → Ongoing
+                    </span>
+                  </div>
+                  <span className="font-mono font-bold shrink-0 text-amber-900">
+                    {breakElapsed}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -519,7 +547,7 @@ export const AttendancePunchCard = ({
                 isLoading={isBreakLoading}
                 onClick={onResumeBreak}
               >
-                {isBreakLoading ? 'Resuming...' : 'Resume Work (End Break)'}
+                {isBreakLoading ? 'Ending Break...' : 'End Break (Resume Work)'}
               </Button>
             ) : (
               <Button
@@ -531,7 +559,7 @@ export const AttendancePunchCard = ({
                 isLoading={isBreakLoading}
                 onClick={onPauseBreak}
               >
-                {isBreakLoading ? 'Pausing...' : 'Pause for Break'}
+                {isBreakLoading ? 'Starting Break...' : 'Start Break (Pause Shift)'}
               </Button>
             )}
 

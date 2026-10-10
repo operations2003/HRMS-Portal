@@ -28,8 +28,13 @@ import { Button } from '../common/Button.jsx';
 import { Input } from '../common/Input.jsx';
 import { Select } from '../common/Select.jsx';
 import { LoadingSpinner } from '../common/LoadingSpinner.jsx';
-import { EmptyState } from '../common/EmptyState.jsx';
-import { formatHoursToClock, formatOvertimeDuration } from '../../utils/timeUtils.js';
+import {
+  formatHoursToClock,
+  formatOvertimeDuration,
+  formatTimeWithTimezone,
+  getLiveBreakMinutes,
+  formatLiveBreakDuration,
+} from '../../utils/timeUtils.js';
 import { getLeaveShortCode } from '../../utils/attendanceExcelExport.js';
 
 export const AttendanceHistoryTable = ({
@@ -103,6 +108,18 @@ export const AttendanceHistoryTable = ({
       const [y, m, d] = dStr.split('-').map(Number);
       return new Date(y, m - 1, d).getDay() !== 0;
     });
+  }, [records]);
+
+  // Live timer tick updating break duration in real time when any displayed records are on break
+  const [, setTick] = React.useState(0);
+  React.useEffect(() => {
+    const hasAnyOnBreak = (records || []).some((r) => r.isOnBreak);
+    if (!hasAnyOnBreak) return;
+
+    const timer = setInterval(() => {
+      setTick((t) => t + 1);
+    }, 1000);
+    return () => clearInterval(timer);
   }, [records]);
 
   const isSelectedDateSunday = React.useMemo(() => {
@@ -399,11 +416,14 @@ export const AttendanceHistoryTable = ({
                       {getStatusBadge(row.status)}
                       {row.isOnBreak && (
                         <span
-                          title="Employee is currently on an active break (Shift Paused)"
-                          className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 ring-1 ring-amber-400/30 text-[10px] font-bold inline-flex items-center gap-1 animate-pulse"
+                          title={`Break started at ${formatTimeWithTimezone(row.currentBreakStart, row.timezone)}. Live break duration: ${formatLiveBreakDuration(row.currentBreakStart)}`}
+                          className="px-2.5 py-1 rounded-full bg-amber-50 text-amber-900 border border-amber-300 ring-1 ring-amber-400/30 text-[11px] font-bold inline-flex items-center gap-1.5 animate-pulse shadow-2xs"
                         >
-                          <Coffee className="w-2.5 h-2.5 text-amber-600 shrink-0" />
-                          On Break
+                          <Coffee className="w-3 h-3 text-amber-600 shrink-0" />
+                          <span>On Break · {getLiveBreakMinutes(row.currentBreakStart)} mins</span>
+                          <span className="text-[10px] font-normal text-amber-700/90">
+                            (Started at {formatTimeWithTimezone(row.currentBreakStart, row.timezone)})
+                          </span>
                         </span>
                       )}
                       {row.breakDurationMinutes > 0 && !row.isOnBreak && (
@@ -679,11 +699,14 @@ export const AttendanceHistoryTable = ({
                           {getStatusBadge(row.status, row)}
                           {row.isOnBreak && (
                             <span
-                              title="Employee is currently on an active break (Shift Paused)"
+                              title={`Break started at ${formatTimeWithTimezone(row.currentBreakStart, row.timezone)}. Live break duration: ${formatLiveBreakDuration(row.currentBreakStart)}`}
                               className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-300 ring-1 ring-amber-400/30 animate-pulse shadow-2xs"
                             >
                               <Coffee className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                              On Break
+                              <span>On Break · {getLiveBreakMinutes(row.currentBreakStart)} mins</span>
+                              <span className="text-[10px] font-medium text-amber-700/80">
+                                (Started at {formatTimeWithTimezone(row.currentBreakStart, row.timezone)})
+                              </span>
                             </span>
                           )}
                           {row.breakDurationMinutes > 0 && !row.isOnBreak && (
@@ -791,11 +814,15 @@ export const AttendanceHistoryTable = ({
                         >
                           {formatHoursToClock(row.totalHours)}
                         </span>
-                        {row.breakDurationMinutes > 0 && (
+                        {row.isOnBreak ? (
+                          <span className="text-[11px] text-amber-700 font-bold block animate-pulse">
+                            On Break · {getLiveBreakMinutes(row.currentBreakStart)}m
+                          </span>
+                        ) : row.breakDurationMinutes > 0 ? (
                           <span className="text-[11px] text-slate-400 block">
                             Break: {row.breakDurationMinutes}m
                           </span>
-                        )}
+                        ) : null}
                       </td>
 
                       {/* Overtime */}

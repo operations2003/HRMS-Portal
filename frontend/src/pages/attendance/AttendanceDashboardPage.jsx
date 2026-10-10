@@ -197,6 +197,27 @@ export const AttendanceDashboardPage = () => {
     fetchTableData(1);
   }, [fetchTableData]);
 
+  // Real-time synchronization across windows/tabs & background auto-refresh
+  useEffect(() => {
+    const handleAttendanceUpdate = () => {
+      if (!isCeo) {
+        fetchTodayRecord();
+      }
+      fetchTableData(pagination?.page || 1);
+    };
+    window.addEventListener('hrms:attendance:updated', handleAttendanceUpdate);
+
+    // Auto-refresh attendance records every 25 seconds for real-time status across team
+    const pollInterval = setInterval(() => {
+      fetchTableData(pagination?.page || 1);
+    }, 25000);
+
+    return () => {
+      window.removeEventListener('hrms:attendance:updated', handleAttendanceUpdate);
+      clearInterval(pollInterval);
+    };
+  }, [fetchTodayRecord, fetchTableData, isCeo, pagination?.page]);
+
   // Load departments for export filter selector
   useEffect(() => {
     if (canViewOrg) {
@@ -268,6 +289,8 @@ export const AttendanceDashboardPage = () => {
       setTodayRecord(record);
       toast.success('Shift paused for break. Timer paused.');
       fetchTodayRecord();
+      fetchTableData(pagination?.page || 1);
+      window.dispatchEvent(new CustomEvent('hrms:attendance:updated', { detail: record }));
     } catch (err) {
       const msg = err.message || 'Failed to pause for break.';
       setPunchError(msg);
@@ -287,6 +310,8 @@ export const AttendanceDashboardPage = () => {
       setTodayRecord(record);
       toast.success('Break ended. Work session resumed!');
       fetchTodayRecord();
+      fetchTableData(pagination?.page || 1);
+      window.dispatchEvent(new CustomEvent('hrms:attendance:updated', { detail: record }));
     } catch (err) {
       const msg = err.message || 'Failed to resume work.';
       setPunchError(msg);

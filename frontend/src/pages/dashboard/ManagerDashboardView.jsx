@@ -35,6 +35,11 @@ import { Button } from '../../components/common/Button.jsx';
 import { Badge } from '../../components/common/Badge.jsx';
 import { Avatar } from '../../components/common/Avatar.jsx';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
+import {
+  formatTimeWithTimezone,
+  getLiveBreakMinutes,
+  formatLiveBreakDuration,
+} from '../../utils/timeUtils.js';
 
 export const ManagerDashboardView = () => {
   const { user } = useAuth();
@@ -121,8 +126,38 @@ export const ManagerDashboardView = () => {
     }
   };
 
+  const [, setLiveTick] = useState(0);
+
+  // Live seconds ticker when any member in team roster is currently on break
+  useEffect(() => {
+    const hasAnyOnBreak = teamAttendance.some((a) => Boolean(a.isOnBreak || a.is_on_break));
+    if (!hasAnyOnBreak) return;
+
+    const interval = setInterval(() => {
+      setLiveTick((t) => t + 1);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [teamAttendance]);
+
   useEffect(() => {
     loadData();
+
+    // Cross-tab / cross-device attendance event listener
+    const handleAttendanceUpdate = () => {
+      loadData(true);
+    };
+    window.addEventListener('hrms:attendance:updated', handleAttendanceUpdate);
+
+    // Auto-refresh team attendance status every 25 seconds
+    const pollInterval = setInterval(() => {
+      loadData(true);
+    }, 25000);
+
+    return () => {
+      window.removeEventListener('hrms:attendance:updated', handleAttendanceUpdate);
+      clearInterval(pollInterval);
+    };
   }, []);
 
   // Quick Leave Approval from Dashboard
@@ -393,6 +428,11 @@ export const ManagerDashboardView = () => {
                   const name = member.fullName || `${member.firstName || ''} ${member.lastName || ''}`.trim() || 'Team Member';
                   // Find attendance record for member
                   const att = teamAttendance.find((a) => a.employeeId === member.id || a.employee_id === member.id);
+                  const isOnBreak = Boolean(att?.isOnBreak || att?.is_on_break);
+                  const currentBreakStart = att?.currentBreakStart || att?.current_break_start;
+                  const tz = att?.timezone || user?.organization?.timezone || user?.timezone || 'Asia/Kolkata';
+                  const breakStartTimeFormatted = currentBreakStart ? formatTimeWithTimezone(currentBreakStart, tz) : '';
+                  const liveBreakMins = currentBreakStart ? getLiveBreakMinutes(currentBreakStart) : (att?.breakDurationMinutes || 0);
                   const isPresent = att?.status === 'PRESENT' || att?.status === 'HALF_DAY';
                   const isLate = att?.status === 'LATE';
 
@@ -420,7 +460,23 @@ export const ManagerDashboardView = () => {
                       </div>
 
                       <div className="flex items-center gap-3 shrink-0">
-                        {isLate ? (
+                        {isOnBreak ? (
+                          <span
+                            title={currentBreakStart ? `Break started at ${breakStartTimeFormatted} (${liveBreakMins} mins)` : 'On Break'}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-900 border border-amber-300 ring-1 ring-amber-400/30 shadow-2xs"
+                          >
+                            <span className="relative flex h-2 w-2 shrink-0">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                            </span>
+                            <span>On Break · {liveBreakMins} mins</span>
+                            {breakStartTimeFormatted && (
+                              <span className="text-amber-700 font-normal">
+                                (Started at {breakStartTimeFormatted})
+                              </span>
+                            )}
+                          </span>
+                        ) : isLate ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
                             Late ({att.checkInTime || att.check_in_time || 'Check-in'})
                           </span>

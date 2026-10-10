@@ -43,7 +43,12 @@ import { EmptyState } from '../../components/common/EmptyState.jsx';
 import { TeamMemberDetailModal } from '../../components/team/TeamMemberDetailModal.jsx';
 import { AssignManagerModal } from '../../components/team/AssignManagerModal.jsx';
 import { ApprovalActionModal } from '../../components/approvals/ApprovalActionModal.jsx';
-import { formatHoursToClock } from '../../utils/timeUtils.js';
+import {
+  formatHoursToClock,
+  formatTimeWithTimezone,
+  getLiveBreakMinutes,
+  formatLiveBreakDuration,
+} from '../../utils/timeUtils.js';
 import { filterNonCeoEmployees } from '../../utils/roleUtils.js';
 import { AttendanceDetailModal } from '../../components/attendance/AttendanceDetailModal.jsx';
 import { EditAttendanceTimingModal } from '../../components/attendance/EditAttendanceTimingModal.jsx';
@@ -107,6 +112,43 @@ export const TeamManagementPage = () => {
   const [rejectReason, setRejectReason] = useState('');
   const [isVerifyingDoc, setIsVerifyingDoc] = useState(false);
   const [previewDocModal, setPreviewDocModal] = useState(null);
+
+  const [, setLiveTick] = useState(0);
+
+  // Live seconds ticker when any member in attendance is currently on break
+  useEffect(() => {
+    if (activeTab !== 'attendance') return;
+    const hasAnyOnBreak = (attendance || []).some((r) => Boolean(r.attendance?.isOnBreak || r.isOnBreak));
+    if (!hasAnyOnBreak) return;
+
+    const interval = setInterval(() => {
+      setLiveTick((t) => t + 1);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [activeTab, attendance]);
+
+  useEffect(() => {
+    if (!isAuthorized) return;
+
+    const handleAttendanceUpdate = () => {
+      if (activeTab === 'attendance') {
+        loadTabData();
+      }
+    };
+    window.addEventListener('hrms:attendance:updated', handleAttendanceUpdate);
+
+    const pollInterval = setInterval(() => {
+      if (activeTab === 'attendance') {
+        loadTabData();
+      }
+    }, 25000);
+
+    return () => {
+      window.removeEventListener('hrms:attendance:updated', handleAttendanceUpdate);
+      clearInterval(pollInterval);
+    };
+  }, [isAuthorized, activeTab, selectedDate, attendanceStatusFilter]);
 
   useEffect(() => {
     if (isAuthorized) {
@@ -584,7 +626,11 @@ export const TeamManagementPage = () => {
       header: 'Status',
       render: (row) => {
         const isOnBreak = Boolean(row.attendance?.isOnBreak || row.isOnBreak);
+        const currentBreakStart = row.attendance?.currentBreakStart || row.currentBreakStart;
+        const tz = row.attendance?.timezone || row.timezone || user?.organization?.timezone || user?.timezone || 'Asia/Kolkata';
         const breakDuration = row.attendance?.breakDurationMinutes || row.breakDurationMinutes || 0;
+        const liveMins = currentBreakStart ? getLiveBreakMinutes(currentBreakStart) : breakDuration;
+        const liveStartFormatted = currentBreakStart ? formatTimeWithTimezone(currentBreakStart, tz) : '';
         const rawStatus = (row.attendance?.status || row.status || 'ABSENT').toUpperCase();
         const isNotStarted = rawStatus === 'NOT_STARTED' || rawStatus === 'YET_TO_CHECK_IN';
         return (
@@ -609,11 +655,19 @@ export const TeamManagementPage = () => {
             </Badge>
             {isOnBreak && (
               <span
-                title="Employee is currently on break (Shift Paused)"
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300 ring-1 ring-amber-400/30 animate-pulse shadow-2xs"
+                title={currentBreakStart ? `Break started at ${liveStartFormatted} (${liveMins} mins)` : 'Employee is currently on break'}
+                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-300 ring-1 ring-amber-400/30 shadow-2xs"
               >
-                <Coffee className="w-3 h-3 text-amber-600 shrink-0" />
-                On Break
+                <span className="relative flex h-2 w-2 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                </span>
+                <span>On Break · {liveMins} mins</span>
+                {liveStartFormatted && (
+                  <span className="text-amber-700 font-normal">
+                    (Started at {liveStartFormatted})
+                  </span>
+                )}
               </span>
             )}
             {breakDuration > 0 && !isOnBreak && (

@@ -22,7 +22,12 @@ import {
 import { Modal } from '../common/Modal.jsx';
 import { Badge } from '../common/Badge.jsx';
 import { Button } from '../common/Button.jsx';
-import { formatHoursToClock } from '../../utils/timeUtils.js';
+import {
+  formatHoursToClock,
+  formatTimeWithTimezone,
+  getLiveBreakMinutes,
+  formatLiveBreakDuration,
+} from '../../utils/timeUtils.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 
 export const AttendanceDetailModal = ({
@@ -35,6 +40,16 @@ export const AttendanceDetailModal = ({
   canEditTiming = false,
 }) => {
   const { user } = useAuth();
+  const [, setTick] = React.useState(0);
+
+  React.useEffect(() => {
+    if (!isOpen || !record?.isOnBreak || !record?.currentBreakStart) return;
+    const interval = setInterval(() => {
+      setTick((t) => t + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isOpen, record?.isOnBreak, record?.currentBreakStart]);
+
   if (!record) return null;
 
   const normRole = (user?.roleName || user?.role?.name || user?.role || '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -76,6 +91,17 @@ export const AttendanceDetailModal = ({
         return 'neutral';
     }
   };
+
+  const tz = record.timezone || user?.organization?.timezone || user?.timezone || 'Asia/Kolkata';
+  const breakStartTimeFormatted = record.currentBreakStart
+    ? formatTimeWithTimezone(record.currentBreakStart, tz)
+    : '';
+  const liveBreakDurationText = record.currentBreakStart
+    ? formatLiveBreakDuration(record.currentBreakStart)
+    : '';
+  const liveBreakMins = record.currentBreakStart
+    ? getLiveBreakMinutes(record.currentBreakStart)
+    : 0;
 
   return (
     <Modal
@@ -136,6 +162,36 @@ export const AttendanceDetailModal = ({
           </div>
         </div>
 
+        {/* Live Break Indicator Banner */}
+        {record.isOnBreak && (
+          <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between gap-3 shadow-xs">
+            <div className="flex items-center gap-3">
+              <span className="relative flex h-3 w-3 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+              </span>
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wider text-amber-800">
+                  Currently On Break
+                </div>
+                <div className="text-sm font-semibold text-amber-950">
+                  {liveBreakDurationText ? `On Break · ${liveBreakDurationText}` : 'On Break'}
+                  {breakStartTimeFormatted && (
+                    <span className="text-amber-700 font-normal ml-1.5">
+                      (Started at {breakStartTimeFormatted})
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+            {liveBreakDurationText && (
+              <Badge variant="warning" size="md" className="font-mono font-bold">
+                {liveBreakDurationText}
+              </Badge>
+            )}
+          </div>
+        )}
+
         {/* Timestamps & Hours Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="p-4 rounded-2xl bg-slate-50/70 border border-slate-100">
@@ -167,7 +223,7 @@ export const AttendanceDetailModal = ({
               {formatHoursToClock(record.totalHours)}
             </div>
             <div className="text-xs text-slate-400 mt-0.5">
-              Break: {record.breakDurationMinutes || 0} mins
+              Break: {(record.breakDurationMinutes || 0) + (record.isOnBreak ? liveBreakMins : 0)} mins
             </div>
           </div>
 
@@ -186,12 +242,16 @@ export const AttendanceDetailModal = ({
         </div>
 
         {/* Break Sessions History Breakdown */}
-        {((Array.isArray(record.breakHistory) && record.breakHistory.length > 0) || (record.breakDurationMinutes > 0)) && (
+        {((Array.isArray(record.breakHistory) && record.breakHistory.length > 0) || (record.breakDurationMinutes > 0) || record.isOnBreak) && (
           <div className="p-4 rounded-2xl bg-amber-50/50 border border-amber-200/70 space-y-2">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-xs font-bold text-amber-800 uppercase tracking-wider">
                 <Coffee className="w-4 h-4 text-amber-600" />
-                Break Sessions {Array.isArray(record.breakHistory) && record.breakHistory.length > 0 ? `(${record.breakHistory.length})` : ''} — Total {record.breakDurationMinutes || 0} mins
+                Break Sessions {
+                  (Array.isArray(record.breakHistory) ? record.breakHistory.length : 0) + (record.isOnBreak ? 1 : 0) > 0
+                    ? `(${(Array.isArray(record.breakHistory) ? record.breakHistory.length : 0) + (record.isOnBreak ? 1 : 0)})`
+                    : ''
+                } — Total {(record.breakDurationMinutes || 0) + (record.isOnBreak ? liveBreakMins : 0)} mins
               </div>
               {effectiveCanEditTiming && (
                 <button
@@ -204,24 +264,36 @@ export const AttendanceDetailModal = ({
                 </button>
               )}
             </div>
-            {Array.isArray(record.breakHistory) && record.breakHistory.length > 0 && (
-              <div className="space-y-1.5 max-h-36 overflow-y-auto">
-                {record.breakHistory.map((b, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center justify-between py-1.5 px-3 rounded-xl bg-white/90 border border-amber-200/50 text-xs text-slate-700"
-                  >
-                    <span className="font-semibold text-slate-700">Break #{idx + 1}</span>
-                    <span className="font-mono text-slate-500">
-                      {formatTimestamp(b.startTime)} — {formatTimestamp(b.endTime)}
-                    </span>
-                    <span className="font-bold text-amber-700 font-mono">
-                      {b.durationMinutes ?? (b.durationSeconds ? Math.round(b.durationSeconds / 60) : 0)} mins
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
+            <div className="space-y-1.5 max-h-40 overflow-y-auto">
+              {Array.isArray(record.breakHistory) && record.breakHistory.map((b, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-center justify-between py-1.5 px-3 rounded-xl bg-white/90 border border-amber-200/50 text-xs text-slate-700"
+                >
+                  <span className="font-semibold text-slate-700">Break #{idx + 1}</span>
+                  <span className="font-mono text-slate-500">
+                    {formatTimestamp(b.startTime)} — {formatTimestamp(b.endTime)}
+                  </span>
+                  <span className="font-bold text-amber-700 font-mono">
+                    {b.durationMinutes ?? (b.durationSeconds ? Math.round(b.durationSeconds / 60) : 0)} mins
+                  </span>
+                </div>
+              ))}
+              {record.isOnBreak && record.currentBreakStart && (
+                <div className="flex items-center justify-between py-1.5 px-3 rounded-xl bg-amber-100/90 border border-amber-300 text-xs text-amber-950 font-medium shadow-2xs">
+                  <span className="font-bold text-amber-900 flex items-center gap-1.5">
+                    <span className="inline-block w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                    Break #{(record.breakHistory?.length || 0) + 1} (Ongoing)
+                  </span>
+                  <span className="font-mono text-amber-800">
+                    Started at {breakStartTimeFormatted || formatTimestamp(record.currentBreakStart)}
+                  </span>
+                  <span className="font-bold text-amber-950 font-mono">
+                    Live: {liveBreakDurationText}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
