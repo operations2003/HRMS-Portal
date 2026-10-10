@@ -459,7 +459,17 @@ class RosterParserService {
    * - "11:00 AM - 07:00 PM"
    */
   parseShiftTime(value, date, employeeName) {
-    const cleaned = value.trim();
+    let cleaned = value.trim();
+    let isExplicitNight = false;
+
+    // Detect explicit night indicators (e.g. "Night 10 to 4", "10 - 4 Night", "(Night)")
+    if (/^night\s+/i.test(cleaned)) {
+      cleaned = cleaned.replace(/^night\s+/i, '').trim();
+      isExplicitNight = true;
+    } else if (/\s+night$/i.test(cleaned)) {
+      cleaned = cleaned.replace(/\s+night$/i, '').trim();
+      isExplicitNight = true;
+    }
 
     // Regex matching time range with optional minutes and optional AM/PM on start or end
     // Supports separator: -, –, —, to
@@ -474,7 +484,7 @@ class RosterParserService {
         shiftLabel: value,
         isValid: false,
         isOvernight: false,
-        error: `Unrecognized shift format: "${value}". Expected format like "11 - 8 PM", "2-8PM", "WO", etc.`
+        error: `Unrecognized shift format: "${value}". Expected format like "10 AM - 7 PM", "10 PM - 4 AM", etc.`
       };
     }
 
@@ -513,7 +523,11 @@ class RosterParserService {
     // Determine AM/PM
     let isOvernight = false;
 
-    if (startPeriod && endPeriod) {
+    if (isExplicitNight) {
+      if (!startPeriod) startPeriod = 'PM';
+      if (!endPeriod) endPeriod = 'AM';
+      isOvernight = true;
+    } else if (startPeriod && endPeriod) {
       // Both periods explicitly given
       const start24 = this.to24Hour(startHour, startPeriod);
       const end24 = this.to24Hour(endHour, endPeriod);
@@ -554,7 +568,7 @@ class RosterParserService {
           }
         }
       } else {
-        // End is AM: likely an overnight shift (e.g. "10 - 6 AM", "11 - 7 AM")
+        // End is AM: likely an overnight shift (e.g. "10 - 6 AM", "11 - 7 AM", "10 - 4 AM")
         if (startHour >= 6 && startHour <= 12) {
           startPeriod = 'PM';
           isOvernight = true;
@@ -571,8 +585,13 @@ class RosterParserService {
         if (endPeriod === 'AM') isOvernight = true;
       }
     } else {
-      // Neither AM nor PM given: make smart standard assumption (typical work shift)
-      if (startHour >= 8 && startHour <= 12 && endHour >= 1 && endHour <= 9) {
+      // Neither AM nor PM given: make smart standard assumption
+      if (startHour === 10 && endHour === 4) {
+        // Standard company night shift: 10 PM to 4 AM
+        startPeriod = 'PM';
+        endPeriod = 'AM';
+        isOvernight = true;
+      } else if (startHour >= 8 && startHour <= 12 && endHour >= 1 && endHour <= 9) {
         startPeriod = 'AM';
         endPeriod = 'PM';
       } else if (startHour < endHour) {

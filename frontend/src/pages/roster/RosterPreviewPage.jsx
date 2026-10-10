@@ -20,6 +20,8 @@ import {
   Info,
   CalendarCheck,
   Edit3,
+  Moon,
+  Sun,
 } from 'lucide-react';
 import { Button } from '../../components/common/Button.jsx';
 import { Alert } from '../../components/common/Alert.jsx';
@@ -82,10 +84,10 @@ export const RosterPreviewPage = () => {
       empIndex,
       dayIndex,
       mode: initialMode,
-      shiftLabel: day.shiftType === 'SHIFT' && day.shiftLabel ? day.shiftLabel : '2 - 8 PM',
+      shiftLabel: day.shiftType === 'SHIFT' && day.shiftLabel ? day.shiftLabel : '10 AM - 7 PM',
       useCustomTime: false,
-      customStart: day.shiftStartTime ? day.shiftStartTime.slice(0, 5) : '14:00',
-      customEnd: day.shiftEndTime ? day.shiftEndTime.slice(0, 5) : '20:00',
+      customStart: day.shiftStartTime ? day.shiftStartTime.slice(0, 5) : '10:00',
+      customEnd: day.shiftEndTime ? day.shiftEndTime.slice(0, 5) : '19:00',
       leaveType: isLeave ? (shiftType === 'HDL' ? 'HD' : shiftType) : 'CL',
       otherType: isOther ? (shiftType === 'OFF' ? 'WO' : shiftType) : 'WO'
     });
@@ -1062,18 +1064,23 @@ export const RosterPreviewPage = () => {
             {/* Mode 1: SHIFT */}
             {editingCell.mode === 'SHIFT' && (
               <div className="space-y-4">
+                {/* Day Shifts Section */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">
-                    Select Standard Shift Preset
-                  </label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs font-bold text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+                      <Sun className="w-3.5 h-3.5 text-amber-500" />
+                      Day Shifts (10:00 AM – 09:00 PM)
+                    </label>
+                    <span className="text-[11px] text-slate-500">Starts 10:00 AM</span>
+                  </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                     {[
-                      { label: '12 - 6 PM', desc: '12:00 PM – 06:00 PM (6 hrs)' },
-                      { label: '2 - 8 PM', desc: '02:00 PM – 08:00 PM (6 hrs)' },
-                      { label: '11 - 8 PM', desc: '11:00 AM – 08:00 PM (9 hrs)' },
-                      { label: '1 - 7 PM', desc: '01:00 PM – 07:00 PM (6 hrs)' },
-                      { label: '9:30 AM - 6:30 PM', desc: '09:30 AM – 06:30 PM (9 hrs)' },
-                      { label: '10 PM - 6 AM', desc: '10:00 PM – 06:00 AM (Overnight)' },
+                      { label: '10 AM - 7 PM', desc: '10:00 AM – 07:00 PM (9 hrs standard)', badge: 'Standard' },
+                      { label: '10 AM - 6 PM', desc: '10:00 AM – 06:00 PM (8 hrs)', badge: '8 hrs' },
+                      { label: '10 AM - 9 PM', desc: '10:00 AM – 09:00 PM (11 hrs full day)', badge: 'Full Day' },
+                      { label: '11 AM - 8 PM', desc: '11:00 AM – 08:00 PM (9 hrs)', badge: 'Mid-Day' },
+                      { label: '12 PM - 9 PM', desc: '12:00 PM – 09:00 PM (9 hrs)', badge: 'Closing' },
+                      { label: '10 AM - 4 PM', desc: '10:00 AM – 04:00 PM (6 hrs short)', badge: '6 hrs' },
                     ].map((preset) => {
                       const isSelected = !editingCell.useCustomTime && editingCell.shiftLabel === preset.label;
                       return (
@@ -1089,11 +1096,16 @@ export const RosterPreviewPage = () => {
                           }
                           className={`p-2.5 rounded-xl border text-left transition-all ${
                             isSelected
-                              ? 'border-blue-500 bg-blue-50/70 text-blue-900 ring-2 ring-blue-500/20'
+                              ? 'border-blue-500 bg-blue-50/80 text-blue-900 ring-2 ring-blue-500/20 shadow-xs'
                               : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
                           }`}
                         >
-                          <p className="font-bold text-xs">{preset.label}</p>
+                          <div className="flex items-center justify-between">
+                            <p className="font-bold text-xs">{preset.label}</p>
+                            <span className="text-[9px] px-1 py-0.2 bg-slate-100 text-slate-600 rounded font-medium">
+                              {preset.badge}
+                            </span>
+                          </div>
                           <p className="text-[10px] text-slate-500 mt-0.5">{preset.desc}</p>
                         </button>
                       );
@@ -1101,41 +1113,102 @@ export const RosterPreviewPage = () => {
                   </div>
                 </div>
 
+                {/* Night Shift Section */}
+                <div className="pt-2 border-t border-slate-100">
+                  <label className="block text-xs font-bold text-slate-800 mb-2 uppercase tracking-wide flex items-center gap-1.5">
+                    <Moon className="w-3.5 h-3.5 text-indigo-600" />
+                    Night Shift (10:00 PM – 04:00 AM)
+                  </label>
+                  <div>
+                    {(() => {
+                      const isSelected = !editingCell.useCustomTime && (editingCell.shiftLabel === '10 PM - 4 AM' || editingCell.shiftLabel === '10:00 PM - 04:00 AM');
+                      return (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setEditingCell(prev => ({
+                              ...prev,
+                              shiftLabel: '10 PM - 4 AM',
+                              customStart: '22:00',
+                              customEnd: '04:00',
+                              useCustomTime: false
+                            }))
+                          }
+                          className={`w-full p-3 rounded-xl border text-left transition-all flex items-center justify-between ${
+                            isSelected
+                              ? 'border-indigo-600 bg-indigo-50/90 text-indigo-950 ring-2 ring-indigo-500/30 shadow-xs'
+                              : 'border-slate-200 bg-white hover:border-indigo-300 hover:bg-indigo-50/30'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-lg bg-indigo-900 text-amber-300 flex items-center justify-center font-black">
+                              🌙
+                            </div>
+                            <div>
+                              <p className="font-bold text-xs">10 PM - 4 AM (Night Shift)</p>
+                              <p className="text-[10px] text-slate-500">10:00 PM – 04:00 AM • 6 hours Overnight</p>
+                            </div>
+                          </div>
+                          <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200">
+                            Overnight Shift
+                          </span>
+                        </button>
+                      );
+                    })()}
+                  </div>
+                </div>
+
                 {/* Custom Shift Toggle & Inputs */}
                 <div className="pt-2 border-t border-slate-100">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-semibold text-slate-700">Custom Shift Timing</span>
+                    <span className="text-xs font-semibold text-slate-700">Custom Time Selection</span>
                     <button
                       type="button"
                       onClick={() => setEditingCell(prev => ({ ...prev, useCustomTime: !prev.useCustomTime }))}
                       className="text-xs font-bold text-brand-600 hover:text-brand-700"
                     >
-                      {editingCell.useCustomTime ? 'Use Presets Instead' : 'Enter Custom Hours'}
+                      {editingCell.useCustomTime ? 'Use Standard Presets' : 'Enter Custom Hours'}
                     </button>
                   </div>
 
                   {editingCell.useCustomTime && (
-                    <div className="grid grid-cols-2 gap-3 p-3 bg-blue-50/40 rounded-xl border border-blue-100">
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">Start Time</label>
-                        <input
-                          type="time"
-                          value={editingCell.customStart}
-                          onChange={(e) => setEditingCell(prev => ({ ...prev, customStart: e.target.value }))}
-                          className="w-full px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        />
+                    <div className="space-y-3 p-3 bg-blue-50/40 rounded-xl border border-blue-100">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                            Start Time (e.g. 10:00 AM)
+                          </label>
+                          <input
+                            type="time"
+                            value={editingCell.customStart}
+                            onChange={(e) => setEditingCell(prev => ({ ...prev, customStart: e.target.value }))}
+                            className="w-full px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                            End Time (e.g. 09:00 PM)
+                          </label>
+                          <input
+                            type="time"
+                            value={editingCell.customEnd}
+                            onChange={(e) => setEditingCell(prev => ({ ...prev, customEnd: e.target.value }))}
+                            className="w-full px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
                       </div>
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">End Time</label>
-                        <input
-                          type="time"
-                          value={editingCell.customEnd}
-                          onChange={(e) => setEditingCell(prev => ({ ...prev, customEnd: e.target.value }))}
-                          className="w-full px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        />
-                      </div>
-                      <div className="col-span-2 text-center text-xs text-blue-800 font-semibold">
-                        Preview: {formatTo12Hr(editingCell.customStart)} - {formatTo12Hr(editingCell.customEnd)}
+
+                      <div className="flex items-center justify-between pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setEditingCell(prev => ({ ...prev, customStart: '22:00', customEnd: '04:00' }))}
+                          className="text-[11px] font-bold text-indigo-700 hover:text-indigo-900 flex items-center gap-1"
+                        >
+                          🌙 Quick Set Night Shift (22:00 - 04:00)
+                        </button>
+                        <div className="text-xs text-blue-900 font-bold">
+                          {formatTo12Hr(editingCell.customStart)} - {formatTo12Hr(editingCell.customEnd)}
+                        </div>
                       </div>
                     </div>
                   )}

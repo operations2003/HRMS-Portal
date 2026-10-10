@@ -19,6 +19,12 @@ const testCases = [
   { input: '2-8PM',     expectedStart: '14:00:00', expectedEnd: '20:00:00', overnight: false },
   { input: '11:00 AM - 08:00 PM', expectedStart: '11:00:00', expectedEnd: '20:00:00', overnight: false },
   { input: '10 PM - 6 AM', expectedStart: '22:00:00', expectedEnd: '06:00:00', overnight: true },
+  { input: '10 AM - 7 PM', expectedStart: '10:00:00', expectedEnd: '19:00:00', overnight: false },
+  { input: '10 AM - 9 PM', expectedStart: '10:00:00', expectedEnd: '21:00:00', overnight: false },
+  { input: '10 PM - 4 AM', expectedStart: '22:00:00', expectedEnd: '04:00:00', overnight: true },
+  { input: '10 pm to 4',   expectedStart: '22:00:00', expectedEnd: '04:00:00', overnight: true },
+  { input: 'night 10 to 4', expectedStart: '22:00:00', expectedEnd: '04:00:00', overnight: true },
+  { input: '10 - 4',       expectedStart: '22:00:00', expectedEnd: '04:00:00', overnight: true },
 ];
 
 for (const tc of testCases) {
