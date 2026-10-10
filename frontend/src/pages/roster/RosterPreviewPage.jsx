@@ -397,8 +397,8 @@ export const RosterPreviewPage = () => {
       <div className="max-w-4xl mx-auto p-6 space-y-4">
         <Alert variant="error">{error || 'No preview data available.'}</Alert>
         <div>
-          <Button onClick={() => navigate('/roster/import')} icon={ChevronLeft}>
-            Back to Import
+          <Button onClick={() => navigate('/roster/history')} icon={ChevronLeft}>
+            Back to Roster History
           </Button>
         </div>
       </div>
@@ -418,7 +418,7 @@ export const RosterPreviewPage = () => {
             variant="ghost"
             size="sm"
             icon={ChevronLeft}
-            onClick={() => navigate('/roster/import')}
+            onClick={() => navigate('/roster/history')}
           >
             Back
           </Button>
