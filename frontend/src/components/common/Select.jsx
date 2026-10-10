@@ -38,7 +38,7 @@ export const Select = ({
         } disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed ${className}`}
         {...props}
       >
-        {placeholder && !hasEmptyOption && (
+        {placeholder && !hasEmptyOption && !children && (
           <option value="" disabled={required}>
             {placeholder}
           </option>
@@ -52,6 +52,7 @@ export const Select = ({
             </option>
           );
         })}
+        {children}
       </select>
       {error && <p className="mt-1 text-xs text-rose-600 font-medium">{error}</p>}
       {helperText && !error && <p className="mt-1 text-xs text-slate-500">{helperText}</p>}

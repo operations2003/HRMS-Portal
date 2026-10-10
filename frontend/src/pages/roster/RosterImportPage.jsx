@@ -61,6 +61,23 @@ export const RosterImportPage = () => {
 
     setSelectedFile(file);
     setUploadError(null);
+
+    // Auto-detect month and year from filename if present
+    const nameLower = file.name.toLowerCase();
+    const yearMatch = nameLower.match(/\b(202[0-9]|203[0-5])\b/);
+    if (yearMatch) {
+      setSelectedYear(parseInt(yearMatch[1], 10));
+    }
+    const monthNames = [
+      'january', 'february', 'march', 'april', 'may', 'june',
+      'july', 'august', 'september', 'october', 'november', 'december'
+    ];
+    for (let m = 0; m < monthNames.length; m++) {
+      if (nameLower.includes(monthNames[m])) {
+        setSelectedMonth(m + 1);
+        break;
+      }
+    }
   };
 
   const handleUpload = async () => {
@@ -189,39 +206,29 @@ export const RosterImportPage = () => {
 
           <div className="p-6 space-y-6">
             {/* Month and Year Selectors */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
                   Roster Month <span className="text-red-500">*</span>
                 </label>
                 <Select
                   value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                  onChange={(e) => setSelectedMonth(parseInt(e.target.value, 10))}
+                  options={months}
                   required
-                >
-                  {months.map((month) => (
-                    <option key={month.value} value={month.value}>
-                      {month.label}
-                    </option>
-                  ))}
-                </Select>
+                />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
                   Roster Year <span className="text-red-500">*</span>
                 </label>
                 <Select
                   value={selectedYear}
-                  onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                  onChange={(e) => setSelectedYear(parseInt(e.target.value, 10))}
+                  options={years.map((y) => ({ value: y, label: String(y) }))}
                   required
-                >
-                  {years.map((year) => (
-                    <option key={year} value={year}>
-                      {year}
-                    </option>
-                  ))}
-                </Select>
+                />
               </div>
             </div>
 
