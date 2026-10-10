@@ -76,11 +76,35 @@ class AIRosterService {
     if (val === 'WO' || val === 'OFF' || val === 'W/O' || val === 'WEEKLY OFF') {
       return { shiftType: 'WO', isValid: true, shiftLabel: 'Weekly Off' };
     }
-    if (val === 'HD' || val === 'HOLIDAY' || val === 'PH') {
-      return { shiftType: 'HD', isValid: true, shiftLabel: 'Holiday' };
+    if (val === 'HD' || val === 'HDL' || val === 'HALF DAY' || val === 'HALF-DAY') {
+      return { shiftType: 'HD', isValid: true, shiftLabel: 'Half Day' };
     }
-    if (val === 'CL' || val === 'SL' || val === 'PL' || val === 'LEAVE' || val === 'CASUAL LEAVE') {
+    if (val === 'HL' || val === 'HOLIDAY' || val === 'PH' || val === 'PUBLIC HOLIDAY') {
+      return { shiftType: 'HL', isValid: true, shiftLabel: 'Holiday' };
+    }
+    if (val === 'CL' || val === 'CASUAL LEAVE') {
       return { shiftType: 'CL', isValid: true, shiftLabel: 'Casual Leave' };
+    }
+    if (val === 'PL' || val === 'PLANNED LEAVE' || val === 'AL' || val === 'ANNUAL LEAVE' || val === 'EL' || val === 'EARNED LEAVE') {
+      return { shiftType: 'PL', isValid: true, shiftLabel: 'Planned Leave' };
+    }
+    if (val === 'SL' || val === 'SICK LEAVE') {
+      return { shiftType: 'SL', isValid: true, shiftLabel: 'Sick Leave' };
+    }
+    if (val === 'ML' || val === 'MATERNITY' || val === 'MATERNITY LEAVE') {
+      return { shiftType: 'ML', isValid: true, shiftLabel: 'Maternity Leave' };
+    }
+    if (val === 'PTL' || val === 'PATERNITY' || val === 'PATERNITY LEAVE') {
+      return { shiftType: 'PTL', isValid: true, shiftLabel: 'Paternity Leave' };
+    }
+    if (val === 'SBL' || val === 'SABBATICAL' || val === 'SABBATICAL LEAVE') {
+      return { shiftType: 'SBL', isValid: true, shiftLabel: 'Sabbatical Leave' };
+    }
+    if (val === 'LOP' || val === 'LWP' || val === 'LEAVE WITHOUT PAY' || val === 'LOSS OF PAY') {
+      return { shiftType: 'LOP', isValid: true, shiftLabel: 'Leave without pay (LOP)' };
+    }
+    if (val === 'AWOL' || val === 'ABSENT') {
+      return { shiftType: 'AWOL', isValid: true, shiftLabel: 'Absent Without Leave' };
     }
     if (val === 'NA' || val === 'N/A' || val === 'NONE') {
       return { shiftType: 'NA', isValid: true, shiftLabel: 'Not Assigned' };

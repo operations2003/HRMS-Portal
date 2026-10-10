@@ -417,10 +417,22 @@ class RosterParserService {
 
     const upper = cleaned.toUpperCase();
 
-    // Roster status codes: WO, CL, HD, NA
-    if (['WO', 'CL', 'HD', 'NA'].includes(upper)) {
+    // Roster status and leave codes: WO, OFF, CL, PL, SL, HD, HDL, LOP, LWP, ML, PTL, SBL, AWOL, HL, HOLIDAY, NA, CO, EL, AL
+    const recognizedCodes = [
+      'WO', 'OFF', 'CL', 'PL', 'SL', 'HD', 'HDL', 'LOP', 'LWP',
+      'ML', 'PTL', 'SBL', 'AWOL', 'HL', 'HOLIDAY', 'NA', 'CO', 'EL', 'AL'
+    ];
+
+    if (recognizedCodes.includes(upper)) {
+      let normalizedType = upper;
+      if (upper === 'OFF') normalizedType = 'WO';
+      else if (upper === 'HDL') normalizedType = 'HD';
+      else if (upper === 'LWP') normalizedType = 'LOP';
+      else if (upper === 'HOLIDAY') normalizedType = 'HL';
+      else if (upper === 'EL' || upper === 'AL') normalizedType = 'PL';
+
       return {
-        shiftType: upper,
+        shiftType: normalizedType,
         shiftStartTime: null,
         shiftEndTime: null,
         shiftLabel: upper,
