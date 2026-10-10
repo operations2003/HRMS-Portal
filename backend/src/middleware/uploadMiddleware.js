@@ -32,6 +32,12 @@ const ALLOWED_MIME_TYPES = new Set([
   'image/heif',
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/csv',
+  'application/csv',
+  'text/x-csv',
+  'application/octet-stream',
 ]);
 
 const ALLOWED_EXTENSIONS = new Set([
@@ -48,6 +54,9 @@ const ALLOWED_EXTENSIONS = new Set([
   '.heif',
   '.doc',
   '.docx',
+  '.xlsx',
+  '.xls',
+  '.csv',
 ]);
 
 // File filter function

@@ -20,6 +20,12 @@ export const apiClient = async (endpoint, options = {}) => {
     ...options.headers,
   };
 
+  // For FormData, delete Content-Type so fetch/browser automatically generates multipart boundary
+  if (isFormData) {
+    delete headers['Content-Type'];
+    delete headers['content-type'];
+  }
+
   const config = {
     cache: 'no-store',
     ...options,

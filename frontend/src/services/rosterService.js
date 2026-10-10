@@ -5,12 +5,8 @@ export const rosterService = {
    * Upload and parse roster file
    */
   async uploadRoster(formData) {
-    const res = await http.post('/v1/roster/upload', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-    return res.data;
+    const res = await http.post('/v1/roster/upload', formData);
+    return res;
   },
 
   /**

@@ -103,13 +103,14 @@ export const RosterImportPage = () => {
       formData.append('aiMode', useAiAutomation);
 
       const response = await rosterService.uploadRoster(formData);
+      const jobId = response.data?.jobId || response.jobId;
 
-      if (response.success) {
+      if (response.success || jobId) {
         toast.success('Roster uploaded and parsed successfully!');
         
         // Navigate to preview page
-        navigate(`/roster/preview/${response.data.jobId}`, {
-          state: { previewData: response.data }
+        navigate(`/roster/preview/${jobId}`, {
+          state: { previewData: response.data || response }
         });
       }
     } catch (err) {
