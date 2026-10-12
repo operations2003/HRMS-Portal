@@ -22,6 +22,7 @@ import {
   Edit3,
   Moon,
   Sun,
+  Trash2,
 } from 'lucide-react';
 import { Button } from '../../components/common/Button.jsx';
 import { Alert } from '../../components/common/Alert.jsx';
@@ -47,6 +48,7 @@ export const RosterPreviewPage = () => {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
   const [resolvingAmbiguity, setResolvingAmbiguity] = useState(false);
   const [isAiResolving, setIsAiResolving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Search, filter, and pagination states
   const [searchQuery, setSearchQuery] = useState('');
@@ -255,6 +257,37 @@ export const RosterPreviewPage = () => {
     }
   };
 
+  const handleDeleteRoster = async () => {
+    const monthName = getMonthName(previewData?.parsedRoster?.selectedMonth);
+    const year = previewData?.parsedRoster?.selectedYear;
+    const isConfirmed = previewData?.status === 'CONFIRMED' || previewData?.job?.status === 'CONFIRMED';
+
+    const confirmMsg = isConfirmed
+      ? `Delete Confirmed Monthly Roster for ${monthName} ${year}?\n\n` +
+        `• Shift assignments imported by this roster will be permanently deleted.\n` +
+        `• Auto-synced leaves will be cancelled and deducted leave balances restored.\n\n` +
+        `Are you sure you want to delete this monthly roster?`
+      : `Delete this uploaded monthly roster for ${monthName} ${year}?\n\n` +
+        `This will discard the uploaded file and all temporary preview/mapping data.\n\n` +
+        `Are you sure you want to proceed?`;
+
+    if (!window.confirm(confirmMsg)) {
+      return;
+    }
+
+    try {
+      setIsDeleting(true);
+      await rosterService.deleteRoster(jobId);
+      toast.success(`Monthly roster for ${monthName} ${year} deleted successfully.`);
+      navigate('/roster/history', { replace: true });
+    } catch (err) {
+      console.error('Delete roster error:', err);
+      toast.error(err.response?.data?.message || err.message || 'Failed to delete monthly roster.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const getMonthName = (month) => {
     const months = [
       'January', 'February', 'March', 'April', 'May', 'June',
@@ -442,9 +475,22 @@ export const RosterPreviewPage = () => {
           <Button
             variant="outline"
             size="md"
+            icon={Trash2}
+            className="text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
+            onClick={handleDeleteRoster}
+            disabled={isDeleting || isConfirming}
+            isLoading={isDeleting}
+            title="Delete or discard this monthly roster"
+          >
+            Delete Roster
+          </Button>
+          <Button
+            variant="outline"
+            size="md"
             icon={RefreshCw}
             onClick={fetchPreview}
             title="Refresh preview data"
+            disabled={isDeleting}
           >
             Refresh
           </Button>
@@ -455,7 +501,7 @@ export const RosterPreviewPage = () => {
               icon={Sparkles}
               className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs"
               onClick={handleAiAutoResolve}
-              disabled={isAiResolving}
+              disabled={isAiResolving || isDeleting}
               isLoading={isAiResolving}
             >
               {isAiResolving ? 'Resolving with AI...' : '✨ AI Auto-Resolve'}
@@ -466,7 +512,7 @@ export const RosterPreviewPage = () => {
             size="md"
             icon={CheckCircle2}
             onClick={handleConfirmImport}
-            disabled={unresolvedAmbiguous.length > 0 || isConfirming}
+            disabled={unresolvedAmbiguous.length > 0 || isConfirming || isDeleting}
             isLoading={isConfirming}
           >
             {isConfirming ? 'Synchronizing...' : 'Confirm & Apply Roster'}

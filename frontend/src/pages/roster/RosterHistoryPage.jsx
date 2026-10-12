@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   Eye,
   FileText,
+  Trash2,
 } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Badge } from '../../components/common/Badge';
@@ -18,16 +19,19 @@ import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { Alert } from '../../components/common/Alert';
 import { rosterService } from '../../services/rosterService';
 import { Can } from '../../components/rbac/Can';
+import { useToast } from '../../context/ToastContext.jsx';
 
 export const RosterHistoryPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const toast = useToast();
 
   const [imports, setImports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState(null);
+  const [deletingJobId, setDeletingJobId] = useState(null);
 
   useEffect(() => {
     fetchHistory();
@@ -55,6 +59,36 @@ export const RosterHistoryPage = () => {
       setError(err.response?.data?.message || err.message || 'Failed to load import history.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteRoster = async (job) => {
+    const isConfirmed = job.status === 'CONFIRMED' || job.status === 'PARTIAL';
+    const periodStr = `${getMonthName(job.roster_month)} ${job.roster_year}`;
+    const confirmMessage = isConfirmed
+      ? `Delete Confirmed Monthly Roster for ${periodStr}?\n\n` +
+        `• File: ${job.original_filename}\n` +
+        `• Shift assignments imported by this roster will be permanently removed.\n` +
+        `• Auto-synced leaves will be cancelled and deducted leave balances restored.\n\n` +
+        `Are you sure you want to proceed?`
+      : `Delete Roster Import Session for ${periodStr} (${job.original_filename})?\n\n` +
+        `This uploaded roster data and preview will be permanently removed.\n\n` +
+        `Are you sure you want to delete this roster?`;
+
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    try {
+      setDeletingJobId(job.id);
+      await rosterService.deleteRoster(job.id);
+      toast.success(`Monthly roster for ${periodStr} deleted successfully.`);
+      fetchHistory();
+    } catch (err) {
+      console.error('Delete roster error:', err);
+      toast.error(err.response?.data?.message || err.message || 'Failed to delete monthly roster.');
+    } finally {
+      setDeletingJobId(null);
     }
   };
 
@@ -251,25 +285,39 @@ export const RosterHistoryPage = () => {
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right">
-                        {importJob.status === 'PENDING' || importJob.status === 'PREVIEWED' ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            icon={Eye}
-                            onClick={() => navigate(`/roster/preview/${importJob.id}`)}
-                          >
-                            Review
-                          </Button>
-                        ) : (
+                        <div className="flex items-center justify-end gap-2">
+                          {importJob.status === 'PENDING' || importJob.status === 'PREVIEWED' ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              icon={Eye}
+                              onClick={() => navigate(`/roster/preview/${importJob.id}`)}
+                            >
+                              Review
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              icon={Eye}
+                              onClick={() => navigate(`/roster/preview/${importJob.id}`)}
+                            >
+                              View
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="ghost"
-                            icon={Eye}
-                            onClick={() => navigate(`/roster/preview/${importJob.id}`)}
+                            className="text-red-500 hover:text-red-700 hover:bg-red-50 px-2"
+                            icon={Trash2}
+                            title="Delete Monthly Roster"
+                            onClick={() => handleDeleteRoster(importJob)}
+                            disabled={deletingJobId === importJob.id}
+                            isLoading={deletingJobId === importJob.id}
                           >
-                            View
+                            Delete
                           </Button>
-                        )}
+                        </div>
                       </td>
                     </tr>
                   ))}

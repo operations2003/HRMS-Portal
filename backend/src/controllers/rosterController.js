@@ -1076,6 +1076,115 @@ export const getImportHistory = async (req, res, next) => {
 };
 
 /**
+ * DELETE /api/v1/roster/job/:jobId
+ * Delete a monthly roster import session and roll back its assignments/leaves if confirmed
+ */
+export const deleteRosterJob = async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const { jobId } = req.params;
+    const orgId = req.user?.orgId || req.user?.org?.id || 'org-1';
+
+    await client.query('BEGIN');
+
+    // 1. Fetch the roster import job with lock
+    const jobRes = await client.query(
+      `SELECT * FROM roster_import_jobs WHERE id = $1 AND org_id = $2 FOR UPDATE`,
+      [jobId, orgId]
+    );
+
+    if (jobRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return sendError(res, 'Roster import job not found.', 404);
+    }
+
+    const job = jobRes.rows[0];
+
+    // 2. If the roster was confirmed, rollback created shift_assignments and auto-applied leaves
+    if (job.status === 'CONFIRMED' || job.status === 'PARTIAL') {
+      // Delete audit records
+      await client.query(
+        `DELETE FROM shift_assignment_audit WHERE import_job_id = $1`,
+        [jobId]
+      );
+
+      // Delete shift assignments created or updated by this import
+      await client.query(
+        `DELETE FROM shift_assignments WHERE import_job_id = $1 AND org_id = $2`,
+        [jobId, orgId]
+      );
+
+      // Revert auto-applied roster leaves for this month/year if any were generated
+      const year = job.roster_year;
+      const month = String(job.roster_month).padStart(2, '0');
+      const startDate = `${year}-${month}-01`;
+      const lastDay = new Date(year, job.roster_month, 0).getDate();
+      const endDate = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
+
+      const leavesRes = await client.query(
+        `SELECT id, employee_id, leave_type_id, total_days, start_date 
+         FROM leave_requests 
+         WHERE org_id = $1 
+           AND id LIKE 'lr-roster-%'
+           AND reason LIKE 'Auto-applied from monthly roster import%'
+           AND start_date >= $2::date AND end_date <= $3::date`,
+        [orgId, startDate, endDate]
+      );
+
+      for (const lr of leavesRes.rows) {
+        const leaveYear = parseInt(String(lr.start_date).split('-')[0], 10) || year;
+        const totalDays = parseFloat(lr.total_days) || 1.0;
+
+        // Revert leave balance
+        await client.query(
+          `UPDATE leave_balances 
+           SET used_days = GREATEST(0, used_days - $1), updated_at = NOW() 
+           WHERE employee_id = $2 AND leave_type_id = $3 AND year = $4`,
+          [totalDays, lr.employee_id, lr.leave_type_id, leaveYear]
+        );
+      }
+
+      await client.query(
+        `DELETE FROM leave_requests 
+         WHERE org_id = $1 
+           AND id LIKE 'lr-roster-%'
+           AND reason LIKE 'Auto-applied from monthly roster import%'
+           AND start_date >= $2::date AND end_date <= $3::date`,
+        [orgId, startDate, endDate]
+      );
+    }
+
+    // 3. Delete employee mappings (cascade or explicit delete)
+    await client.query(
+      `DELETE FROM roster_employee_mappings WHERE import_job_id = $1`,
+      [jobId]
+    );
+
+    // 4. Delete the roster import job
+    await client.query(
+      `DELETE FROM roster_import_jobs WHERE id = $1 AND org_id = $2`,
+      [jobId, orgId]
+    );
+
+    await client.query('COMMIT');
+
+    return sendSuccess(res, 'Monthly roster deleted successfully.', {
+      jobId,
+      filename: job.original_filename,
+      month: job.roster_month,
+      year: job.roster_year,
+      status: job.status
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Delete roster error:', err);
+    return sendError(res, `Failed to delete roster: ${err.message}`, 500);
+  } finally {
+    client.release();
+  }
+};
+
+/**
  * GET /api/v1/roster/assignments
  * Get shift assignments with role-based scoping (Employee: self, Manager: team, HR/Admin: all)
  */
@@ -1653,6 +1762,7 @@ export default {
   aiAutoResolve,
   confirmImport,
   getImportHistory,
+  deleteRosterJob,
   getAssignments,
   overrideCell,
   updateAssignment

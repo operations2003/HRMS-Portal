@@ -88,4 +88,12 @@ export const rosterService = {
     const res = await http.put('/v1/roster/assignment', data);
     return res;
   },
+
+  /**
+   * Delete a monthly roster import job and roll back its assignments
+   */
+  async deleteRoster(jobId) {
+    const res = await http.delete(`/v1/roster/job/${jobId}`);
+    return res;
+  },
 };

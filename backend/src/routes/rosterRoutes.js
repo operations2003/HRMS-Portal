@@ -66,4 +66,16 @@ router.get(
   rosterController.getImportHistory
 );
 
+router.delete(
+  '/job/:jobId',
+  authorize(['employee:write', 'attendance:write']),
+  rosterController.deleteRosterJob
+);
+
+router.delete(
+  '/:jobId',
+  authorize(['employee:write', 'attendance:write']),
+  rosterController.deleteRosterJob
+);
+
 export default router;
