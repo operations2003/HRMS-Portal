@@ -244,4 +244,112 @@ export const dailyReportService = {
 
     return updated;
   },
+
+  /**
+   * Get list of employees who have NOT submitted daily report for a date
+   */
+  async getPendingEmployees(user, query = {}) {
+    const normRole = normalizeRole(user.roleName);
+    const isHrAdmin = ['admin', 'superadmin', 'hr', 'hrmanager', 'orgadmin'].includes(normRole);
+    const isManager = ['manager', 'lead', 'teamlead', 'supervisor'].some((r) => normRole.includes(r));
+
+    if (!isHrAdmin && !isManager) {
+      const err = new Error('Access denied: Manager or HR/Admin authorization required.');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    let managerId = null;
+    if (isManager && !isHrAdmin) {
+      const mgrEmp = await resolveRequesterEmployee(user);
+      if (!mgrEmp) return [];
+      managerId = mgrEmp.id;
+    }
+
+    return dailyReportRepository.findPendingEmployees({
+      orgId: user.orgId || 'org-1',
+      managerId,
+      deptId: query.deptId || '',
+      date: query.date || null,
+    });
+  },
+
+  /**
+   * Send reminder notification to pending employee(s)
+   */
+  async sendReminder(user, data = {}) {
+    const normRole = normalizeRole(user.roleName);
+    const isHrAdmin = ['admin', 'superadmin', 'hr', 'hrmanager', 'orgadmin'].includes(normRole);
+    const isManager = ['manager', 'lead', 'teamlead', 'supervisor'].some((r) => normRole.includes(r));
+
+    if (!isHrAdmin && !isManager) {
+      const err = new Error('Access denied: Manager or HR/Admin authorization required.');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    let managerId = null;
+    if (isManager && !isHrAdmin) {
+      const mgrEmp = await resolveRequesterEmployee(user);
+      if (mgrEmp) managerId = mgrEmp.id;
+    }
+
+    const targetDate = data.date || new Date().toISOString().split('T')[0];
+    const pendingList = await dailyReportRepository.findPendingEmployees({
+      orgId: user.orgId || 'org-1',
+      managerId,
+      deptId: data.deptId || '',
+      date: targetDate,
+    });
+
+    let targetEmployees = [];
+    if (data.employeeId) {
+      targetEmployees = pendingList.filter((e) => e.id === data.employeeId);
+    } else if (Array.isArray(data.employeeIds) && data.employeeIds.length > 0) {
+      const idSet = new Set(data.employeeIds);
+      targetEmployees = pendingList.filter((e) => idSet.has(e.id));
+    } else {
+      // Remind all pending
+      targetEmployees = pendingList;
+    }
+
+    if (targetEmployees.length === 0) {
+      return { count: 0, message: 'No pending employees to remind.' };
+    }
+
+    let sentCount = 0;
+    const senderName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'HR/Manager';
+
+    for (const emp of targetEmployees) {
+      try {
+        let recipientUserId = emp.userId;
+        if (!recipientUserId && emp.email) {
+          const u = await userRepository.findByEmail(emp.email);
+          if (u) recipientUserId = u.id;
+        }
+
+        if (recipientUserId) {
+          await notificationService.createNotification({
+            orgId: user.orgId || 'org-1',
+            userId: recipientUserId,
+            eventType: 'GENERAL_ALERT',
+            title: 'Daily Work Report Reminder',
+            message: `${senderName} requested your daily work report for ${targetDate}. Please submit your work summary.`,
+            entityType: 'DAILY_WORK_REPORT',
+            entityId: null,
+            actionUrl: `/daily-reports?date=${targetDate}`,
+          });
+          sentCount++;
+        }
+      } catch (err) {
+        logger.warn('DailyReportService', `Failed to send reminder to ${emp.id}: ${err.message}`);
+      }
+    }
+
+    return {
+      count: sentCount,
+      totalPending: targetEmployees.length,
+      message: `Sent reminders to ${sentCount} employee${sentCount === 1 ? '' : 's'}.`,
+    };
+  },
 };

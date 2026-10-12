@@ -61,4 +61,24 @@ export const dailyReportService = {
     const res = await http.post(`/v1/daily-reports/${id}/feedback`, { feedback: feedbackText });
     return res;
   },
+
+  /**
+   * Get list of employees who have not submitted daily report for a date
+   * @param {Object} params - { date, deptId }
+   */
+  async getPendingEmployees(params = {}) {
+    const searchParams = new URLSearchParams(params).toString();
+    const query = searchParams ? `?${searchParams}` : '';
+    const res = await http.get(`/v1/daily-reports/pending${query}`);
+    return res;
+  },
+
+  /**
+   * Send reminder notification to pending employee(s)
+   * @param {Object} data - { date, employeeId, employeeIds }
+   */
+  async sendReminder(data = {}) {
+    const res = await http.post('/v1/daily-reports/remind', data);
+    return res;
+  },
 };

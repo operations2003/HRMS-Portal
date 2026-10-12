@@ -22,7 +22,13 @@ router.get('/team', dailyReportController.getTeamReports);
 // 5. Get summary & compliance rate for a date
 router.get('/summary', dailyReportController.getSummary);
 
-// 6. Acknowledge and add feedback to a report
+// 6. Get pending employees who have not submitted daily report for a date
+router.get('/pending', dailyReportController.getPendingEmployees);
+
+// 7. Send reminder notification(s) to pending employees
+router.post('/remind', dailyReportController.sendReminder);
+
+// 8. Acknowledge and add feedback to a report
 router.post('/:id/feedback', dailyReportController.addFeedback);
 
 export default router;

@@ -26,8 +26,10 @@ import { AttendanceRemarkModal } from '../../components/attendance/AttendanceRem
 import { EditAttendanceTimingModal } from '../../components/attendance/EditAttendanceTimingModal.jsx';
 import { ConvertAbsenceToLeaveModal } from '../../components/attendance/ConvertAbsenceToLeaveModal.jsx';
 import { ExportAttendanceModal } from '../../components/attendance/ExportAttendanceModal.jsx';
+import { PunchOutDailyReportModal } from '../../components/attendance/PunchOutDailyReportModal.jsx';
 import { AttendanceAnalyticsSection } from '../../components/attendance/AttendanceAnalyticsSection.jsx';
 import { departmentService } from '../../services/departmentService.js';
+import { dailyReportService } from '../../services/dailyReportService.js';
 import { Button } from '../../components/common/Button.jsx';
 import { Alert } from '../../components/common/Alert.jsx';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
@@ -73,6 +75,8 @@ export const AttendanceDashboardPage = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [departments, setDepartments] = useState([]);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [pendingPunchData, setPendingPunchData] = useState(null);
 
   // History & Metrics state
   const [records, setRecords] = useState([]);
@@ -260,9 +264,8 @@ export const AttendanceDashboardPage = () => {
     }
   };
 
-  // Handle Logout (Punch Out)
-  const handleCheckOut = async (punchData) => {
-    if (isPunchingIn || isPunchingOut) return;
+  // Actual execution of Logout (Punch Out)
+  const executeCheckOut = async (punchData) => {
     try {
       setIsPunchingOut(true);
       setPunchError(null);
@@ -282,6 +285,29 @@ export const AttendanceDashboardPage = () => {
     } finally {
       setIsPunchingOut(false);
     }
+  };
+
+  // Intercept Logout: prompt for daily work report if not yet submitted
+  const handleCheckOut = async (punchData) => {
+    if (isPunchingIn || isPunchingOut) return;
+
+    try {
+      const todayDate = new Date().toLocaleDateString('en-CA');
+      const res = await dailyReportService.getMyTodayReport(todayDate);
+      const report = res?.data?.report || res?.report;
+
+      if (!report) {
+        // Daily work report has not been submitted yet -> show modal
+        setPendingPunchData(punchData);
+        setIsReportModalOpen(true);
+        return;
+      }
+    } catch {
+      // Fallback: If checking daily report fails, don't block punch out
+    }
+
+    // Already submitted or check passed -> punch out directly
+    await executeCheckOut(punchData);
   };
 
   // Handle Pause for Break
@@ -685,6 +711,21 @@ export const AttendanceDashboardPage = () => {
         isExporting={isExporting}
         departments={departments}
         currentDeptId={filters.deptId}
+      />
+
+      {/* Daily Work Report on Punch-Out Modal */}
+      <PunchOutDailyReportModal
+        isOpen={isReportModalOpen}
+        onClose={() => {
+          setIsReportModalOpen(false);
+          setPendingPunchData(null);
+        }}
+        onConfirmCheckOut={async () => {
+          await executeCheckOut(pendingPunchData);
+          setPendingPunchData(null);
+        }}
+        isCheckingOut={isPunchingOut}
+        todayDateStr={todayDateString}
       />
     </div>
   );

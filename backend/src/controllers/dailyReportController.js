@@ -101,4 +101,36 @@ export const dailyReportController = {
       next(error);
     }
   },
+
+  /**
+   * GET /api/v1/daily-reports/pending
+   * Get active employees who have not submitted daily report for a date
+   */
+  async getPendingEmployees(req, res, next) {
+    try {
+      const records = await dailyReportService.getPendingEmployees(req.user, req.query);
+      return sendSuccess(res, 'Pending daily report employees fetched successfully.', records);
+    } catch (error) {
+      if (error.statusCode) {
+        return sendError(res, error.message, error.statusCode);
+      }
+      next(error);
+    }
+  },
+
+  /**
+   * POST /api/v1/daily-reports/remind
+   * Send reminder notification to pending employee(s)
+   */
+  async sendReminder(req, res, next) {
+    try {
+      const result = await dailyReportService.sendReminder(req.user, req.body);
+      return sendSuccess(res, result.message, result);
+    } catch (error) {
+      if (error.statusCode) {
+        return sendError(res, error.message, error.statusCode);
+      }
+      next(error);
+    }
+  },
 };

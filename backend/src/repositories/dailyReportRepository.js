@@ -347,4 +347,71 @@ export const dailyReportRepository = {
     if (res.rows.length === 0) return null;
     return this.findById(id);
   },
+
+  /**
+   * Find active employees who have NOT submitted a daily work report for a specific date
+   */
+  async findPendingEmployees({ orgId, managerId = null, deptId = '', date = null } = {}) {
+    const targetDate = date || new Date().toISOString().split('T')[0];
+
+    const conditions = ['e.org_id = $1', "e.status = 'Active'", CEO_ADMIN_EXCLUSION_SQL];
+    const values = [orgId, targetDate];
+    let pIdx = 3;
+
+    if (managerId) {
+      conditions.push(`e.manager_id = $${pIdx++}`);
+      values.push(managerId);
+    }
+    if (deptId) {
+      conditions.push(`e.dept_id = $${pIdx++}`);
+      values.push(deptId);
+    }
+
+    const sql = `
+      SELECT
+        e.id,
+        e.employee_code,
+        e.first_name,
+        e.last_name,
+        e.email,
+        e.avatar_url,
+        e.user_id,
+        d.name AS dept_name,
+        ds.title AS desig_title,
+        ar.check_in,
+        ar.check_out,
+        ar.status AS attendance_status
+      FROM employees e
+      LEFT JOIN departments d ON d.id = e.dept_id
+      LEFT JOIN designations ds ON ds.id = e.desig_id
+      LEFT JOIN attendance_records ar ON ar.employee_id = e.id AND ar.attendance_date = $2::date
+      WHERE ${conditions.join(' AND ')}
+        AND NOT EXISTS (
+          SELECT 1 FROM daily_work_reports r
+          WHERE r.employee_id = e.id AND r.report_date = $2::date AND r.org_id = $1
+        )
+      ORDER BY e.first_name ASC, e.last_name ASC;
+    `;
+
+    const res = await pool.query(sql, values);
+    return res.rows.map((row) => ({
+      id: row.id,
+      employeeCode: row.employee_code,
+      firstName: row.first_name,
+      lastName: row.last_name,
+      fullName: `${row.first_name || ''} ${row.last_name || ''}`.trim(),
+      email: row.email,
+      avatarUrl: row.avatar_url || null,
+      userId: row.user_id || null,
+      departmentName: row.dept_name || '',
+      designationTitle: row.desig_title || '',
+      attendance: {
+        checkedIn: Boolean(row.check_in),
+        checkInTime: row.check_in ? new Date(row.check_in).toISOString() : null,
+        checkedOut: Boolean(row.check_out),
+        checkOutTime: row.check_out ? new Date(row.check_out).toISOString() : null,
+        status: row.attendance_status || (row.check_in ? 'PRESENT' : 'NOT_LOGGED_IN'),
+      },
+    }));
+  },
 };
