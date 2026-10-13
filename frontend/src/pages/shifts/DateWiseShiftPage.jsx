@@ -306,6 +306,13 @@ export const DateWiseShiftPage = () => {
       });
       const attendance = scheduleData?.attendanceByDate?.[dateKey] || null;
 
+      const isHalfDay = Boolean(
+        approvedLeave?.isHalfDay ||
+        approvedLeave?.leaveCode === 'HDL' ||
+        (approvedLeave?.leaveName && approvedLeave.leaveName.toLowerCase().includes('half')) ||
+        attendance?.status === 'HALF_DAY'
+      );
+
       days.push({
         dayNumber: d,
         dateKey,
@@ -313,6 +320,7 @@ export const DateWiseShiftPage = () => {
         customAssignment,
         holiday,
         approvedLeave,
+        isHalfDay,
         attendance,
         isToday:
           today.getFullYear() === currentYear &&
@@ -432,7 +440,7 @@ export const DateWiseShiftPage = () => {
 
     const days = scheduleData.days;
     const dayHeaders = days.map((d) => `Day ${d.dayNumber} (${d.dayName})`).join(',');
-    const headerRow = `Employee Code,Employee Name,Department,Designation,Default Shift,${dayHeaders},Scheduled Days,Present Days,Shift Overrides,Approved Leaves,Weekly Offs,Total Hours Worked\n`;
+    const headerRow = `Employee Code,Employee Name,Department,Designation,Default Shift,${dayHeaders},Scheduled Days,Present Days,Half Days,Shift Overrides,Approved Leaves,Weekly Offs,Total Hours Worked\n`;
 
     const rows = filteredRosterRows.map((r) => {
       const emp = r.employee;
@@ -440,14 +448,19 @@ export const DateWiseShiftPage = () => {
         const cell = r.cells[d.dateKey];
         if (!cell) return '-';
         if (cell.holiday) return `Holiday (${cell.holiday.name || 'Holiday'})`;
-        if (cell.leave) return `Leave (${cell.leave.leaveCode || 'Leave'})`;
+        if (cell.isHalfDay || cell.displayType === 'HALF_DAY') return 'Half Day';
+        if (cell.leave) {
+          const lCode = cell.leave.leaveCode || '';
+          const lName = cell.leave.leaveName || 'Leave';
+          return `"${lCode ? `${lCode}: ${lName}` : lName}"`;
+        }
         if (cell.shiftType === 'WO') return 'Weekly Off';
         const shift = cell.shiftLabel || emp.defaultShiftTiming || 'Shift';
         const att = cell.attendance ? ` [Att: ${cell.attendance.status} ${cell.attendance.formattedWorkHours}]` : '';
         return `"${shift}${att}"`;
       }).join(',');
 
-      return `"${emp.employeeCode}","${emp.fullName}","${emp.departmentName}","${emp.designationTitle}","${emp.defaultShiftTiming}",${dayValues},${r.stats.scheduledDays},${r.stats.presentDays},${r.stats.overridesCount},${r.stats.leavesDays},${r.stats.weeklyOffsCount},"${r.stats.totalWorkHoursFormatted}"`;
+      return `"${emp.employeeCode}","${emp.fullName}","${emp.departmentName}","${emp.designationTitle}","${emp.defaultShiftTiming}",${dayValues},${r.stats.scheduledDays},${r.stats.presentDays},${r.stats.halfDays || 0},${r.stats.overridesCount},${r.stats.leavesDays},${r.stats.weeklyOffsCount},"${r.stats.totalWorkHoursFormatted}"`;
     }).join('\n');
 
     const csvContent = 'data:text/csv;charset=utf-8,' + encodeURIComponent(headerRow + rows);
@@ -1121,21 +1134,29 @@ export const DateWiseShiftPage = () => {
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-1">Roster Legend:</span>
               <div className="flex items-center gap-1.5">
                 <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200/60">11-7</span>
-                <span>Default Shift</span>
+                <span>Full Day Shift</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-300 shadow-2xs">
                   <Sparkles className="w-2.5 h-2.5" /> 10-6
                 </span>
-                <span>Custom Override</span>
+                <span>Shift Override</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 shadow-2xs">Half Day</span>
+                <span>Half Day</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300 border border-orange-200">PL</span>
+                <span>Planned Leave</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold bg-yellow-100 text-yellow-800 dark:bg-yellow-950/60 dark:text-yellow-300 border border-yellow-200">CL</span>
+                <span>Casual Leave</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">WO</span>
                 <span>Weekly Off</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200">PL</span>
-                <span>Approved Leave</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200">Holiday</span>
@@ -1197,22 +1218,25 @@ export const DateWiseShiftPage = () => {
                         </th>
                       ))}
                       {/* Right summary totals */}
-                      <th className="p-2 text-center min-w-[55px] bg-slate-50 dark:bg-slate-850 border-r border-slate-200 dark:border-slate-700" title="Scheduled Days">
+                      <th className="p-2 text-center min-w-[50px] bg-slate-50 dark:bg-slate-850 border-r border-slate-200 dark:border-slate-700" title="Scheduled Days">
                         Sched
                       </th>
-                      <th className="p-2 text-center min-w-[55px] bg-emerald-50/50 dark:bg-emerald-950/20 border-r border-slate-200 dark:border-slate-700 text-emerald-700 dark:text-emerald-400" title="Present / Logged Days">
+                      <th className="p-2 text-center min-w-[50px] bg-emerald-50/50 dark:bg-emerald-950/20 border-r border-slate-200 dark:border-slate-700 text-emerald-700 dark:text-emerald-400" title="Present / Logged Days">
                         Att
+                      </th>
+                      <th className="p-2 text-center min-w-[50px] bg-amber-50/50 dark:bg-amber-950/20 border-r border-slate-200 dark:border-slate-700 text-amber-700 dark:text-amber-400" title="Half Days">
+                        HD
                       </th>
                       <th className="p-2 text-center min-w-[65px] bg-indigo-50/50 dark:bg-indigo-950/20 border-r border-slate-200 dark:border-slate-700 text-indigo-700 dark:text-indigo-400" title="Custom Shift Overrides">
                         Overrides
                       </th>
-                      <th className="p-2 text-center min-w-[55px] bg-amber-50/50 dark:bg-amber-950/20 border-r border-slate-200 dark:border-slate-700 text-amber-700 dark:text-amber-400" title="Approved Leaves">
+                      <th className="p-2 text-center min-w-[50px] bg-orange-50/50 dark:bg-orange-950/20 border-r border-slate-200 dark:border-slate-700 text-orange-700 dark:text-orange-400" title="Approved Leaves">
                         Leave
                       </th>
-                      <th className="p-2 text-center min-w-[55px] bg-slate-50 dark:bg-slate-850 border-r border-slate-200 dark:border-slate-700" title="Weekly Offs">
+                      <th className="p-2 text-center min-w-[50px] bg-slate-50 dark:bg-slate-850 border-r border-slate-200 dark:border-slate-700" title="Weekly Offs">
                         Off
                       </th>
-                      <th className="p-2 text-center min-w-[80px] bg-slate-100 dark:bg-slate-800" title="Total Actual Hours Worked">
+                      <th className="p-2 text-center min-w-[75px] bg-slate-100 dark:bg-slate-800" title="Total Actual Hours Worked">
                         Work Hrs
                       </th>
                     </tr>
@@ -1268,7 +1292,8 @@ export const DateWiseShiftPage = () => {
 
                           const isOverride = cell.isOverride;
                           const hasHoliday = Boolean(cell.holiday);
-                          const hasLeave = Boolean(cell.leave);
+                          const isHalfDay = Boolean(cell.isHalfDay || cell.displayType === 'HALF_DAY');
+                          const hasLeave = Boolean(cell.leave && !isHalfDay);
                           const isWO = cell.shiftType === 'WO';
                           const att = cell.attendance;
 
@@ -1279,15 +1304,19 @@ export const DateWiseShiftPage = () => {
                               className={`p-1.5 text-center border-r border-slate-100 dark:border-slate-800/60 cursor-pointer transition-all hover:bg-brand-50/50 dark:hover:bg-brand-950/30 ${
                                 day.isWeekend ? 'bg-slate-50/40 dark:bg-slate-850/40' : ''
                               }`}
-                              title={`${row.employee.fullName} | ${day.dateKey}\nShift: ${cell.shiftLabel}${isOverride ? ' (✨ Override)' : ''}${att ? `\nAtt: ${att.status} (${att.formattedWorkHours})` : ''}`}
+                              title={`${row.employee.fullName} | ${day.dateKey}\n${isHalfDay ? 'Half Day' : cell.shiftLabel}${isOverride ? ' (✨ Override)' : ''}${cell.leave ? `\nLeave: ${cell.leave.leaveName || cell.leave.leaveCode}` : ''}${att ? `\nAtt: ${att.status} (${att.formattedWorkHours})` : ''}`}
                             >
                               <div className="flex flex-col items-center justify-center gap-0.5 min-h-[36px]">
                                 {hasHoliday ? (
                                   <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200">
                                     Holiday
                                   </span>
+                                ) : isHalfDay ? (
+                                  <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 shadow-2xs">
+                                    Half Day
+                                  </span>
                                 ) : hasLeave ? (
-                                  <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200">
+                                  <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300 border border-orange-200">
                                     {cell.leave.leaveCode || 'Leave'}
                                   </span>
                                 ) : isWO ? (
@@ -1338,10 +1367,13 @@ export const DateWiseShiftPage = () => {
                         <td className="p-2 text-center text-xs font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50/30 dark:bg-emerald-950/10 border-r border-slate-200 dark:border-slate-700">
                           {row.stats.presentDays}
                         </td>
+                        <td className="p-2 text-center text-xs font-bold text-amber-700 dark:text-amber-400 bg-amber-50/30 dark:bg-amber-950/10 border-r border-slate-200 dark:border-slate-700">
+                          {row.stats.halfDays || 0}
+                        </td>
                         <td className="p-2 text-center text-xs font-bold text-indigo-700 dark:text-indigo-400 bg-indigo-50/30 dark:bg-indigo-950/10 border-r border-slate-200 dark:border-slate-700">
                           {row.stats.overridesCount > 0 ? `✨ ${row.stats.overridesCount}` : '0'}
                         </td>
-                        <td className="p-2 text-center text-xs font-semibold text-amber-700 dark:text-amber-400 bg-amber-50/30 dark:bg-amber-950/10 border-r border-slate-200 dark:border-slate-700">
+                        <td className="p-2 text-center text-xs font-semibold text-orange-700 dark:text-orange-400 bg-orange-50/30 dark:bg-orange-950/10 border-r border-slate-200 dark:border-slate-700">
                           {row.stats.leavesDays}
                         </td>
                         <td className="p-2 text-center text-xs font-semibold text-slate-600 dark:text-slate-400 bg-slate-50/50 dark:bg-slate-850/50 border-r border-slate-200 dark:border-slate-700">
@@ -1575,8 +1607,12 @@ export const DateWiseShiftPage = () => {
                         <div className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded px-1.5 py-0.5 truncate" title={day.holiday.name}>
                           🎉 {day.holiday.name}
                         </div>
+                      ) : day.isHalfDay ? (
+                        <div className="text-[10px] font-bold text-amber-900 bg-amber-100 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-700 rounded px-1.5 py-0.5 truncate" title={day.approvedLeave?.leaveName ? `Half Day (${day.approvedLeave.leaveName})` : 'Half Day'}>
+                          🌗 Half Day
+                        </div>
                       ) : hasLeave ? (
-                        <div className="text-[10px] font-semibold text-amber-700 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded px-1.5 py-0.5 truncate" title={day.approvedLeave.leaveName}>
+                        <div className="text-[10px] font-semibold text-orange-800 bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-800 rounded px-1.5 py-0.5 truncate" title={day.approvedLeave.leaveName}>
                           ⛱️ {day.approvedLeave.leaveName}
                         </div>
                       ) : isWO ? (
@@ -1988,17 +2024,21 @@ export const DateWiseShiftPage = () => {
               </div>
             )}
 
-            {/* Leave / Holiday Info if any */}
+            {/* Leave / Holiday / Half Day Info if any */}
             {selectedMatrixCellDetails.cell.holiday && (
               <div className="p-2.5 bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-800/40 rounded-xl text-rose-800 dark:text-rose-300 text-xs">
                 🎉 Company Holiday: <strong>{selectedMatrixCellDetails.cell.holiday.name}</strong>
               </div>
             )}
-            {selectedMatrixCellDetails.cell.leave && (
-              <div className="p-2.5 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 rounded-xl text-amber-800 dark:text-amber-300 text-xs">
+            {selectedMatrixCellDetails.cell.isHalfDay ? (
+              <div className="p-2.5 bg-amber-50 dark:bg-amber-950/20 border border-amber-300 dark:border-amber-700/50 rounded-xl text-amber-900 dark:text-amber-200 text-xs">
+                🌗 Half Day (0.5 Day): <strong>{selectedMatrixCellDetails.cell.leave?.leaveName ? `Leave - ${selectedMatrixCellDetails.cell.leave.leaveName}` : 'Attendance Half Day'}</strong>
+              </div>
+            ) : selectedMatrixCellDetails.cell.leave ? (
+              <div className="p-2.5 bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800/40 rounded-xl text-orange-900 dark:text-orange-200 text-xs">
                 🏖️ Approved Leave: <strong>{selectedMatrixCellDetails.cell.leave.leaveName} ({selectedMatrixCellDetails.cell.leave.leaveCode})</strong>
               </div>
-            )}
+            ) : null}
 
             {/* Action Buttons */}
             <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">

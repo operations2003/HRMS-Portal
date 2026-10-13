@@ -456,6 +456,7 @@ export const shiftManagementService = {
       const cells = {};
       let scheduledDaysCount = 0;
       let presentDaysCount = 0;
+      let halfDaysCount = 0;
       let overrideDaysCount = 0;
       let leaveDaysCount = 0;
       let weeklyOffDaysCount = 0;
@@ -494,12 +495,23 @@ export const shiftManagementService = {
           scheduledDaysCount++;
         }
 
-        if (leave) {
+        // Distinct Half Day detection:
+        // Do not classify Half Days as Planned Leave (PL)!
+        const isHalfDay = Boolean(
+          leave?.isHalfDay ||
+          leave?.leaveCode === 'HDL' ||
+          (leave?.leaveName && leave.leaveName.toLowerCase().includes('half')) ||
+          att?.status === 'HALF_DAY'
+        );
+
+        if (isHalfDay) {
+          halfDaysCount++;
+        } else if (leave) {
           leaveDaysCount++;
         }
 
         if (att) {
-          if (['PRESENT', 'HALF_DAY', 'ON_DUTY'].includes(att.status)) {
+          if (['PRESENT', 'ON_DUTY'].includes(att.status)) {
             presentDaysCount++;
           }
           if (att.workMinutes > 0) {
@@ -513,9 +525,14 @@ export const shiftManagementService = {
         if (holiday) {
           displayType = 'HOLIDAY';
           cellText = 'Holiday';
+        } else if (isHalfDay) {
+          // Half day must strictly be Half Day, NEVER Planned Leave (PL)
+          displayType = 'HALF_DAY';
+          cellText = 'Half Day';
         } else if (leave) {
           displayType = 'LEAVE';
-          cellText = leave.leaveCode || 'Leave';
+          // Full-day leave according to type: PL = Planned Leave, CL = Casual Leave, SL = Sick Leave, etc.
+          cellText = leave.leaveCode || leave.leaveName || 'Leave';
         } else if (shiftType === 'WO') {
           displayType = 'WO';
           cellText = 'WO';
@@ -534,6 +551,7 @@ export const shiftManagementService = {
           shortLabel,
           displayType,
           cellText,
+          isHalfDay,
           isOverride,
           customAssignment: custom,
           holiday,
@@ -561,6 +579,7 @@ export const shiftManagementService = {
         stats: {
           scheduledDays: scheduledDaysCount,
           presentDays: presentDaysCount,
+          halfDays: halfDaysCount,
           overridesCount: overrideDaysCount,
           leavesDays: leaveDaysCount,
           weeklyOffsCount: weeklyOffDaysCount,
