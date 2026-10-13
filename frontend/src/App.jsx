@@ -38,9 +38,7 @@ import { EngagementPage } from './pages/engagement/EngagementPage.jsx';
 import { ProbationDashboardPage } from './pages/probation/ProbationDashboardPage.jsx';
 import { ReportsPage } from './pages/reports/ReportsPage.jsx';
 import { DailyReportPage } from './pages/daily-reports/DailyReportPage.jsx';
-import { RosterImportPage } from './pages/roster/RosterImportPage.jsx';
-import { RosterPreviewPage } from './pages/roster/RosterPreviewPage.jsx';
-import { RosterHistoryPage } from './pages/roster/RosterHistoryPage.jsx';
+import { DateWiseShiftPage } from './pages/shifts/DateWiseShiftPage.jsx';
 import { ForbiddenPage } from './pages/common/ForbiddenPage.jsx';
 import { NotFoundPage } from './pages/common/NotFoundPage.jsx';
 import { AppLayout } from './layouts/AppLayout.jsx';
@@ -178,41 +176,23 @@ export const App = () => {
                 }
               />
 
+              {/* Date-wise Shift Management */}
               <Route
-                path="roster/import"
+                path="shifts"
                 element={
                   <PermissionRoute
-                    roles={['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']}
-                    permission={['employee:write', 'attendance:write']}
+                    roles={['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin', 'Manager', 'TeamLead']}
                   >
-                    <RosterImportPage />
+                    <DateWiseShiftPage />
                   </PermissionRoute>
                 }
               />
 
-              <Route
-                path="roster/preview/:jobId"
-                element={
-                  <PermissionRoute
-                    roles={['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']}
-                    permission={['employee:write', 'attendance:write']}
-                  >
-                    <RosterPreviewPage />
-                  </PermissionRoute>
-                }
-              />
-
-              <Route
-                path="roster/history"
-                element={
-                  <PermissionRoute
-                    roles={['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']}
-                    permission={['employee:write', 'attendance:write', 'attendance:read']}
-                  >
-                    <RosterHistoryPage />
-                  </PermissionRoute>
-                }
-              />
+              {/* Legacy Roster Route Redirects */}
+              <Route path="roster" element={<Navigate to="/shifts" replace />} />
+              <Route path="roster/import" element={<Navigate to="/shifts" replace />} />
+              <Route path="roster/history" element={<Navigate to="/shifts" replace />} />
+              <Route path="roster/preview/:jobId" element={<Navigate to="/shifts" replace />} />
 
               <Route
                 path="policies"

@@ -1,99 +1,22 @@
-import { http } from './api.js';
+import { shiftService } from './shiftService.js';
 
+// Fully decommissioned bulk roster import - delegate to Date-wise Shift Management
 export const rosterService = {
-  /**
-   * Upload and parse roster file
-   */
-  async uploadRoster(formData) {
-    const res = await http.post('/v1/roster/upload', formData);
-    return res;
-  },
-
-  /**
-   * Get preview of uploaded roster
-   */
-  async getPreview(jobId) {
-    const res = await http.get(`/v1/roster/preview/${jobId}`);
-    return res;
-  },
-
-  /**
-   * Resolve ambiguous employee mapping
-   */
-  async resolveAmbiguity(mappingId, selectedEmployeeId) {
-    const res = await http.post('/v1/roster/resolve-ambiguity', {
-      mappingId,
-      selectedEmployeeId,
-    });
-    return res;
-  },
-
-  /**
-   * Automatically resolve all ambiguous mappings using AI
-   */
-  async aiAutoResolve(jobId) {
-    const res = await http.post(`/v1/roster/ai-auto-resolve/${jobId}`);
-    return res;
-  },
-
-  /**
-   * Confirm and apply roster import
-   */
-  async confirmImport(jobId) {
-    const res = await http.post(`/v1/roster/confirm/${jobId}`);
-    return res;
-  },
-
-  /**
-   * Get roster import history
-   */
-  async getImportHistory(params = {}) {
-    const query = new URLSearchParams();
-    if (params.page) query.append('page', params.page);
-    if (params.limit) query.append('limit', params.limit);
-    const queryString = query.toString() ? `?${query.toString()}` : '';
-
-    const res = await http.get(`/v1/roster/history${queryString}`);
-    return res;
-  },
-
-  /**
-   * Get shift assignments
-   */
+  ...shiftService,
   async getAssignments(params = {}) {
-    const query = new URLSearchParams();
-    if (params.employeeId) query.append('employeeId', params.employeeId);
-    if (params.month) query.append('month', params.month);
-    if (params.year) query.append('year', params.year);
-    if (params.startDate) query.append('startDate', params.startDate);
-    if (params.endDate) query.append('endDate', params.endDate);
-    const queryString = query.toString() ? `?${query.toString()}` : '';
-
-    const res = await http.get(`/v1/roster/assignments${queryString}`);
-    return res;
+    return shiftService.getEmployeeShifts(params);
   },
-
-  /**
-   * Override a specific cell (shift timing or leave) in a roster job
-   */
-  async overrideCell(jobId, data) {
-    const res = await http.post(`/v1/roster/cell-override/${jobId}`, data);
-    return res;
-  },
-
-  /**
-   * Update employee daily shift assignment directly
-   */
   async updateAssignment(data) {
-    const res = await http.put('/v1/roster/assignment', data);
-    return res;
-  },
-
-  /**
-   * Delete a monthly roster import job and roll back its assignments
-   */
-  async deleteRoster(jobId) {
-    const res = await http.delete(`/v1/roster/job/${jobId}`);
-    return res;
+    return shiftService.assignShifts({
+      employeeId: data.employeeId,
+      dates: [data.date],
+      shiftType: data.shiftType,
+      shiftLabel: data.shiftLabel,
+      shiftStartTime: data.shiftStartTime,
+      shiftEndTime: data.shiftEndTime,
+      notes: data.notes || '',
+    });
   },
 };
+
+export default rosterService;
