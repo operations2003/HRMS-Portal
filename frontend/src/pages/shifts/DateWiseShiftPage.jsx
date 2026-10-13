@@ -61,6 +61,7 @@ export const DateWiseShiftPage = () => {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
   const [employeeSearch, setEmployeeSearch] = useState('');
   const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
+  const [employeeFilterTab, setEmployeeFilterTab] = useState('ALL'); // 'ALL' | 'CUSTOM'
 
   // Shift Schedule State
   const [scheduleData, setScheduleData] = useState(null);
@@ -85,25 +86,28 @@ export const DateWiseShiftPage = () => {
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
   // 1. Fetch eligible employees on mount
-  useEffect(() => {
-    const fetchEmployees = async () => {
-      try {
-        setIsLoadingEmployees(true);
-        const list = await shiftService.getEligibleEmployees();
-        setEmployees(list || []);
+  const fetchEmployees = async () => {
+    try {
+      setIsLoadingEmployees(true);
+      const list = await shiftService.getEligibleEmployees();
+      const safeList = Array.isArray(list) ? list : [];
+      setEmployees(safeList);
 
-        if (list && list.length > 0) {
-          // If caller is an employee and in list, default to self; else pick first
-          const callerMatch = list.find((e) => e.id === user?.employeeId);
-          setSelectedEmployeeId(callerMatch ? callerMatch.id : list[0].id);
-        }
-      } catch (err) {
-        toast.error('Failed to load eligible employees for shift management.');
-      } finally {
-        setIsLoadingEmployees(false);
+      if (safeList.length > 0) {
+        setSelectedEmployeeId((prev) => {
+          if (prev && safeList.some((e) => e.id === prev)) return prev;
+          const callerMatch = safeList.find((e) => e.id === user?.employeeId);
+          return callerMatch ? callerMatch.id : safeList[0].id;
+        });
       }
-    };
+    } catch (err) {
+      toast.error('Failed to load eligible employees for shift management.');
+    } finally {
+      setIsLoadingEmployees(false);
+    }
+  };
 
+  useEffect(() => {
     fetchEmployees();
   }, []);
 
@@ -137,17 +141,29 @@ export const DateWiseShiftPage = () => {
     return employees.find((e) => e.id === selectedEmployeeId) || scheduleData?.employee || null;
   }, [employees, selectedEmployeeId, scheduleData]);
 
+  // Count employees with custom/adjusted shifts
+  const withCustomCount = useMemo(() => {
+    return employees.filter((e) => (e.customShiftCount || 0) > 0).length;
+  }, [employees]);
+
   // Filtered employees for dropdown
   const filteredEmployees = useMemo(() => {
-    if (!employeeSearch.trim()) return employees;
+    let list = employees;
+    if (employeeFilterTab === 'CUSTOM') {
+      list = list.filter((e) => (e.customShiftCount || 0) > 0);
+    }
+    if (!employeeSearch.trim()) return list;
     const q = employeeSearch.toLowerCase();
-    return employees.filter(
+    return list.filter(
       (e) =>
         e.fullName?.toLowerCase().includes(q) ||
         e.employeeCode?.toLowerCase().includes(q) ||
-        e.departmentName?.toLowerCase().includes(q)
+        e.email?.toLowerCase().includes(q) ||
+        e.departmentName?.toLowerCase().includes(q) ||
+        e.designationTitle?.toLowerCase().includes(q) ||
+        e.defaultShiftTiming?.toLowerCase().includes(q)
     );
-  }, [employees, employeeSearch]);
+  }, [employees, employeeSearch, employeeFilterTab]);
 
   // Month navigation
   const handlePrevMonth = () => {
@@ -408,12 +424,69 @@ export const DateWiseShiftPage = () => {
         {/* Left: Employee Selection Dropdown / Search (4 cols) */}
         <div className="lg:col-span-4 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between space-y-3">
           <div>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5 flex items-center justify-between">
-              <span>Select Employee</span>
-              <span className="text-[11px] font-normal text-slate-400">
-                {employees.length} available
-              </span>
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                Select Employee
+              </label>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-semibold text-brand-600 dark:text-brand-400">
+                  {employees.length} available
+                </span>
+                <button
+                  type="button"
+                  onClick={fetchEmployees}
+                  className="text-[11px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer p-0.5 rounded"
+                  title="Refresh employee list"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                </button>
+              </div>
+            </div>
+
+            {/* Quick dropdown for instant switching */}
+            <div className="mb-2">
+              <select
+                value={selectedEmployeeId}
+                onChange={(e) => setSelectedEmployeeId(e.target.value)}
+                className="w-full text-xs py-2 px-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-brand-500 font-medium"
+              >
+                {employees.length === 0 ? (
+                  <option value="">No employees available</option>
+                ) : (
+                  employees.map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.fullName} ({emp.employeeCode}) - {emp.defaultShiftTiming || '11:00 AM - 07:00 PM'}
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
+
+            {/* Filter Tabs: All vs With Custom Shifts */}
+            <div className="flex items-center gap-1.5 p-1 bg-slate-100/80 dark:bg-slate-800 rounded-xl mb-2 text-xs">
+              <button
+                type="button"
+                onClick={() => setEmployeeFilterTab('ALL')}
+                className={`flex-1 py-1 px-2 rounded-lg text-center transition-all cursor-pointer font-medium text-[11px] ${
+                  employeeFilterTab === 'ALL'
+                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs'
+                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
+                }`}
+              >
+                All ({employees.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setEmployeeFilterTab('CUSTOM')}
+                className={`flex-1 py-1 px-2 rounded-lg text-center transition-all cursor-pointer font-medium text-[11px] ${
+                  employeeFilterTab === 'CUSTOM'
+                    ? 'bg-white dark:bg-slate-700 text-brand-600 dark:text-brand-400 shadow-2xs'
+                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
+                }`}
+              >
+                Adjusted ({withCustomCount})
+              </button>
+            </div>
 
             <div className="relative mb-2">
               <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-slate-400" />
@@ -421,23 +494,27 @@ export const DateWiseShiftPage = () => {
                 type="text"
                 value={employeeSearch}
                 onChange={(e) => setEmployeeSearch(e.target.value)}
-                placeholder="Search by name, ID, dept..."
+                placeholder="Search name, code, dept, shift..."
                 className="w-full text-xs pl-8 pr-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-brand-500 text-slate-800 dark:text-slate-200"
               />
             </div>
 
-            <div className="max-h-56 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+            <div className="max-h-60 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
               {isLoadingEmployees ? (
-                <div className="p-4 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+                <div className="p-6 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
                   <LoadingSpinner size="sm" /> Loading employees...
                 </div>
               ) : filteredEmployees.length === 0 ? (
-                <div className="p-4 text-center text-xs text-slate-400">
-                  No matching employees found.
+                <div className="p-6 text-center text-xs text-slate-400 space-y-1">
+                  <p>No matching employees found.</p>
+                  <Button variant="ghost" size="sm" onClick={() => { setEmployeeSearch(''); setEmployeeFilterTab('ALL'); }} className="text-xs text-brand-600">
+                    Clear Filters
+                  </Button>
                 </div>
               ) : (
                 filteredEmployees.map((emp) => {
                   const isSelected = emp.id === selectedEmployeeId;
+                  const hasCustom = (emp.customShiftCount || 0) > 0;
                   return (
                     <button
                       key={emp.id}
@@ -462,9 +539,16 @@ export const DateWiseShiftPage = () => {
                             {emp.employeeCode}
                           </span>
                         </div>
-                        <p className="text-[10px] text-slate-400 truncate mt-0.5">
-                          {emp.designationTitle || emp.departmentName || 'Staff'}
-                        </p>
+                        <div className="flex items-center justify-between gap-1 mt-0.5">
+                          <p className="text-[10px] text-slate-400 truncate">
+                            {emp.designationTitle || emp.departmentName || 'Staff'}
+                          </p>
+                          {hasCustom && (
+                            <span className="inline-block px-1.5 py-0.2 text-[9px] font-bold rounded-md bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 shrink-0">
+                              Adjusted ({emp.customShiftCount})
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </button>
                   );

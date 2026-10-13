@@ -6,7 +6,11 @@ export const shiftService = {
    */
   async getEligibleEmployees() {
     const res = await http.get('/v1/shifts/eligible-employees');
-    return res?.data || res || [];
+    const raw = res?.data ?? res;
+    if (Array.isArray(raw)) return raw;
+    if (Array.isArray(raw?.employees)) return raw.employees;
+    if (Array.isArray(raw?.data)) return raw.data;
+    return [];
   },
 
   /**
@@ -22,7 +26,7 @@ export const shiftService = {
 
     const qs = params.toString() ? `?${params.toString()}` : '';
     const res = await http.get(`/v1/shifts/assignments${qs}`);
-    return res?.data || res || {};
+    return res?.data ?? res ?? {};
   },
 
   /**

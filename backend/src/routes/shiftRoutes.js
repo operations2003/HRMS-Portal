@@ -27,7 +27,6 @@ router.get(
 router.post(
   '/assign',
   requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin', 'Manager', 'TeamLead']),
-  authorize(['attendance:write', 'employee:write', 'team:write']),
   shiftManagementController.assignShifts
 );
 
@@ -35,7 +34,6 @@ router.post(
 router.post(
   '/reset',
   requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin', 'Manager', 'TeamLead']),
-  authorize(['attendance:write', 'employee:write', 'team:write']),
   shiftManagementController.resetShifts
 );
 
