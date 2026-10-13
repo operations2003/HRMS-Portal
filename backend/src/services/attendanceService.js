@@ -1157,7 +1157,9 @@ export const attendanceService = {
 
     // Compute updated hours if check-in or check-out adjusted
     const newCheckIn = data.checkIn ? new Date(data.checkIn) : record.checkIn ? new Date(record.checkIn) : null;
-    const newCheckOut = data.checkOut ? new Date(data.checkOut) : record.checkOut ? new Date(record.checkOut) : null;
+    const newCheckOut = data.checkOut !== undefined
+      ? (data.checkOut ? new Date(data.checkOut) : null)
+      : (record.checkOut ? new Date(record.checkOut) : null);
 
     const hasExplicitBreak = data.breakDurationMinutes !== undefined && data.breakDurationMinutes !== null && data.breakDurationMinutes !== '';
     const explicitBreakMinutes = hasExplicitBreak ? Math.max(0, parseInt(data.breakDurationMinutes, 10) || 0) : null;
@@ -1193,6 +1195,9 @@ export const attendanceService = {
       totalHours = calc.totalHours;
       overtimeHours = calc.overtimeHours;
       breakDurationMinutes = calc.breakDurationMinutes;
+    } else if (newCheckIn && !newCheckOut) {
+      totalHours = 0.0;
+      overtimeHours = 0.0;
     }
 
     // Handle end/clear break if requested or if explicit break passed for a stuck break

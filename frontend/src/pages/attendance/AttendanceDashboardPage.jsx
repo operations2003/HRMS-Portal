@@ -154,11 +154,15 @@ export const AttendanceDashboardPage = () => {
 
   /**
    * Fetch attendance records based on current active tab & filters
+   * @param {number} page - Target page number
+   * @param {boolean} silent - If true, fetches silently in background without flickering loading spinner
    */
   const fetchTableData = useCallback(
-    async (page = 1) => {
+    async (page = 1, silent = false) => {
       try {
-        setLoading(true);
+        if (!silent) {
+          setLoading(true);
+        }
         setError(null);
 
         if (activeTab === 'my') {
@@ -188,12 +192,16 @@ export const AttendanceDashboardPage = () => {
           setPagination(res.pagination || null);
         }
       } catch (err) {
-        setError(err.message || 'Failed to load attendance records.');
+        if (!silent) {
+          setError(err.message || 'Failed to load attendance records.');
+        }
       } finally {
-        setLoading(false);
+        if (!silent) {
+          setLoading(false);
+        }
       }
     },
-    [activeTab, filters]
+    [activeTab, filters, canViewOrg]
   );
 
   useEffect(() => {
@@ -203,7 +211,7 @@ export const AttendanceDashboardPage = () => {
   }, [fetchTodayRecord, isCeo]);
 
   useEffect(() => {
-    fetchTableData(1);
+    fetchTableData(1, false);
   }, [fetchTableData]);
 
   // Real-time synchronization across windows/tabs & background auto-refresh
@@ -212,20 +220,40 @@ export const AttendanceDashboardPage = () => {
       if (!isCeo) {
         fetchTodayRecord();
       }
-      fetchTableData(pagination?.page || 1);
+      fetchTableData(pagination?.page || 1, true);
     };
     window.addEventListener('hrms:attendance:updated', handleAttendanceUpdate);
 
-    // Auto-refresh attendance records every 25 seconds for real-time status across team
+    // Auto-refresh attendance records silently every 45s when document is visible and no modals are open
     const pollInterval = setInterval(() => {
-      fetchTableData(pagination?.page || 1);
-    }, 25000);
+      if (typeof document !== 'undefined' && document.hidden) return;
+      if (
+        selectedEditTimingRecord ||
+        selectedRemarkRecord ||
+        selectedConvertRecord ||
+        isExportModalOpen ||
+        isReportModalOpen
+      ) {
+        return;
+      }
+      fetchTableData(pagination?.page || 1, true);
+    }, 45000);
 
     return () => {
       window.removeEventListener('hrms:attendance:updated', handleAttendanceUpdate);
       clearInterval(pollInterval);
     };
-  }, [fetchTodayRecord, fetchTableData, isCeo, pagination?.page]);
+  }, [
+    fetchTodayRecord,
+    fetchTableData,
+    isCeo,
+    pagination?.page,
+    selectedEditTimingRecord,
+    selectedRemarkRecord,
+    selectedConvertRecord,
+    isExportModalOpen,
+    isReportModalOpen,
+  ]);
 
   // Load departments for export filter selector
   useEffect(() => {
@@ -670,8 +698,9 @@ export const AttendanceDashboardPage = () => {
         onClose={() => setSelectedConvertRecord(null)}
         record={selectedConvertRecord}
         onSuccess={() => {
-          fetchTableData(pagination?.page || 1);
+          fetchTableData(pagination?.page || 1, true);
           fetchTodayRecord();
+          window.dispatchEvent(new CustomEvent('hrms:attendance:updated'));
         }}
       />
 
@@ -682,10 +711,11 @@ export const AttendanceDashboardPage = () => {
           onClose={() => setSelectedRemarkRecord(null)}
           record={selectedRemarkRecord}
           onSuccess={(updated) => {
-            fetchTableData(pagination?.page || 1);
-            if (todayRecord && todayRecord.id === updated.id) {
+            fetchTableData(pagination?.page || 1, true);
+            if (todayRecord && todayRecord.id === updated?.id) {
               setTodayRecord(updated);
             }
+            window.dispatchEvent(new CustomEvent('hrms:attendance:updated', { detail: updated }));
           }}
         />
       )}
@@ -696,10 +726,11 @@ export const AttendanceDashboardPage = () => {
         onClose={() => setSelectedEditTimingRecord(null)}
         record={selectedEditTimingRecord}
         onSuccess={(updated) => {
-          fetchTableData(pagination?.page || 1);
-          if (todayRecord && todayRecord.id === updated.id) {
+          fetchTableData(pagination?.page || 1, true);
+          if (todayRecord && todayRecord.id === updated?.id) {
             setTodayRecord(updated);
           }
+          window.dispatchEvent(new CustomEvent('hrms:attendance:updated', { detail: updated }));
         }}
       />
 

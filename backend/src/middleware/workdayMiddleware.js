@@ -41,12 +41,8 @@ export const enforceActiveWorkday = async (req, res, next) => {
     // 4. Exempt paths that must remain operational without active workday
     const rawPath = (req.originalUrl || req.baseUrl + req.path || req.path || '').toLowerCase();
     const isExempt =
-      rawPath.includes('/attendance/check-in') ||
-      rawPath.includes('/attendance/check-out') ||
-      rawPath.includes('/attendance/pause-break') ||
-      rawPath.includes('/attendance/resume-break') ||
-      rawPath.includes('/attendance/overtime') ||
-      rawPath.includes('/attendance/cron/auto-logout') ||
+      rawPath.includes('/attendance') ||
+      rawPath.includes('/roster') ||
       rawPath.includes('/daily-reports') ||
       rawPath.includes('/v1/auth/') ||
       rawPath.includes('/auth/logout') ||

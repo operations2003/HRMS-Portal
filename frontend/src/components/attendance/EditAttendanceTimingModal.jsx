@@ -205,7 +205,9 @@ export const EditAttendanceTimingModal = ({
       // Do NOT push to the next day unless the user explicitly checks the box.
       setIsNextDayDeparture(false);
 
-      setStatus(record.status === 'LATE' ? 'AUTO' : record.status || 'AUTO');
+      // When adjusting timings for Late, Absent, or Unstarted records, default to AUTO evaluation
+      const recStatus = (record.status || '').toUpperCase();
+      setStatus(['LATE', 'ABSENT', 'NOT_STARTED', 'YET_TO_CHECK_IN'].includes(recStatus) ? 'AUTO' : record.status || 'AUTO');
       setReason(record.regularizationReason || '');
       setBreakDurationMinutes(record.breakDurationMinutes || 0);
       setIsOnBreak(Boolean(record.isOnBreak));
@@ -370,7 +372,7 @@ export const EditAttendanceTimingModal = ({
 
       const payload = {
         checkIn: checkInDate.toISOString(),
-        checkOut: checkOutDate ? checkOutDate.toISOString() : undefined,
+        checkOut: isCheckOutEnabled && checkOutDate ? checkOutDate.toISOString() : null,
         breakDurationMinutes: Math.max(0, parseInt(breakDurationMinutes, 10) || 0),
         isOnBreak,
         status: status === 'AUTO' ? undefined : status,
