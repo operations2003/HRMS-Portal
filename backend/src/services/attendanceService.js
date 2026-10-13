@@ -939,10 +939,10 @@ export const attendanceService = {
     const history = await attendanceRepository.findByEmployeeHistory(employee.id, employee.orgId, query);
 
     // Resolve today's attendance record (or active unclosed session) for punch card
+    const tz = employee.timezone || 'Asia/Kolkata';
+    const todayDate = new Date().toLocaleDateString('en-CA', { timeZone: tz });
     let todayRecord = null;
     try {
-      const tz = employee.timezone || 'Asia/Kolkata';
-      const todayDate = new Date().toLocaleDateString('en-CA', { timeZone: tz });
       const unclosedList = await attendanceRepository.findActiveUnclosedRecords(employee.orgId);
       todayRecord = unclosedList.find((r) => r.employeeId === employee.id) || null;
       if (!todayRecord) {
