@@ -11,14 +11,12 @@ router.use(authenticate);
 // 1. Get eligible employees that caller can schedule
 router.get(
   '/eligible-employees',
-  authorize(['employee:read', 'attendance:read', 'team:read']),
   shiftManagementController.getEligibleEmployees
 );
 
 // 2. Get shift assignments / schedule for employee and date range
 router.get(
   '/assignments',
-  authorize(['employee:read', 'attendance:read', 'team:read']),
   shiftManagementController.getAssignments
 );
 

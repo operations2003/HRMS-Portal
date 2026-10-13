@@ -29,6 +29,7 @@ import { Input } from '../../components/common/Input.jsx';
 import { Select } from '../../components/common/Select.jsx';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
 import { shiftService } from '../../services/shiftService.js';
+import { employeeService } from '../../services/employeeService.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 
@@ -85,19 +86,52 @@ export const DateWiseShiftPage = () => {
   const [auditHistory, setAuditHistory] = useState([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
-  // 1. Fetch eligible employees on mount
+  // 1. Fetch eligible employees on mount with universal fallback
   const fetchEmployees = async () => {
     try {
       setIsLoadingEmployees(true);
-      const list = await shiftService.getEligibleEmployees();
-      const safeList = Array.isArray(list) ? list : [];
-      setEmployees(safeList);
+      let list = [];
 
-      if (safeList.length > 0) {
+      try {
+        list = await shiftService.getEligibleEmployees();
+      } catch (err) {
+        console.warn('[ShiftPage] shiftService.getEligibleEmployees warning:', err.message);
+      }
+
+      // If empty or error, fallback to universal employeeService
+      if (!Array.isArray(list) || list.length === 0) {
+        try {
+          const empRes = await employeeService.listEmployees({ limit: 500 });
+          list = empRes?.employees || empRes?.data || empRes?.items || [];
+        } catch (err) {
+          console.warn('[ShiftPage] employeeService fallback warning:', err.message);
+        }
+      }
+
+      const formatted = (Array.isArray(list) ? list : []).map((e) => ({
+        id: e.id,
+        employeeCode: e.employeeCode || e.code || '',
+        firstName: e.firstName || '',
+        lastName: e.lastName || '',
+        fullName:
+          e.fullName ||
+          `${e.firstName || ''} ${e.lastName || ''}`.trim() ||
+          'Employee',
+        email: e.email || '',
+        defaultShiftTiming: e.shiftTiming || e.defaultShiftTiming || '11:00 AM - 07:00 PM',
+        avatarUrl: e.avatarUrl || null,
+        departmentName: e.departmentName || e.department?.name || '',
+        designationTitle: e.designationTitle || e.designation?.title || '',
+        customShiftCount: e.customShiftCount || 0,
+      }));
+
+      setEmployees(formatted);
+
+      if (formatted.length > 0) {
         setSelectedEmployeeId((prev) => {
-          if (prev && safeList.some((e) => e.id === prev)) return prev;
-          const callerMatch = safeList.find((e) => e.id === user?.employeeId);
-          return callerMatch ? callerMatch.id : safeList[0].id;
+          if (prev && formatted.some((e) => e.id === prev)) return prev;
+          const callerMatch = formatted.find((e) => e.id === user?.employeeId);
+          return callerMatch ? callerMatch.id : formatted[0].id;
         });
       }
     } catch (err) {
