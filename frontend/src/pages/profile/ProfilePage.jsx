@@ -679,14 +679,14 @@ export const ProfilePage = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Personal & Family Information */}
         <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-6 shadow-xs space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+          <div className="flex items-center justify-between border-b borde                                                                                r-slate-100 dark:border-slate-800 pb-3">
             <div className="flex items-center gap-2">
               <Heart className="w-4 h-4 text-brand-600" />
               <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">
                 Personal & Family Information
               </h3>
             </div>
-            {canEdit && (
+            {!isViewingOther && (
               <button
                 type="button"
                 onClick={handleOpenEdit}
@@ -737,7 +737,7 @@ export const ProfilePage = () => {
                 Contact & Address
               </h3>
             </div>
-            {canEdit && (
+            {!isViewingOther && (
               <button
                 type="button"
                 onClick={handleOpenEdit}
@@ -1044,10 +1044,10 @@ export const ProfilePage = () => {
                               Uploaded on{' '}
                               {doc.createdAt
                                 ? new Date(doc.createdAt).toLocaleDateString(undefined, {
-                                    month: 'short',
-                                    day: 'numeric',
-                                    year: 'numeric',
-                                  })
+                                  month: 'short',
+                                  day: 'numeric',
+                                  year: 'numeric',
+                                })
                                 : 'Recent'}
                             </span>
                           </div>
@@ -1094,68 +1094,12 @@ export const ProfilePage = () => {
       <Modal
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
-        title={isViewingOther ? `Edit Profile — ${profile?.fullName || 'Employee'}` : 'Edit Personal Information'}
-        subtitle="Update profile details, contact phone, emergency contacts, parents' names, and residential address."
+        title="Edit Personal Information"
+        subtitle="Update your contact phone, emergency contacts, parents' names, and residential address."
         maxWidth="max-w-xl"
       >
         <form onSubmit={handleSaveProfile} className="space-y-4">
           {saveError && <Alert variant="danger" message={saveError} />}
-
-          {/* Profile Photo Quick Preview & Trigger */}
-          <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
-            <div className="flex items-center gap-3">
-              <Avatar
-                src={profile?.avatarUrl}
-                name={profile?.fullName || `${formData.firstName} ${formData.lastName}`}
-                firstName={formData.firstName || profile?.firstName}
-                lastName={formData.lastName || profile?.lastName}
-                size="md"
-                shape="rounded-xl"
-              />
-              <div>
-                <p className="text-xs font-semibold text-slate-900 dark:text-white">Profile Picture</p>
-                <p className="text-[11px] text-slate-400">JPG, PNG, WEBP, GIF up to 25MB</p>
-              </div>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              icon={Camera}
-              onClick={() => {
-                setIsEditModalOpen(false);
-                handleOpenPhotoModal();
-              }}
-            >
-              {profile?.avatarUrl ? 'Change Photo' : 'Upload Photo'}
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                First Name
-              </label>
-              <Input
-                type="text"
-                placeholder="First Name"
-                value={formData.firstName}
-                onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Last Name
-              </label>
-              <Input
-                type="text"
-                placeholder="Last Name"
-                value={formData.lastName}
-                onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-              />
-            </div>
-          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -1323,11 +1267,10 @@ export const ProfilePage = () => {
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
-            className={`border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-all ${
-              isDragging
-                ? 'border-brand-500 bg-brand-50/70 dark:bg-brand-900/40 scale-[1.01]'
-                : 'border-slate-300 dark:border-slate-700 hover:border-brand-500 dark:hover:border-brand-500 bg-slate-50/60 dark:bg-slate-800/40 hover:bg-brand-50/30'
-            } group`}
+            className={`border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-all ${isDragging
+              ? 'border-brand-500 bg-brand-50/70 dark:bg-brand-900/40 scale-[1.01]'
+              : 'border-slate-300 dark:border-slate-700 hover:border-brand-500 dark:hover:border-brand-500 bg-slate-50/60 dark:bg-slate-800/40 hover:bg-brand-50/30'
+              } group`}
           >
             <div className="w-10 h-10 rounded-full bg-brand-50 dark:bg-brand-900/40 text-brand-600 dark:text-brand-400 flex items-center justify-center mx-auto mb-2 group-hover:scale-110 transition-transform">
               <Upload className="w-5 h-5" />
@@ -1336,10 +1279,10 @@ export const ProfilePage = () => {
               {optimizingPhoto
                 ? 'Optimizing image for fast upload...'
                 : photoFile
-                ? photoFile.name
-                : isDragging
-                ? 'Drop image here'
-                : 'Click to select or drag and drop a photo'}
+                  ? photoFile.name
+                  : isDragging
+                    ? 'Drop image here'
+                    : 'Click to select or drag and drop a photo'}
             </p>
             <p className="text-[11px] text-slate-400 mt-1">
               Supports JPG, PNG, WEBP, GIF, BMP (auto-optimized)

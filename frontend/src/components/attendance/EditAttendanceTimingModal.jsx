@@ -319,6 +319,47 @@ export const EditAttendanceTimingModal = ({
     }
   };
 
+  const currentBreakMins = Math.max(0, parseInt(breakDurationMinutes, 10) || 0);
+  const breakHrsPart = Math.floor(currentBreakMins / 60);
+  const breakMinsPart = currentBreakMins % 60;
+
+  const handleBreakMinutesChange = (e) => {
+    const val = e.target.value;
+    if (val === '') {
+      setBreakDurationMinutes('');
+      return;
+    }
+    const num = parseInt(val, 10);
+    if (!isNaN(num)) {
+      setBreakDurationMinutes(Math.max(0, Math.min(720, num)));
+    }
+  };
+
+  const handleBreakMinutesBlur = () => {
+    if (breakDurationMinutes === '' || isNaN(parseInt(breakDurationMinutes, 10))) {
+      setBreakDurationMinutes(0);
+    } else {
+      setBreakDurationMinutes(Math.max(0, Math.min(720, parseInt(breakDurationMinutes, 10))));
+    }
+  };
+
+  const handleBreakHoursChange = (e) => {
+    const val = e.target.value;
+    const hrs = Math.max(0, Math.min(12, parseInt(val, 10) || 0));
+    setBreakDurationMinutes(hrs * 60 + breakMinsPart);
+  };
+
+  const handleBreakMinsPartChange = (e) => {
+    const val = e.target.value;
+    const mins = Math.max(0, Math.min(59, parseInt(val, 10) || 0));
+    setBreakDurationMinutes(breakHrsPart * 60 + mins);
+  };
+
+  const handleNudgeBreak = (delta) => {
+    const nextVal = Math.max(0, Math.min(720, currentBreakMins + delta));
+    setBreakDurationMinutes(nextVal);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
@@ -601,14 +642,14 @@ export const EditAttendanceTimingModal = ({
                   )}
                 </h4>
                 <p className="text-[11px] text-amber-800">
-                  Correct break minutes if employee forgot to end break or had an accidental timer mistake.
+                  Set any custom break duration in minutes (or hours &amp; minutes) if employee had a timer discrepancy.
                 </p>
               </div>
             </div>
 
-            {Number(breakDurationMinutes) !== (record.breakDurationMinutes || 0) && (
+            {currentBreakMins !== (record.breakDurationMinutes || 0) && (
               <span className="text-[10px] font-bold text-amber-900 bg-amber-200/80 px-2.5 py-0.5 rounded-full border border-amber-300">
-                Modified: {record.breakDurationMinutes || 0}m ➔ {breakDurationMinutes}m
+                Modified: {record.breakDurationMinutes || 0}m ➔ {currentBreakMins}m
               </span>
             )}
           </div>
@@ -632,53 +673,114 @@ export const EditAttendanceTimingModal = ({
             </div>
           )}
 
-          {/* Controls: Input + Quick Presets */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                Total Break Duration (Minutes)
-              </label>
-              <div className="relative">
-                <input
-                  type="number"
-                  min="0"
-                  max="720"
-                  step="5"
-                  value={breakDurationMinutes}
-                  onChange={(e) => setBreakDurationMinutes(Math.max(0, parseInt(e.target.value, 10) || 0))}
-                  className="w-full pl-3 pr-12 py-2 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 shadow-2xs"
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400 pointer-events-none">
-                  mins
-                </span>
+          {/* Controls: Fully Customizable Break Duration (Any Number) */}
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+              {/* Primary Custom Minutes Input (any number) */}
+              <div className="sm:col-span-6">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-slate-700">
+                    Custom Break Duration (Minutes)
+                  </label>
+                  <span className="text-[11px] font-semibold text-amber-900 bg-amber-100/80 px-2 py-0.5 rounded-md border border-amber-200/70">
+                    {currentBreakMins === 0
+                      ? 'No break'
+                      : breakHrsPart > 0
+                        ? `${breakHrsPart}h ${breakMinsPart}m total`
+                        : `${currentBreakMins}m total`}
+                  </span>
+                </div>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="0"
+                    max="720"
+                    step="1"
+                    placeholder="Enter any number (e.g. 25)"
+                    value={breakDurationMinutes}
+                    onChange={handleBreakMinutesChange}
+                    onBlur={handleBreakMinutesBlur}
+                    className="w-full pl-3 pr-14 py-2 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 shadow-2xs"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400 pointer-events-none">
+                    mins
+                  </span>
+                </div>
+              </div>
+
+              {/* Companion Hours & Minutes Fine-tune (synced) */}
+              <div className="sm:col-span-6">
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Or Set via Hours &amp; Minutes (Synced)
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="0"
+                      max="12"
+                      step="1"
+                      placeholder="0"
+                      value={breakHrsPart}
+                      onChange={handleBreakHoursChange}
+                      className="w-full pl-3 pr-10 py-2 bg-white border border-slate-300 rounded-xl text-sm font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 shadow-2xs"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-400 pointer-events-none">
+                      hrs
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="0"
+                      max="59"
+                      step="1"
+                      placeholder="0"
+                      value={breakMinsPart}
+                      onChange={handleBreakMinsPartChange}
+                      className="w-full pl-3 pr-12 py-2 bg-white border border-slate-300 rounded-xl text-sm font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 shadow-2xs"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-400 pointer-events-none">
+                      mins
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="space-y-1">
-              <span className="block text-[11px] font-semibold text-slate-500">
-                Quick Presets:
+            {/* Quick Adjust Nudge Steppers (+/- relative adjustments) */}
+            <div className="flex flex-wrap items-center justify-between gap-1.5 pt-2 border-t border-amber-200/50">
+              <span className="text-[11px] font-semibold text-slate-500">
+                Quick Adjust (+/-):
               </span>
-              <div className="flex flex-wrap gap-1">
+              <div className="flex flex-wrap items-center gap-1">
                 {[
-                  { label: '0m (None)', val: 0 },
-                  { label: '15m', val: 15 },
-                  { label: '30m (Lunch)', val: 30 },
-                  { label: '45m', val: 45 },
-                  { label: '60m (1 hr)', val: 60 },
-                ].map((preset) => (
+                  { label: '-15m', delta: -15 },
+                  { label: '-5m', delta: -5 },
+                  { label: '-1m', delta: -1 },
+                  { label: '+1m', delta: 1 },
+                  { label: '+5m', delta: 5 },
+                  { label: '+15m', delta: 15 },
+                  { label: '+30m', delta: 30 },
+                ].map((item) => (
                   <button
-                    key={preset.val}
+                    key={item.label}
                     type="button"
-                    onClick={() => setBreakDurationMinutes(preset.val)}
-                    className={`text-[10px] px-2 py-1 rounded-lg font-semibold border transition-all cursor-pointer ${
-                      Number(breakDurationMinutes) === preset.val
-                        ? 'bg-amber-600 text-white border-amber-600 shadow-2xs'
-                        : 'bg-white text-slate-700 border-slate-200 hover:bg-amber-100/60 hover:border-amber-300'
-                    }`}
+                    onClick={() => handleNudgeBreak(item.delta)}
+                    className="text-[10px] px-2 py-1 rounded-lg font-semibold border bg-white text-slate-700 border-slate-200 hover:bg-amber-100/70 hover:border-amber-300 transition-colors cursor-pointer"
                   >
-                    {preset.label}
+                    {item.label}
                   </button>
                 ))}
+                {currentBreakMins > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setBreakDurationMinutes(0)}
+                    className="text-[10px] px-2 py-1 rounded-lg font-semibold border bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 transition-colors cursor-pointer ml-1"
+                  >
+                    Clear (0m)
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -695,7 +797,12 @@ export const EditAttendanceTimingModal = ({
               <div>
                 <span className="text-[10px] text-slate-400 block font-medium">Break Deducted</span>
                 <span className="font-bold text-amber-700">
-                  -{breakDurationMinutes}m
+                  -{currentBreakMins}m
+                  {breakHrsPart > 0 && (
+                    <span className="text-[10px] text-amber-600 block font-normal">
+                      ({breakHrsPart}h {breakMinsPart}m)
+                    </span>
+                  )}
                 </span>
               </div>
               <div className="border-l border-amber-100 pl-2">
