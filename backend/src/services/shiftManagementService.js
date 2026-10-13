@@ -31,7 +31,7 @@ export const shiftManagementService = {
 
     // Check email prefixes
     const email = (user.email || '').toLowerCase();
-    if (email.startsWith('operations@') || email.startsWith('admin@') || email.startsWith('hr@') || email.includes('sakshi')) {
+    if (email.startsWith('operations@') || email.startsWith('admin@') || email.startsWith('hr@')) {
       return true;
     }
 
