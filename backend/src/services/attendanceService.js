@@ -50,6 +50,59 @@ export {
 };
 
 /**
+ * Resolves the effective shift timing for a specific employee and date.
+ * Looks up date-wise override in shift_assignments first; if none, falls back to employee default shift.
+ * The employee default shift in employees table is NEVER overwritten.
+ */
+export const resolveShiftForEmployeeAndDate = async (
+  employeeId,
+  dateStr,
+  fallbackShift = '11:00 AM - 07:00 PM'
+) => {
+  if (!employeeId || !dateStr) {
+    return {
+      shiftTiming: fallbackShift,
+      shiftType: 'SHIFT',
+      isOvernight: false,
+      isCustom: false,
+    };
+  }
+
+  try {
+    const cleanDate = typeof dateStr === 'string' ? dateStr.slice(0, 10) : new Date(dateStr).toISOString().slice(0, 10);
+    const res = await pool.query(
+      `SELECT shift_type, shift_label, shift_start_time, shift_end_time, is_overnight
+       FROM shift_assignments
+       WHERE employee_id = $1 AND assignment_date = $2::date
+       LIMIT 1;`,
+      [employeeId, cleanDate]
+    );
+
+    if (res.rows.length > 0) {
+      const row = res.rows[0];
+      const label = row.shift_label || (row.shift_type === 'WO' ? 'Weekly Off' : fallbackShift);
+      return {
+        shiftTiming: label,
+        shiftType: row.shift_type || 'SHIFT',
+        shiftStartTime: row.shift_start_time,
+        shiftEndTime: row.shift_end_time,
+        isOvernight: Boolean(row.is_overnight),
+        isCustom: true,
+      };
+    }
+  } catch (err) {
+    console.warn(`[resolveShiftForEmployeeAndDate] DB query failed for employee ${employeeId}:`, err.message);
+  }
+
+  return {
+    shiftTiming: fallbackShift,
+    shiftType: 'SHIFT',
+    isOvernight: false,
+    isCustom: false,
+  };
+};
+
+/**
  * Universal deterministic calculation of actual working duration and overtime.
  *
  * Rules:
@@ -259,7 +312,16 @@ export const checkAndAutoLogoutRecord = async (record, shiftTimingOverride = nul
     return record;
   }
 
-  const shiftTiming = shiftTimingOverride || record.employee?.shiftTiming || '11:00 AM - 07:00 PM';
+  let shiftTiming = shiftTimingOverride;
+  if (!shiftTiming) {
+    const recDate = record.attendanceDate ? new Date(record.attendanceDate).toISOString().slice(0, 10) : null;
+    const effectiveShift = await resolveShiftForEmployeeAndDate(
+      record.employeeId || record.employee?.id,
+      recDate,
+      record.employee?.shiftTiming || '11:00 AM - 07:00 PM'
+    );
+    shiftTiming = effectiveShift.shiftTiming;
+  }
   const cutoff = calculateAutoLogoutCutoff(record, shiftTiming, record.timezone, 20);
   if (!cutoff) return record;
 
@@ -451,7 +513,12 @@ export const attendanceService = {
 
     const todayDate = data.date || new Date().toISOString().split('T')[0];
     const serverNow = new Date();
-    const shiftTiming = targetEmployee.shiftTiming || data.shiftTiming || '11:00 AM - 07:00 PM';
+    const effectiveShift = await resolveShiftForEmployeeAndDate(
+      targetEmployee.id,
+      todayDate,
+      targetEmployee.shiftTiming || data.shiftTiming || '11:00 AM - 07:00 PM'
+    );
+    const shiftTiming = effectiveShift.shiftTiming;
 
     // Auto-resolve any prior open records for targetEmployee exceeding cutoff or from a previous day
     try {
@@ -580,7 +647,6 @@ export const attendanceService = {
 
     const todayDate = data.date || new Date().toISOString().split('T')[0];
     const serverNow = new Date();
-    const shiftTiming = targetEmployee.shiftTiming || data.shiftTiming || '11:00 AM - 07:00 PM';
 
     let existing = await attendanceRepository.findByEmployeeAndDate(targetEmployee.id, todayDate, targetEmployee.orgId);
 
@@ -592,6 +658,15 @@ export const attendanceService = {
         existing = openRec;
       }
     }
+
+    // Resolve date-wise shift for the attendance record date
+    const targetDate = existing?.attendanceDate ? new Date(existing.attendanceDate).toISOString().slice(0, 10) : todayDate;
+    const effectiveShift = await resolveShiftForEmployeeAndDate(
+      targetEmployee.id,
+      targetDate,
+      targetEmployee.shiftTiming || data.shiftTiming || '11:00 AM - 07:00 PM'
+    );
+    const shiftTiming = effectiveShift.shiftTiming;
 
     // Validate check-in exists before check-out
     if (!existing || !existing.checkIn) {
@@ -877,6 +952,12 @@ export const attendanceService = {
       // Non-blocking
     }
 
+    const effectiveShift = await resolveShiftForEmployeeAndDate(
+      employee.id,
+      todayDate,
+      employee.shiftTiming || '11:00 AM - 07:00 PM'
+    );
+
     return {
       ...history,
       todayRecord,
@@ -885,7 +966,9 @@ export const attendanceService = {
         firstName: employee.firstName,
         lastName: employee.lastName,
         employeeCode: employee.employeeCode,
-        shiftTiming: employee.shiftTiming || '11:00 AM - 07:00 PM',
+        shiftTiming: effectiveShift.shiftTiming,
+        defaultShiftTiming: employee.shiftTiming || '11:00 AM - 07:00 PM',
+        isCustomShift: effectiveShift.isCustom,
       },
     };
   },
@@ -938,6 +1021,12 @@ export const attendanceService = {
       todayRecord = await attendanceRepository.findByEmployeeAndDate(employee.id, todayDate, employee.orgId);
     }
 
+    const effectiveShift = await resolveShiftForEmployeeAndDate(
+      employee.id,
+      todayDate,
+      employee.shiftTiming || '11:00 AM - 07:00 PM'
+    );
+
     return {
       record: todayRecord,
       employeeProfile: {
@@ -945,7 +1034,9 @@ export const attendanceService = {
         firstName: employee.firstName,
         lastName: employee.lastName,
         employeeCode: employee.employeeCode,
-        shiftTiming: employee.shiftTiming || '11:00 AM - 07:00 PM',
+        shiftTiming: effectiveShift.shiftTiming,
+        defaultShiftTiming: employee.shiftTiming || '11:00 AM - 07:00 PM',
+        isCustomShift: effectiveShift.isCustom,
       },
     };
   },

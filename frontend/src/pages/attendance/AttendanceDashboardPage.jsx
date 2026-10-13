@@ -11,7 +11,7 @@ import {
   ShieldCheck,
   AlertCircle,
   Download,
-  Upload,
+  CalendarCheck,
 } from 'lucide-react';
 import { exportAttendanceToExcel } from '../../utils/attendanceExcelExport.js';
 import { useAuth } from '../../context/AuthContext.jsx';
@@ -49,8 +49,8 @@ export const AttendanceDashboardPage = () => {
   const canRemark = hasRole(['HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin', 'Manager']);
   // Export to Excel is strictly reserved for HR, Admin, and Manager (Employees must not have this button)
   const canExportAttendance = hasRole(['HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin', 'Manager']);
-  // Roster import is authorized for Admin and HR
-  const canImportRoster = hasRole(['HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin']) || hasPermission('employee:write');
+  // Date-wise Shift Management is authorized for Admin, HR, and Manager
+  const canManageShifts = hasRole(['HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin', 'Manager', 'TeamLead']);
 
   // Active view tab: Admin, HR, and Manager default to 'org', regular Employees have 'my'. CEO stays exclusively on 'org'
   const [activeTab, setActiveTab] = useState(() => (canViewOrg ? 'org' : 'my'));
@@ -506,16 +506,16 @@ export const AttendanceDashboardPage = () => {
             Refresh Logs
           </Button>
 
-          {canImportRoster && (
+          {canManageShifts && (
             <Button
               variant="secondary"
               size="md"
-              icon={Upload}
-              onClick={() => navigate('/roster/import')}
-              title="Import and synchronize monthly roster spreadsheet"
+              icon={CalendarCheck}
+              onClick={() => navigate('/shifts')}
+              title="Manage date-wise shift timings for employees"
               className="border-brand-300 text-brand-700 hover:bg-brand-50"
             >
-              Import Roster
+              Shift Management
             </Button>
           )}
 
