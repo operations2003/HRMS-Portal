@@ -12,10 +12,13 @@ import {
   RotateCcw,
   Sparkles,
   Lock,
+  Edit,
+  Camera,
 } from 'lucide-react';
 import { Badge } from '../common/Badge.jsx';
 import { Button } from '../common/Button.jsx';
 import { Avatar } from '../common/Avatar.jsx';
+import { EditExitedEmployeeModal } from './EditExitedEmployeeModal.jsx';
 import { exitService } from '../../services/exitService.js';
 import { useToast } from '../../context/ToastContext.jsx';
 
@@ -28,6 +31,7 @@ export const ExitChecklistDetailCard = ({
   const [updatingItemId, setUpdatingItemId] = useState(null);
   const [isCompleting, setIsCompleting] = useState(false);
   const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   if (!checklist) return null;
 
@@ -92,13 +96,25 @@ export const ExitChecklistDetailCard = ({
       <div className="p-6 border-b border-slate-100 dark:border-slate-800 bg-gradient-to-r from-slate-50/70 via-white to-slate-50/70 dark:from-slate-850 dark:via-slate-900 dark:to-slate-850">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
-            <Avatar
-              src={checklist.avatarUrl}
-              name={checklist.employeeName}
-              size="xl"
-              shape="rounded-2xl"
-              className="w-14 h-14 min-w-[3.5rem] min-h-[3.5rem] max-w-[3.5rem] max-h-[3.5rem] shrink-0 border border-slate-200 dark:border-slate-700 shadow-sm"
-            />
+            <div className="relative group shrink-0">
+              <Avatar
+                src={checklist.avatarUrl}
+                name={checklist.employeeName}
+                size="xl"
+                shape="rounded-2xl"
+                className="w-14 h-14 min-w-[3.5rem] min-h-[3.5rem] max-w-[3.5rem] max-h-[3.5rem] shrink-0 border border-slate-200 dark:border-slate-700 shadow-sm"
+              />
+              {canManage && (
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(true)}
+                  title="Upload profile photo or edit details"
+                  className="absolute -bottom-1 -right-1 bg-brand-600 hover:bg-brand-700 text-white p-1 rounded-full shadow-md transition-all hover:scale-110 cursor-pointer"
+                >
+                  <Camera className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-lg font-bold text-slate-900 dark:text-white">
@@ -141,27 +157,42 @@ export const ExitChecklistDetailCard = ({
             </div>
           </div>
 
-          {/* Key Exit Dates */}
-          <div className="flex items-center gap-3 self-start md:self-auto bg-white dark:bg-slate-800 p-2.5 rounded-xl border border-slate-200/70 dark:border-slate-700 text-xs">
-            <div className="px-2">
-              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
-                Resignation Date
-              </span>
-              <span className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1 mt-0.5">
-                <Calendar className="w-3.5 h-3.5 text-brand-500" />
-                {checklist.resignationDate || 'N/A'}
-              </span>
+          {/* Key Exit Dates & Actions */}
+          <div className="flex items-center gap-2.5 flex-wrap self-start md:self-auto">
+            <div className="flex items-center gap-3 bg-white dark:bg-slate-800 p-2.5 rounded-xl border border-slate-200/70 dark:border-slate-700 text-xs shadow-xs">
+              <div className="px-2">
+                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
+                  Resignation Date
+                </span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1 mt-0.5">
+                  <Calendar className="w-3.5 h-3.5 text-brand-500" />
+                  {checklist.resignationDate || 'N/A'}
+                </span>
+              </div>
+              <div className="h-7 w-px bg-slate-200 dark:bg-slate-700" />
+              <div className="px-2">
+                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
+                  Last Working Day
+                </span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1 mt-0.5">
+                  <Calendar className="w-3.5 h-3.5 text-emerald-500" />
+                  {checklist.lastWorkingDay || 'N/A'}
+                </span>
+              </div>
             </div>
-            <div className="h-7 w-px bg-slate-200 dark:bg-slate-700" />
-            <div className="px-2">
-              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
-                Last Working Day
-              </span>
-              <span className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1 mt-0.5">
-                <Calendar className="w-3.5 h-3.5 text-emerald-500" />
-                {checklist.lastWorkingDay || 'N/A'}
-              </span>
-            </div>
+
+            {canManage && (
+              <Button
+                variant="outline"
+                size="sm"
+                icon={Edit}
+                onClick={() => setIsEditModalOpen(true)}
+                className="bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 shadow-xs h-[42px] px-3.5"
+                title="Upload profile photo or edit details for this employee"
+              >
+                Edit Details
+              </Button>
+            )}
           </div>
         </div>
 
@@ -364,6 +395,16 @@ export const ExitChecklistDetailCard = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Edit Exited Employee Details & Profile Photo Modal */}
+      {isEditModalOpen && (
+        <EditExitedEmployeeModal
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          checklist={checklist}
+          onSuccess={() => onRefresh?.()}
+        />
       )}
     </div>
   );

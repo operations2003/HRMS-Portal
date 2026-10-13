@@ -307,6 +307,14 @@ export const exitService = {
   },
 
   /**
+   * Update exit checklist metadata (resignation date, last working day, notes) (HR & Admin)
+   */
+  async updateExitChecklist(checklistId, data) {
+    const res = await http.patch(`/v1/exit/checklists/${checklistId}`, data);
+    return res.data;
+  },
+
+  /**
    * Delete / cancel exit checklist (HR & Admin)
    */
   async deleteExitChecklist(checklistId) {

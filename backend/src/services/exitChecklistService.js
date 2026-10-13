@@ -294,7 +294,40 @@ export const exitChecklistService = {
   },
 
   /**
-   * 7. Delete / Cancel exit checklist (HR & Admin only)
+   * 7. Update exit checklist details (HR & Admin only)
+   */
+  async updateExitChecklist(currentUser, checklistId, data) {
+    if (!this.isHrOrAdmin(currentUser)) {
+      const err = new Error('Access denied: Only HR and Admin can update an exit checklist.');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    const checklist = await exitChecklistRepository.findById(checklistId);
+    if (!checklist) {
+      const err = new Error(`Exit checklist '${checklistId}' not found.`);
+      err.statusCode = 404;
+      throw err;
+    }
+
+    if (checklist.orgId !== currentUser.orgId) {
+      const err = new Error('Access denied.');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    const updated = await exitChecklistRepository.updateChecklist(checklistId, {
+      resignationDate: data.resignationDate,
+      lastWorkingDay: data.lastWorkingDay,
+      notes: data.notes,
+    });
+
+    logger.info('EXIT_CHECKLIST', `Exit checklist ${checklistId} updated by user ${currentUser.id}`);
+    return updated;
+  },
+
+  /**
+   * 8. Delete / Cancel exit checklist (HR & Admin only)
    */
   async deleteExitChecklist(currentUser, checklistId) {
     if (!this.isHrOrAdmin(currentUser)) {

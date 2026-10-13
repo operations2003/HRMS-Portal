@@ -331,6 +331,47 @@ export const exitChecklistRepository = {
   },
 
   /**
+   * Update exit checklist metadata (resignation date, last working day, notes)
+   */
+  async updateChecklist(checklistId, { resignationDate, lastWorkingDay, notes }) {
+    const setClauses = [];
+    const values = [];
+    let idx = 1;
+
+    if (resignationDate !== undefined) {
+      setClauses.push(`resignation_date = $${idx++}`);
+      values.push(resignationDate || null);
+    }
+
+    if (lastWorkingDay !== undefined) {
+      setClauses.push(`last_working_day = $${idx++}`);
+      values.push(lastWorkingDay || null);
+    }
+
+    if (notes !== undefined) {
+      setClauses.push(`notes = $${idx++}`);
+      values.push(notes || '');
+    }
+
+    if (setClauses.length === 0) {
+      return this.findById(checklistId);
+    }
+
+    setClauses.push('updated_at = NOW()');
+    values.push(checklistId);
+
+    const sql = `
+      UPDATE exit_checklists
+      SET ${setClauses.join(', ')}
+      WHERE id = $${idx}
+      RETURNING *;
+    `;
+
+    await pool.query(sql, values);
+    return this.findById(checklistId);
+  },
+
+  /**
    * Delete / Cancel checklist
    */
   async deleteChecklist(checklistId) {

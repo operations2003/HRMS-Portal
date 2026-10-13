@@ -93,6 +93,20 @@ export const exitChecklistController = {
   },
 
   /**
+   * PATCH /api/v1/exit/checklists/:id
+   * Update exit checklist metadata (HR & Admin only)
+   */
+  async updateChecklist(req, res, next) {
+    try {
+      const updated = await exitChecklistService.updateExitChecklist(req.user, req.params.id, req.body);
+      return sendSuccess(res, 'Exit checklist updated successfully.', updated);
+    } catch (err) {
+      if (err.statusCode) return sendError(res, err.message, err.statusCode);
+      next(err);
+    }
+  },
+
+  /**
    * DELETE /api/v1/exit/checklists/:id
    * Delete exit checklist (HR & Admin only)
    */

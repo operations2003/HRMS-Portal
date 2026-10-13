@@ -80,6 +80,14 @@ router.post(
   exitChecklistController.completeExit
 );
 
+// HR & Admin: Update checklist details (resignation date, last working day, notes)
+router.patch(
+  '/checklists/:id',
+  requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']),
+  authorize(['exit:admin']),
+  exitChecklistController.updateChecklist
+);
+
 // HR & Admin: Delete / cancel exit checklist
 router.delete(
   '/checklists/:id',
