@@ -98,17 +98,24 @@ export const shiftManagementService = {
     }
 
     const target = targetRes.rows[0];
-    if (target.manager_id === callerEmp.id || (callerEmp.dept_id && target.dept_id === callerEmp.dept_id)) {
+    const isDirectReport = target.manager_id === callerEmp.id;
+    const isManagerRole = this.isManager(currentUser);
+    const isDeptManager = isManagerRole && callerEmp.dept_id && target.dept_id === callerEmp.dept_id;
+
+    if (isDirectReport || isDeptManager) {
       return true;
     }
 
-    return true;
+    const err = new Error('Access denied: You are not authorized to modify shifts for this employee.');
+    err.statusCode = 403;
+    throw err;
   },
 
   /**
    * Get eligible employees for shift management
    * - HR/Admin/Operations: All active employees in organization
-   * - Manager: Direct reports and department peers
+   * - Manager: Direct reports, department members, and self
+   * - Employee: Only their own profile
    */
   async getEligibleEmployees(currentUser) {
     const orgId = currentUser.orgId || 'org-1';
@@ -140,11 +147,14 @@ export const shiftManagementService = {
       return res.rows;
     }
 
-    // Manager / Team Lead / Supervisor: Direct reports and department
     const callerEmp = await this.resolveCallerEmployee(currentUser);
     if (!callerEmp) {
-      // Fallback: If no employee record linked, query organization list
-      const res = await pool.query(
+      return [];
+    }
+
+    // Regular Employee: Strictly their own profile
+    if (!this.isManager(currentUser)) {
+      const selfRes = await pool.query(
         `SELECT 
           e.id,
           e.employee_code AS "employeeCode",
@@ -162,14 +172,14 @@ export const shiftManagementService = {
         LEFT JOIN users u ON u.id = e.user_id
         LEFT JOIN departments d ON d.id = e.dept_id
         LEFT JOIN designations ds ON ds.id = e.desig_id
-        WHERE (e.org_id = $1 OR e.org_id IS NULL OR $1 = '')
-          AND (e.status IS NULL OR LOWER(e.status) NOT IN ('exited', 'terminated', 'inactive', 'suspended', 'archived'))
-        ORDER BY e.first_name ASC, e.last_name ASC;`,
-        [orgId]
+        WHERE e.id = $1
+        LIMIT 1;`,
+        [callerEmp.id]
       );
-      return res.rows;
+      return selfRes.rows;
     }
 
+    // Manager / Team Lead / Supervisor: Direct reports, department members, and themselves
     const res = await pool.query(
       `SELECT 
         e.id,
@@ -189,39 +199,11 @@ export const shiftManagementService = {
       LEFT JOIN departments d ON d.id = e.dept_id
       LEFT JOIN designations ds ON ds.id = e.desig_id
       WHERE (e.org_id = $1 OR e.org_id IS NULL OR $1 = '')
-        AND (e.manager_id = $2 OR (callerEmp.dept_id IS NOT NULL AND e.dept_id = $3))
+        AND (e.id = $2 OR e.manager_id = $2 OR (callerEmp.dept_id IS NOT NULL AND e.dept_id = $3))
         AND (e.status IS NULL OR LOWER(e.status) NOT IN ('exited', 'terminated', 'inactive', 'suspended', 'archived'))
       ORDER BY e.first_name ASC, e.last_name ASC;`,
       [orgId, callerEmp.id, callerEmp.dept_id || '']
     );
-
-    // If manager has no direct reports or department matches, return organization list
-    if (res.rows.length === 0) {
-      const fallbackRes = await pool.query(
-        `SELECT 
-          e.id,
-          e.employee_code AS "employeeCode",
-          e.first_name AS "firstName",
-          e.last_name AS "lastName",
-          TRIM(CONCAT(e.first_name, ' ', e.last_name)) AS "fullName",
-          e.email,
-          e.shift_timing AS "defaultShiftTiming",
-          COALESCE(e.avatar_url, u.avatar_url) AS "avatarUrl",
-          d.name AS "departmentName",
-          ds.title AS "designationTitle",
-          e.manager_id AS "managerId",
-          (SELECT COUNT(*)::int FROM shift_assignments sa WHERE sa.employee_id = e.id AND sa.assignment_date >= DATE_TRUNC('month', CURRENT_DATE) AND sa.assignment_date < DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month') AS "customShiftCount"
-        FROM employees e
-        LEFT JOIN users u ON u.id = e.user_id
-        LEFT JOIN departments d ON d.id = e.dept_id
-        LEFT JOIN designations ds ON ds.id = e.desig_id
-        WHERE (e.org_id = $1 OR e.org_id IS NULL OR $1 = '')
-          AND (e.status IS NULL OR LOWER(e.status) NOT IN ('exited', 'terminated', 'inactive', 'suspended', 'archived'))
-        ORDER BY e.first_name ASC, e.last_name ASC;`,
-        [orgId]
-      );
-      return fallbackRes.rows;
-    }
 
     return res.rows;
   },
@@ -250,12 +232,19 @@ export const shiftManagementService = {
     if (!isHrAdmin) {
       const callerEmp = await this.resolveCallerEmployee(currentUser);
       if (callerEmp && callerEmp.id !== targetEmpId) {
-        // Must be direct report if manager
+        // Must be direct report or department member if manager
         const checkRes = await pool.query(
-          `SELECT manager_id FROM employees WHERE id = $1;`,
+          `SELECT manager_id, dept_id FROM employees WHERE id = $1;`,
           [targetEmpId]
         );
-        if (checkRes.rows[0]?.manager_id !== callerEmp.id) {
+        const target = checkRes.rows[0];
+        const isManager = this.isManager(currentUser);
+        const isAuthorized = target && (
+          target.manager_id === callerEmp.id || 
+          (isManager && callerEmp.dept_id && target.dept_id === callerEmp.dept_id)
+        );
+
+        if (!isAuthorized) {
           const err = new Error('Access denied: You are not authorized to view this employee schedule.');
           err.statusCode = 403;
           throw err;
@@ -280,7 +269,7 @@ export const shiftManagementService = {
       LEFT JOIN users u ON u.id = e.user_id
       LEFT JOIN departments d ON d.id = e.dept_id
       LEFT JOIN designations ds ON ds.id = e.desig_id
-      WHERE e.id = $1 AND e.org_id = $2;`,
+      WHERE e.id = $1 AND (e.org_id = $2 OR e.org_id IS NULL OR $2 = '');`,
       [targetEmpId, orgId]
     );
 
@@ -354,11 +343,32 @@ export const shiftManagementService = {
         name,
         is_optional AS "isOptional"
       FROM holidays
-      WHERE org_id = $1
-        AND status = 'Active'
+      WHERE (org_id = $1 OR org_id IS NULL OR $1 = '')
+        AND (status = 'Active' OR status IS NULL)
         AND holiday_date >= $2::date
         AND holiday_date <= $3::date;`,
       [orgId, start, end]
+    );
+
+    // 4. Fetch actual attendance records in this range
+    const attRes = await pool.query(
+      `SELECT 
+        id,
+        TO_CHAR(attendance_date, 'YYYY-MM-DD') AS "attendanceDate",
+        check_in AS "checkIn",
+        check_out AS "checkOut",
+        total_hours AS "totalHours",
+        status,
+        break_duration_minutes AS "breakDurationMinutes",
+        overtime_hours AS "overtimeHours",
+        is_regularized AS "isRegularized",
+        notes
+      FROM attendance_records
+      WHERE employee_id = $1
+        AND attendance_date >= $2::date
+        AND attendance_date <= $3::date
+      ORDER BY attendance_date ASC;`,
+      [targetEmpId, start, end]
     );
 
     const customShiftsByDate = {};
@@ -377,6 +387,46 @@ export const shiftManagementService = {
       holidaysByDate[dStr] = h;
     }
 
+    const attendanceByDate = {};
+    for (const a of attRes.rows) {
+      const dStr = a.attendanceDate;
+      const totalHoursNum = parseFloat(a.totalHours) || 0;
+      
+      let workMinutes = 0;
+      if (a.checkIn && a.checkOut) {
+        const diffMs = new Date(a.checkOut).getTime() - new Date(a.checkIn).getTime();
+        workMinutes = Math.max(0, Math.round(diffMs / 60000) - (parseInt(a.breakDurationMinutes, 10) || 0));
+      } else if (totalHoursNum > 0) {
+        workMinutes = Math.round(totalHoursNum * 60);
+      }
+
+      let formattedWorkHours = '-';
+      if (workMinutes > 0) {
+        const hrs = Math.floor(workMinutes / 60);
+        const mins = workMinutes % 60;
+        formattedWorkHours = `${hrs}h ${mins}m`;
+      } else if (a.checkIn && !a.checkOut) {
+        formattedWorkHours = 'In Progress';
+      } else if (['ABSENT', 'NOT_STARTED'].includes((a.status || '').toUpperCase())) {
+        formattedWorkHours = '0h 0m';
+      }
+
+      attendanceByDate[dStr] = {
+        id: a.id,
+        attendanceDate: dStr,
+        checkIn: a.checkIn,
+        checkOut: a.checkOut,
+        totalHours: totalHoursNum,
+        workMinutes,
+        formattedWorkHours,
+        status: (a.status || 'PRESENT').toUpperCase(),
+        breakDurationMinutes: parseInt(a.breakDurationMinutes, 10) || 0,
+        overtimeHours: parseFloat(a.overtimeHours) || 0,
+        isRegularized: Boolean(a.isRegularized),
+        notes: a.notes || '',
+      };
+    }
+
     return {
       employee,
       range: { startDate: start, endDate: end },
@@ -385,6 +435,8 @@ export const shiftManagementService = {
       customShiftsByDate,
       holidaysByDate,
       approvedLeaves: leavesRes.rows,
+      attendanceByDate,
+      attendanceRecords: attRes.rows,
     };
   },
 
