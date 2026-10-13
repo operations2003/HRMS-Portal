@@ -510,13 +510,13 @@ export const DateWiseShiftPage = () => {
             </div>
             <div>
               <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                {canEditShifts ? 'Monthly Schedule & Shift Management' : 'My Monthly Schedule'}
+                {canEditShifts ? 'Monthly Roster & Schedule' : 'My Monthly Roster & Schedule'}
                 <Badge variant="brand" size="sm">Live HRMS Data</Badge>
               </h1>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 {canEditShifts
-                  ? 'View monthly schedules, date-specific shift changes, actual attendance punches, hours worked, weekly offs, holidays, and leaves.'
-                  : 'Your live monthly work schedule, assigned shifts, actual hours worked, attendance records, weekly offs, and holidays.'}
+                  ? 'Organization & team monthly rosters, date-specific shift changes, actual attendance punches, hours worked, weekly offs, holidays, and leaves.'
+                  : 'Your live monthly roster, assigned shifts, actual hours worked, attendance records, weekly offs, and holidays.'}
               </p>
             </div>
           </div>
@@ -536,7 +536,7 @@ export const DateWiseShiftPage = () => {
                 }`}
               >
                 <Eye className="w-3.5 h-3.5" />
-                Schedule View
+                Roster Calendar View
               </button>
               <button
                 type="button"

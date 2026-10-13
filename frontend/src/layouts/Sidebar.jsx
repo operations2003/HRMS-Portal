@@ -66,8 +66,8 @@ export const Sidebar = ({ isOpen, onClose }) => {
           permission: 'leave:read',
         },
         {
-          name: 'Monthly Schedule & Shifts',
-          path: '/shifts',
+          name: 'Monthly Roster & Schedule',
+          path: '/roster',
           icon: CalendarCheck,
           roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin', 'Manager', 'TeamLead', 'Employee'],
         },

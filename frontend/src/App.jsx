@@ -176,7 +176,7 @@ export const App = () => {
                 }
               />
 
-              {/* Date-wise Shift Management & Monthly Schedule Calendar */}
+              {/* Monthly Roster & Schedule Calendar (Date-wise Shift Management) */}
               <Route
                 path="shifts"
                 element={
@@ -187,14 +187,23 @@ export const App = () => {
                   </PermissionRoute>
                 }
               />
+              <Route
+                path="roster"
+                element={
+                  <PermissionRoute
+                    roles={['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin', 'Manager', 'TeamLead', 'Employee']}
+                  >
+                    <DateWiseShiftPage />
+                  </PermissionRoute>
+                }
+              />
 
-              <Route path="schedule" element={<Navigate to="/shifts" replace />} />
+              <Route path="schedule" element={<Navigate to="/roster" replace />} />
 
-              {/* Legacy Roster Route Redirects */}
-              <Route path="roster" element={<Navigate to="/shifts" replace />} />
-              <Route path="roster/import" element={<Navigate to="/shifts" replace />} />
-              <Route path="roster/history" element={<Navigate to="/shifts" replace />} />
-              <Route path="roster/preview/:jobId" element={<Navigate to="/shifts" replace />} />
+              {/* Legacy Roster Sub-Route Redirects */}
+              <Route path="roster/import" element={<Navigate to="/roster" replace />} />
+              <Route path="roster/history" element={<Navigate to="/roster" replace />} />
+              <Route path="roster/preview/:jobId" element={<Navigate to="/roster" replace />} />
 
               <Route
                 path="policies"
