@@ -209,9 +209,394 @@ export const shiftManagementService = {
   },
 
   /**
+   * Helper to format work minutes into hours and minutes string
+   */
+  formatWorkMinutes(workMinutes) {
+    if (!workMinutes || workMinutes <= 0) return '0h 0m';
+    const hrs = Math.floor(workMinutes / 60);
+    const mins = workMinutes % 60;
+    return `${hrs}h ${mins}m`;
+  },
+
+  /**
+   * Helper to produce concise display label for shifts (e.g. "11-7", "WO")
+   */
+  getShortShiftLabel(label) {
+    if (!label) return '-';
+    const clean = label.trim();
+    if (/^wo\b|weekly\s*off/i.test(clean)) return 'WO';
+    const match = clean.match(/(\d{1,2})(?::\d{2})?\s*(?:am|pm)?\s*[-–—to]+\s*(\d{1,2})(?::\d{2})?\s*(?:am|pm)?/i);
+    if (match) {
+      return `${match[1]}-${match[2]}`;
+    }
+    return clean.length > 8 ? clean.slice(0, 8) : clean;
+  },
+
+  /**
+   * Get organization-wide or team monthly roster in rows (employees) and columns (days 1..N)
+   * Designed specifically for Admin, HR, and Managers to view all employees together.
+   */
+  async getOrganizationMonthlyRoster(currentUser, { month, year, startDate, endDate, departmentId }) {
+    const isHrAdmin = this.isHrOrAdmin(currentUser);
+    const isMgr = this.isManager(currentUser);
+
+    if (!isHrAdmin && !isMgr) {
+      const err = new Error('Access denied: Only HR, Admin, or authorized Managers can view the organization roster.');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    const orgId = currentUser.orgId || 'org-1';
+
+    // 1. Fetch eligible employees for this caller
+    let eligibleEmployees = await this.getEligibleEmployees(currentUser);
+
+    // Optional department filtering
+    if (departmentId && departmentId !== 'ALL' && departmentId !== '') {
+      eligibleEmployees = eligibleEmployees.filter(
+        (e) => (e.departmentId === departmentId || e.departmentName === departmentId || e.dept_id === departmentId)
+      );
+    }
+
+    // 2. Compute date range
+    const y = year ? parseInt(year, 10) : new Date().getFullYear();
+    const m = month ? parseInt(month, 10) : new Date().getMonth() + 1;
+    const mStr = String(m).padStart(2, '0');
+    const start = startDate || `${y}-${mStr}-01`;
+    const lastDay = new Date(y, m, 0).getDate();
+    const end = endDate || `${y}-${mStr}-${String(lastDay).padStart(2, '0')}`;
+
+    // 3. Generate columns metadata for each day of the month
+    const days = [];
+    const weekdayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    for (let d = 1; d <= lastDay; d++) {
+      const dStr = String(d).padStart(2, '0');
+      const dateKey = `${y}-${mStr}-${dStr}`;
+      const dateObj = new Date(y, m - 1, d);
+      const dayOfWeek = dateObj.getDay();
+      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+      days.push({
+        dayNumber: d,
+        dateKey,
+        dayName: weekdayNames[dayOfWeek],
+        isWeekend,
+      });
+    }
+
+    if (eligibleEmployees.length === 0) {
+      return {
+        isAllEmployees: true,
+        range: { startDate: start, endDate: end },
+        month: m,
+        year: y,
+        totalEmployees: 0,
+        days,
+        departments: [],
+        holidaysByDate: {},
+        roster: [],
+        summary: {
+          totalEmployees: 0,
+          totalOverrides: 0,
+          totalAttendancePunches: 0,
+          totalApprovedLeaves: 0,
+          totalHolidays: 0,
+        },
+      };
+    }
+
+    const empIds = eligibleEmployees.map((e) => e.id);
+
+    // 4. Batch query shift_assignments
+    const shiftRes = await pool.query(
+      `SELECT 
+        id,
+        employee_id AS "employeeId",
+        TO_CHAR(assignment_date, 'YYYY-MM-DD') AS "assignmentDate",
+        shift_type AS "shiftType",
+        shift_start_time AS "shiftStartTime",
+        shift_end_time AS "shiftEndTime",
+        shift_label AS "shiftLabel",
+        is_overnight AS "isOvernight",
+        notes,
+        source
+      FROM shift_assignments
+      WHERE employee_id = ANY($1) 
+        AND assignment_date >= $2::date 
+        AND assignment_date <= $3::date
+      ORDER BY assignment_date ASC;`,
+      [empIds, start, end]
+    );
+
+    // 5. Batch query approved leave_requests
+    const leavesRes = await pool.query(
+      `SELECT 
+        lr.id,
+        lr.employee_id AS "employeeId",
+        TO_CHAR(lr.start_date, 'YYYY-MM-DD') AS "startDate",
+        TO_CHAR(lr.end_date, 'YYYY-MM-DD') AS "endDate",
+        lr.is_half_day AS "isHalfDay",
+        lr.status,
+        lt.name AS "leaveName",
+        lt.code AS "leaveCode"
+      FROM leave_requests lr
+      JOIN leave_types lt ON lt.id = lr.leave_type_id
+      WHERE lr.employee_id = ANY($1)
+        AND lr.status = 'APPROVED'
+        AND lr.start_date <= $3::date 
+        AND lr.end_date >= $2::date;`,
+      [empIds, start, end]
+    );
+
+    // 6. Batch query attendance_records
+    const attRes = await pool.query(
+      `SELECT 
+        id,
+        employee_id AS "employeeId",
+        TO_CHAR(attendance_date, 'YYYY-MM-DD') AS "attendanceDate",
+        check_in AS "checkIn",
+        check_out AS "checkOut",
+        total_hours AS "totalHours",
+        status,
+        break_duration_minutes AS "breakDurationMinutes",
+        overtime_hours AS "overtimeHours",
+        is_regularized AS "isRegularized",
+        notes
+      FROM attendance_records
+      WHERE employee_id = ANY($1)
+        AND attendance_date >= $2::date
+        AND attendance_date <= $3::date;`,
+      [empIds, start, end]
+    );
+
+    // 7. Query org holidays
+    const holidayRes = await pool.query(
+      `SELECT 
+        id,
+        TO_CHAR(holiday_date, 'YYYY-MM-DD') AS "holidayDate",
+        name,
+        is_optional AS "isOptional"
+      FROM holidays
+      WHERE (org_id = $1 OR org_id IS NULL OR $1 = '')
+        AND (status = 'Active' OR status IS NULL)
+        AND holiday_date >= $2::date
+        AND holiday_date <= $3::date;`,
+      [orgId, start, end]
+    );
+
+    // 8. Map lookups
+    const holidaysByDate = {};
+    for (const h of holidayRes.rows) {
+      holidaysByDate[h.holidayDate] = h;
+    }
+
+    days.forEach((day) => {
+      day.holiday = holidaysByDate[day.dateKey] || null;
+    });
+
+    const customShiftsByEmpAndDate = new Map();
+    for (const s of shiftRes.rows) {
+      customShiftsByEmpAndDate.set(`${s.employeeId}_${s.assignmentDate}`, s);
+    }
+
+    const attendanceByEmpAndDate = new Map();
+    for (const a of attRes.rows) {
+      const totalHoursNum = parseFloat(a.totalHours) || 0;
+      let workMinutes = 0;
+      if (a.checkIn && a.checkOut) {
+        const diffMs = new Date(a.checkOut).getTime() - new Date(a.checkIn).getTime();
+        workMinutes = Math.max(0, Math.round(diffMs / 60000) - (parseInt(a.breakDurationMinutes, 10) || 0));
+      } else if (totalHoursNum > 0) {
+        workMinutes = Math.round(totalHoursNum * 60);
+      }
+
+      let formattedWorkHours = '-';
+      if (workMinutes > 0) {
+        const hrs = Math.floor(workMinutes / 60);
+        const mins = workMinutes % 60;
+        formattedWorkHours = `${hrs}h ${mins}m`;
+      } else if (a.checkIn && !a.checkOut) {
+        formattedWorkHours = 'In Progress';
+      }
+
+      attendanceByEmpAndDate.set(`${a.employeeId}_${a.attendanceDate}`, {
+        id: a.id,
+        status: (a.status || 'PRESENT').toUpperCase(),
+        checkIn: a.checkIn,
+        checkOut: a.checkOut,
+        totalHours: totalHoursNum,
+        workMinutes,
+        formattedWorkHours,
+        isRegularized: Boolean(a.isRegularized),
+        notes: a.notes || '',
+      });
+    }
+
+    const leavesByEmp = new Map();
+    for (const l of leavesRes.rows) {
+      if (!leavesByEmp.has(l.employeeId)) {
+        leavesByEmp.set(l.employeeId, []);
+      }
+      leavesByEmp.get(l.employeeId).push(l);
+    }
+
+    // 9. Build each employee row with daily cells and summary stats
+    const roster = [];
+    const deptSet = new Set();
+    let totalOverridesCount = 0;
+
+    for (const emp of eligibleEmployees) {
+      if (emp.departmentName) {
+        deptSet.add(emp.departmentName);
+      }
+
+      const defaultTiming = emp.defaultShiftTiming || '11:00 AM - 07:00 PM';
+      const defaultShort = this.getShortShiftLabel(defaultTiming);
+      const empLeaves = leavesByEmp.get(emp.id) || [];
+
+      const cells = {};
+      let scheduledDaysCount = 0;
+      let presentDaysCount = 0;
+      let overrideDaysCount = 0;
+      let leaveDaysCount = 0;
+      let weeklyOffDaysCount = 0;
+      let totalWorkMinutes = 0;
+
+      for (const day of days) {
+        const dateKey = day.dateKey;
+        const custom = customShiftsByEmpAndDate.get(`${emp.id}_${dateKey}`) || null;
+        const holiday = holidaysByDate[dateKey] || null;
+        const leave = empLeaves.find((l) => dateKey >= l.startDate && dateKey <= l.endDate) || null;
+        const att = attendanceByEmpAndDate.get(`${emp.id}_${dateKey}`) || null;
+
+        const isOverride = Boolean(custom);
+        if (isOverride) {
+          overrideDaysCount++;
+          totalOverridesCount++;
+        }
+
+        let shiftType = 'SHIFT';
+        let shiftLabel = defaultTiming;
+        let shortLabel = defaultShort;
+
+        if (custom) {
+          shiftType = custom.shiftType || 'SHIFT';
+          shiftLabel = custom.shiftLabel || (shiftType === 'WO' ? 'Weekly Off' : defaultTiming);
+          shortLabel = shiftType === 'WO' ? 'WO' : this.getShortShiftLabel(shiftLabel);
+        } else if (day.isWeekend) {
+          shiftType = 'WO';
+          shiftLabel = 'Weekly Off';
+          shortLabel = 'WO';
+        }
+
+        if (shiftType === 'WO') {
+          weeklyOffDaysCount++;
+        } else {
+          scheduledDaysCount++;
+        }
+
+        if (leave) {
+          leaveDaysCount++;
+        }
+
+        if (att) {
+          if (['PRESENT', 'HALF_DAY', 'ON_DUTY'].includes(att.status)) {
+            presentDaysCount++;
+          }
+          if (att.workMinutes > 0) {
+            totalWorkMinutes += att.workMinutes;
+          }
+        }
+
+        let displayType = 'SHIFT';
+        let cellText = shortLabel;
+
+        if (holiday) {
+          displayType = 'HOLIDAY';
+          cellText = 'Holiday';
+        } else if (leave) {
+          displayType = 'LEAVE';
+          cellText = leave.leaveCode || 'Leave';
+        } else if (shiftType === 'WO') {
+          displayType = 'WO';
+          cellText = 'WO';
+        } else if (isOverride) {
+          displayType = 'OVERRIDE';
+          cellText = shortLabel;
+        }
+
+        cells[dateKey] = {
+          dateKey,
+          dayNumber: day.dayNumber,
+          dayName: day.dayName,
+          isWeekend: day.isWeekend,
+          shiftType,
+          shiftLabel,
+          shortLabel,
+          displayType,
+          cellText,
+          isOverride,
+          customAssignment: custom,
+          holiday,
+          leave,
+          attendance: att,
+        };
+      }
+
+      const totalWorkHoursFormatted = this.formatWorkMinutes(totalWorkMinutes);
+
+      roster.push({
+        employee: {
+          id: emp.id,
+          employeeCode: emp.employeeCode,
+          firstName: emp.firstName,
+          lastName: emp.lastName,
+          fullName: emp.fullName,
+          email: emp.email,
+          avatarUrl: emp.avatarUrl,
+          departmentName: emp.departmentName || 'General',
+          designationTitle: emp.designationTitle || 'Staff',
+          defaultShiftTiming: defaultTiming,
+        },
+        cells,
+        stats: {
+          scheduledDays: scheduledDaysCount,
+          presentDays: presentDaysCount,
+          overridesCount: overrideDaysCount,
+          leavesDays: leaveDaysCount,
+          weeklyOffsCount: weeklyOffDaysCount,
+          totalWorkHoursFormatted,
+        },
+      });
+    }
+
+    return {
+      isAllEmployees: true,
+      range: { startDate: start, endDate: end },
+      month: m,
+      year: y,
+      totalEmployees: eligibleEmployees.length,
+      days,
+      holidaysByDate,
+      departments: Array.from(deptSet).sort(),
+      roster,
+      summary: {
+        totalEmployees: eligibleEmployees.length,
+        totalOverrides: totalOverridesCount,
+        totalAttendancePunches: attRes.rows.length,
+        totalApprovedLeaves: leavesRes.rows.length,
+        totalHolidays: holidayRes.rows.length,
+      },
+    };
+  },
+
+  /**
    * Get shift schedule for a specific employee and date range
    */
-  async getEmployeeShifts(currentUser, { employeeId, startDate, endDate, month, year }) {
+  async getEmployeeShifts(currentUser, { employeeId, startDate, endDate, month, year, departmentId }) {
+    if (employeeId === 'ALL' || employeeId === 'all') {
+      return this.getOrganizationMonthlyRoster(currentUser, { startDate, endDate, month, year, departmentId });
+    }
+
     const orgId = currentUser.orgId || 'org-1';
 
     // Fall back to caller employee if not specified

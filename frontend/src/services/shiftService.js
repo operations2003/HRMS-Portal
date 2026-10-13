@@ -23,6 +23,7 @@ export const shiftService = {
     if (endDate) params.append('endDate', endDate);
     if (month) params.append('month', month);
     if (year) params.append('year', year);
+    if (departmentId) params.append('departmentId', departmentId);
 
     const qs = params.toString() ? `?${params.toString()}` : '';
     const res = await http.get(`/v1/shifts/assignments${qs}`);

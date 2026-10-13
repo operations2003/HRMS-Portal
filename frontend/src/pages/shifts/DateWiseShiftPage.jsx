@@ -26,6 +26,9 @@ import {
   Sun,
   Eye,
   Edit3,
+  Download,
+  Building,
+  Grid,
 } from 'lucide-react';
 import { Button } from '../../components/common/Button.jsx';
 import { Badge } from '../../components/common/Badge.jsx';
@@ -120,6 +123,14 @@ export const DateWiseShiftPage = () => {
   // Day Details Modal State (for viewing punch logs & full details of a single day)
   const [selectedDayDetails, setSelectedDayDetails] = useState(null);
 
+  // Organization Roster Matrix State (When "All Employees" is selected)
+  const [selectedDepartmentFilter, setSelectedDepartmentFilter] = useState('ALL');
+  const [matrixSearch, setMatrixSearch] = useState('');
+  const [selectedMatrixCellDetails, setSelectedMatrixCellDetails] = useState(null);
+
+  // Today ISO Date string
+  const todayDateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
   // 1. Fetch eligible employees on mount
   const fetchEmployees = async () => {
     try {
@@ -190,6 +201,7 @@ export const DateWiseShiftPage = () => {
         employeeId: selectedEmployeeId,
         month: currentMonth,
         year: currentYear,
+        departmentId: selectedDepartmentFilter !== 'ALL' ? selectedDepartmentFilter : undefined,
       });
       setScheduleData(data);
       // Clear selected dates on month/employee switch
@@ -203,12 +215,16 @@ export const DateWiseShiftPage = () => {
 
   useEffect(() => {
     fetchSchedule();
-  }, [selectedEmployeeId, currentMonth, currentYear]);
+  }, [selectedEmployeeId, currentMonth, currentYear, selectedDepartmentFilter]);
 
-  // Selected employee object
+  // Is "All Employees" consolidated matrix view active?
+  const isAllMode = selectedEmployeeId === 'ALL';
+
+  // Selected employee object (for single employee view)
   const activeEmployee = useMemo(() => {
+    if (isAllMode) return null;
     return employees.find((e) => e.id === selectedEmployeeId) || scheduleData?.employee || null;
-  }, [employees, selectedEmployeeId, scheduleData]);
+  }, [employees, selectedEmployeeId, scheduleData, isAllMode]);
 
   // Count employees with custom/adjusted shifts
   const withCustomCount = useMemo(() => {
@@ -310,6 +326,30 @@ export const DateWiseShiftPage = () => {
 
   // Monthly Overview Statistics
   const monthStats = useMemo(() => {
+    if (isAllMode) {
+      const summary = scheduleData?.summary || {};
+      const rosterList = scheduleData?.roster || [];
+      let totalWorkMins = 0;
+      rosterList.forEach((r) => {
+        const str = r.stats?.totalWorkHoursFormatted || '';
+        const match = str.match(/(\d+)h\s*(\d+)m/);
+        if (match) {
+          totalWorkMins += parseInt(match[1], 10) * 60 + parseInt(match[2], 10);
+        }
+      });
+      const totalHrs = Math.floor(totalWorkMins / 60);
+      const totalMins = totalWorkMins % 60;
+
+      return {
+        totalDays: scheduleData?.days?.length || 31,
+        attendanceLoggedDays: summary.totalAttendancePunches || 0,
+        totalWorkHoursStr: `${totalHrs}h ${totalMins}m`,
+        customOverridesCount: summary.totalOverrides || 0,
+        leavesCount: summary.totalApprovedLeaves || 0,
+        holidaysCount: summary.totalHolidays || 0,
+      };
+    }
+
     if (!scheduleData) {
       return {
         totalDays: 0,
@@ -350,7 +390,75 @@ export const DateWiseShiftPage = () => {
       leavesCount: leaves.length,
       holidaysCount: Object.keys(holidays).length,
     };
-  }, [scheduleData, calendarDays]);
+  }, [scheduleData, calendarDays, isAllMode]);
+
+  // Filtered rows for All Employees Matrix Grid
+  const filteredRosterRows = useMemo(() => {
+    if (!scheduleData?.roster) return [];
+    let list = scheduleData.roster;
+    if (selectedDepartmentFilter && selectedDepartmentFilter !== 'ALL') {
+      list = list.filter((r) => r.employee.departmentName === selectedDepartmentFilter);
+    }
+    if (!matrixSearch.trim()) return list;
+    const q = matrixSearch.toLowerCase();
+    return list.filter(
+      (r) =>
+        r.employee.fullName?.toLowerCase().includes(q) ||
+        r.employee.employeeCode?.toLowerCase().includes(q) ||
+        r.employee.departmentName?.toLowerCase().includes(q) ||
+        r.employee.designationTitle?.toLowerCase().includes(q) ||
+        r.employee.defaultShiftTiming?.toLowerCase().includes(q)
+    );
+  }, [scheduleData?.roster, selectedDepartmentFilter, matrixSearch]);
+
+  // Unique department options for filtering
+  const departmentOptions = useMemo(() => {
+    if (scheduleData?.departments && Array.isArray(scheduleData.departments) && scheduleData.departments.length > 0) {
+      return scheduleData.departments;
+    }
+    const set = new Set();
+    employees.forEach((e) => {
+      if (e.departmentName) set.add(e.departmentName);
+    });
+    return Array.from(set).sort();
+  }, [scheduleData?.departments, employees]);
+
+  // Export Roster to CSV Spreadsheet
+  const handleExportRosterCSV = () => {
+    if (!scheduleData?.roster || !scheduleData?.days) {
+      toast.error('No roster data available to export.');
+      return;
+    }
+
+    const days = scheduleData.days;
+    const dayHeaders = days.map((d) => `Day ${d.dayNumber} (${d.dayName})`).join(',');
+    const headerRow = `Employee Code,Employee Name,Department,Designation,Default Shift,${dayHeaders},Scheduled Days,Present Days,Shift Overrides,Approved Leaves,Weekly Offs,Total Hours Worked\n`;
+
+    const rows = filteredRosterRows.map((r) => {
+      const emp = r.employee;
+      const dayValues = days.map((d) => {
+        const cell = r.cells[d.dateKey];
+        if (!cell) return '-';
+        if (cell.holiday) return `Holiday (${cell.holiday.name || 'Holiday'})`;
+        if (cell.leave) return `Leave (${cell.leave.leaveCode || 'Leave'})`;
+        if (cell.shiftType === 'WO') return 'Weekly Off';
+        const shift = cell.shiftLabel || emp.defaultShiftTiming || 'Shift';
+        const att = cell.attendance ? ` [Att: ${cell.attendance.status} ${cell.attendance.formattedWorkHours}]` : '';
+        return `"${shift}${att}"`;
+      }).join(',');
+
+      return `"${emp.employeeCode}","${emp.fullName}","${emp.departmentName}","${emp.designationTitle}","${emp.defaultShiftTiming}",${dayValues},${r.stats.scheduledDays},${r.stats.presentDays},${r.stats.overridesCount},${r.stats.leavesDays},${r.stats.weeklyOffsCount},"${r.stats.totalWorkHoursFormatted}"`;
+    }).join('\n');
+
+    const csvContent = 'data:text/csv;charset=utf-8,' + encodeURIComponent(headerRow + rows);
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute('href', csvContent);
+    downloadAnchor.setAttribute('download', `Monthly_Roster_${monthNames[currentMonth - 1]}_${currentYear}.csv`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+    toast.success('Monthly Roster CSV exported successfully.');
+  };
 
   // Toggle selection of a single date
   const handleToggleDate = (dateKey) => {
@@ -610,6 +718,11 @@ export const DateWiseShiftPage = () => {
                   onChange={(e) => setSelectedEmployeeId(e.target.value)}
                   className="w-full text-xs py-2 px-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-brand-500 font-medium cursor-pointer"
                 >
+                  {canEditShifts && (
+                    <option value="ALL">
+                      👥 All Employees (Monthly Roster Grid - {employees.length})
+                    </option>
+                  )}
                   {employees.length === 0 ? (
                     <option value="">No employees available</option>
                   ) : (
@@ -672,7 +785,32 @@ export const DateWiseShiftPage = () => {
                     </Button>
                   </div>
                 ) : (
-                  filteredEmployees.map((emp) => {
+                  <>
+                    {canEditShifts && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedEmployeeId('ALL')}
+                        className={`w-full text-left p-2.5 rounded-xl transition-all flex items-center gap-2.5 cursor-pointer mb-1.5 ${
+                          isAllMode
+                            ? 'bg-brand-50 dark:bg-brand-950/40 border border-brand-300 dark:border-brand-700 text-brand-900 dark:text-brand-100 font-bold shadow-2xs'
+                            : 'hover:bg-slate-50 dark:hover:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800 text-slate-700 dark:text-slate-300'
+                        }`}
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-brand-500/10 dark:bg-brand-500/20 text-brand-600 dark:text-brand-400 flex items-center justify-center font-bold">
+                          <Users className="w-4 h-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between text-xs font-semibold">
+                            <span>All Employees</span>
+                            <span className="text-[10px] bg-brand-100 dark:bg-brand-900/60 text-brand-700 dark:text-brand-300 px-1.5 py-0.2 rounded font-bold">
+                              Grid ({employees.length})
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-400 truncate">Consolidated rows & columns roster</p>
+                        </div>
+                      </button>
+                    )}
+                    {filteredEmployees.map((emp) => {
                     const isSelected = emp.id === selectedEmployeeId;
                     const hasCustom = (emp.customShiftCount || 0) > 0;
                     return (
@@ -712,7 +850,8 @@ export const DateWiseShiftPage = () => {
                         </div>
                       </button>
                     );
-                  })
+                  })}
+                  </>
                 )}
               </div>
             </div>
@@ -721,7 +860,51 @@ export const DateWiseShiftPage = () => {
 
         {/* Selected Employee Details & Profile Card */}
         <div className={`${canEditShifts ? 'lg:col-span-8' : 'lg:col-span-12'} bg-gradient-to-r from-slate-50/80 via-white to-slate-50/80 dark:from-slate-850 dark:via-slate-900 dark:to-slate-850 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between`}>
-          {activeEmployee ? (
+          {isAllMode ? (
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-14 h-14 min-w-[3.5rem] min-h-[3.5rem] rounded-2xl bg-brand-500/10 dark:bg-brand-500/20 text-brand-600 dark:text-brand-400 border border-brand-200 dark:border-brand-700/50 flex items-center justify-center shadow-xs">
+                    <Users className="w-7 h-7" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                        Organization Monthly Roster Matrix
+                      </h3>
+                      <Badge variant="brand" size="sm">
+                        {filteredRosterRows.length} of {employees.length} Employees
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      Consolidated date-wise schedule for all active employees across all departments for {monthNames[currentMonth - 1]} {currentYear}.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Export CSV Button */}
+                <div className="flex items-center gap-2 self-start sm:self-auto">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    icon={Download}
+                    onClick={handleExportRosterCSV}
+                    title="Export Monthly Roster as CSV Spreadsheet"
+                  >
+                    Export CSV
+                  </Button>
+                </div>
+              </div>
+
+              {/* Guarantees & Summary Notice */}
+              <div className="p-3 bg-indigo-50/70 dark:bg-indigo-950/20 border border-indigo-200/80 dark:border-indigo-900/40 rounded-xl text-xs text-indigo-900 dark:text-indigo-300 flex items-start gap-2.5">
+                <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5" />
+                <p className="leading-relaxed text-[11px]">
+                  <strong>Consolidated Grid Overview:</strong> Rows show each employee and columns represent all dates of {monthNames[currentMonth - 1]} {currentYear}. Each cell displays active shift timing, custom override indicator (✨), leave, weekly off, or holiday, plus attendance punch dots. Click any cell to view punch logs or edit shifts!
+                </p>
+              </div>
+            </div>
+          ) : activeEmployee ? (
             <div className="space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-3.5">
@@ -784,12 +967,22 @@ export const DateWiseShiftPage = () => {
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3">
         <div className="bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-2xs flex items-center gap-3">
           <div className="w-9 h-9 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-            <Activity className="w-4 h-4" />
+            {isAllMode ? <Users className="w-4 h-4" /> : <Activity className="w-4 h-4" />}
           </div>
           <div className="min-w-0">
-            <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider truncate">Attendance Logged</p>
+            <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider truncate">
+              {isAllMode ? 'Employees in Roster' : 'Attendance Logged'}
+            </p>
             <p className="text-base font-bold text-slate-900 dark:text-white">
-              {monthStats.attendanceLoggedDays} <span className="text-xs font-normal text-slate-400">/ {monthStats.totalDays}d</span>
+              {isAllMode ? (
+                <>
+                  {filteredRosterRows.length} <span className="text-xs font-normal text-slate-400">/ {employees.length} active</span>
+                </>
+              ) : (
+                <>
+                  {monthStats.attendanceLoggedDays} <span className="text-xs font-normal text-slate-400">/ {monthStats.totalDays}d</span>
+                </>
+              )}
             </p>
           </div>
         </div>
@@ -799,9 +992,11 @@ export const DateWiseShiftPage = () => {
             <Clock className="w-4 h-4" />
           </div>
           <div className="min-w-0">
-            <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider truncate">Actual Hours Worked</p>
+            <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider truncate">
+              {isAllMode ? 'Total Punches Logged' : 'Actual Hours Worked'}
+            </p>
             <p className="text-base font-bold text-slate-900 dark:text-white">
-              {monthStats.totalWorkHoursStr}
+              {isAllMode ? `${monthStats.attendanceLoggedDays} punch records` : monthStats.totalWorkHoursStr}
             </p>
           </div>
         </div>
@@ -813,7 +1008,7 @@ export const DateWiseShiftPage = () => {
           <div className="min-w-0">
             <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider truncate">Shift Overrides</p>
             <p className="text-base font-bold text-slate-900 dark:text-white">
-              {monthStats.customOverridesCount} <span className="text-xs font-normal text-slate-400">day(s)</span>
+              {monthStats.customOverridesCount} <span className="text-xs font-normal text-slate-400">{isAllMode ? 'active overrides' : 'day(s)'}</span>
             </p>
           </div>
         </div>
@@ -844,10 +1039,330 @@ export const DateWiseShiftPage = () => {
       </div>
 
       {/* =================================================================== */}
-      {/* 4. Month Navigation & Calendar Controls                             */}
+      {/* 4. Schedule View: All Employees Matrix vs Single Employee Calendar  */}
       {/* =================================================================== */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs p-5 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+        {isAllMode ? (
+          /* ================================================================= */
+          /* 4A. ORGANIZATION MONTHLY ROSTER MATRIX (ROWS & COLUMNS)           */
+          /* ================================================================= */
+          <div className="space-y-4">
+            {/* Top Toolbar: Month Navigation, Dept filter, Search, Export */}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={handlePrevMonth}
+                  className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 cursor-pointer"
+                  title="Previous Month"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <h2 className="text-base font-bold text-slate-900 dark:text-white min-w-[170px] text-center">
+                  {monthNames[currentMonth - 1]} {currentYear}
+                </h2>
+                <button
+                  type="button"
+                  onClick={handleNextMonth}
+                  className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 cursor-pointer"
+                  title="Next Month"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleTodayMonth}
+                  className="text-xs text-brand-600 dark:text-brand-400"
+                >
+                  Today
+                </Button>
+              </div>
+
+              {/* Filters for Matrix View */}
+              <div className="flex items-center gap-2.5 flex-wrap">
+                {/* Department filter */}
+                <div className="flex items-center gap-1.5">
+                  <Building className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                  <select
+                    value={selectedDepartmentFilter}
+                    onChange={(e) => setSelectedDepartmentFilter(e.target.value)}
+                    className="text-xs py-1.5 px-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-brand-500 font-medium cursor-pointer"
+                  >
+                    <option value="ALL">All Departments ({employees.length})</option>
+                    {departmentOptions.map((dept) => (
+                      <option key={dept} value={dept}>
+                        {dept}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Search in Rows */}
+                <div className="relative min-w-[190px]">
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
+                  <input
+                    type="text"
+                    value={matrixSearch}
+                    onChange={(e) => setMatrixSearch(e.target.value)}
+                    placeholder="Filter employee rows..."
+                    className="w-full text-xs pl-8 pr-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  />
+                </div>
+
+                <Badge variant="neutral" size="sm">
+                  {filteredRosterRows.length} Rows
+                </Badge>
+              </div>
+            </div>
+
+            {/* Legend for Matrix */}
+            <div className="flex items-center gap-3.5 text-xs text-slate-500 dark:text-slate-400 flex-wrap p-2.5 bg-slate-50/60 dark:bg-slate-850 rounded-xl border border-slate-200/60 dark:border-slate-800">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-1">Roster Legend:</span>
+              <div className="flex items-center gap-1.5">
+                <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200/60">11-7</span>
+                <span>Default Shift</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-300 shadow-2xs">
+                  <Sparkles className="w-2.5 h-2.5" /> 10-6
+                </span>
+                <span>Custom Override</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">WO</span>
+                <span>Weekly Off</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200">PL</span>
+                <span>Approved Leave</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200">Holiday</span>
+                <span>Holiday</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+                <span>Punch Logged</span>
+              </div>
+            </div>
+
+            {/* Matrix Table */}
+            {isLoadingSchedule ? (
+              <div className="p-16 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+                <LoadingSpinner size="md" /> Loading organization roster matrix...
+              </div>
+            ) : filteredRosterRows.length === 0 ? (
+              <div className="p-12 text-center text-xs text-slate-400 space-y-2">
+                <Users className="w-8 h-8 mx-auto text-slate-300" />
+                <p className="font-semibold text-slate-600 dark:text-slate-300">No employee roster records found for the selected filter.</p>
+                <Button variant="ghost" size="sm" onClick={() => { setSelectedDepartmentFilter('ALL'); setMatrixSearch(''); }}>
+                  Reset Filters
+                </Button>
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-slate-200/90 dark:border-slate-800 shadow-2xs max-w-full">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-slate-100/95 dark:bg-slate-800/95 border-b border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold select-none">
+                      {/* Sticky 1: Employee */}
+                      <th className="sticky left-0 z-30 bg-slate-100 dark:bg-slate-800 p-2.5 min-w-[210px] border-r border-slate-200 dark:border-slate-700 shadow-xs">
+                        Employee
+                      </th>
+                      {/* Sticky 2: Default Shift */}
+                      <th className="sticky left-[210px] z-30 bg-slate-100 dark:bg-slate-800 p-2.5 min-w-[130px] border-r border-slate-200 dark:border-slate-700 shadow-xs">
+                        Default Shift
+                      </th>
+                      {/* Days columns 1..N */}
+                      {scheduleData?.days?.map((day) => (
+                        <th
+                          key={day.dateKey}
+                          className={`p-1.5 text-center min-w-[62px] border-r border-slate-200/60 dark:border-slate-700/60 ${
+                            day.isWeekend ? 'bg-slate-200/50 dark:bg-slate-800/50 text-rose-500' : ''
+                          }`}
+                        >
+                          <div className="text-[10px] uppercase font-bold text-slate-400">
+                            {day.dayName}
+                          </div>
+                          <div className={`text-xs font-bold inline-block px-1.5 py-0.2 rounded ${
+                            day.dateKey === todayDateStr ? 'bg-brand-600 text-white shadow-2xs' : ''
+                          }`}>
+                            {String(day.dayNumber).padStart(2, '0')}
+                          </div>
+                          {day.holiday && (
+                            <div className="text-[9px] text-rose-500 font-semibold truncate" title={day.holiday.name}>
+                              🎉
+                            </div>
+                          )}
+                        </th>
+                      ))}
+                      {/* Right summary totals */}
+                      <th className="p-2 text-center min-w-[55px] bg-slate-50 dark:bg-slate-850 border-r border-slate-200 dark:border-slate-700" title="Scheduled Days">
+                        Sched
+                      </th>
+                      <th className="p-2 text-center min-w-[55px] bg-emerald-50/50 dark:bg-emerald-950/20 border-r border-slate-200 dark:border-slate-700 text-emerald-700 dark:text-emerald-400" title="Present / Logged Days">
+                        Att
+                      </th>
+                      <th className="p-2 text-center min-w-[65px] bg-indigo-50/50 dark:bg-indigo-950/20 border-r border-slate-200 dark:border-slate-700 text-indigo-700 dark:text-indigo-400" title="Custom Shift Overrides">
+                        Overrides
+                      </th>
+                      <th className="p-2 text-center min-w-[55px] bg-amber-50/50 dark:bg-amber-950/20 border-r border-slate-200 dark:border-slate-700 text-amber-700 dark:text-amber-400" title="Approved Leaves">
+                        Leave
+                      </th>
+                      <th className="p-2 text-center min-w-[55px] bg-slate-50 dark:bg-slate-850 border-r border-slate-200 dark:border-slate-700" title="Weekly Offs">
+                        Off
+                      </th>
+                      <th className="p-2 text-center min-w-[80px] bg-slate-100 dark:bg-slate-800" title="Total Actual Hours Worked">
+                        Work Hrs
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
+                    {filteredRosterRows.map((row) => (
+                      <tr key={row.employee.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
+                        {/* Sticky 1: Employee */}
+                        <td className="sticky left-0 z-20 bg-white dark:bg-slate-900 hover:bg-slate-50/90 dark:hover:bg-slate-800/90 p-2.5 border-r border-slate-200 dark:border-slate-700 shadow-xs">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedEmployeeId(row.employee.id)}
+                            className="flex items-center gap-2.5 text-left w-full cursor-pointer group"
+                            title="Click to view this employee's individual schedule calendar"
+                          >
+                            <Avatar
+                              src={row.employee.avatarUrl}
+                              name={row.employee.fullName}
+                              size="sm"
+                              shape="rounded-lg"
+                            />
+                            <div className="min-w-0">
+                              <div className="font-semibold text-slate-900 dark:text-white truncate group-hover:text-brand-600 transition-colors">
+                                {row.employee.fullName}
+                              </div>
+                              <div className="text-[10px] text-slate-400 flex items-center gap-1.5">
+                                <span className="font-mono">{row.employee.employeeCode}</span>
+                                <span>•</span>
+                                <span className="truncate">{row.employee.departmentName}</span>
+                              </div>
+                            </div>
+                          </button>
+                        </td>
+
+                        {/* Sticky 2: Default Shift */}
+                        <td className="sticky left-[210px] z-20 bg-white dark:bg-slate-900 hover:bg-slate-50/90 dark:hover:bg-slate-800/90 p-2.5 border-r border-slate-200 dark:border-slate-700 text-[11px] text-slate-600 dark:text-slate-300 font-medium whitespace-nowrap shadow-xs">
+                          <div className="flex items-center gap-1">
+                            <Clock className="w-3 h-3 text-brand-500 shrink-0" />
+                            <span className="truncate">{row.employee.defaultShiftTiming || '11:00 AM - 07:00 PM'}</span>
+                          </div>
+                        </td>
+
+                        {/* Day Cells 1..N */}
+                        {scheduleData?.days?.map((day) => {
+                          const cell = row.cells[day.dateKey];
+                          if (!cell) {
+                            return (
+                              <td key={day.dateKey} className="p-1.5 text-center border-r border-slate-100 dark:border-slate-800/60 text-slate-300">
+                                -
+                              </td>
+                            );
+                          }
+
+                          const isOverride = cell.isOverride;
+                          const hasHoliday = Boolean(cell.holiday);
+                          const hasLeave = Boolean(cell.leave);
+                          const isWO = cell.shiftType === 'WO';
+                          const att = cell.attendance;
+
+                          return (
+                            <td
+                              key={day.dateKey}
+                              onClick={() => setSelectedMatrixCellDetails({ employee: row.employee, dateKey: day.dateKey, cell })}
+                              className={`p-1.5 text-center border-r border-slate-100 dark:border-slate-800/60 cursor-pointer transition-all hover:bg-brand-50/50 dark:hover:bg-brand-950/30 ${
+                                day.isWeekend ? 'bg-slate-50/40 dark:bg-slate-850/40' : ''
+                              }`}
+                              title={`${row.employee.fullName} | ${day.dateKey}\nShift: ${cell.shiftLabel}${isOverride ? ' (✨ Override)' : ''}${att ? `\nAtt: ${att.status} (${att.formattedWorkHours})` : ''}`}
+                            >
+                              <div className="flex flex-col items-center justify-center gap-0.5 min-h-[36px]">
+                                {hasHoliday ? (
+                                  <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200">
+                                    Holiday
+                                  </span>
+                                ) : hasLeave ? (
+                                  <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200">
+                                    {cell.leave.leaveCode || 'Leave'}
+                                  </span>
+                                ) : isWO ? (
+                                  <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                                    WO
+                                  </span>
+                                ) : isOverride ? (
+                                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-700 shadow-2xs">
+                                    <Sparkles className="w-2.5 h-2.5" />
+                                    {cell.shortLabel}
+                                  </span>
+                                ) : (
+                                  <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200/60">
+                                    {cell.shortLabel}
+                                  </span>
+                                )}
+
+                                {/* Attendance status dot and hours */}
+                                {att && (
+                                  <div className="flex items-center gap-1 text-[9px] font-mono leading-none">
+                                    <span
+                                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                        att.status === 'PRESENT'
+                                          ? 'bg-emerald-500'
+                                          : att.status === 'HALF_DAY'
+                                          ? 'bg-orange-500'
+                                          : att.status === 'LATE'
+                                          ? 'bg-amber-500'
+                                          : 'bg-rose-500'
+                                      }`}
+                                    />
+                                    {att.workMinutes > 0 && (
+                                      <span className="text-[9px] text-slate-500 dark:text-slate-400">
+                                        {Math.round(att.workMinutes / 60)}h
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                          );
+                        })}
+
+                        {/* Right Summary Columns */}
+                        <td className="p-2 text-center text-xs font-semibold text-slate-700 dark:text-slate-300 bg-slate-50/50 dark:bg-slate-850/50 border-r border-slate-200 dark:border-slate-700">
+                          {row.stats.scheduledDays}
+                        </td>
+                        <td className="p-2 text-center text-xs font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50/30 dark:bg-emerald-950/10 border-r border-slate-200 dark:border-slate-700">
+                          {row.stats.presentDays}
+                        </td>
+                        <td className="p-2 text-center text-xs font-bold text-indigo-700 dark:text-indigo-400 bg-indigo-50/30 dark:bg-indigo-950/10 border-r border-slate-200 dark:border-slate-700">
+                          {row.stats.overridesCount > 0 ? `✨ ${row.stats.overridesCount}` : '0'}
+                        </td>
+                        <td className="p-2 text-center text-xs font-semibold text-amber-700 dark:text-amber-400 bg-amber-50/30 dark:bg-amber-950/10 border-r border-slate-200 dark:border-slate-700">
+                          {row.stats.leavesDays}
+                        </td>
+                        <td className="p-2 text-center text-xs font-semibold text-slate-600 dark:text-slate-400 bg-slate-50/50 dark:bg-slate-850/50 border-r border-slate-200 dark:border-slate-700">
+                          {row.stats.weeklyOffsCount}
+                        </td>
+                        <td className="p-2 text-center text-xs font-bold text-slate-900 dark:text-white bg-slate-100/50 dark:bg-slate-800/50 whitespace-nowrap">
+                          {row.stats.totalWorkHoursFormatted}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        ) : (
+          /* ================================================================= */
+          /* 4B. SINGLE EMPLOYEE CALENDAR VIEW (UNTOUCHED & PRESERVED)         */
+          /* ================================================================= */
+          <>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -1126,6 +1641,8 @@ export const DateWiseShiftPage = () => {
             </div>
           </div>
         )}
+          </>
+        )}
       </div>
 
       {/* =================================================================== */}
@@ -1385,6 +1902,135 @@ export const DateWiseShiftPage = () => {
               >
                 Close
               </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* =================================================================== */}
+      {/* 8. Cell Inspector Modal for Organization Roster Matrix Grid         */}
+      {/* =================================================================== */}
+      {selectedMatrixCellDetails && (
+        <Modal
+          isOpen={Boolean(selectedMatrixCellDetails)}
+          onClose={() => setSelectedMatrixCellDetails(null)}
+          title={`Roster Details: ${selectedMatrixCellDetails.dateKey}`}
+          subtitle={`${selectedMatrixCellDetails.employee.fullName} (${selectedMatrixCellDetails.employee.employeeCode})`}
+          maxWidth="max-w-md"
+        >
+          <div className="space-y-4 text-xs">
+            {/* Employee Quick Header */}
+            <div className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+              <Avatar
+                src={selectedMatrixCellDetails.employee.avatarUrl}
+                name={selectedMatrixCellDetails.employee.fullName}
+                size="md"
+              />
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-slate-900 dark:text-white truncate">
+                  {selectedMatrixCellDetails.employee.fullName}
+                </p>
+                <p className="text-[11px] text-slate-400 truncate">
+                  {selectedMatrixCellDetails.employee.designationTitle || 'Staff'} • {selectedMatrixCellDetails.employee.departmentName || 'General'}
+                </p>
+              </div>
+            </div>
+
+            {/* Shift Timing Details */}
+            <div className="p-3 bg-white dark:bg-slate-850 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Assigned Shift</span>
+                {selectedMatrixCellDetails.cell.isOverride ? (
+                  <Badge variant="brand" size="xs">✨ Date Override</Badge>
+                ) : selectedMatrixCellDetails.cell.shiftType === 'WO' ? (
+                  <Badge variant="neutral" size="xs">Weekly Off</Badge>
+                ) : (
+                  <Badge variant="neutral" size="xs">Default Contract</Badge>
+                )}
+              </div>
+              <p className="text-sm font-bold text-slate-900 dark:text-white">
+                {selectedMatrixCellDetails.cell.shiftLabel}
+              </p>
+              {selectedMatrixCellDetails.cell.customAssignment?.notes && (
+                <p className="text-[11px] text-slate-500 italic">
+                  Remarks: {selectedMatrixCellDetails.cell.customAssignment.notes}
+                </p>
+              )}
+            </div>
+
+            {/* Attendance Punch Details if any */}
+            {selectedMatrixCellDetails.cell.attendance ? (
+              <div className="p-3 bg-emerald-50/60 dark:bg-emerald-950/20 rounded-xl border border-emerald-200 dark:border-emerald-800/40 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">Attendance Punches</span>
+                  <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200">
+                    {selectedMatrixCellDetails.cell.attendance.status}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-slate-700 dark:text-slate-300">
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">Check-In</span>
+                    <span className="font-semibold">{formatTime12h(selectedMatrixCellDetails.cell.attendance.checkIn) || '-'}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">Check-Out</span>
+                    <span className="font-semibold">{formatTime12h(selectedMatrixCellDetails.cell.attendance.checkOut) || 'Active / None'}</span>
+                  </div>
+                  <div className="col-span-2 pt-1 border-t border-emerald-200/60 dark:border-emerald-800/40 flex justify-between">
+                    <span className="text-[11px] text-slate-500">Total Worked:</span>
+                    <span className="font-bold text-emerald-700 dark:text-emerald-300">{selectedMatrixCellDetails.cell.attendance.formattedWorkHours}</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="p-2.5 text-center text-[11px] text-slate-400 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">
+                No punch attendance record logged for this date.
+              </div>
+            )}
+
+            {/* Leave / Holiday Info if any */}
+            {selectedMatrixCellDetails.cell.holiday && (
+              <div className="p-2.5 bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-800/40 rounded-xl text-rose-800 dark:text-rose-300 text-xs">
+                🎉 Company Holiday: <strong>{selectedMatrixCellDetails.cell.holiday.name}</strong>
+              </div>
+            )}
+            {selectedMatrixCellDetails.cell.leave && (
+              <div className="p-2.5 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 rounded-xl text-amber-800 dark:text-amber-300 text-xs">
+                🏖️ Approved Leave: <strong>{selectedMatrixCellDetails.cell.leave.leaveName} ({selectedMatrixCellDetails.cell.leave.leaveCode})</strong>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const empId = selectedMatrixCellDetails.employee.id;
+                  setSelectedMatrixCellDetails(null);
+                  setSelectedEmployeeId(empId);
+                }}
+              >
+                View Individual Calendar
+              </Button>
+
+              {canEditShifts && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  icon={Edit3}
+                  onClick={() => {
+                    const empId = selectedMatrixCellDetails.employee.id;
+                    const dateStr = selectedMatrixCellDetails.dateKey;
+                    setSelectedMatrixCellDetails(null);
+                    setSelectedEmployeeId(empId);
+                    setSelectedDates(new Set([dateStr]));
+                    setIsAssignModalOpen(true);
+                  }}
+                >
+                  Edit Shift For Date
+                </Button>
+              )}
             </div>
           </div>
         </Modal>

@@ -22,13 +22,14 @@ export const shiftManagementController = {
    */
   async getAssignments(req, res, next) {
     try {
-      const { employeeId, startDate, endDate, month, year } = req.query;
+      const { employeeId, startDate, endDate, month, year, departmentId } = req.query;
       const result = await shiftManagementService.getEmployeeShifts(req.user, {
         employeeId,
         startDate,
         endDate,
         month,
         year,
+        departmentId,
       });
       return sendSuccess(res, 'Shift assignments retrieved successfully.', result);
     } catch (err) {
