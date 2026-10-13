@@ -12,14 +12,14 @@ export const shiftManagementService = {
   isHrOrAdmin(user) {
     if (!user) return false;
     const role = normalizeRole(user?.roleName || user?.role?.name || user?.role || '');
-    if (['admin', 'superadmin', 'orgadmin', 'hr', 'hrmanager', 'management'].includes(role)) {
+    if (['admin', 'superadmin', 'orgadmin', 'hr', 'hrmanager', 'management', 'ceo', 'director'].includes(role)) {
       return true;
     }
 
     const allRoles = (Array.isArray(user?.roles) ? user.roles : [user?.roleName || user?.role || ''])
       .filter(Boolean)
       .map(normalizeRole);
-    if (allRoles.some((r) => ['admin', 'superadmin', 'orgadmin', 'hr', 'hrmanager'].some((adm) => r.includes(adm)))) {
+    if (allRoles.some((r) => ['admin', 'superadmin', 'orgadmin', 'hr', 'hrmanager', 'ceo', 'director'].some((adm) => r.includes(adm)))) {
       return true;
     }
 
@@ -50,12 +50,12 @@ export const shiftManagementService = {
   isManager(user) {
     if (!user) return false;
     const role = normalizeRole(user?.roleName || user?.role?.name || user?.role || '');
-    if (role.includes('manager') || role === 'teamlead') return true;
+    if (role.includes('manager') || role === 'teamlead' || role === 'supervisor') return true;
 
     const allRoles = (Array.isArray(user?.roles) ? user.roles : [user?.roleName || user?.role || ''])
       .filter(Boolean)
       .map(normalizeRole);
-    return allRoles.some((r) => r.includes('manager') || r === 'teamlead');
+    return allRoles.some((r) => r.includes('manager') || r === 'teamlead' || r === 'supervisor');
   },
 
   /**
@@ -113,7 +113,7 @@ export const shiftManagementService = {
 
   /**
    * Get eligible employees for shift management
-   * - HR/Admin/Operations: All active employees in organization
+   * - HR/Admin/Operations/CEO: All active employees in organization
    * - Manager: Direct reports, department members, and self
    * - Employee: Only their own profile
    */
@@ -132,6 +132,8 @@ export const shiftManagementService = {
           e.shift_timing AS "defaultShiftTiming",
           COALESCE(e.avatar_url, u.avatar_url) AS "avatarUrl",
           d.name AS "departmentName",
+          e.dept_id AS "departmentId",
+          e.dept_id AS "deptId",
           ds.title AS "designationTitle",
           e.manager_id AS "managerId",
           (SELECT COUNT(*)::int FROM shift_assignments sa WHERE sa.employee_id = e.id AND sa.assignment_date >= DATE_TRUNC('month', CURRENT_DATE) AND sa.assignment_date < DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month') AS "customShiftCount"
@@ -165,6 +167,8 @@ export const shiftManagementService = {
           e.shift_timing AS "defaultShiftTiming",
           COALESCE(e.avatar_url, u.avatar_url) AS "avatarUrl",
           d.name AS "departmentName",
+          e.dept_id AS "departmentId",
+          e.dept_id AS "deptId",
           ds.title AS "designationTitle",
           e.manager_id AS "managerId",
           (SELECT COUNT(*)::int FROM shift_assignments sa WHERE sa.employee_id = e.id AND sa.assignment_date >= DATE_TRUNC('month', CURRENT_DATE) AND sa.assignment_date < DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month') AS "customShiftCount"
@@ -191,6 +195,8 @@ export const shiftManagementService = {
         e.shift_timing AS "defaultShiftTiming",
         COALESCE(e.avatar_url, u.avatar_url) AS "avatarUrl",
         d.name AS "departmentName",
+        e.dept_id AS "departmentId",
+        e.dept_id AS "deptId",
         ds.title AS "designationTitle",
         e.manager_id AS "managerId",
         (SELECT COUNT(*)::int FROM shift_assignments sa WHERE sa.employee_id = e.id AND sa.assignment_date >= DATE_TRUNC('month', CURRENT_DATE) AND sa.assignment_date < DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month') AS "customShiftCount"
@@ -221,14 +227,31 @@ export const shiftManagementService = {
   /**
    * Helper to produce concise display label for shifts (e.g. "11-7", "WO")
    */
-  getShortShiftLabel(label) {
-    if (!label) return '-';
-    const clean = label.trim();
+  getShortShiftLabel(label, startTime = null, endTime = null) {
+    if (!label && !startTime) return '-';
+    const clean = (label || '').trim();
     if (/^wo\b|weekly\s*off/i.test(clean)) return 'WO';
-    const match = clean.match(/(\d{1,2})(?::\d{2})?\s*(?:am|pm)?\s*[-–—to]+\s*(\d{1,2})(?::\d{2})?\s*(?:am|pm)?/i);
+    if (/^hd\b|half\s*day/i.test(clean)) return 'HD';
+    if (/^cl\b|casual\s*leave/i.test(clean)) return 'CL';
+    if (/^pl\b|planned\s*leave/i.test(clean)) return 'PL';
+    if (/^sl\b|sick\s*leave/i.test(clean)) return 'SL';
+    if (/^lop\b|^lwp\b|unpaid/i.test(clean)) return 'LOP';
+
+    const match = clean.match(/(\d{1,2})(?::\d{2})?\s*(?:am|pm)?\s*[-–—+to]+\s*(\d{1,2})(?::\d{2})?\s*(?:am|pm)?/i);
     if (match) {
-      return `${match[1]}-${match[2]}`;
+      const sH = parseInt(match[1], 10);
+      const eH = parseInt(match[2], 10);
+      return `${sH}-${eH}`;
     }
+
+    if (startTime && endTime) {
+      const sH = parseInt(String(startTime).split(':')[0], 10);
+      const eH = parseInt(String(endTime).split(':')[0], 10);
+      const s12 = sH > 12 ? sH - 12 : sH;
+      const e12 = eH > 12 ? eH - 12 : eH;
+      return `${s12}-${e12}`;
+    }
+
     return clean.length > 8 ? clean.slice(0, 8) : clean;
   },
 
@@ -259,28 +282,46 @@ export const shiftManagementService = {
     }
 
     // 2. Compute date range
-    const y = year ? parseInt(year, 10) : new Date().getFullYear();
-    const m = month ? parseInt(month, 10) : new Date().getMonth() + 1;
-    const mStr = String(m).padStart(2, '0');
-    const start = startDate || `${y}-${mStr}-01`;
-    const lastDay = new Date(y, m, 0).getDate();
-    const end = endDate || `${y}-${mStr}-${String(lastDay).padStart(2, '0')}`;
+    let start = startDate;
+    let end = endDate;
+    let y = year ? parseInt(year, 10) : new Date().getFullYear();
+    let m = month ? parseInt(month, 10) : new Date().getMonth() + 1;
 
-    // 3. Generate columns metadata for each day of the month
+    if (!start || !end) {
+      const mStr = String(m).padStart(2, '0');
+      start = start || `${y}-${mStr}-01`;
+      const lastDay = new Date(y, m, 0).getDate();
+      end = end || `${y}-${mStr}-${String(lastDay).padStart(2, '0')}`;
+    } else {
+      // If dates provided, infer y and m from start
+      const parts = start.split('-');
+      if (parts.length >= 2) {
+        y = parseInt(parts[0], 10) || y;
+        m = parseInt(parts[1], 10) || m;
+      }
+    }
+
+    // 3. Generate columns metadata for each day in range
     const days = [];
     const weekdayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    for (let d = 1; d <= lastDay; d++) {
-      const dStr = String(d).padStart(2, '0');
-      const dateKey = `${y}-${mStr}-${dStr}`;
-      const dateObj = new Date(y, m - 1, d);
-      const dayOfWeek = dateObj.getDay();
+    const startObj = new Date(`${start}T00:00:00`);
+    const endObj = new Date(`${end}T00:00:00`);
+    const curr = new Date(startObj);
+
+    while (curr <= endObj) {
+      const currY = curr.getFullYear();
+      const currM = String(curr.getMonth() + 1).padStart(2, '0');
+      const currD = String(curr.getDate()).padStart(2, '0');
+      const dateKey = `${currY}-${currM}-${currD}`;
+      const dayOfWeek = curr.getDay();
       const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
       days.push({
-        dayNumber: d,
+        dayNumber: curr.getDate(),
         dateKey,
         dayName: weekdayNames[dayOfWeek],
         isWeekend,
       });
+      curr.setDate(curr.getDate() + 1);
     }
 
     if (eligibleEmployees.length === 0) {
@@ -333,17 +374,17 @@ export const shiftManagementService = {
         lr.id,
         lr.employee_id AS "employeeId",
         TO_CHAR(lr.start_date, 'YYYY-MM-DD') AS "startDate",
-        TO_CHAR(lr.end_date, 'YYYY-MM-DD') AS "endDate",
+        TO_CHAR(COALESCE(lr.end_date, lr.start_date), 'YYYY-MM-DD') AS "endDate",
         lr.is_half_day AS "isHalfDay",
         lr.status,
-        lt.name AS "leaveName",
-        lt.code AS "leaveCode"
+        COALESCE(lt.name, lr.leave_type_id, 'Leave') AS "leaveName",
+        COALESCE(lt.code, 'LV') AS "leaveCode"
       FROM leave_requests lr
-      JOIN leave_types lt ON lt.id = lr.leave_type_id
+      LEFT JOIN leave_types lt ON lt.id = lr.leave_type_id
       WHERE lr.employee_id = ANY($1)
-        AND lr.status = 'APPROVED'
+        AND UPPER(lr.status) = 'APPROVED'
         AND lr.start_date <= $3::date 
-        AND lr.end_date >= $2::date;`,
+        AND COALESCE(lr.end_date, lr.start_date) >= $2::date;`,
       [empIds, start, end]
     );
 
@@ -377,7 +418,7 @@ export const shiftManagementService = {
         is_optional AS "isOptional"
       FROM holidays
       WHERE (org_id = $1 OR org_id IS NULL OR $1 = '')
-        AND (status = 'Active' OR status IS NULL)
+        AND (UPPER(status) = 'ACTIVE' OR status IS NULL)
         AND holiday_date >= $2::date
         AND holiday_date <= $3::date;`,
       [orgId, start, end]
@@ -469,49 +510,75 @@ export const shiftManagementService = {
         const leave = empLeaves.find((l) => dateKey >= l.startDate && dateKey <= l.endDate) || null;
         const att = attendanceByEmpAndDate.get(`${emp.id}_${dateKey}`) || null;
 
-        const isOverride = Boolean(custom);
-        if (isOverride) {
-          overrideDaysCount++;
-          totalOverridesCount++;
-        }
-
         let shiftType = 'SHIFT';
         let shiftLabel = defaultTiming;
         let shortLabel = defaultShort;
 
         if (custom) {
-          shiftType = custom.shiftType || 'SHIFT';
+          shiftType = (custom.shiftType || 'SHIFT').toUpperCase();
           shiftLabel = custom.shiftLabel || (shiftType === 'WO' ? 'Weekly Off' : defaultTiming);
-          shortLabel = shiftType === 'WO' ? 'WO' : this.getShortShiftLabel(shiftLabel);
+          shortLabel = this.getShortShiftLabel(shiftLabel, custom.shiftStartTime, custom.shiftEndTime);
         } else if (day.isWeekend) {
           shiftType = 'WO';
           shiftLabel = 'Weekly Off';
           shortLabel = 'WO';
         }
 
-        if (shiftType === 'WO') {
+        // Distinct Half Day detection
+        const isHalfDay = Boolean(
+          leave?.isHalfDay ||
+          leave?.leaveCode === 'HDL' ||
+          (leave?.leaveName && leave.leaveName.toLowerCase().includes('half')) ||
+          shiftType === 'HD' ||
+          /half\s*day/i.test(shiftLabel) ||
+          att?.status === 'HALF_DAY'
+        );
+
+        // Leave detection (excluding half days)
+        const isLeave = Boolean(
+          (leave && !isHalfDay) ||
+          ['CL', 'PL', 'SL', 'LOP', 'LWP', 'ML', 'PTL', 'SBL'].includes(shiftType) ||
+          /casual\s*leave|planned\s*leave|sick\s*leave/i.test(shiftLabel) ||
+          att?.status === 'ON_LEAVE'
+        );
+
+        const isWeeklyOff = shiftType === 'WO';
+
+        // Override determination:
+        // A day is an override if the custom shift explicitly alters the standard schedule:
+        // 1. Working on weekend (weekend day where shiftType !== 'WO')
+        // 2. Off on a weekday (weekday where shiftType === 'WO')
+        // 3. Different timing on weekday (weekday working day where shortLabel !== defaultShort)
+        let isOverride = false;
+        if (custom && !isLeave && !isHalfDay) {
+          if (day.isWeekend && !isWeeklyOff) {
+            isOverride = true;
+          } else if (!day.isWeekend && isWeeklyOff) {
+            isOverride = true;
+          } else if (!day.isWeekend && !isWeeklyOff && shortLabel !== defaultShort) {
+            isOverride = true;
+          }
+        }
+
+        if (isOverride) {
+          overrideDaysCount++;
+          totalOverridesCount++;
+        }
+
+        if (isWeeklyOff) {
           weeklyOffDaysCount++;
         } else {
           scheduledDaysCount++;
         }
 
-        // Distinct Half Day detection:
-        // Do not classify Half Days as Planned Leave (PL)!
-        const isHalfDay = Boolean(
-          leave?.isHalfDay ||
-          leave?.leaveCode === 'HDL' ||
-          (leave?.leaveName && leave.leaveName.toLowerCase().includes('half')) ||
-          att?.status === 'HALF_DAY'
-        );
-
         if (isHalfDay) {
           halfDaysCount++;
-        } else if (leave) {
+        } else if (isLeave) {
           leaveDaysCount++;
         }
 
         if (att) {
-          if (['PRESENT', 'ON_DUTY'].includes(att.status)) {
+          if (['PRESENT', 'ON_DUTY', 'LATE'].includes(att.status)) {
             presentDaysCount++;
           }
           if (att.workMinutes > 0) {
@@ -526,14 +593,12 @@ export const shiftManagementService = {
           displayType = 'HOLIDAY';
           cellText = 'Holiday';
         } else if (isHalfDay) {
-          // Half day must strictly be Half Day, NEVER Planned Leave (PL)
           displayType = 'HALF_DAY';
           cellText = 'Half Day';
-        } else if (leave) {
+        } else if (isLeave) {
           displayType = 'LEAVE';
-          // Full-day leave according to type: PL = Planned Leave, CL = Casual Leave, SL = Sick Leave, etc.
-          cellText = leave.leaveCode || leave.leaveName || 'Leave';
-        } else if (shiftType === 'WO') {
+          cellText = leave?.leaveCode || (['CL', 'PL', 'SL', 'LOP', 'LWP'].includes(shiftType) ? shiftType : 'Leave');
+        } else if (isWeeklyOff) {
           displayType = 'WO';
           cellText = 'WO';
         } else if (isOverride) {
@@ -572,6 +637,7 @@ export const shiftManagementService = {
           email: emp.email,
           avatarUrl: emp.avatarUrl,
           departmentName: emp.departmentName || 'General',
+          departmentId: emp.departmentId || emp.dept_id || '',
           designationTitle: emp.designationTitle || 'Staff',
           defaultShiftTiming: defaultTiming,
         },
@@ -702,7 +768,7 @@ export const shiftManagementService = {
     const shiftRes = await pool.query(
       `SELECT 
         id,
-        assignment_date AS "assignmentDate",
+        TO_CHAR(assignment_date, 'YYYY-MM-DD') AS "assignmentDate",
         shift_type AS "shiftType",
         shift_start_time AS "shiftStartTime",
         shift_end_time AS "shiftEndTime",
@@ -724,18 +790,18 @@ export const shiftManagementService = {
     const leavesRes = await pool.query(
       `SELECT 
         lr.id,
-        lr.start_date AS "startDate",
-        lr.end_date AS "endDate",
+        TO_CHAR(lr.start_date, 'YYYY-MM-DD') AS "startDate",
+        TO_CHAR(COALESCE(lr.end_date, lr.start_date), 'YYYY-MM-DD') AS "endDate",
         lr.is_half_day AS "isHalfDay",
         lr.status,
-        lt.name AS "leaveName",
-        lt.code AS "leaveCode"
+        COALESCE(lt.name, lr.leave_type_id, 'Leave') AS "leaveName",
+        COALESCE(lt.code, 'LV') AS "leaveCode"
       FROM leave_requests lr
-      JOIN leave_types lt ON lt.id = lr.leave_type_id
+      LEFT JOIN leave_types lt ON lt.id = lr.leave_type_id
       WHERE lr.employee_id = $1
-        AND lr.status = 'APPROVED'
+        AND UPPER(lr.status) = 'APPROVED'
         AND lr.start_date <= $3::date 
-        AND lr.end_date >= $2::date;`,
+        AND COALESCE(lr.end_date, lr.start_date) >= $2::date;`,
       [targetEmpId, start, end]
     );
 
@@ -743,12 +809,12 @@ export const shiftManagementService = {
     const holidayRes = await pool.query(
       `SELECT 
         id,
-        holiday_date AS "holidayDate",
+        TO_CHAR(holiday_date, 'YYYY-MM-DD') AS "holidayDate",
         name,
         is_optional AS "isOptional"
       FROM holidays
       WHERE (org_id = $1 OR org_id IS NULL OR $1 = '')
-        AND (status = 'Active' OR status IS NULL)
+        AND (UPPER(status) = 'ACTIVE' OR status IS NULL)
         AND holiday_date >= $2::date
         AND holiday_date <= $3::date;`,
       [orgId, start, end]

@@ -16,7 +16,7 @@ export const shiftService = {
   /**
    * Get shift schedule and date-wise overrides for an employee in a date range
    */
-  async getEmployeeShifts({ employeeId, startDate, endDate, month, year } = {}) {
+  async getEmployeeShifts({ employeeId, startDate, endDate, month, year, departmentId } = {}) {
     const params = new URLSearchParams();
     if (employeeId) params.append('employeeId', employeeId);
     if (startDate) params.append('startDate', startDate);

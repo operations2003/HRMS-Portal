@@ -6,14 +6,14 @@
  * Parse time string to hour (0-23) and minute (0-59).
  * Supports: "11:00 AM", "7:00 PM", "2:00 PM", "06:08 PM", "10:00 PM", "21:00", etc.
  */
-export const parseTimeStr = (timeStr) => {
+export const parseTimeStr = (timeStr, defaultPeriod = null) => {
   if (!timeStr || typeof timeStr !== 'string') return null;
   const trimmed = timeStr.trim();
-  const match12 = trimmed.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+  const match12 = trimmed.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?/i);
   if (match12) {
     let h = parseInt(match12[1], 10);
-    const m = parseInt(match12[2], 10);
-    const period = (match12[3] || '').toUpperCase();
+    const m = match12[2] ? parseInt(match12[2], 10) : 0;
+    const period = (match12[3] || defaultPeriod || '').toUpperCase();
     if (period === 'PM' && h < 12) h += 12;
     if (period === 'AM' && h === 12) h = 0;
     return { hour: h, minute: m };
@@ -27,13 +27,13 @@ export const parseTimeStr = (timeStr) => {
 
 /**
  * Parse start hour and minute from shift timing string.
- * Supports: "03:00 PM - 08:00 PM", "1:00 AM - 7:00 PM", "11:00 AM to 07:00 PM", "2:00 PM - 08:00 PM", etc.
+ * Supports: "03:00 PM - 08:00 PM", "1:00 AM - 7:00 PM", "11:00 AM to 07:00 PM", "2:00 PM - 08:00 PM", "12 - 8 PM", etc.
  */
 export const parseShiftStartTime = (shiftTiming) => {
   if (!shiftTiming || typeof shiftTiming !== 'string') {
     return { hour: 11, minute: 0 };
   }
-  const parts = shiftTiming.split(/\s*[-–—]|\s+to\s+/i).map((s) => s.trim()).filter(Boolean);
+  const parts = shiftTiming.split(/\s*[-–—+]|\s+to\s+/i).map((s) => s.trim()).filter(Boolean);
   const startStr = parts.length > 0 ? parts[0] : shiftTiming;
   const parsed = parseTimeStr(startStr);
   return parsed || { hour: 11, minute: 0 };
@@ -56,7 +56,7 @@ export const parseShiftTiming = (shiftTiming) => {
     return defaultShift;
   }
 
-  const parts = shiftTiming.split(/\s*[-–—]|\s+to\s+/i).map((s) => s.trim()).filter(Boolean);
+  const parts = shiftTiming.split(/\s*[-–—+]|\s+to\s+/i).map((s) => s.trim()).filter(Boolean);
   if (parts.length < 2) {
     const start = parseShiftStartTime(shiftTiming);
     const endH = (start.hour + 8) % 24;
@@ -70,11 +70,19 @@ export const parseShiftTiming = (shiftTiming) => {
     };
   }
 
-  const start = parseTimeStr(parts[0]);
-  const end = parseTimeStr(parts[1]);
+  const endPeriodMatch = parts[1].match(/(AM|PM)/i);
+  const endPeriod = endPeriodMatch ? endPeriodMatch[1].toUpperCase() : null;
+
+  let start = parseTimeStr(parts[0]);
+  let end = parseTimeStr(parts[1]);
 
   if (!start || !end) {
     return defaultShift;
+  }
+
+  // If start had no AM/PM and start hour <= 6 and end period is PM, start is PM (e.g. 2 - 10 PM)
+  if (!parts[0].match(/(AM|PM)/i) && endPeriod === 'PM' && start.hour >= 1 && start.hour <= 6) {
+    start.hour += 12;
   }
 
   let startMinutes = start.hour * 60 + start.minute;

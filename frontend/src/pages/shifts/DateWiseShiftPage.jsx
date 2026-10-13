@@ -91,9 +91,10 @@ export const DateWiseShiftPage = () => {
   // View Mode: 'CALENDAR' (Schedule Overview) vs 'ADJUST' (Date-wise Shift Adjuster)
   const [viewMode, setViewMode] = useState('CALENDAR');
 
-  // Employee Selection State
-  const [employees, setEmployees] = useState([]);
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
+  // Employee Selection State: default to 'ALL' for authorized managers/HR, or empty
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState(() => {
+    return canEditShifts ? 'ALL' : '';
+  });
   const [employeeSearch, setEmployeeSearch] = useState('');
   const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
   const [employeeFilterTab, setEmployeeFilterTab] = useState('ALL'); // 'ALL' | 'CUSTOM'
@@ -101,12 +102,14 @@ export const DateWiseShiftPage = () => {
   // Shift Schedule State
   const [scheduleData, setScheduleData] = useState(null);
   const [isLoadingSchedule, setIsLoadingSchedule] = useState(false);
+  const [scheduleError, setScheduleError] = useState(null);
 
   // Date Selection State (Set of 'YYYY-MM-DD')
   const [selectedDates, setSelectedDates] = useState(new Set());
 
   // Assign Modal State
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [modalTargetEmployee, setModalTargetEmployee] = useState(null);
   const [shiftType, setShiftType] = useState('SHIFT'); // 'SHIFT' | 'WO'
   const [selectedPreset, setSelectedPreset] = useState('11:00 AM - 07:00 PM');
   const [customStartTime, setCustomStartTime] = useState('');
@@ -124,12 +127,15 @@ export const DateWiseShiftPage = () => {
   const [selectedDayDetails, setSelectedDayDetails] = useState(null);
 
   // Organization Roster Matrix State (When "All Employees" is selected)
+  const [allEmployeesViewMode, setAllEmployeesViewMode] = useState('DATE_WISE'); // 'DATE_WISE' | 'MATRIX'
   const [selectedDepartmentFilter, setSelectedDepartmentFilter] = useState('ALL');
   const [matrixSearch, setMatrixSearch] = useState('');
   const [selectedMatrixCellDetails, setSelectedMatrixCellDetails] = useState(null);
 
   // Today ISO Date string
   const todayDateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const [selectedRosterDate, setSelectedRosterDate] = useState(todayDateStr);
+  const [rosterStatusFilter, setRosterStatusFilter] = useState('ALL'); // 'ALL' | 'WORKING' | 'WO' | 'LEAVE' | 'OVERRIDE'
 
   // 1. Fetch eligible employees on mount
   const fetchEmployees = async () => {
@@ -166,6 +172,7 @@ export const DateWiseShiftPage = () => {
         defaultShiftTiming: e.shiftTiming || e.defaultShiftTiming || '11:00 AM - 07:00 PM',
         avatarUrl: e.avatarUrl || null,
         departmentName: e.departmentName || e.department?.name || '',
+        departmentId: e.departmentId || e.dept_id || '',
         designationTitle: e.designationTitle || e.designation?.title || '',
         customShiftCount: e.customShiftCount || 0,
       }));
@@ -174,8 +181,9 @@ export const DateWiseShiftPage = () => {
 
       if (formatted.length > 0) {
         setSelectedEmployeeId((prev) => {
+          if (prev === 'ALL') return 'ALL';
           if (prev && formatted.some((e) => e.id === prev)) return prev;
-          // Preselect current user's employee ID if present
+          if (canEditShifts) return 'ALL';
           const callerMatch = formatted.find((e) => e.id === user?.employeeId);
           return callerMatch ? callerMatch.id : formatted[0].id;
         });
@@ -197,6 +205,7 @@ export const DateWiseShiftPage = () => {
 
     try {
       setIsLoadingSchedule(true);
+      setScheduleError(null);
       const data = await shiftService.getEmployeeShifts({
         employeeId: selectedEmployeeId,
         month: currentMonth,
@@ -207,6 +216,8 @@ export const DateWiseShiftPage = () => {
       // Clear selected dates on month/employee switch
       setSelectedDates(new Set());
     } catch (err) {
+      console.error('[ShiftPage] fetchSchedule error:', err);
+      setScheduleError(err.message || 'Failed to retrieve monthly schedule data.');
       toast.error('Failed to retrieve monthly schedule data.');
     } finally {
       setIsLoadingSchedule(false);
@@ -216,6 +227,57 @@ export const DateWiseShiftPage = () => {
   useEffect(() => {
     fetchSchedule();
   }, [selectedEmployeeId, currentMonth, currentYear, selectedDepartmentFilter]);
+
+  // Date Navigation Handlers for Date-wise Roster
+  const handleRosterDateChange = (newDateStr) => {
+    if (!newDateStr) return;
+    setSelectedRosterDate(newDateStr);
+    const parts = newDateStr.split('-');
+    if (parts.length >= 2) {
+      const newY = parseInt(parts[0], 10);
+      const newM = parseInt(parts[1], 10);
+      if (newY && newM && (newY !== currentYear || newM !== currentMonth)) {
+        setCurrentYear(newY);
+        setCurrentMonth(newM);
+      }
+    }
+  };
+
+  const handlePrevDay = () => {
+    try {
+      const cur = new Date(`${selectedRosterDate}T00:00:00`);
+      cur.setDate(cur.getDate() - 1);
+      const dStr = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
+      handleRosterDateChange(dStr);
+    } catch {
+      handleRosterDateChange(todayDateStr);
+    }
+  };
+
+  const handleNextDay = () => {
+    try {
+      const cur = new Date(`${selectedRosterDate}T00:00:00`);
+      cur.setDate(cur.getDate() + 1);
+      const dStr = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
+      handleRosterDateChange(dStr);
+    } catch {
+      handleRosterDateChange(todayDateStr);
+    }
+  };
+
+  const handleTodayDay = () => {
+    handleRosterDateChange(todayDateStr);
+    handleTodayMonth();
+  };
+
+  const formatRosterDateHeading = (dateStr) => {
+    try {
+      const d = new Date(`${dateStr}T00:00:00`);
+      return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+    } catch {
+      return dateStr;
+    }
+  };
 
   // Is "All Employees" consolidated matrix view active?
   const isAllMode = selectedEmployeeId === 'ALL';
@@ -405,7 +467,11 @@ export const DateWiseShiftPage = () => {
     if (!scheduleData?.roster) return [];
     let list = scheduleData.roster;
     if (selectedDepartmentFilter && selectedDepartmentFilter !== 'ALL') {
-      list = list.filter((r) => r.employee.departmentName === selectedDepartmentFilter);
+      const filterLower = selectedDepartmentFilter.toLowerCase();
+      list = list.filter((r) =>
+        (r.employee.departmentName && r.employee.departmentName.toLowerCase() === filterLower) ||
+        (r.employee.departmentId && r.employee.departmentId.toLowerCase() === filterLower)
+      );
     }
     if (!matrixSearch.trim()) return list;
     const q = matrixSearch.toLowerCase();
@@ -418,6 +484,118 @@ export const DateWiseShiftPage = () => {
         r.employee.defaultShiftTiming?.toLowerCase().includes(q)
     );
   }, [scheduleData?.roster, selectedDepartmentFilter, matrixSearch]);
+
+  // Filtered rows for Date-Wise Daily Roster (All Employees for selectedRosterDate)
+  const dailyRosterRows = useMemo(() => {
+    if (!scheduleData?.roster) return [];
+    let list = scheduleData.roster.map((r) => ({
+      employee: r.employee,
+      cell: r.cells?.[selectedRosterDate] || null,
+      stats: r.stats,
+    }));
+
+    // Department filter
+    if (selectedDepartmentFilter && selectedDepartmentFilter !== 'ALL') {
+      const filterLower = selectedDepartmentFilter.toLowerCase();
+      list = list.filter(
+        (row) =>
+          (row.employee.departmentName && row.employee.departmentName.toLowerCase() === filterLower) ||
+          (row.employee.departmentId && row.employee.departmentId.toLowerCase() === filterLower)
+      );
+    }
+
+    // Status filter
+    if (rosterStatusFilter && rosterStatusFilter !== 'ALL') {
+      list = list.filter((row) => {
+        const c = row.cell;
+        if (!c) return false;
+        if (rosterStatusFilter === 'WORKING') {
+          return c.displayType === 'SHIFT' || c.displayType === 'OVERRIDE' || (!c.holiday && !c.leave && c.shiftType !== 'WO');
+        }
+        if (rosterStatusFilter === 'WO') {
+          return c.shiftType === 'WO' || c.displayType === 'WO';
+        }
+        if (rosterStatusFilter === 'LEAVE') {
+          return Boolean(c.leave || c.isHalfDay || c.displayType === 'LEAVE' || c.displayType === 'HALF_DAY');
+        }
+        if (rosterStatusFilter === 'OVERRIDE') {
+          return Boolean(c.isOverride || c.displayType === 'OVERRIDE');
+        }
+        if (rosterStatusFilter === 'HOLIDAY') {
+          return Boolean(c.holiday || c.displayType === 'HOLIDAY');
+        }
+        if (rosterStatusFilter === 'PRESENT') {
+          return c.attendance && ['PRESENT', 'LATE', 'HALF_DAY', 'ON_DUTY'].includes(c.attendance.status);
+        }
+        return true;
+      });
+    }
+
+    // Search query across name, code, dept, designation, shift
+    if (matrixSearch.trim()) {
+      const q = matrixSearch.toLowerCase();
+      list = list.filter(
+        (row) =>
+          row.employee.fullName?.toLowerCase().includes(q) ||
+          row.employee.employeeCode?.toLowerCase().includes(q) ||
+          row.employee.departmentName?.toLowerCase().includes(q) ||
+          row.employee.designationTitle?.toLowerCase().includes(q) ||
+          row.employee.defaultShiftTiming?.toLowerCase().includes(q) ||
+          row.cell?.shiftLabel?.toLowerCase().includes(q)
+      );
+    }
+
+    return list;
+  }, [scheduleData?.roster, selectedRosterDate, selectedDepartmentFilter, rosterStatusFilter, matrixSearch]);
+
+  // Daily statistics for selectedRosterDate
+  const dailyRosterStats = useMemo(() => {
+    if (!scheduleData?.roster) {
+      return { total: 0, working: 0, weeklyOff: 0, leave: 0, holiday: 0, override: 0, present: 0 };
+    }
+    let total = 0;
+    let working = 0;
+    let weeklyOff = 0;
+    let leave = 0;
+    let holiday = 0;
+    let override = 0;
+    let present = 0;
+
+    scheduleData.roster.forEach((r) => {
+      total++;
+      const cell = r.cells?.[selectedRosterDate];
+      if (!cell) return;
+      if (cell.holiday || cell.displayType === 'HOLIDAY') {
+        holiday++;
+      } else if (cell.isHalfDay || cell.leave || cell.displayType === 'LEAVE' || cell.displayType === 'HALF_DAY') {
+        leave++;
+      } else if (cell.shiftType === 'WO' || cell.displayType === 'WO') {
+        weeklyOff++;
+      } else {
+        working++;
+      }
+      if (cell.isOverride || cell.displayType === 'OVERRIDE') {
+        override++;
+      }
+      if (cell.attendance && ['PRESENT', 'LATE', 'HALF_DAY', 'ON_DUTY'].includes(cell.attendance.status)) {
+        present++;
+      }
+    });
+
+    return { total, working, weeklyOff, leave, holiday, override, present };
+  }, [scheduleData?.roster, selectedRosterDate]);
+
+  // Quick edit shift for a specific employee on a specific date
+  const handleQuickEditEmployeeShift = (emp, dateStr) => {
+    if (!canEditShifts) return;
+    if (hasRole('HR') && !hasRole('Admin') && !hasRole('SuperAdmin') && user?.employeeId === emp.id) {
+      toast.error('You cannot modify your own shift timings.');
+      return;
+    }
+    setModalTargetEmployee(emp);
+    setSelectedDates(new Set([dateStr]));
+    setIsAssignModalOpen(true);
+  };
 
   // Unique department options for filtering
   const departmentOptions = useMemo(() => {
@@ -449,12 +627,12 @@ export const DateWiseShiftPage = () => {
         if (!cell) return '-';
         if (cell.holiday) return `Holiday (${cell.holiday.name || 'Holiday'})`;
         if (cell.isHalfDay || cell.displayType === 'HALF_DAY') return 'Half Day';
-        if (cell.leave) {
-          const lCode = cell.leave.leaveCode || '';
-          const lName = cell.leave.leaveName || 'Leave';
+        if (cell.leave || cell.displayType === 'LEAVE') {
+          const lCode = cell.leave?.leaveCode || cell.cellText || '';
+          const lName = cell.leave?.leaveName || cell.cellText || 'Leave';
           return `"${lCode ? `${lCode}: ${lName}` : lName}"`;
         }
-        if (cell.shiftType === 'WO') return 'Weekly Off';
+        if (cell.shiftType === 'WO' || cell.displayType === 'WO') return 'Weekly Off';
         const shift = cell.shiftLabel || emp.defaultShiftTiming || 'Shift';
         const att = cell.attendance ? ` [Att: ${cell.attendance.status} ${cell.attendance.formattedWorkHours}]` : '';
         return `"${shift}${att}"`;
@@ -527,10 +705,16 @@ export const DateWiseShiftPage = () => {
       return;
     }
 
+    const targetEmpId = modalTargetEmployee?.id || selectedEmployeeId;
+    if (!targetEmpId || targetEmpId === 'ALL') {
+      toast.error('Please select an employee.');
+      return;
+    }
+
     try {
       setIsSaving(true);
       let payload = {
-        employeeId: selectedEmployeeId,
+        employeeId: targetEmpId,
         dates: Array.from(selectedDates),
         shiftType,
         notes: shiftNotes.trim(),
@@ -556,6 +740,7 @@ export const DateWiseShiftPage = () => {
       const res = await shiftService.assignShifts(payload);
       toast.success(res.message || 'Shift timings successfully assigned!');
       setIsAssignModalOpen(false);
+      setModalTargetEmployee(null);
       setSelectedDates(new Set());
       setShiftNotes('');
       // Refresh schedule and employees
@@ -569,7 +754,7 @@ export const DateWiseShiftPage = () => {
   };
 
   // Handle Reset Dates to Default Shift
-  const handleResetToDefault = async (datesToReset = null) => {
+  const handleResetToDefault = async (datesToReset = null, targetEmp = null) => {
     if (!canEditShifts) return;
     const targetDates = datesToReset || Array.from(selectedDates);
 
@@ -578,10 +763,16 @@ export const DateWiseShiftPage = () => {
       return;
     }
 
+    const empId = targetEmp?.id || modalTargetEmployee?.id || selectedEmployeeId;
+    if (!empId || empId === 'ALL') {
+      toast.error('Please select a specific employee to reset shifts.');
+      return;
+    }
+
     try {
       setIsSaving(true);
       const res = await shiftService.resetShifts({
-        employeeId: selectedEmployeeId,
+        employeeId: empId,
         dates: targetDates,
       });
 
@@ -1057,335 +1248,724 @@ export const DateWiseShiftPage = () => {
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs p-5 space-y-4">
         {isAllMode ? (
           /* ================================================================= */
-          /* 4A. ORGANIZATION MONTHLY ROSTER MATRIX (ROWS & COLUMNS)           */
+          /* 4A. ORGANIZATION ALL EMPLOYEES ROSTER (DUAL MODE)                 */
           /* ================================================================= */
           <div className="space-y-4">
-            {/* Top Toolbar: Month Navigation, Dept filter, Search, Export */}
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
-              <div className="flex items-center gap-2 flex-wrap">
-                <button
-                  type="button"
-                  onClick={handlePrevMonth}
-                  className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 cursor-pointer"
-                  title="Previous Month"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-                <h2 className="text-base font-bold text-slate-900 dark:text-white min-w-[170px] text-center">
-                  {monthNames[currentMonth - 1]} {currentYear}
-                </h2>
-                <button
-                  type="button"
-                  onClick={handleNextMonth}
-                  className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 cursor-pointer"
-                  title="Next Month"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleTodayMonth}
-                  className="text-xs text-brand-600 dark:text-brand-400"
-                >
-                  Today
+            {/* Error Notification Banner with Retry button */}
+            {scheduleError && (
+              <div className="p-4 rounded-xl border border-rose-200 dark:border-rose-900 bg-rose-50/70 dark:bg-rose-950/30 text-rose-800 dark:text-rose-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <AlertCircle className="w-5 h-5 text-rose-500 shrink-0" />
+                  <div>
+                    <p className="font-bold text-xs">Error loading roster schedule</p>
+                    <p className="text-[11px] text-rose-600 dark:text-rose-300">{scheduleError}</p>
+                  </div>
+                </div>
+                <Button variant="outline" size="sm" icon={RotateCcw} onClick={fetchSchedule} className="shrink-0 text-xs bg-white text-rose-700 border-rose-300 hover:bg-rose-50">
+                  Retry
                 </Button>
               </div>
+            )}
 
-              {/* Filters for Matrix View */}
-              <div className="flex items-center gap-2.5 flex-wrap">
-                {/* Department filter */}
-                <div className="flex items-center gap-1.5">
-                  <Building className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <select
-                    value={selectedDepartmentFilter}
-                    onChange={(e) => setSelectedDepartmentFilter(e.target.value)}
-                    className="text-xs py-1.5 px-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-brand-500 font-medium cursor-pointer"
-                  >
-                    <option value="ALL">All Departments ({employees.length})</option>
-                    {departmentOptions.map((dept) => (
-                      <option key={dept} value={dept}>
-                        {dept}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Search in Rows */}
-                <div className="relative min-w-[190px]">
-                  <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
-                  <input
-                    type="text"
-                    value={matrixSearch}
-                    onChange={(e) => setMatrixSearch(e.target.value)}
-                    placeholder="Filter employee rows..."
-                    className="w-full text-xs pl-8 pr-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                  />
-                </div>
-
-                <Badge variant="neutral" size="sm">
-                  {filteredRosterRows.length} Rows
-                </Badge>
+            {/* View Mode Toggle: Date-Wise Daily Roster vs Monthly Matrix Grid */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-1.5 p-1 bg-slate-100/90 dark:bg-slate-800/90 rounded-xl w-fit">
+                <button
+                  type="button"
+                  onClick={() => setAllEmployeesViewMode('DATE_WISE')}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    allEmployeesViewMode === 'DATE_WISE'
+                      ? 'bg-white dark:bg-slate-700 text-brand-600 dark:text-brand-400 shadow-2xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  }`}
+                >
+                  <CalendarDays className="w-3.5 h-3.5" />
+                  <span>Date-Wise Daily Roster</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAllEmployeesViewMode('MATRIX')}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    allEmployeesViewMode === 'MATRIX'
+                      ? 'bg-white dark:bg-slate-700 text-brand-600 dark:text-brand-400 shadow-2xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  }`}
+                >
+                  <Grid className="w-3.5 h-3.5" />
+                  <span>Monthly Matrix Grid (31 Days)</span>
+                </button>
               </div>
-            </div>
 
-            {/* Legend for Matrix */}
-            <div className="flex items-center gap-3.5 text-xs text-slate-500 dark:text-slate-400 flex-wrap p-2.5 bg-slate-50/60 dark:bg-slate-850 rounded-xl border border-slate-200/60 dark:border-slate-800">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-1">Roster Legend:</span>
-              <div className="flex items-center gap-1.5">
-                <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200/60">11-7</span>
-                <span>Full Day Shift</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-300 shadow-2xs">
-                  <Sparkles className="w-2.5 h-2.5" /> 10-6
+              <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                <Users className="w-4 h-4 text-brand-500" />
+                <span>
+                  Authorized Employees: <strong>{employees.length}</strong>
                 </span>
-                <span>Shift Override</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 shadow-2xs">Half Day</span>
-                <span>Half Day</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300 border border-orange-200">PL</span>
-                <span>Planned Leave</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold bg-yellow-100 text-yellow-800 dark:bg-yellow-950/60 dark:text-yellow-300 border border-yellow-200">CL</span>
-                <span>Casual Leave</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">WO</span>
-                <span>Weekly Off</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200">Holiday</span>
-                <span>Holiday</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
-                <span>Punch Logged</span>
               </div>
             </div>
 
-            {/* Matrix Table */}
+            {/* Loading Indicator */}
             {isLoadingSchedule ? (
-              <div className="p-16 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
-                <LoadingSpinner size="md" /> Loading organization roster matrix...
+              <div className="p-16 text-center text-xs text-slate-400 flex flex-col items-center justify-center gap-3">
+                <LoadingSpinner size="lg" />
+                <span className="font-semibold text-slate-600 dark:text-slate-300">
+                  Loading complete employee roster data from database...
+                </span>
               </div>
-            ) : filteredRosterRows.length === 0 ? (
-              <div className="p-12 text-center text-xs text-slate-400 space-y-2">
-                <Users className="w-8 h-8 mx-auto text-slate-300" />
-                <p className="font-semibold text-slate-600 dark:text-slate-300">No employee roster records found for the selected filter.</p>
-                <Button variant="ghost" size="sm" onClick={() => { setSelectedDepartmentFilter('ALL'); setMatrixSearch(''); }}>
-                  Reset Filters
-                </Button>
-              </div>
-            ) : (
-              <div className="overflow-x-auto rounded-xl border border-slate-200/90 dark:border-slate-800 shadow-2xs max-w-full">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="bg-slate-100/95 dark:bg-slate-800/95 border-b border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold select-none">
-                      {/* Sticky 1: Employee */}
-                      <th className="sticky left-0 z-30 bg-slate-100 dark:bg-slate-800 p-2.5 min-w-[210px] border-r border-slate-200 dark:border-slate-700 shadow-xs">
-                        Employee
-                      </th>
-                      {/* Sticky 2: Default Shift */}
-                      <th className="sticky left-[210px] z-30 bg-slate-100 dark:bg-slate-800 p-2.5 min-w-[130px] border-r border-slate-200 dark:border-slate-700 shadow-xs">
-                        Default Shift
-                      </th>
-                      {/* Days columns 1..N */}
-                      {scheduleData?.days?.map((day) => (
-                        <th
-                          key={day.dateKey}
-                          className={`p-1.5 text-center min-w-[62px] border-r border-slate-200/60 dark:border-slate-700/60 ${
-                            day.isWeekend ? 'bg-slate-200/50 dark:bg-slate-800/50 text-rose-500' : ''
-                          }`}
-                        >
-                          <div className="text-[10px] uppercase font-bold text-slate-400">
-                            {day.dayName}
-                          </div>
-                          <div className={`text-xs font-bold inline-block px-1.5 py-0.2 rounded ${
-                            day.dateKey === todayDateStr ? 'bg-brand-600 text-white shadow-2xs' : ''
-                          }`}>
-                            {String(day.dayNumber).padStart(2, '0')}
-                          </div>
-                          {day.holiday && (
-                            <div className="text-[9px] text-rose-500 font-semibold truncate" title={day.holiday.name}>
-                              🎉
-                            </div>
-                          )}
-                        </th>
-                      ))}
-                      {/* Right summary totals */}
-                      <th className="p-2 text-center min-w-[50px] bg-slate-50 dark:bg-slate-850 border-r border-slate-200 dark:border-slate-700" title="Scheduled Days">
-                        Sched
-                      </th>
-                      <th className="p-2 text-center min-w-[50px] bg-emerald-50/50 dark:bg-emerald-950/20 border-r border-slate-200 dark:border-slate-700 text-emerald-700 dark:text-emerald-400" title="Present / Logged Days">
-                        Att
-                      </th>
-                      <th className="p-2 text-center min-w-[50px] bg-amber-50/50 dark:bg-amber-950/20 border-r border-slate-200 dark:border-slate-700 text-amber-700 dark:text-amber-400" title="Half Days">
-                        HD
-                      </th>
-                      <th className="p-2 text-center min-w-[65px] bg-indigo-50/50 dark:bg-indigo-950/20 border-r border-slate-200 dark:border-slate-700 text-indigo-700 dark:text-indigo-400" title="Custom Shift Overrides">
-                        Overrides
-                      </th>
-                      <th className="p-2 text-center min-w-[50px] bg-orange-50/50 dark:bg-orange-950/20 border-r border-slate-200 dark:border-slate-700 text-orange-700 dark:text-orange-400" title="Approved Leaves">
-                        Leave
-                      </th>
-                      <th className="p-2 text-center min-w-[50px] bg-slate-50 dark:bg-slate-850 border-r border-slate-200 dark:border-slate-700" title="Weekly Offs">
-                        Off
-                      </th>
-                      <th className="p-2 text-center min-w-[75px] bg-slate-100 dark:bg-slate-800" title="Total Actual Hours Worked">
-                        Work Hrs
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
-                    {filteredRosterRows.map((row) => (
-                      <tr key={row.employee.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
-                        {/* Sticky 1: Employee */}
-                        <td className="sticky left-0 z-20 bg-white dark:bg-slate-900 hover:bg-slate-50/90 dark:hover:bg-slate-800/90 p-2.5 border-r border-slate-200 dark:border-slate-700 shadow-xs">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedEmployeeId(row.employee.id)}
-                            className="flex items-center gap-2.5 text-left w-full cursor-pointer group"
-                            title="Click to view this employee's individual schedule calendar"
-                          >
-                            <Avatar
-                              src={row.employee.avatarUrl}
-                              name={row.employee.fullName}
-                              size="sm"
-                              shape="rounded-lg"
-                            />
-                            <div className="min-w-0">
-                              <div className="font-semibold text-slate-900 dark:text-white truncate group-hover:text-brand-600 transition-colors">
-                                {row.employee.fullName}
-                              </div>
-                              <div className="text-[10px] text-slate-400 flex items-center gap-1.5">
-                                <span className="font-mono">{row.employee.employeeCode}</span>
-                                <span>•</span>
-                                <span className="truncate">{row.employee.departmentName}</span>
-                              </div>
-                            </div>
-                          </button>
-                        </td>
+            ) : allEmployeesViewMode === 'DATE_WISE' ? (
+              /* ============================================================= */
+              /* TAB 1: DATE-WISE DAILY ROSTER TABLE                           */
+              /* ============================================================= */
+              <div className="space-y-4">
+                {/* Daily Roster Date Navigation & Filters Toolbar */}
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+                  {/* Date Controls */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={handlePrevDay}
+                      className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 cursor-pointer"
+                      title="Previous Day"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
 
-                        {/* Sticky 2: Default Shift */}
-                        <td className="sticky left-[210px] z-20 bg-white dark:bg-slate-900 hover:bg-slate-50/90 dark:hover:bg-slate-800/90 p-2.5 border-r border-slate-200 dark:border-slate-700 text-[11px] text-slate-600 dark:text-slate-300 font-medium whitespace-nowrap shadow-xs">
-                          <div className="flex items-center gap-1">
-                            <Clock className="w-3 h-3 text-brand-500 shrink-0" />
-                            <span className="truncate">{row.employee.defaultShiftTiming || '11:00 AM - 07:00 PM'}</span>
-                          </div>
-                        </td>
+                    <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                      <Calendar className="w-4 h-4 text-brand-500 shrink-0" />
+                      <input
+                        type="date"
+                        value={selectedRosterDate}
+                        onChange={(e) => handleRosterDateChange(e.target.value)}
+                        className="text-xs font-bold bg-transparent text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer"
+                      />
+                    </div>
 
-                        {/* Day Cells 1..N */}
-                        {scheduleData?.days?.map((day) => {
-                          const cell = row.cells[day.dateKey];
-                          if (!cell) {
-                            return (
-                              <td key={day.dateKey} className="p-1.5 text-center border-r border-slate-100 dark:border-slate-800/60 text-slate-300">
-                                -
-                              </td>
-                            );
-                          }
+                    <button
+                      type="button"
+                      onClick={handleNextDay}
+                      className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 cursor-pointer"
+                      title="Next Day"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
 
-                          const isOverride = cell.isOverride;
-                          const hasHoliday = Boolean(cell.holiday);
-                          const isHalfDay = Boolean(cell.isHalfDay || cell.displayType === 'HALF_DAY');
-                          const hasLeave = Boolean(cell.leave && !isHalfDay);
-                          const isWO = cell.shiftType === 'WO';
-                          const att = cell.attendance;
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleTodayDay}
+                      className="text-xs text-brand-600 dark:text-brand-400 font-bold"
+                    >
+                      Today
+                    </Button>
+
+                    <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 ml-1">
+                      {formatRosterDateHeading(selectedRosterDate)}
+                      {selectedRosterDate === todayDateStr && (
+                        <span className="ml-2 inline-block px-1.5 py-0.2 rounded text-[10px] font-bold bg-brand-100 text-brand-700 dark:bg-brand-900/60 dark:text-brand-300">
+                          Today
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Filters: Department & Search */}
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    {/* Department dropdown */}
+                    <div className="flex items-center gap-1.5">
+                      <Building className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <select
+                        value={selectedDepartmentFilter}
+                        onChange={(e) => setSelectedDepartmentFilter(e.target.value)}
+                        className="text-xs py-1.5 px-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-brand-500 font-medium cursor-pointer"
+                      >
+                        <option value="ALL">All Departments ({employees.length})</option>
+                        {departmentOptions.map((dept) => (
+                          <option key={dept} value={dept}>
+                            {dept}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Search */}
+                    <div className="relative min-w-[200px]">
+                      <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
+                      <input
+                        type="text"
+                        value={matrixSearch}
+                        onChange={(e) => setMatrixSearch(e.target.value)}
+                        placeholder="Search employee, dept, shift..."
+                        className="w-full text-xs pl-8 pr-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Status KPI Filter Pills Strip */}
+                <div className="flex items-center gap-2 flex-wrap text-xs">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-1">Status Filter:</span>
+                  {[
+                    { key: 'ALL', label: 'All', count: dailyRosterStats.total },
+                    { key: 'WORKING', label: 'Working Shift', count: dailyRosterStats.working },
+                    { key: 'WO', label: 'Weekly Off', count: dailyRosterStats.weeklyOff },
+                    { key: 'LEAVE', label: 'Leave / Half Day', count: dailyRosterStats.leave },
+                    { key: 'OVERRIDE', label: 'Shift Overrides', count: dailyRosterStats.override },
+                    { key: 'PRESENT', label: 'Punched In', count: dailyRosterStats.present },
+                  ].map((filterTab) => {
+                    const isActive = rosterStatusFilter === filterTab.key;
+                    return (
+                      <button
+                        key={filterTab.key}
+                        type="button"
+                        onClick={() => setRosterStatusFilter(filterTab.key)}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold transition-all cursor-pointer border ${
+                          isActive
+                            ? 'bg-brand-50 dark:bg-brand-950/50 border-brand-400 text-brand-700 dark:text-brand-300 shadow-2xs'
+                            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span>{filterTab.label}</span>
+                        <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                          isActive ? 'bg-brand-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
+                        }`}>
+                          {filterTab.count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Date-Wise Table */}
+                {dailyRosterRows.length === 0 ? (
+                  <div className="p-12 text-center text-xs text-slate-400 space-y-2">
+                    <Users className="w-8 h-8 mx-auto text-slate-300" />
+                    <p className="font-semibold text-slate-600 dark:text-slate-300">
+                      No employee records found for the selected date or filter.
+                    </p>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedDepartmentFilter('ALL');
+                        setRosterStatusFilter('ALL');
+                        setMatrixSearch('');
+                      }}
+                    >
+                      Reset Filters
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-xl border border-slate-200/90 dark:border-slate-800 shadow-2xs max-w-full">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-slate-100/95 dark:bg-slate-800/95 border-b border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold select-none">
+                          <th className="p-3 min-w-[220px]">Employee</th>
+                          <th className="p-3 min-w-[130px]">Department</th>
+                          <th className="p-3 min-w-[110px]">Assigned Date</th>
+                          <th className="p-3 min-w-[160px]">Assigned Shift Timing</th>
+                          <th className="p-3 min-w-[140px]">Assignment Status</th>
+                          <th className="p-3 min-w-[210px]">Attendance & Punches</th>
+                          <th className="p-3 text-right min-w-[130px]">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
+                        {dailyRosterRows.map(({ employee: emp, cell }) => {
+                          const hasHoliday = Boolean(cell?.holiday || cell?.displayType === 'HOLIDAY');
+                          const isHalfDay = Boolean(cell?.isHalfDay || cell?.displayType === 'HALF_DAY');
+                          const hasLeave = Boolean((cell?.leave || cell?.displayType === 'LEAVE') && !isHalfDay);
+                          const isWO = Boolean(cell?.shiftType === 'WO' || cell?.displayType === 'WO');
+                          const isOverride = Boolean(cell?.isOverride || cell?.displayType === 'OVERRIDE');
+                          const att = cell?.attendance;
 
                           return (
-                            <td
-                              key={day.dateKey}
-                              onClick={() => setSelectedMatrixCellDetails({ employee: row.employee, dateKey: day.dateKey, cell })}
-                              className={`p-1.5 text-center border-r border-slate-100 dark:border-slate-800/60 cursor-pointer transition-all hover:bg-brand-50/50 dark:hover:bg-brand-950/30 ${
-                                day.isWeekend ? 'bg-slate-50/40 dark:bg-slate-850/40' : ''
-                              }`}
-                              title={`${row.employee.fullName} | ${day.dateKey}\n${isHalfDay ? 'Half Day' : cell.shiftLabel}${isOverride ? ' (✨ Override)' : ''}${cell.leave ? `\nLeave: ${cell.leave.leaveName || cell.leave.leaveCode}` : ''}${att ? `\nAtt: ${att.status} (${att.formattedWorkHours})` : ''}`}
-                            >
-                              <div className="flex flex-col items-center justify-center gap-0.5 min-h-[36px]">
-                                {hasHoliday ? (
-                                  <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200">
-                                    Holiday
-                                  </span>
-                                ) : isHalfDay ? (
-                                  <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 shadow-2xs">
-                                    Half Day
-                                  </span>
-                                ) : hasLeave ? (
-                                  <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300 border border-orange-200">
-                                    {cell.leave.leaveCode || 'Leave'}
-                                  </span>
-                                ) : isWO ? (
-                                  <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-                                    WO
-                                  </span>
-                                ) : isOverride ? (
-                                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-700 shadow-2xs">
-                                    <Sparkles className="w-2.5 h-2.5" />
-                                    {cell.shortLabel}
-                                  </span>
-                                ) : (
-                                  <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200/60">
-                                    {cell.shortLabel}
-                                  </span>
-                                )}
+                            <tr key={emp.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
+                              {/* Employee */}
+                              <td className="p-3">
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedEmployeeId(emp.id)}
+                                  className="flex items-center gap-2.5 text-left w-full cursor-pointer group"
+                                  title="Click to view this employee's individual schedule calendar"
+                                >
+                                  <Avatar
+                                    src={emp.avatarUrl}
+                                    name={emp.fullName}
+                                    size="sm"
+                                    shape="rounded-lg"
+                                  />
+                                  <div className="min-w-0">
+                                    <div className="font-semibold text-slate-900 dark:text-white truncate group-hover:text-brand-600 transition-colors">
+                                      {emp.fullName}
+                                    </div>
+                                    <div className="text-[10px] text-slate-400 flex items-center gap-1.5">
+                                      <span className="font-mono font-medium">{emp.employeeCode}</span>
+                                      <span>•</span>
+                                      <span className="truncate">{emp.designationTitle || 'Staff'}</span>
+                                    </div>
+                                  </div>
+                                </button>
+                              </td>
 
-                                {/* Attendance status dot and hours */}
-                                {att && (
-                                  <div className="flex items-center gap-1 text-[9px] font-mono leading-none">
-                                    <span
-                                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                                        att.status === 'PRESENT'
-                                          ? 'bg-emerald-500'
-                                          : att.status === 'HALF_DAY'
-                                          ? 'bg-orange-500'
-                                          : att.status === 'LATE'
-                                          ? 'bg-amber-500'
-                                          : 'bg-rose-500'
-                                      }`}
-                                    />
-                                    {att.workMinutes > 0 && (
-                                      <span className="text-[9px] text-slate-500 dark:text-slate-400">
-                                        {Math.round(att.workMinutes / 60)}h
-                                      </span>
-                                    )}
+                              {/* Department */}
+                              <td className="p-3 text-slate-600 dark:text-slate-300">
+                                <span className="inline-block px-2 py-0.5 rounded-lg text-[11px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                                  {emp.departmentName || 'General'}
+                                </span>
+                              </td>
+
+                              {/* Assigned Date */}
+                              <td className="p-3 text-slate-600 dark:text-slate-300 font-mono text-[11px]">
+                                {selectedRosterDate}
+                              </td>
+
+                              {/* Assigned Shift Timing */}
+                              <td className="p-3 font-medium">
+                                {hasHoliday ? (
+                                  <div className="flex items-center gap-1.5 text-rose-600 dark:text-rose-400">
+                                    <Sun className="w-3.5 h-3.5" />
+                                    <span>{cell?.holiday?.name || 'Company Holiday'}</span>
+                                  </div>
+                                ) : isWO ? (
+                                  <div className="flex items-center gap-1.5 text-slate-500">
+                                    <CalendarDays className="w-3.5 h-3.5" />
+                                    <span>Weekly Off (WO)</span>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-1.5 text-slate-800 dark:text-slate-200">
+                                    <Clock className="w-3.5 h-3.5 text-brand-500 shrink-0" />
+                                    <span className="font-semibold">{cell?.shiftLabel || emp.defaultShiftTiming || '11:00 AM - 07:00 PM'}</span>
                                   </div>
                                 )}
-                              </div>
-                            </td>
+                              </td>
+
+                              {/* Assignment Status Badge */}
+                              <td className="p-3">
+                                {hasHoliday ? (
+                                  <span className="inline-block px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200">
+                                    🎉 Holiday
+                                  </span>
+                                ) : isHalfDay ? (
+                                  <span className="inline-block px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 shadow-2xs">
+                                    🌗 Half Day
+                                  </span>
+                                ) : hasLeave ? (
+                                  <span className="inline-block px-2 py-0.5 rounded-md text-[10px] font-bold bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300 border border-orange-200">
+                                    🏖️ Leave ({cell?.leave?.leaveCode || cell?.cellText || 'Leave'})
+                                  </span>
+                                ) : isWO ? (
+                                  <span className="inline-block px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                                    🛋️ Weekly Off
+                                  </span>
+                                ) : isOverride ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-700 shadow-2xs">
+                                    <Sparkles className="w-3 h-3" />
+                                    ✨ Override
+                                  </span>
+                                ) : (
+                                  <span className="inline-block px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200/60">
+                                    Normal Shift
+                                  </span>
+                                )}
+                              </td>
+
+                              {/* Attendance Punches & Hours */}
+                              <td className="p-3">
+                                {att ? (
+                                  <div className="space-y-1">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span
+                                        className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                                          att.status === 'PRESENT'
+                                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
+                                            : att.status === 'HALF_DAY'
+                                            ? 'bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-300'
+                                            : att.status === 'LATE'
+                                            ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950/60 dark:text-yellow-300'
+                                            : 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'
+                                        }`}
+                                      >
+                                        {att.status}
+                                      </span>
+                                      {att.isOnBreak && (
+                                        <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 animate-pulse">
+                                          ☕ On Break
+                                        </span>
+                                      )}
+                                      <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                                        {att.formattedWorkHours}
+                                      </span>
+                                    </div>
+                                    <div className="text-[10px] text-slate-400">
+                                      In: {formatTime12h(att.checkIn) || '-'} • Out: {formatTime12h(att.checkOut) || 'Active / None'}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <span className="text-slate-400 text-[11px] italic">
+                                    No punch recorded
+                                  </span>
+                                )}
+                              </td>
+
+                              {/* Actions */}
+                              <td className="p-3 text-right">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  {canEditShifts && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleQuickEditEmployeeShift(emp, selectedRosterDate)}
+                                      className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors"
+                                      title="Edit shift for this date"
+                                    >
+                                      <Edit3 className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelectedEmployeeId(emp.id)}
+                                    className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-brand-600 dark:text-brand-400 transition-colors"
+                                    title="View individual monthly schedule calendar"
+                                  >
+                                    <Calendar className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
                           );
                         })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* ============================================================= */
+              /* TAB 2: ORGANIZATION MONTHLY ROSTER MATRIX (ROWS & COLUMNS)    */
+              /* ============================================================= */
+              <div className="space-y-4">
+                {/* Top Toolbar: Month Navigation, Dept filter, Search, Export */}
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={handlePrevMonth}
+                      className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 cursor-pointer"
+                      title="Previous Month"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <h2 className="text-base font-bold text-slate-900 dark:text-white min-w-[170px] text-center">
+                      {monthNames[currentMonth - 1]} {currentYear}
+                    </h2>
+                    <button
+                      type="button"
+                      onClick={handleNextMonth}
+                      className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 cursor-pointer"
+                      title="Next Month"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleTodayMonth}
+                      className="text-xs text-brand-600 dark:text-brand-400"
+                    >
+                      Today
+                    </Button>
+                  </div>
 
-                        {/* Right Summary Columns */}
-                        <td className="p-2 text-center text-xs font-semibold text-slate-700 dark:text-slate-300 bg-slate-50/50 dark:bg-slate-850/50 border-r border-slate-200 dark:border-slate-700">
-                          {row.stats.scheduledDays}
-                        </td>
-                        <td className="p-2 text-center text-xs font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50/30 dark:bg-emerald-950/10 border-r border-slate-200 dark:border-slate-700">
-                          {row.stats.presentDays}
-                        </td>
-                        <td className="p-2 text-center text-xs font-bold text-amber-700 dark:text-amber-400 bg-amber-50/30 dark:bg-amber-950/10 border-r border-slate-200 dark:border-slate-700">
-                          {row.stats.halfDays || 0}
-                        </td>
-                        <td className="p-2 text-center text-xs font-bold text-indigo-700 dark:text-indigo-400 bg-indigo-50/30 dark:bg-indigo-950/10 border-r border-slate-200 dark:border-slate-700">
-                          {row.stats.overridesCount > 0 ? `✨ ${row.stats.overridesCount}` : '0'}
-                        </td>
-                        <td className="p-2 text-center text-xs font-semibold text-orange-700 dark:text-orange-400 bg-orange-50/30 dark:bg-orange-950/10 border-r border-slate-200 dark:border-slate-700">
-                          {row.stats.leavesDays}
-                        </td>
-                        <td className="p-2 text-center text-xs font-semibold text-slate-600 dark:text-slate-400 bg-slate-50/50 dark:bg-slate-850/50 border-r border-slate-200 dark:border-slate-700">
-                          {row.stats.weeklyOffsCount}
-                        </td>
-                        <td className="p-2 text-center text-xs font-bold text-slate-900 dark:text-white bg-slate-100/50 dark:bg-slate-800/50 whitespace-nowrap">
-                          {row.stats.totalWorkHoursFormatted}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                  {/* Filters for Matrix View */}
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    {/* Department filter */}
+                    <div className="flex items-center gap-1.5">
+                      <Building className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <select
+                        value={selectedDepartmentFilter}
+                        onChange={(e) => setSelectedDepartmentFilter(e.target.value)}
+                        className="text-xs py-1.5 px-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-brand-500 font-medium cursor-pointer"
+                      >
+                        <option value="ALL">All Departments ({employees.length})</option>
+                        {departmentOptions.map((dept) => (
+                          <option key={dept} value={dept}>
+                            {dept}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Search in Rows */}
+                    <div className="relative min-w-[190px]">
+                      <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
+                      <input
+                        type="text"
+                        value={matrixSearch}
+                        onChange={(e) => setMatrixSearch(e.target.value)}
+                        placeholder="Filter employee rows..."
+                        className="w-full text-xs pl-8 pr-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                      />
+                    </div>
+
+                    <Badge variant="neutral" size="sm">
+                      {filteredRosterRows.length} Rows
+                    </Badge>
+                  </div>
+                </div>
+
+                {/* Legend for Matrix */}
+                <div className="flex items-center gap-3.5 text-xs text-slate-500 dark:text-slate-400 flex-wrap p-2.5 bg-slate-50/60 dark:bg-slate-850 rounded-xl border border-slate-200/60 dark:border-slate-800">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-1">Roster Legend:</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200/60">11-7</span>
+                    <span>Full Day Shift</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-300 shadow-2xs">
+                      <Sparkles className="w-2.5 h-2.5" /> 10-6
+                    </span>
+                    <span>Shift Override</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 shadow-2xs">Half Day</span>
+                    <span>Half Day</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300 border border-orange-200">PL</span>
+                    <span>Planned Leave</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold bg-yellow-100 text-yellow-800 dark:bg-yellow-950/60 dark:text-yellow-300 border border-yellow-200">CL</span>
+                    <span>Casual Leave</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">WO</span>
+                    <span>Weekly Off</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200">Holiday</span>
+                    <span>Holiday</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+                    <span>Punch Logged</span>
+                  </div>
+                </div>
+
+                {/* Matrix Table */}
+                {filteredRosterRows.length === 0 ? (
+                  <div className="p-12 text-center text-xs text-slate-400 space-y-2">
+                    <Users className="w-8 h-8 mx-auto text-slate-300" />
+                    <p className="font-semibold text-slate-600 dark:text-slate-300">No employee roster records found for the selected filter.</p>
+                    <Button variant="ghost" size="sm" onClick={() => { setSelectedDepartmentFilter('ALL'); setMatrixSearch(''); }}>
+                      Reset Filters
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-xl border border-slate-200/90 dark:border-slate-800 shadow-2xs max-w-full">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-slate-100/95 dark:bg-slate-800/95 border-b border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold select-none">
+                          {/* Sticky 1: Employee Column */}
+                          <th className="sticky left-0 z-30 bg-slate-100 dark:bg-slate-800 p-2.5 w-[220px] min-w-[220px] max-w-[220px] border-r border-slate-200 dark:border-slate-700 shadow-xs">
+                            Employee
+                          </th>
+                          {/* Non-sticky 2: Default Shift */}
+                          <th className="p-2.5 min-w-[140px] border-r border-slate-200 dark:border-slate-700">
+                            Default Shift
+                          </th>
+                          {/* Days columns 1..N */}
+                          {scheduleData?.days?.map((day) => (
+                            <th
+                              key={day.dateKey}
+                              className={`p-1.5 text-center min-w-[62px] border-r border-slate-200/60 dark:border-slate-700/60 ${
+                                day.isWeekend ? 'bg-slate-200/50 dark:bg-slate-800/50 text-rose-500' : ''
+                              }`}
+                            >
+                              <div className="text-[10px] uppercase font-bold text-slate-400">
+                                {day.dayName}
+                              </div>
+                              <div className={`text-xs font-bold inline-block px-1.5 py-0.2 rounded ${
+                                day.dateKey === todayDateStr ? 'bg-brand-600 text-white shadow-2xs' : ''
+                              }`}>
+                                {String(day.dayNumber).padStart(2, '0')}
+                              </div>
+                              {day.holiday && (
+                                <div className="text-[9px] text-rose-500 font-semibold truncate" title={day.holiday.name}>
+                                  🎉
+                                </div>
+                              )}
+                            </th>
+                          ))}
+                          {/* Right summary totals */}
+                          <th className="p-2 text-center min-w-[50px] bg-slate-50 dark:bg-slate-850 border-r border-slate-200 dark:border-slate-700" title="Scheduled Days">
+                            Sched
+                          </th>
+                          <th className="p-2 text-center min-w-[50px] bg-emerald-50/50 dark:bg-emerald-950/20 border-r border-slate-200 dark:border-slate-700 text-emerald-700 dark:text-emerald-400" title="Present / Logged Days">
+                            Att
+                          </th>
+                          <th className="p-2 text-center min-w-[50px] bg-amber-50/50 dark:bg-amber-950/20 border-r border-slate-200 dark:border-slate-700 text-amber-700 dark:text-amber-400" title="Half Days">
+                            HD
+                          </th>
+                          <th className="p-2 text-center min-w-[65px] bg-indigo-50/50 dark:bg-indigo-950/20 border-r border-slate-200 dark:border-slate-700 text-indigo-700 dark:text-indigo-400" title="Custom Shift Overrides">
+                            Overrides
+                          </th>
+                          <th className="p-2 text-center min-w-[50px] bg-orange-50/50 dark:bg-orange-950/20 border-r border-slate-200 dark:border-slate-700 text-orange-700 dark:text-orange-400" title="Approved Leaves">
+                            Leave
+                          </th>
+                          <th className="p-2 text-center min-w-[50px] bg-slate-50 dark:bg-slate-850 border-r border-slate-200 dark:border-slate-700" title="Weekly Offs">
+                            Off
+                          </th>
+                          <th className="p-2 text-center min-w-[75px] bg-slate-100 dark:bg-slate-800" title="Total Actual Hours Worked">
+                            Work Hrs
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
+                        {filteredRosterRows.map((row) => (
+                          <tr key={row.employee.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
+                            {/* Sticky 1: Employee */}
+                            <td className="sticky left-0 z-20 bg-white dark:bg-slate-900 hover:bg-slate-50/90 dark:hover:bg-slate-800/90 p-2.5 w-[220px] min-w-[220px] max-w-[220px] border-r border-slate-200 dark:border-slate-700 shadow-xs">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedEmployeeId(row.employee.id)}
+                                className="flex items-center gap-2.5 text-left w-full cursor-pointer group"
+                                title="Click to view this employee's individual schedule calendar"
+                              >
+                                <Avatar
+                                  src={row.employee.avatarUrl}
+                                  name={row.employee.fullName}
+                                  size="sm"
+                                  shape="rounded-lg"
+                                />
+                                <div className="min-w-0">
+                                  <div className="font-semibold text-slate-900 dark:text-white truncate group-hover:text-brand-600 transition-colors">
+                                    {row.employee.fullName}
+                                  </div>
+                                  <div className="text-[10px] text-slate-400 flex items-center gap-1.5">
+                                    <span className="font-mono font-medium">{row.employee.employeeCode}</span>
+                                    <span>•</span>
+                                    <span className="truncate">{row.employee.departmentName}</span>
+                                  </div>
+                                </div>
+                              </button>
+                            </td>
+
+                            {/* Non-sticky 2: Default Shift */}
+                            <td className="p-2.5 border-r border-slate-200 dark:border-slate-700 text-[11px] text-slate-600 dark:text-slate-300 font-medium whitespace-nowrap">
+                              <div className="flex items-center gap-1">
+                                <Clock className="w-3 h-3 text-brand-500 shrink-0" />
+                                <span className="truncate">{row.employee.defaultShiftTiming || '11:00 AM - 07:00 PM'}</span>
+                              </div>
+                            </td>
+
+                            {/* Day Cells 1..N */}
+                            {scheduleData?.days?.map((day) => {
+                              const cell = row.cells[day.dateKey];
+                              if (!cell) {
+                                return (
+                                  <td key={day.dateKey} className="p-1.5 text-center border-r border-slate-100 dark:border-slate-800/60 text-slate-300">
+                                    -
+                                  </td>
+                                );
+                              }
+
+                              const isOverride = Boolean(cell.isOverride || cell.displayType === 'OVERRIDE');
+                              const hasHoliday = Boolean(cell.holiday || cell.displayType === 'HOLIDAY');
+                              const isHalfDay = Boolean(cell.isHalfDay || cell.displayType === 'HALF_DAY');
+                              const hasLeave = Boolean((cell.leave || cell.displayType === 'LEAVE') && !isHalfDay);
+                              const isWO = Boolean(cell.shiftType === 'WO' || cell.displayType === 'WO');
+                              const att = cell.attendance;
+
+                              return (
+                                <td
+                                  key={day.dateKey}
+                                  onClick={() => setSelectedMatrixCellDetails({ employee: row.employee, dateKey: day.dateKey, cell })}
+                                  className={`p-1.5 text-center border-r border-slate-100 dark:border-slate-800/60 cursor-pointer transition-all hover:bg-brand-50/50 dark:hover:bg-brand-950/30 ${
+                                    day.isWeekend ? 'bg-slate-50/40 dark:bg-slate-850/40' : ''
+                                  }`}
+                                  title={`${row.employee.fullName} | ${day.dateKey}\n${isHalfDay ? 'Half Day' : hasHoliday ? `Holiday (${cell.holiday?.name || 'Holiday'})` : hasLeave ? `Leave (${cell.leave?.leaveName || cell.cellText || 'Leave'})` : isWO ? 'Weekly Off' : cell.shiftLabel}${isOverride ? ' (✨ Override)' : ''}${att ? `\nAtt: ${att.status} (${att.formattedWorkHours})` : ''}`}
+                                >
+                                  <div className="flex flex-col items-center justify-center gap-0.5 min-h-[36px]">
+                                    {hasHoliday ? (
+                                      <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200">
+                                        Holiday
+                                      </span>
+                                    ) : isHalfDay ? (
+                                      <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 shadow-2xs">
+                                        Half Day
+                                      </span>
+                                    ) : hasLeave ? (
+                                      <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300 border border-orange-200">
+                                        {cell.leave?.leaveCode || cell.cellText || 'Leave'}
+                                      </span>
+                                    ) : isWO ? (
+                                      <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                                        WO
+                                      </span>
+                                    ) : isOverride ? (
+                                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-700 shadow-2xs">
+                                        <Sparkles className="w-2.5 h-2.5" />
+                                        {cell.shortLabel}
+                                      </span>
+                                    ) : (
+                                      <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200/60">
+                                        {cell.shortLabel}
+                                      </span>
+                                    )}
+
+                                    {/* Attendance status dot and hours */}
+                                    {att && (
+                                      <div className="flex items-center gap-1 text-[9px] font-mono leading-none">
+                                        <span
+                                          className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                            att.status === 'PRESENT'
+                                              ? 'bg-emerald-500'
+                                              : att.status === 'HALF_DAY'
+                                              ? 'bg-orange-500'
+                                              : att.status === 'LATE'
+                                              ? 'bg-amber-500'
+                                              : 'bg-rose-500'
+                                          }`}
+                                        />
+                                        {att.workMinutes > 0 && (
+                                          <span className="text-[9px] text-slate-500 dark:text-slate-400">
+                                            {Math.round(att.workMinutes / 60)}h
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                              );
+                            })}
+
+                            {/* Right Summary Columns */}
+                            <td className="p-2 text-center text-xs font-semibold text-slate-700 dark:text-slate-300 bg-slate-50/50 dark:bg-slate-850/50 border-r border-slate-200 dark:border-slate-700">
+                              {row.stats.scheduledDays}
+                            </td>
+                            <td className="p-2 text-center text-xs font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50/30 dark:bg-emerald-950/10 border-r border-slate-200 dark:border-slate-700">
+                              {row.stats.presentDays}
+                            </td>
+                            <td className="p-2 text-center text-xs font-bold text-amber-700 dark:text-amber-400 bg-amber-50/30 dark:bg-amber-950/10 border-r border-slate-200 dark:border-slate-700">
+                              {row.stats.halfDays || 0}
+                            </td>
+                            <td className="p-2 text-center text-xs font-bold text-indigo-700 dark:text-indigo-400 bg-indigo-50/30 dark:bg-indigo-950/10 border-r border-slate-200 dark:border-slate-700">
+                              {row.stats.overridesCount > 0 ? `✨ ${row.stats.overridesCount}` : '0'}
+                            </td>
+                            <td className="p-2 text-center text-xs font-semibold text-orange-700 dark:text-orange-400 bg-orange-50/30 dark:bg-orange-950/10 border-r border-slate-200 dark:border-slate-700">
+                              {row.stats.leavesDays}
+                            </td>
+                            <td className="p-2 text-center text-xs font-semibold text-slate-600 dark:text-slate-400 bg-slate-50/50 dark:bg-slate-850/50 border-r border-slate-200 dark:border-slate-700">
+                              {row.stats.weeklyOffsCount}
+                            </td>
+                            <td className="p-2 text-center text-xs font-bold text-slate-900 dark:text-white bg-slate-100/50 dark:bg-slate-800/50 whitespace-nowrap">
+                              {row.stats.totalWorkHoursFormatted}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1687,9 +2267,12 @@ export const DateWiseShiftPage = () => {
       {isAssignModalOpen && (
         <Modal
           isOpen={isAssignModalOpen}
-          onClose={() => setIsAssignModalOpen(false)}
+          onClose={() => {
+            setIsAssignModalOpen(false);
+            setModalTargetEmployee(null);
+          }}
           title="Assign / Edit Shift Timing"
-          subtitle={`Scheduling ${selectedDates.size} selected date(s) for ${activeEmployee?.fullName || 'employee'}`}
+          subtitle={`Scheduling ${selectedDates.size} selected date(s) for ${modalTargetEmployee?.fullName || activeEmployee?.fullName || 'employee'}`}
           maxWidth="max-w-xl"
         >
           <form onSubmit={handleSaveShift} className="space-y-4">
@@ -1833,7 +2416,10 @@ export const DateWiseShiftPage = () => {
                 type="button"
                 variant="secondary"
                 size="sm"
-                onClick={() => setIsAssignModalOpen(false)}
+                onClick={() => {
+                  setIsAssignModalOpen(false);
+                  setModalTargetEmployee(null);
+                }}
                 disabled={isSaving}
               >
                 Cancel
@@ -2025,18 +2611,18 @@ export const DateWiseShiftPage = () => {
             )}
 
             {/* Leave / Holiday / Half Day Info if any */}
-            {selectedMatrixCellDetails.cell.holiday && (
+            {selectedMatrixCellDetails.cell.holiday || selectedMatrixCellDetails.cell.displayType === 'HOLIDAY' ? (
               <div className="p-2.5 bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-800/40 rounded-xl text-rose-800 dark:text-rose-300 text-xs">
-                🎉 Company Holiday: <strong>{selectedMatrixCellDetails.cell.holiday.name}</strong>
+                🎉 Company Holiday: <strong>{selectedMatrixCellDetails.cell.holiday?.name || 'Company Holiday'}</strong>
               </div>
-            )}
-            {selectedMatrixCellDetails.cell.isHalfDay ? (
+            ) : null}
+            {selectedMatrixCellDetails.cell.isHalfDay || selectedMatrixCellDetails.cell.displayType === 'HALF_DAY' ? (
               <div className="p-2.5 bg-amber-50 dark:bg-amber-950/20 border border-amber-300 dark:border-amber-700/50 rounded-xl text-amber-900 dark:text-amber-200 text-xs">
-                🌗 Half Day (0.5 Day): <strong>{selectedMatrixCellDetails.cell.leave?.leaveName ? `Leave - ${selectedMatrixCellDetails.cell.leave.leaveName}` : 'Attendance Half Day'}</strong>
+                🌗 Half Day (0.5 Day): <strong>{selectedMatrixCellDetails.cell.leave?.leaveName ? `Leave - ${selectedMatrixCellDetails.cell.leave.leaveName}` : 'Half Day Shift / Attendance'}</strong>
               </div>
-            ) : selectedMatrixCellDetails.cell.leave ? (
+            ) : selectedMatrixCellDetails.cell.leave || selectedMatrixCellDetails.cell.displayType === 'LEAVE' ? (
               <div className="p-2.5 bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800/40 rounded-xl text-orange-900 dark:text-orange-200 text-xs">
-                🏖️ Approved Leave: <strong>{selectedMatrixCellDetails.cell.leave.leaveName} ({selectedMatrixCellDetails.cell.leave.leaveCode})</strong>
+                🏖️ Approved Leave: <strong>{selectedMatrixCellDetails.cell.leave?.leaveName || selectedMatrixCellDetails.cell.cellText} ({selectedMatrixCellDetails.cell.leave?.leaveCode || selectedMatrixCellDetails.cell.cellText})</strong>
               </div>
             ) : null}
 
@@ -2060,12 +2646,10 @@ export const DateWiseShiftPage = () => {
                   size="sm"
                   icon={Edit3}
                   onClick={() => {
-                    const empId = selectedMatrixCellDetails.employee.id;
+                    const emp = selectedMatrixCellDetails.employee;
                     const dateStr = selectedMatrixCellDetails.dateKey;
                     setSelectedMatrixCellDetails(null);
-                    setSelectedEmployeeId(empId);
-                    setSelectedDates(new Set([dateStr]));
-                    setIsAssignModalOpen(true);
+                    handleQuickEditEmployeeShift(emp, dateStr);
                   }}
                 >
                   Edit Shift For Date
