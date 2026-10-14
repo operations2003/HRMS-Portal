@@ -234,26 +234,40 @@ export const shiftManagementService = {
     if (/^wo\b|weekly\s*off/i.test(clean)) return 'WO';
     if (/^hd\b|half\s*day/i.test(clean)) return 'HD';
     if (/^cl\b|casual\s*leave/i.test(clean)) return 'CL';
-    if (/^pl\b|planned\s*leave/i.test(clean)) return 'PL';
+    if (/^pl\b|planned\s*leave|paid\s*leave/i.test(clean)) return 'PL';
     if (/^sl\b|sick\s*leave/i.test(clean)) return 'SL';
-    if (/^lop\b|^lwp\b|unpaid/i.test(clean)) return 'LOP';
+    if (/^lop\b|^lwp\b|unpaid/i.test(clean)) return 'UP';
+    if (/^na$/i.test(clean)) return 'NA';
 
-    const match = clean.match(/(\d{1,2})(?::\d{2})?\s*(?:am|pm)?\s*[-–—+to]+\s*(\d{1,2})(?::\d{2})?\s*(?:am|pm)?/i);
+    // Parse shift string matching PDF style: "11 - 8 PM", "12 - 6 PM", "2 - 8 PM", "5 - 11 PM", "2 - 10 PM"
+    const match = clean.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*[-–—+to]+\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
     if (match) {
       const sH = parseInt(match[1], 10);
-      const eH = parseInt(match[2], 10);
-      return `${sH}-${eH}`;
+      const sM = match[2] && match[2] !== '00' ? `:${match[2]}` : '';
+      const sAmPm = match[3] ? match[3].toUpperCase() : '';
+
+      const eH = parseInt(match[4], 10);
+      const eM = match[5] && match[5] !== '00' ? `:${match[5]}` : '';
+      const eAmPm = match[6] ? match[6].toUpperCase() : (eH <= 11 || eH === 12 ? 'PM' : '');
+
+      return `${sH}${sM} - ${eH}${eM} ${eAmPm || 'PM'}`.trim();
     }
 
     if (startTime && endTime) {
-      const sH = parseInt(String(startTime).split(':')[0], 10);
-      const eH = parseInt(String(endTime).split(':')[0], 10);
-      const s12 = sH > 12 ? sH - 12 : sH;
-      const e12 = eH > 12 ? eH - 12 : eH;
-      return `${s12}-${e12}`;
+      const sParts = String(startTime).split(':');
+      const eParts = String(endTime).split(':');
+      let sH = parseInt(sParts[0], 10);
+      let eH = parseInt(eParts[0], 10);
+      const sM = sParts[1] && sParts[1] !== '00' ? `:${sParts[1]}` : '';
+      const eM = eParts[1] && eParts[1] !== '00' ? `:${eParts[1]}` : '';
+      const sAmPm = sH >= 12 ? 'PM' : 'AM';
+      const eAmPm = eH >= 12 ? 'PM' : 'AM';
+      sH = sH > 12 ? sH - 12 : sH === 0 ? 12 : sH;
+      eH = eH > 12 ? eH - 12 : eH === 0 ? 12 : eH;
+      return `${sH}${sM} - ${eH}${eM} ${eAmPm}`;
     }
 
-    return clean.length > 8 ? clean.slice(0, 8) : clean;
+    return clean;
   },
 
   /**
@@ -264,11 +278,7 @@ export const shiftManagementService = {
     const isHrAdmin = this.isHrOrAdmin(currentUser);
     const isMgr = this.isManager(currentUser);
 
-    if (!isHrAdmin && !isMgr) {
-      const err = new Error('Access denied: Only HR, Admin, or authorized Managers can view the organization roster.');
-      err.statusCode = 403;
-      throw err;
-    }
+    // Eligible employees: HR/Admin see all, Managers see team, Staff see self
 
     const orgId = currentUser.orgId || 'org-1';
 
@@ -412,29 +422,13 @@ export const shiftManagementService = {
       [empIds, start, end]
     );
 
-    // 7. Query org holidays
-    const holidayRes = await pool.query(
-      `SELECT 
-        id,
-        TO_CHAR(holiday_date, 'YYYY-MM-DD') AS "holidayDate",
-        name,
-        is_optional AS "isOptional"
-      FROM holidays
-      WHERE (org_id = $1 OR org_id IS NULL OR $1 = '')
-        AND (UPPER(status) = 'ACTIVE' OR status IS NULL)
-        AND holiday_date >= $2::date
-        AND holiday_date <= $3::date;`,
-      [orgId, start, end]
-    );
-
-    // 8. Map lookups
+    // 7. Note: Company works on US-based calendars where leave is ONLY on Sundays.
+    // Indian public holidays are not considered.
+    const holidayRes = { rows: [] };
     const holidaysByDate = {};
-    for (const h of holidayRes.rows) {
-      holidaysByDate[h.holidayDate] = h;
-    }
 
     days.forEach((day) => {
-      day.holiday = holidaysByDate[day.dateKey] || null;
+      day.holiday = null;
     });
 
     const customShiftsByEmpAndDate = new Map();
@@ -570,13 +564,15 @@ export const shiftManagementService = {
 
         if (isSunday || isWeeklyOff) {
           weeklyOffDaysCount++;
+        } else if (isHalfDay) {
+          halfDaysCount++;
+          scheduledDaysCount += 0.5;
+        } else if (isLeave) {
+          leaveDaysCount++;
+        } else if (shortLabel === 'NA' || shiftType === 'NA') {
+          // Unassigned / inactive
         } else {
           scheduledDaysCount++;
-          if (isHalfDay) {
-            halfDaysCount++;
-          } else if (isLeave) {
-            leaveDaysCount++;
-          }
         }
 
         if (att) {
@@ -599,7 +595,10 @@ export const shiftManagementService = {
           cellText = 'Holiday';
         } else if (isHalfDay) {
           displayType = 'HALF_DAY';
-          cellText = 'Half Day';
+          cellText = 'HD';
+        } else if (shortLabel === 'NA' || shiftType === 'NA') {
+          displayType = 'NA';
+          cellText = 'NA';
         } else if (isLeave) {
           displayType = 'LEAVE';
           cellText = leave?.leaveCode || (['CL', 'PL', 'SL', 'LOP', 'LWP'].includes(shiftType) ? shiftType : 'Leave');
@@ -808,22 +807,7 @@ export const shiftManagementService = {
       [targetEmpId, start, end]
     );
 
-    // 3. Fetch org holidays in this range
-    const holidayRes = await pool.query(
-      `SELECT 
-        id,
-        TO_CHAR(holiday_date, 'YYYY-MM-DD') AS "holidayDate",
-        name,
-        is_optional AS "isOptional"
-      FROM holidays
-      WHERE (org_id = $1 OR org_id IS NULL OR $1 = '')
-        AND (UPPER(status) = 'ACTIVE' OR status IS NULL)
-        AND holiday_date >= $2::date
-        AND holiday_date <= $3::date;`,
-      [orgId, start, end]
-    );
-
-    // 4. Fetch actual attendance records in this range
+    // 3. Fetch actual attendance records in this range
     const attRes = await pool.query(
       `SELECT 
         id,
@@ -852,13 +836,9 @@ export const shiftManagementService = {
       customShiftsByDate[dStr] = s;
     }
 
+    // US-based calendar: Indian holidays are not considered (leave only on Sundays)
     const holidaysByDate = {};
-    for (const h of holidayRes.rows) {
-      const dStr = typeof h.holidayDate === 'string'
-        ? h.holidayDate.slice(0, 10)
-        : new Date(h.holidayDate).toISOString().slice(0, 10);
-      holidaysByDate[dStr] = h;
-    }
+    const holidayRes = { rows: [] };
 
     const attendanceByDate = {};
     for (const a of attRes.rows) {
