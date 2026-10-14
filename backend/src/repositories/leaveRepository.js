@@ -822,23 +822,7 @@ export const leaveRepository = {
         lt.name AS lt_name,
         lt.code AS lt_code,
         lt.is_paid AS lt_is_paid,
-        lt.gender_eligibility AS lt_gender_eligibility,
-        GREATEST(
-          COALESCE(lb.used_days, 0.0),
-          COALESCE(
-            (
-              SELECT SUM(lr.total_days)
-              FROM leave_requests lr
-              WHERE lr.employee_id = lb.employee_id
-                AND lr.leave_type_id = lb.leave_type_id
-                AND lr.status = 'APPROVED'
-                AND (
-                  EXTRACT(YEAR FROM lr.start_date) = lb.year
-                  OR lr.year = lb.year
-                )
-            ), 0.0
-          )
-        ) AS effective_used_days
+        lt.gender_eligibility AS lt_gender_eligibility
       FROM leave_balances lb
       JOIN leave_types lt ON lt.id = lb.leave_type_id
       WHERE lb.employee_id = $1 AND lb.year = $2 AND lt.status = 'Active'
@@ -1168,22 +1152,7 @@ export const leaveRepository = {
               'leaveTypeCode', lt.code,
               'isPaid', lt.is_paid,
               'allocatedDays', COALESCE(lb.allocated_days, 0)::float,
-              'usedDays', GREATEST(
-                COALESCE(lb.used_days, 0)::float,
-                COALESCE(
-                  (
-                    SELECT SUM(lr.total_days)::float
-                    FROM leave_requests lr
-                    WHERE lr.employee_id = lb.employee_id
-                      AND lr.leave_type_id = lb.leave_type_id
-                      AND lr.status = 'APPROVED'
-                      AND (
-                        EXTRACT(YEAR FROM lr.start_date) = lb.year
-                        OR lr.year = lb.year
-                      )
-                  ), 0.0
-                )
-              ),
+              'usedDays', COALESCE(lb.used_days, 0)::float,
               'pendingDays', COALESCE(lb.pending_days, 0)::float,
               'remainingDays', COALESCE(lb.remaining_days, 0)::float
             ) ORDER BY lt.name
