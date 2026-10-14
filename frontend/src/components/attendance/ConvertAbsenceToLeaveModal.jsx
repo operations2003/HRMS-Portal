@@ -236,7 +236,7 @@ export const ConvertAbsenceToLeaveModal = ({
                         >
                           {type.isPaid
                             ? `${remaining} / ${allocated} left`
-                            : 'Unrestricted'}
+                            : (used > 0 ? `${used} days consumed` : 'Unrestricted (Unpaid)')}
                         </span>
                       </div>
                     </button>

@@ -433,10 +433,10 @@ export const DateWiseShiftPage = () => {
       const holiday = scheduleData?.holidaysByDate?.[dateKey] || null;
       const approvedLeave = !isSunday
         ? (scheduleData?.approvedLeaves || []).find((l) => {
-            const start = l.startDate?.slice(0, 10);
-            const end = l.endDate?.slice(0, 10);
-            return dateKey >= start && dateKey <= end;
-          })
+          const start = l.startDate?.slice(0, 10);
+          const end = l.endDate?.slice(0, 10);
+          return dateKey >= start && dateKey <= end;
+        })
         : null;
       const attendance = scheduleData?.attendanceByDate?.[dateKey] || null;
 
@@ -931,13 +931,11 @@ export const DateWiseShiftPage = () => {
       ]);
       const types = typesRes.status === 'fulfilled' ? typesRes.value : [];
       const balances = balancesRes.status === 'fulfilled' ? balancesRes.value : [];
-      const validTypes = Array.isArray(types)
-        ? types.filter((t) => t.code?.toUpperCase() !== 'HDL' && t.name?.toLowerCase() !== 'half day')
-        : [];
+      const validTypes = Array.isArray(types) ? types : [];
       setCellLeaveTypes(validTypes);
       setCellLeaveBalances(Array.isArray(balances) ? balances : []);
       if (validTypes.length > 0) {
-        const preferred = validTypes.find((t) => t.code === 'CL') || validTypes.find((t) => ['PL', 'SL'].includes(t.code)) || validTypes[0];
+        const preferred = validTypes.find((t) => ['CL', 'PL', 'SL'].includes(t.code)) || validTypes[0];
         setSelectedCellLeaveTypeId(preferred.id);
       }
     } catch (e) {
@@ -1026,15 +1024,9 @@ export const DateWiseShiftPage = () => {
 
     try {
       setIsApplyingCellLeave(true);
-      let targetLeaveTypeId = selectedCellLeaveTypeId;
-      if (isCellHalfDay) {
-        const clType = cellLeaveTypes.find((t) => t.code === 'CL' || t.name?.toLowerCase().includes('casual'));
-        if (clType) targetLeaveTypeId = clType.id;
-      }
-
       await leaveService.applyLeave({
         employeeId: employee.id,
-        leaveTypeId: targetLeaveTypeId,
+        leaveTypeId: selectedCellLeaveTypeId,
         dates: [dateKey],
         startDate: dateKey,
         endDate: dateKey,
@@ -1043,8 +1035,8 @@ export const DateWiseShiftPage = () => {
         reason: cellLeaveReason.trim() || `Applied from Monthly Roster on ${dateKey}`,
       });
 
-      const selectedLt = cellLeaveTypes.find((t) => t.id === targetLeaveTypeId);
-      const ltName = isCellHalfDay ? 'Casual Leave (CL)' : (selectedLt?.name || selectedLt?.code || 'Leave');
+      const selectedLt = cellLeaveTypes.find((t) => t.id === selectedCellLeaveTypeId);
+      const ltName = selectedLt?.name || selectedLt?.code || 'Leave';
       const daysCount = isCellHalfDay ? '0.5 day' : '1.0 day';
       toast.success(`Leave applied successfully! Deducted ${daysCount} from ${ltName} bucket for ${employee.fullName}.`);
       setSelectedMatrixCellDetails(null);
@@ -1458,8 +1450,8 @@ export const DateWiseShiftPage = () => {
                                   att.status === 'PRESENT'
                                     ? 'bg-emerald-500'
                                     : att.status === 'HALF_DAY'
-                                    ? 'bg-amber-500'
-                                    : 'bg-indigo-500'
+                                      ? 'bg-amber-500'
+                                      : 'bg-indigo-500'
                                 )}
                                 title={'Punch: ' + att.formattedWorkHours}
                               />
@@ -1522,11 +1514,10 @@ export const DateWiseShiftPage = () => {
                 <button
                   type="button"
                   onClick={() => setShiftType('SHIFT')}
-                  className={`p-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-all ${
-                    shiftType === 'SHIFT'
-                      ? 'border-brand-500 bg-brand-50 dark:bg-brand-950/40 text-brand-700 dark:text-brand-300 shadow-xs'
-                      : 'border-slate-200 dark:border-slate-700 text-slate-600 hover:bg-slate-50'
-                  }`}
+                  className={`p-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-all ${shiftType === 'SHIFT'
+                    ? 'border-brand-500 bg-brand-50 dark:bg-brand-950/40 text-brand-700 dark:text-brand-300 shadow-xs'
+                    : 'border-slate-200 dark:border-slate-700 text-slate-600 hover:bg-slate-50'
+                    }`}
                 >
                   <Clock className="w-4 h-4" />
                   Working Shift
@@ -1534,11 +1525,10 @@ export const DateWiseShiftPage = () => {
                 <button
                   type="button"
                   onClick={() => setShiftType('WO')}
-                  className={`p-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-all ${
-                    shiftType === 'WO'
-                      ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 shadow-xs'
-                      : 'border-slate-200 dark:border-slate-700 text-slate-600 hover:bg-slate-50'
-                  }`}
+                  className={`p-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-all ${shiftType === 'WO'
+                    ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 shadow-xs'
+                    : 'border-slate-200 dark:border-slate-700 text-slate-600 hover:bg-slate-50'
+                    }`}
                 >
                   <CalendarDays className="w-4 h-4" />
                   Weekly Off (WO)
@@ -1570,11 +1560,10 @@ export const DateWiseShiftPage = () => {
                         <div
                           key={ps.label}
                           onClick={() => setSelectedPreset(ps.label)}
-                          className={`p-3 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
-                            isSelected
-                              ? 'border-brand-500 bg-brand-50/50 dark:bg-brand-950/40 text-brand-900 dark:text-brand-100 shadow-2xs font-semibold'
-                              : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 text-slate-700 dark:text-slate-300'
-                          }`}
+                          className={`p-3 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${isSelected
+                            ? 'border-brand-500 bg-brand-50/50 dark:bg-brand-950/40 text-brand-900 dark:text-brand-100 shadow-2xs font-semibold'
+                            : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 text-slate-700 dark:text-slate-300'
+                            }`}
                         >
                           <div className="flex items-center gap-2.5">
                             <Clock className={`w-4 h-4 ${isSelected ? 'text-brand-500' : 'text-slate-400'}`} />
@@ -1817,11 +1806,10 @@ export const DateWiseShiftPage = () => {
               <button
                 type="button"
                 onClick={() => setMatrixModalTab('SHIFT')}
-                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer ${
-                  matrixModalTab === 'SHIFT'
-                    ? 'border-brand-600 text-brand-600 dark:text-brand-400'
-                    : 'border-transparent text-slate-500 hover:text-slate-700'
-                }`}
+                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer ${matrixModalTab === 'SHIFT'
+                  ? 'border-brand-600 text-brand-600 dark:text-brand-400'
+                  : 'border-transparent text-slate-500 hover:text-slate-700'
+                  }`}
               >
                 <Clock className="w-3.5 h-3.5" />
                 <span>Change Shift Timing</span>
@@ -1830,11 +1818,10 @@ export const DateWiseShiftPage = () => {
               <button
                 type="button"
                 onClick={() => setMatrixModalTab('LEAVE')}
-                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer ${
-                  matrixModalTab === 'LEAVE'
-                    ? 'border-brand-600 text-brand-600 dark:text-brand-400'
-                    : 'border-transparent text-slate-500 hover:text-slate-700'
-                }`}
+                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer ${matrixModalTab === 'LEAVE'
+                  ? 'border-brand-600 text-brand-600 dark:text-brand-400'
+                  : 'border-transparent text-slate-500 hover:text-slate-700'
+                  }`}
               >
                 <Sun className="w-3.5 h-3.5" />
                 <span>Apply Leave (Bucket Deduction)</span>
@@ -1843,11 +1830,10 @@ export const DateWiseShiftPage = () => {
               <button
                 type="button"
                 onClick={() => setMatrixModalTab('ATTENDANCE')}
-                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer ${
-                  matrixModalTab === 'ATTENDANCE'
-                    ? 'border-brand-600 text-brand-600 dark:text-brand-400'
-                    : 'border-transparent text-slate-500 hover:text-slate-700'
-                }`}
+                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer ${matrixModalTab === 'ATTENDANCE'
+                  ? 'border-brand-600 text-brand-600 dark:text-brand-400'
+                  : 'border-transparent text-slate-500 hover:text-slate-700'
+                  }`}
               >
                 <Activity className="w-3.5 h-3.5" />
                 <span>Punches & Attendance</span>
@@ -1872,11 +1858,10 @@ export const DateWiseShiftPage = () => {
                         <button
                           type="button"
                           onClick={() => setCellShiftType('SHIFT')}
-                          className={`p-2 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                            cellShiftType === 'SHIFT'
-                              ? 'bg-brand-50 border-brand-500 text-brand-700 dark:bg-brand-950/50 dark:border-brand-500 dark:text-brand-300 shadow-2xs'
-                              : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50'
-                          }`}
+                          className={`p-2 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${cellShiftType === 'SHIFT'
+                            ? 'bg-brand-50 border-brand-500 text-brand-700 dark:bg-brand-950/50 dark:border-brand-500 dark:text-brand-300 shadow-2xs'
+                            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50'
+                            }`}
                         >
                           <Clock className="w-3.5 h-3.5" />
                           <span>Working Shift Timing</span>
@@ -1884,11 +1869,10 @@ export const DateWiseShiftPage = () => {
                         <button
                           type="button"
                           onClick={() => setCellShiftType('WO')}
-                          className={`p-2 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                            cellShiftType === 'WO'
-                              ? 'bg-rose-50 border-rose-500 text-rose-700 dark:bg-rose-950/50 dark:border-rose-500 dark:text-rose-300 shadow-2xs'
-                              : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50'
-                          }`}
+                          className={`p-2 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${cellShiftType === 'WO'
+                            ? 'bg-rose-50 border-rose-500 text-rose-700 dark:bg-rose-950/50 dark:border-rose-500 dark:text-rose-300 shadow-2xs'
+                            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50'
+                            }`}
                         >
                           <RotateCcw className="w-3.5 h-3.5" />
                           <span>Weekly Off (WO)</span>
@@ -1914,11 +1898,10 @@ export const DateWiseShiftPage = () => {
                                     setCellSelectedPreset(preset.label);
                                     setCellIsCustom(false);
                                   }}
-                                  className={`p-2 rounded-lg border text-left transition-all cursor-pointer ${
-                                    isSelected
-                                      ? 'bg-brand-50 border-brand-500 text-brand-900 dark:bg-brand-950/40 dark:border-brand-500 dark:text-brand-300 ring-1 ring-brand-500/30'
-                                      : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-brand-300'
-                                  }`}
+                                  className={`p-2 rounded-lg border text-left transition-all cursor-pointer ${isSelected
+                                    ? 'bg-brand-50 border-brand-500 text-brand-900 dark:bg-brand-950/40 dark:border-brand-500 dark:text-brand-300 ring-1 ring-brand-500/30'
+                                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-brand-300'
+                                    }`}
                                 >
                                   <div className="font-bold text-[11px] flex items-center justify-between">
                                     <span>{preset.label}</span>
@@ -1932,11 +1915,10 @@ export const DateWiseShiftPage = () => {
                             <button
                               type="button"
                               onClick={() => setCellIsCustom(true)}
-                              className={`p-2 rounded-lg border text-left transition-all cursor-pointer ${
-                                cellIsCustom
-                                  ? 'bg-brand-50 border-brand-500 text-brand-900 dark:bg-brand-950/40 dark:border-brand-500 dark:text-brand-300 ring-1 ring-brand-500/30'
-                                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-brand-300'
-                              }`}
+                              className={`p-2 rounded-lg border text-left transition-all cursor-pointer ${cellIsCustom
+                                ? 'bg-brand-50 border-brand-500 text-brand-900 dark:bg-brand-950/40 dark:border-brand-500 dark:text-brand-300 ring-1 ring-brand-500/30'
+                                : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-brand-300'
+                                }`}
                             >
                               <div className="font-bold text-[11px] flex items-center justify-between">
                                 <span>Custom Shift</span>
@@ -2058,23 +2040,28 @@ export const DateWiseShiftPage = () => {
                     <div className="grid grid-cols-3 gap-2">
                       {cellLeaveBalances.map((b) => {
                         const rem = parseFloat(b.remainingDays) || 0;
-                        const isZero = rem <= 0 && b.leaveTypeCode !== 'LOP';
+                        const used = parseFloat(b.usedDays) || 0;
+                        const isUnpaid = ['LWP', 'LOP', 'AWOL'].includes(String(b.leaveTypeCode || '').toUpperCase()) || b.isPaid === false;
+                        const isZero = rem <= 0 && !isUnpaid;
                         return (
                           <div
                             key={b.leaveTypeId || b.leaveTypeCode}
-                            className={`p-2 rounded-lg border text-center ${
-                              isZero
-                                ? 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 text-slate-400'
-                                : 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/50 text-emerald-900 dark:text-emerald-300'
-                            }`}
+                            className={`p-2 rounded-lg border text-center ${isZero
+                              ? 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 text-slate-400'
+                              : isUnpaid && used > 0
+                              ? 'bg-rose-50/70 dark:bg-rose-950/30 border-rose-300 dark:border-rose-800 text-rose-900 dark:text-rose-200'
+                              : isUnpaid
+                              ? 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 text-slate-700 dark:text-slate-300'
+                              : 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/50 text-emerald-900 dark:text-emerald-300'
+                              }`}
                           >
                             <div className="font-bold text-[11px] truncate">{b.leaveTypeName || b.leaveTypeCode}</div>
                             <div className="text-sm font-extrabold mt-0.5">
-                              {b.leaveTypeCode === 'LOP' ? '∞' : rem}
-                              <span className="text-[10px] font-normal text-slate-500 ml-0.5">days</span>
+                              {isUnpaid ? (used > 0 ? `${used} used` : '0 used') : rem}
+                              <span className="text-[10px] font-normal text-slate-500 ml-0.5">{isUnpaid ? '' : 'days'}</span>
                             </div>
                             <div className="text-[9px] text-slate-400">
-                              {b.leaveTypeCode === 'LOP' ? 'Unpaid' : `of ${b.totalAllocated || 0} allocated`}
+                              {isUnpaid ? (used > 0 ? `${used} days consumed (unpaid)` : 'Unpaid (No limit)') : `of ${b.totalAllocated || b.allocatedDays || 0} allocated`}
                             </div>
                           </div>
                         );
@@ -2119,30 +2106,24 @@ export const DateWiseShiftPage = () => {
                     <button
                       type="button"
                       onClick={() => setIsCellHalfDay(false)}
-                      className={`p-2 rounded-lg border text-xs font-bold text-center transition-all cursor-pointer ${
-                        !isCellHalfDay
-                          ? 'bg-brand-50 border-brand-500 text-brand-700 dark:bg-brand-950/40 dark:border-brand-500 dark:text-brand-300'
-                          : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600'
-                      }`}
+                      className={`p-2 rounded-lg border text-xs font-bold text-center transition-all cursor-pointer ${!isCellHalfDay
+                        ? 'bg-brand-50 border-brand-500 text-brand-700 dark:bg-brand-950/40 dark:border-brand-500 dark:text-brand-300'
+                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600'
+                        }`}
                     >
                       <div>Full Day</div>
                       <div className="text-[10px] font-normal text-slate-500">Deducts 1.0 Day</div>
                     </button>
                     <button
                       type="button"
-                      onClick={() => {
-                        setIsCellHalfDay(true);
-                        const cl = cellLeaveTypes.find((t) => t.code === 'CL' || t.name?.toLowerCase().includes('casual'));
-                        if (cl) setSelectedCellLeaveTypeId(cl.id);
-                      }}
-                      className={`p-2 rounded-lg border text-xs font-bold text-center transition-all cursor-pointer ${
-                        isCellHalfDay
-                          ? 'bg-amber-50 border-amber-500 text-amber-800 dark:bg-amber-950/40 dark:border-amber-500 dark:text-amber-300'
-                          : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600'
-                      }`}
+                      onClick={() => setIsCellHalfDay(true)}
+                      className={`p-2 rounded-lg border text-xs font-bold text-center transition-all cursor-pointer ${isCellHalfDay
+                        ? 'bg-amber-50 border-amber-500 text-amber-800 dark:bg-amber-950/40 dark:border-amber-500 dark:text-amber-300'
+                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600'
+                        }`}
                     >
                       <div>Half Day</div>
-                      <div className="text-[10px] font-normal text-slate-500">Deducts 0.5 Day (CL)</div>
+                      <div className="text-[10px] font-normal text-slate-500">Deducts 0.5 Day</div>
                     </button>
                   </div>
                 </div>
@@ -2157,22 +2138,20 @@ export const DateWiseShiftPage = () => {
                       <button
                         type="button"
                         onClick={() => setCellHalfDayPeriod('FIRST_HALF')}
-                        className={`p-1.5 text-xs font-semibold rounded border ${
-                          cellHalfDayPeriod === 'FIRST_HALF'
-                            ? 'bg-amber-100 border-amber-500 text-amber-900'
-                            : 'bg-white border-slate-200 text-slate-600'
-                        }`}
+                        className={`p-1.5 text-xs font-semibold rounded border ${cellHalfDayPeriod === 'FIRST_HALF'
+                          ? 'bg-amber-100 border-amber-500 text-amber-900'
+                          : 'bg-white border-slate-200 text-slate-600'
+                          }`}
                       >
                         First Half (Morning)
                       </button>
                       <button
                         type="button"
                         onClick={() => setCellHalfDayPeriod('SECOND_HALF')}
-                        className={`p-1.5 text-xs font-semibold rounded border ${
-                          cellHalfDayPeriod === 'SECOND_HALF'
-                            ? 'bg-amber-100 border-amber-500 text-amber-900'
-                            : 'bg-white border-slate-200 text-slate-600'
-                        }`}
+                        className={`p-1.5 text-xs font-semibold rounded border ${cellHalfDayPeriod === 'SECOND_HALF'
+                          ? 'bg-amber-100 border-amber-500 text-amber-900'
+                          : 'bg-white border-slate-200 text-slate-600'
+                          }`}
                       >
                         Second Half (Afternoon)
                       </button>
@@ -2291,6 +2270,7 @@ export const DateWiseShiftPage = () => {
                     variant="ghost"
                     size="sm"
                     onClick={() => setSelectedMatrixCellDetails(null)}
+
                   >
                     Close
                   </Button>

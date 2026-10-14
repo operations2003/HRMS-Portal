@@ -221,6 +221,14 @@ export const EmployeeLeaveBalancesViewer = ({ onAssignLeave }) => {
         bar: 'bg-purple-500',
       };
     }
+    if (c === 'LWP' || c === 'LOP' || c === 'AWOL') {
+      return {
+        bg: 'bg-rose-50 dark:bg-rose-950/40',
+        border: 'border-rose-200 dark:border-rose-800',
+        text: 'text-rose-700 dark:text-rose-400',
+        bar: 'bg-rose-500',
+      };
+    }
     return {
       bg: 'bg-slate-50 dark:bg-slate-800/60',
       border: 'border-slate-200 dark:border-slate-700',
@@ -329,6 +337,7 @@ export const EmployeeLeaveBalancesViewer = ({ onAssignLeave }) => {
                   <th className="p-3 text-center">Annual (PL)</th>
                   <th className="p-3 text-center">Casual (CL)</th>
                   <th className="p-3 text-center">Sick (SL)</th>
+                  <th className="p-3 text-center">LWP (Used)</th>
                   <th className="p-3 text-center">Total Remaining</th>
                   <th className="p-3 text-right">Action</th>
                 </tr>
@@ -339,7 +348,12 @@ export const EmployeeLeaveBalancesViewer = ({ onAssignLeave }) => {
                   const pl = bList.find((b) => (b.leaveTypeCode || '').toUpperCase() === 'PL');
                   const cl = bList.find((b) => (b.leaveTypeCode || '').toUpperCase() === 'CL');
                   const sl = bList.find((b) => (b.leaveTypeCode || '').toUpperCase() === 'SL');
-                  const totalRem = bList.reduce((acc, b) => acc + (parseFloat(b.remainingDays) || 0), 0);
+                  const lwp = bList.find((b) => ['LWP', 'LOP'].includes((b.leaveTypeCode || '').toUpperCase()));
+                  const lwpUsed = parseFloat(lwp?.usedDays || 0);
+                  const totalRem = bList.reduce((acc, b) => {
+                    const isUnp = b.isPaid === false || ['LWP', 'LOP', 'AWOL'].includes((b.leaveTypeCode || '').toUpperCase());
+                    return isUnp ? acc : acc + (parseFloat(b.remainingDays) || 0);
+                  }, 0);
                   const isSelected = item.id === inspectingEmployeeId;
 
                   return (
@@ -397,6 +411,17 @@ export const EmployeeLeaveBalancesViewer = ({ onAssignLeave }) => {
                         <span className="font-bold text-amber-600 bg-amber-50 dark:bg-amber-950/50 px-2 py-0.5 rounded border border-amber-200 dark:border-amber-800 text-xs">
                           {sl ? parseFloat(sl.remainingDays).toFixed(1) : '—'}
                         </span>
+                      </td>
+
+                      {/* LWP */}
+                      <td className="p-3 text-center whitespace-nowrap">
+                        {lwpUsed > 0 ? (
+                          <span className="font-bold text-rose-700 bg-rose-50 dark:bg-rose-950/60 px-2 py-0.5 rounded border border-rose-200 dark:border-rose-800 text-xs font-mono">
+                            {lwpUsed.toFixed(1)} d
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 font-mono">0.0</span>
+                        )}
                       </td>
 
                       {/* Total Remaining */}
@@ -550,12 +575,17 @@ export const EmployeeLeaveBalancesViewer = ({ onAssignLeave }) => {
                     const used = parseFloat(bal.usedDays) || 0;
                     const pending = parseFloat(bal.pendingDays) || 0;
                     const remaining = parseFloat(bal.remainingDays) || 0;
-                    const usedPercent = allocated > 0 ? Math.min(100, Math.round((used / allocated) * 100)) : 0;
+                    const isUnpaid = bal.isPaid === false || ['LWP', 'LOP', 'AWOL'].includes(String(bal.leaveTypeCode || '').toUpperCase());
+                    const usedPercent = allocated > 0 ? Math.min(100, Math.round((used / allocated) * 100)) : (isUnpaid && used > 0 ? 100 : 0);
 
                     return (
                       <div
                         key={bal.id || bal.leaveTypeId}
-                        className={`rounded-2xl border p-4 shadow-2xs space-y-3 bg-white dark:bg-slate-900 ${theme.border} transition hover:shadow-md`}
+                        className={`rounded-2xl border p-4 shadow-2xs space-y-3 bg-white dark:bg-slate-900 ${
+                          isUnpaid && used > 0
+                            ? 'border-rose-300 dark:border-rose-800'
+                            : theme.border
+                        } transition hover:shadow-md`}
                       >
                         {/* Category Header */}
                         <div className="flex items-center justify-between gap-2">
@@ -572,28 +602,40 @@ export const EmployeeLeaveBalancesViewer = ({ onAssignLeave }) => {
                           </span>
                         </div>
 
-                        {/* Main Remaining Bucket Highlight */}
-                        <div className={`p-3 rounded-xl ${theme.bg} border ${theme.border} text-center`}>
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
-                            Remaining Balance
-                          </span>
-                          <div className="text-2xl font-black text-slate-900 dark:text-white mt-0.5">
-                            {remaining.toFixed(1)}{' '}
-                            <span className="text-xs font-semibold text-slate-500">Days</span>
+                        {/* Main Highlight */}
+                        {isUnpaid ? (
+                          <div className={`p-3 rounded-xl bg-rose-50/80 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-center`}>
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-rose-700 dark:text-rose-400 block">
+                              Total Consumed (Unpaid)
+                            </span>
+                            <div className="text-2xl font-black text-rose-600 dark:text-rose-300 mt-0.5">
+                              {used.toFixed(1)}{' '}
+                              <span className="text-xs font-semibold text-slate-500">Days Taken</span>
+                            </div>
                           </div>
-                        </div>
+                        ) : (
+                          <div className={`p-3 rounded-xl ${theme.bg} border ${theme.border} text-center`}>
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                              Remaining Balance
+                            </span>
+                            <div className="text-2xl font-black text-slate-900 dark:text-white mt-0.5">
+                              {remaining.toFixed(1)}{' '}
+                              <span className="text-xs font-semibold text-slate-500">Days</span>
+                            </div>
+                          </div>
+                        )}
 
                         {/* Progress bar */}
                         <div className="space-y-1">
                           <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
                             <div
-                              className={`h-full ${theme.bar} transition-all duration-300`}
+                              className={`h-full ${isUnpaid ? 'bg-rose-500' : theme.bar} transition-all duration-300`}
                               style={{ width: `${usedPercent}%` }}
                             />
                           </div>
                           <div className="flex items-center justify-between text-[10px] text-slate-400">
-                            <span>{usedPercent}% consumed</span>
-                            <span>{allocated.toFixed(1)} total</span>
+                            <span>{isUnpaid ? `${used.toFixed(1)} days consumed` : `${usedPercent}% consumed`}</span>
+                            <span>{isUnpaid ? 'Unpaid Quota' : `${allocated.toFixed(1)} total`}</span>
                           </div>
                         </div>
 
@@ -601,11 +643,11 @@ export const EmployeeLeaveBalancesViewer = ({ onAssignLeave }) => {
                         <div className="grid grid-cols-3 gap-1 pt-2 border-t border-slate-100 dark:border-slate-800 text-center text-[10px]">
                           <div className="p-1 rounded bg-slate-50 dark:bg-slate-800/50">
                             <span className="text-slate-400 block font-medium">Allocated</span>
-                            <span className="font-bold text-slate-800 dark:text-slate-200">{allocated.toFixed(1)}</span>
+                            <span className="font-bold text-slate-800 dark:text-slate-200">{isUnpaid ? 'Unpaid' : allocated.toFixed(1)}</span>
                           </div>
                           <div className="p-1 rounded bg-slate-50 dark:bg-slate-800/50">
                             <span className="text-slate-400 block font-medium">Used</span>
-                            <span className="font-bold text-slate-800 dark:text-slate-200">{used.toFixed(1)}</span>
+                            <span className={`font-bold ${isUnpaid && used > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-800 dark:text-slate-200'}`}>{used.toFixed(1)}</span>
                           </div>
                           <div className="p-1 rounded bg-slate-50 dark:bg-slate-800/50">
                             <span className="text-slate-400 block font-medium">Pending</span>

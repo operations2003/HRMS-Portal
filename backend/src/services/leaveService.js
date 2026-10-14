@@ -1498,14 +1498,11 @@ export const leaveService = {
         logger.warn('LeaveService', `Failed to adjust balance for leave ${id} during approval`);
       }
     } else {
-      // For special leaves: ensure balance record exists with 0 days and is never deducted
-      await leaveRepository.recordAssignedLeaveBalance(
-        record.employeeId,
-        record.orgId,
-        record.leaveTypeId,
-        year,
-        0
-      );
+      // For special / unpaid leaves (e.g. LWP): record used days in employee leave bucket
+      await leaveRepository.adjustBalance(record.employeeId, record.leaveTypeId, year, {
+        usedDelta: isAllRejected ? 0 : approvedDays,
+        pendingDelta: -record.totalDays,
+      });
     }
 
     // 5. Advance workflow state machine

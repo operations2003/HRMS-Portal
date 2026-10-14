@@ -44,8 +44,13 @@ export const LeaveBalanceCards = ({
 }) => {
   const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'table'
 
-  // Filter to display only leaves that can be applied by the employee
-  const displayBalances = (balances || []).filter((bal) => !isRestrictedLeave(bal));
+  // Display standard leaves, PLUS any consumed leaves (like LWP, LOP, AWOL where usedDays > 0 or pendingDays > 0)
+  const displayBalances = (balances || []).filter((bal) => {
+    if (!isRestrictedLeave(bal)) return true;
+    const used = Number(bal.usedDays || 0);
+    const pending = Number(bal.pendingDays || 0);
+    return used > 0 || pending > 0;
+  });
 
   if (isLoading) {
     return (
@@ -121,6 +126,7 @@ export const LeaveBalanceCards = ({
             const used = Number(bal.usedDays || 0);
             const pending = Number(bal.pendingDays || 0);
             const remaining = Number(bal.remainingDays || 0);
+            const isUnpaid = bal.isPaid === false || ['LWP', 'LOP', 'AWOL'].includes(String(bal.leaveTypeCode || '').toUpperCase());
 
             // Compute usage percentage if allocated > 0
             const percentUsed = allocated > 0 ? Math.min(100, Math.round(((used + pending) / allocated) * 100)) : 0;
@@ -128,7 +134,11 @@ export const LeaveBalanceCards = ({
             return (
               <div
                 key={bal.id || idx}
-                className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group"
+                className={`rounded-3xl border ${
+                  isUnpaid
+                    ? 'border-rose-200/90 bg-rose-50/20'
+                    : 'border-slate-200/80 bg-white'
+                } p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group`}
               >
                 <div>
                   {/* Card Header */}
@@ -136,26 +146,50 @@ export const LeaveBalanceCards = ({
                     <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 truncate" title={bal.leaveTypeName}>
                       {bal.leaveTypeName}
                     </span>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-brand-50 text-brand-600 border border-brand-100">
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${
+                        isUnpaid
+                          ? 'bg-rose-50 text-rose-700 border-rose-200'
+                          : 'bg-brand-50 text-brand-600 border-brand-100'
+                      }`}
+                    >
                       {bal.leaveTypeCode}
                     </span>
                   </div>
 
-                  {/* Remaining Days (Source of Truth) */}
-                  <div className="mt-2 flex items-baseline gap-1">
-                    <span className="text-3xl font-black text-slate-900 font-mono tracking-tight">
-                      {remaining}
-                    </span>
-                    <span className="text-xs text-slate-400 font-medium">
-                      / {allocated} days
-                    </span>
-                  </div>
-                  <div className="text-[11px] text-emerald-600 font-semibold mt-0.5">
-                    Remaining Balance
-                  </div>
+                  {/* Consumed / Remaining Stat */}
+                  {isUnpaid ? (
+                    <div>
+                      <div className="mt-2 flex items-baseline gap-1">
+                        <span className="text-3xl font-black text-rose-600 font-mono tracking-tight">
+                          {used}
+                        </span>
+                        <span className="text-xs text-slate-400 font-medium">
+                          days consumed
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-rose-600 font-semibold mt-0.5 flex items-center gap-1">
+                        <span>Leave Without Pay (Consumed)</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="mt-2 flex items-baseline gap-1">
+                        <span className="text-3xl font-black text-slate-900 font-mono tracking-tight">
+                          {remaining}
+                        </span>
+                        <span className="text-xs text-slate-400 font-medium">
+                          / {allocated} days
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-emerald-600 font-semibold mt-0.5">
+                        Remaining Balance
+                      </div>
+                    </div>
+                  )}
 
                   {/* Visual allocation progress bar */}
-                  {allocated > 0 && (
+                  {allocated > 0 && !isUnpaid && (
                     <div className="mt-3.5">
                       <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden flex">
                         <div
@@ -171,13 +205,27 @@ export const LeaveBalanceCards = ({
                       </div>
                     </div>
                   )}
+                  {isUnpaid && used > 0 && (
+                    <div className="mt-3.5">
+                      <div className="w-full bg-rose-100 rounded-full h-1.5 overflow-hidden flex">
+                        <div
+                          className="bg-rose-500 h-1.5 transition-all duration-300 w-full"
+                          title={`Consumed: ${used} days`}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Used & Pending Breakdowns */}
                 <div className="mt-4 pt-3 border-t border-slate-100 grid grid-cols-2 gap-2 text-xs">
                   <div>
-                    <span className="text-slate-400 text-[10px] block font-medium">Used</span>
-                    <span className="font-bold text-slate-700 font-mono">{used} d</span>
+                    <span className="text-slate-400 text-[10px] block font-medium">
+                      {isUnpaid ? 'Consumed' : 'Used'}
+                    </span>
+                    <span className={`font-bold font-mono ${isUnpaid ? 'text-rose-600' : 'text-slate-700'}`}>
+                      {used} d
+                    </span>
                   </div>
                   <div className="text-right">
                     <span className="text-slate-400 text-[10px] block font-medium">Pending</span>
@@ -223,6 +271,7 @@ export const LeaveBalanceCards = ({
                   const used = Number(bal.usedDays || 0);
                   const pending = Number(bal.pendingDays || 0);
                   const remaining = Number(bal.remainingDays || 0);
+                  const isUnpaid = bal.isPaid === false || ['LWP', 'LOP', 'AWOL'].includes(String(bal.leaveTypeCode || '').toUpperCase());
 
                   return (
                     <tr key={bal.id || idx} className="hover:bg-slate-50/70 transition-colors">
@@ -231,7 +280,7 @@ export const LeaveBalanceCards = ({
                         <div className="text-xs text-slate-400">{bal.leaveTypeCode}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap font-mono font-semibold text-slate-700">
-                        {allocated} days
+                        {isUnpaid ? 'Unpaid (No Quota)' : `${allocated} days`}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap font-mono text-slate-600">
                         {used} days
@@ -246,12 +295,20 @@ export const LeaveBalanceCards = ({
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="font-mono text-base font-extrabold text-brand-600">
-                          {remaining} days
-                        </span>
+                        {isUnpaid ? (
+                          <span className="font-mono text-sm font-bold text-rose-600">
+                            {used} days consumed
+                          </span>
+                        ) : (
+                          <span className="font-mono text-base font-extrabold text-brand-600">
+                            {remaining} days
+                          </span>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right">
-                        {remaining > 0 ? (
+                        {isUnpaid ? (
+                          <Badge variant="warning">Consumed (Unpaid)</Badge>
+                        ) : remaining > 0 ? (
                           <Badge variant="success">Available</Badge>
                         ) : allocated === 0 ? (
                           <Badge variant="neutral">Uncapped / Unpaid</Badge>

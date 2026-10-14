@@ -828,13 +828,11 @@ export const managerService = {
         usedDelta: leave.totalDays,
       });
     } else {
-      await leaveRepository.recordAssignedLeaveBalance(
-        leave.employeeId,
-        currentUser.orgId,
-        leave.leaveTypeId,
-        year,
-        0
-      );
+      // For special / unpaid leaves (e.g. LWP): record used days in employee leave bucket
+      await leaveRepository.adjustBalance(leave.employeeId, leave.leaveTypeId, year, {
+        usedDelta: leave.totalDays,
+        pendingDelta: -leave.totalDays,
+      });
     }
 
     // Notify employee of approval

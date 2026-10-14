@@ -755,11 +755,17 @@ export const ApplyLeaveModal = ({
           {selectedTypeObj && (
             <div className="mt-1.5 flex items-center justify-between text-xs text-slate-500">
               <span>{selectedTypeObj.description}</span>
-              {selectedBalanceObj && !isUnpaidLeave(selectedTypeObj) && (
+              {isUnpaidLeave(selectedTypeObj) ? (
+                <span className={`font-semibold ${selectedBalanceObj && parseFloat(selectedBalanceObj.usedDays) > 0 ? 'text-rose-600' : 'text-slate-500'}`}>
+                  {selectedBalanceObj && parseFloat(selectedBalanceObj.usedDays) > 0
+                    ? `Consumed: ${selectedBalanceObj.usedDays} days taken (Unpaid)`
+                    : 'Unpaid Leave (No fixed balance deduction)'}
+                </span>
+              ) : selectedBalanceObj ? (
                 <span className="font-semibold text-brand-600">
                   Available: {selectedBalanceObj.remainingDays} / {selectedBalanceObj.allocatedDays || selectedBalanceObj.entitledDays || 0} days
                 </span>
-              )}
+              ) : null}
             </div>
           )}
         </div>

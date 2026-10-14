@@ -28,6 +28,8 @@ const mapLeaveTypeRow = (row) => {
  */
 const mapLeaveBalanceRow = (row) => {
   if (!row) return null;
+  const used = parseFloat(row.effective_used_days !== undefined ? row.effective_used_days : row.used_days) || 0.0;
+  const isPaid = row.lt_is_paid !== undefined ? Boolean(row.lt_is_paid) : true;
   return {
     id: row.id,
     orgId: row.org_id,
@@ -39,12 +41,14 @@ const mapLeaveBalanceRow = (row) => {
       id: row.leave_type_id,
       name: row.lt_name || '',
       code: row.lt_code || '',
+      isPaid: isPaid,
     },
     year: row.year,
     allocatedDays: parseFloat(row.allocated_days) || 0.0,
-    usedDays: parseFloat(row.used_days) || 0.0,
+    usedDays: used,
     pendingDays: parseFloat(row.pending_days) || 0.0,
     remainingDays: parseFloat(row.remaining_days) || 0.0,
+    isPaid: isPaid,
     createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
     updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : null,
   };
@@ -817,7 +821,24 @@ export const leaveRepository = {
         lb.*,
         lt.name AS lt_name,
         lt.code AS lt_code,
-        lt.gender_eligibility AS lt_gender_eligibility
+        lt.is_paid AS lt_is_paid,
+        lt.gender_eligibility AS lt_gender_eligibility,
+        GREATEST(
+          COALESCE(lb.used_days, 0.0),
+          COALESCE(
+            (
+              SELECT SUM(lr.total_days)
+              FROM leave_requests lr
+              WHERE lr.employee_id = lb.employee_id
+                AND lr.leave_type_id = lb.leave_type_id
+                AND lr.status = 'APPROVED'
+                AND (
+                  EXTRACT(YEAR FROM lr.start_date) = lb.year
+                  OR lr.year = lb.year
+                )
+            ), 0.0
+          )
+        ) AS effective_used_days
       FROM leave_balances lb
       JOIN leave_types lt ON lt.id = lb.leave_type_id
       WHERE lb.employee_id = $1 AND lb.year = $2 AND lt.status = 'Active'
@@ -928,9 +949,24 @@ export const leaveRepository = {
    * Uses SELECT FOR UPDATE to lock the balance row during transaction
    */
   async adjustBalance(employeeId, leaveTypeId, year, { pendingDelta = 0, usedDelta = 0 }) {
-    // SPECIAL LEAVES: Never adjust or deduct bucket, keep at 0
     const leaveType = await this.findLeaveTypeById(leaveTypeId);
     if (leaveType && isSpecialLeaveType(leaveType)) {
+      if (usedDelta !== 0 || pendingDelta !== 0) {
+        const balanceId = `lb-${employeeId}-${leaveTypeId}-${year}`;
+        const sql = `
+          INSERT INTO leave_balances (id, org_id, employee_id, leave_type_id, year, allocated_days, used_days, pending_days, updated_at)
+          VALUES ($1, $2, $3, $4, $5, GREATEST(0.0, $7), GREATEST(0.0, $7), GREATEST(0.0, $6), NOW())
+          ON CONFLICT (employee_id, leave_type_id, year)
+          DO UPDATE SET
+            pending_days = GREATEST(0.0, leave_balances.pending_days + $6),
+            used_days = GREATEST(0.0, leave_balances.used_days + $7),
+            allocated_days = GREATEST(leave_balances.allocated_days, leave_balances.used_days + $7 + GREATEST(0.0, leave_balances.pending_days + $6)),
+            updated_at = NOW()
+          RETURNING *;
+        `;
+        const res = await pool.query(sql, [balanceId, leaveType.orgId || 'org-1', employeeId, leaveTypeId, year, pendingDelta, usedDelta]);
+        return res.rows.length > 0 ? mapLeaveBalanceRow(res.rows[0]) : null;
+      }
       const rec = await this.recordAssignedLeaveBalance(employeeId, leaveType.orgId || 'org-1', leaveTypeId, year, 0);
       return mapLeaveBalanceRow(rec);
     }
@@ -954,11 +990,9 @@ export const leaveRepository = {
    * Returns null if operation would result in negative remaining balance
    */
   async adjustBalanceWithValidation(employeeId, leaveTypeId, year, { pendingDelta = 0, usedDelta = 0 }) {
-    // SPECIAL LEAVES: Never deduct from bucket, keep at 0
     const leaveType = await this.findLeaveTypeById(leaveTypeId);
     if (leaveType && isSpecialLeaveType(leaveType)) {
-      const rec = await this.recordAssignedLeaveBalance(employeeId, leaveType.orgId || 'org-1', leaveTypeId, year, 0);
-      return mapLeaveBalanceRow(rec);
+      return this.adjustBalance(employeeId, leaveTypeId, year, { pendingDelta, usedDelta });
     }
 
     const client = await pool.connect();
@@ -1090,32 +1124,9 @@ export const leaveRepository = {
    * Ensures bucket allocated_days and used_days accurately reflect the assigned leave dates.
    */
   async recordAssignedLeaveBalance(employeeId, orgId, leaveTypeId, year, days) {
-    // Fetch the leave type to check if it's a special leave
     const leaveType = await this.findLeaveTypeById(leaveTypeId, orgId);
     if (!leaveType) return null;
 
-    const isSpecial = isSpecialLeaveType(leaveType);
-    
-    if (isSpecial) {
-      // For special leaves: Ensure balance record exists with 0 allocated, 0 used, and 0 pending
-      // Do NOT deduct days - these leaves are tracked separately and never consume balance
-      const balanceId = `lb-${employeeId}-${leaveTypeId}-${year}`;
-      const sql = `
-        INSERT INTO leave_balances (id, org_id, employee_id, leave_type_id, year, allocated_days, used_days, pending_days, updated_at)
-        VALUES ($1, $2, $3, $4, $5, 0.0, 0.0, 0.0, NOW())
-        ON CONFLICT (employee_id, leave_type_id, year)
-        DO UPDATE SET
-          allocated_days = 0.0,
-          used_days = 0.0,
-          pending_days = 0.0,
-          updated_at = NOW()
-        RETURNING *;
-      `;
-      const res = await pool.query(sql, [balanceId, orgId, employeeId, leaveTypeId, year]);
-      return res.rows[0];
-    }
-    
-    // For non-special restricted leaves: Track assignment in balance bucket
     const assignedDays = parseFloat(days) || 0;
     const balanceId = `lb-${employeeId}-${leaveTypeId}-${year}`;
     const sql = `
@@ -1155,8 +1166,24 @@ export const leaveRepository = {
               'leaveTypeId', lb.leave_type_id,
               'leaveTypeName', lt.name,
               'leaveTypeCode', lt.code,
+              'isPaid', lt.is_paid,
               'allocatedDays', COALESCE(lb.allocated_days, 0)::float,
-              'usedDays', COALESCE(lb.used_days, 0)::float,
+              'usedDays', GREATEST(
+                COALESCE(lb.used_days, 0)::float,
+                COALESCE(
+                  (
+                    SELECT SUM(lr.total_days)::float
+                    FROM leave_requests lr
+                    WHERE lr.employee_id = lb.employee_id
+                      AND lr.leave_type_id = lb.leave_type_id
+                      AND lr.status = 'APPROVED'
+                      AND (
+                        EXTRACT(YEAR FROM lr.start_date) = lb.year
+                        OR lr.year = lb.year
+                      )
+                  ), 0.0
+                )
+              ),
               'pendingDays', COALESCE(lb.pending_days, 0)::float,
               'remainingDays', COALESCE(lb.remaining_days, 0)::float
             ) ORDER BY lt.name
