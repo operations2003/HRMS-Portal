@@ -104,8 +104,17 @@ export const DateWiseShiftPage = () => {
     hasRole('TeamLead') ||
     hasRole('Supervisor');
 
+  const isCeo =
+    hasRole('CEO') ||
+    hasRole('Director') ||
+    (user?.email || '').toLowerCase() === 'sheetalbedi@tasknera.com' ||
+    (user?.designationTitle || user?.designation?.title || '').toUpperCase() === 'CEO';
+
+  // Rule: Every employee can see only their record, but Manager, CEO, and HR can see everyone's record
+  const canSeeEveryone = isHrOrAdmin || isManager || isCeo;
+
   // Can this user modify shift assignments?
-  const canEditShifts = isHrOrAdmin || isManager;
+  const canEditShifts = canSeeEveryone;
 
   // Month & Year state
   const today = new Date();
@@ -115,8 +124,8 @@ export const DateWiseShiftPage = () => {
   // View Mode: 'CALENDAR' (Schedule Overview) vs 'ADJUST' (Date-wise Shift Adjuster)
   const [viewMode, setViewMode] = useState('CALENDAR');
 
-  // Employee Selection State: default to 'ALL' for matrix grid view
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState('ALL');
+  // Employee Selection State: default to 'ALL' for Manager/CEO/HR, or caller's employeeId for regular employees
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState(() => (canSeeEveryone ? 'ALL' : (user?.employeeId || 'ALL')));
   const [employees, setEmployees] = useState([]);
   const [employeeSearch, setEmployeeSearch] = useState('');
   const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
@@ -203,32 +212,48 @@ export const DateWiseShiftPage = () => {
         }
       }
 
-      const formatted = (Array.isArray(list) ? list : []).map((e) => ({
-        id: e.id,
-        employeeCode: e.employeeCode || e.code || '',
-        firstName: e.firstName || '',
-        lastName: e.lastName || '',
-        fullName:
-          e.fullName ||
-          `${e.firstName || ''} ${e.lastName || ''}`.trim() ||
-          'Employee',
-        email: e.email || '',
-        defaultShiftTiming: e.shiftTiming || e.defaultShiftTiming || '11:00 AM - 07:00 PM',
-        avatarUrl: e.avatarUrl || null,
-        departmentName: e.departmentName || e.department?.name || '',
-        departmentId: e.departmentId || e.dept_id || '',
-        designationTitle: e.designationTitle || e.designation?.title || '',
-        customShiftCount: e.customShiftCount || 0,
-      }));
+      const isCeoEmp = (e) => {
+        const desig = (e.designationTitle || e.designation?.title || '').toLowerCase();
+        const email = (e.email || '').toLowerCase();
+        const id = e.id || '';
+        return (
+          id === 'emp-shubham-admin' ||
+          email === 'sheetalbedi@tasknera.com' ||
+          email === 'sheetal@tasknera.com' ||
+          desig.includes('ceo')
+        );
+      };
+
+      const formatted = (Array.isArray(list) ? list : [])
+        .filter((e) => !isCeoEmp(e))
+        .map((e) => ({
+          id: e.id,
+          employeeCode: e.employeeCode || e.code || '',
+          firstName: e.firstName || '',
+          lastName: e.lastName || '',
+          fullName:
+            e.fullName ||
+            `${e.firstName || ''} ${e.lastName || ''}`.trim() ||
+            'Employee',
+          email: e.email || '',
+          defaultShiftTiming: e.shiftTiming || e.defaultShiftTiming || '11:00 AM - 07:00 PM',
+          avatarUrl: e.avatarUrl || null,
+          departmentName: e.departmentName || e.department?.name || '',
+          departmentId: e.departmentId || e.dept_id || '',
+          designationTitle: e.designationTitle || e.designation?.title || '',
+          customShiftCount: e.customShiftCount || 0,
+        }));
 
       setEmployees(formatted);
 
       if (formatted.length > 0) {
         setSelectedEmployeeId((prev) => {
-          if (prev === 'ALL') return 'ALL';
-          if (prev && formatted.some((e) => e.id === prev)) return prev;
-          if (canEditShifts) return 'ALL';
-          const callerMatch = formatted.find((e) => e.id === user?.employeeId);
+          if (canSeeEveryone) {
+            if (prev === 'ALL') return 'ALL';
+            if (prev && formatted.some((e) => e.id === prev)) return prev;
+            return 'ALL';
+          }
+          const callerMatch = formatted.find((e) => e.id === user?.employeeId) || formatted[0];
           return callerMatch ? callerMatch.id : formatted[0].id;
         });
       }
@@ -513,7 +538,13 @@ export const DateWiseShiftPage = () => {
   // Filtered rows for All Employees Matrix Grid
   const filteredRosterRows = useMemo(() => {
     if (!scheduleData?.roster) return [];
-    let list = scheduleData.roster;
+    let list = scheduleData.roster.filter((r) => {
+      const desig = (r.employee?.designationTitle || '').toLowerCase();
+      const email = (r.employee?.email || '').toLowerCase();
+      const id = r.employee?.id || '';
+      return id !== 'emp-shubham-admin' && email !== 'sheetalbedi@tasknera.com' && email !== 'sheetal@tasknera.com' && !desig.includes('ceo');
+    });
+
     if (selectedDepartmentFilter && selectedDepartmentFilter !== 'ALL') {
       const filterLower = selectedDepartmentFilter.toLowerCase();
       list = list.filter((r) =>
@@ -536,11 +567,18 @@ export const DateWiseShiftPage = () => {
   // Filtered rows for Date-Wise Daily Roster (All Employees for selectedRosterDate)
   const dailyRosterRows = useMemo(() => {
     if (!scheduleData?.roster) return [];
-    let list = scheduleData.roster.map((r) => ({
-      employee: r.employee,
-      cell: r.cells?.[selectedRosterDate] || null,
-      stats: r.stats,
-    }));
+    let list = scheduleData.roster
+      .filter((r) => {
+        const desig = (r.employee?.designationTitle || '').toLowerCase();
+        const email = (r.employee?.email || '').toLowerCase();
+        const id = r.employee?.id || '';
+        return id !== 'emp-shubham-admin' && email !== 'sheetalbedi@tasknera.com' && email !== 'sheetal@tasknera.com' && !desig.includes('ceo');
+      })
+      .map((r) => ({
+        employee: r.employee,
+        cell: r.cells?.[selectedRosterDate] || null,
+        stats: r.stats,
+      }));
 
     // Department filter
     if (selectedDepartmentFilter && selectedDepartmentFilter !== 'ALL') {
@@ -1028,11 +1066,12 @@ export const DateWiseShiftPage = () => {
             </div>
             <div>
               <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                Monthly Roster & Schedule
-                <Badge variant="brand" size="sm">US-Based Calendar</Badge>
+                {canSeeEveryone ? 'Monthly Roster & Schedule' : 'My Monthly Shift Schedule'}
               </h1>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Consolidated employee monthly roster spreadsheet • Sunday is Weekly Off (WO) • Click any cell to update shift timing or apply leave.
+                {canSeeEveryone
+                  ? 'Consolidated monthly roster spreadsheet. Click any cell to update shift timing or apply leaves.'
+                  : 'Personal monthly schedule spreadsheet. Click any day to view shift timing and daily punch details.'}
               </p>
             </div>
           </div>
@@ -1074,10 +1113,16 @@ export const DateWiseShiftPage = () => {
           </div>
           <div className="min-w-0">
             <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider truncate">
-              Employees in Roster
+              {canSeeEveryone ? 'Employees in Roster' : 'My Schedule Record'}
             </p>
             <p className="text-base font-bold text-slate-900 dark:text-white">
-              {filteredRosterRows.length} <span className="text-xs font-normal text-slate-400">/ {employees.length} active</span>
+              {canSeeEveryone ? (
+                <>
+                  {filteredRosterRows.length} <span className="text-xs font-normal text-slate-400">/ {employees.length} active</span>
+                </>
+              ) : (
+                <span className="text-sm font-semibold text-brand-600 dark:text-brand-400">Self Only</span>
+              )}
             </p>
           </div>
         </div>
@@ -1091,7 +1136,7 @@ export const DateWiseShiftPage = () => {
               Schedule Policy
             </p>
             <p className="text-xs font-bold text-slate-800 dark:text-slate-200 mt-0.5">
-              🇺🇸 US Calendar <span className="text-[10px] text-emerald-600 dark:text-emerald-400 block font-medium">Sunday is Weekly Off (WO)</span>
+              Standard Weekly Schedule
             </p>
           </div>
         </div>
@@ -1173,40 +1218,46 @@ export const DateWiseShiftPage = () => {
           </div>
 
           {/* Filters for Matrix View */}
-          <div className="flex items-center gap-2.5 flex-wrap">
-            {/* Department filter */}
-            <div className="flex items-center gap-1.5">
-              <Building className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-              <select
-                value={selectedDepartmentFilter}
-                onChange={(e) => setSelectedDepartmentFilter(e.target.value)}
-                className="text-xs py-1.5 px-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-brand-500 font-medium cursor-pointer"
-              >
-                <option value="ALL">All Departments ({employees.length})</option>
-                {departmentOptions.map((dept) => (
-                  <option key={dept} value={dept}>
-                    {dept}
-                  </option>
-                ))}
-              </select>
-            </div>
+          {canSeeEveryone ? (
+            <div className="flex items-center gap-2.5 flex-wrap">
+              {/* Department filter */}
+              <div className="flex items-center gap-1.5">
+                <Building className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                <select
+                  value={selectedDepartmentFilter}
+                  onChange={(e) => setSelectedDepartmentFilter(e.target.value)}
+                  className="text-xs py-1.5 px-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-brand-500 font-medium cursor-pointer"
+                >
+                  <option value="ALL">All Departments ({employees.length})</option>
+                  {departmentOptions.map((dept) => (
+                    <option key={dept} value={dept}>
+                      {dept}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-            {/* Search in Rows */}
-            <div className="relative min-w-[200px]">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
-              <input
-                type="text"
-                value={matrixSearch}
-                onChange={(e) => setMatrixSearch(e.target.value)}
-                placeholder="Search employee, designation..."
-                className="w-full text-xs pl-8 pr-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-brand-500"
-              />
-            </div>
+              {/* Search in Rows */}
+              <div className="relative min-w-[200px]">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
+                <input
+                  type="text"
+                  value={matrixSearch}
+                  onChange={(e) => setMatrixSearch(e.target.value)}
+                  placeholder="Search employee, designation..."
+                  className="w-full text-xs pl-8 pr-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                />
+              </div>
 
-            <Badge variant="neutral" size="sm">
-              {filteredRosterRows.length} Rows
-            </Badge>
-          </div>
+              <Badge variant="neutral" size="sm">
+                {filteredRosterRows.length} Rows
+              </Badge>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Badge variant="brand" size="sm">Personal Record</Badge>
+            </div>
+          )}
         </div>
 
         {/* Legend strip */}
@@ -1227,9 +1278,6 @@ export const DateWiseShiftPage = () => {
           <div className="flex items-center gap-1.5">
             <span className="text-[11px] font-medium text-slate-300 dark:text-slate-600">NA</span>
             <span>Not Scheduled / Inactive</span>
-          </div>
-          <div className="ml-auto text-[11px] text-[#1e3a8a] dark:text-blue-300 font-semibold flex items-center gap-1">
-            <span>🇺🇸 US-Based Schedule: Sunday is Weekly Off • Indian leaves/holidays are not considered</span>
           </div>
         </div>
 
@@ -1352,11 +1400,27 @@ export const DateWiseShiftPage = () => {
                       return (
                         <td
                           key={day.dateKey}
-                          onClick={() => handleOpenMatrixCell(row.employee, day.dateKey, cell || {})}
+                          onClick={() => {
+                            if (canEditShifts) {
+                              handleOpenMatrixCell(row.employee, day.dateKey, cell || {});
+                            } else {
+                              setSelectedDayDetails({
+                                date: day.dateKey,
+                                isSunday: isSun,
+                                isWeeklyOff: isWO,
+                                shiftLabel: cell?.shiftLabel || (isWO ? 'Weekly Off (WO)' : text),
+                                isHalfDay,
+                                isLeave,
+                                leave: cell?.leave,
+                                attendance: att,
+                                employee: row.employee,
+                              });
+                            }
+                          }}
                           className={'p-1 text-center min-w-[62px] max-w-[76px] border-r border-slate-100 dark:border-slate-800 cursor-pointer transition-all hover:bg-blue-50/70 dark:hover:bg-blue-950/40 hover:ring-1 hover:ring-blue-400 select-none ' + (
                             isSun ? 'bg-slate-50/60 dark:bg-slate-850/40' : ''
                           )}
-                          title={'Click to edit shift or apply leave\n' + row.employee.fullName + ' | ' + day.dateKey + '\nShift: ' + (cell?.shiftLabel || (isWO ? 'Weekly Off (WO)' : text)) + (isOverride ? ' (Override)' : '')}
+                          title={(canEditShifts ? 'Click to edit shift or apply leave\n' : 'Click to view day details\n') + row.employee.fullName + ' | ' + day.dateKey + '\nShift: ' + (cell?.shiftLabel || (isWO ? 'Weekly Off (WO)' : text)) + (isOverride ? ' (Override)' : '')}
                         >
                           <div className="flex flex-col items-center justify-center min-h-[30px] leading-tight">
                             {isYellowBadge ? (

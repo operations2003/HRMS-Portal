@@ -24,14 +24,14 @@ router.get(
 // Allowed for HR, Admin, and Managers
 router.post(
   '/assign',
-  requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin', 'Manager', 'TeamLead']),
+  requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin', 'Manager', 'TeamLead', 'CEO']),
   shiftManagementController.assignShifts
 );
 
 // 4. Reset specific dates back to employee default shift
 router.post(
   '/reset',
-  requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin', 'Manager', 'TeamLead']),
+  requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin', 'Manager', 'TeamLead', 'CEO']),
   shiftManagementController.resetShifts
 );
 

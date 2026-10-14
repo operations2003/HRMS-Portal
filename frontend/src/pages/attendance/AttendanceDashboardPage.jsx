@@ -42,15 +42,15 @@ export const AttendanceDashboardPage = () => {
   const toast = useToast();
   const isCeo = isCeoOrAdmin(user);
 
-  // Role permissions: HR, Admin, and Manager can see the whole organization's attendance
-  const canViewOrg = hasRole(['HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin', 'Manager']);
-  const canEditTiming = hasRole(['HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin', 'Manager']) || hasPermission('attendance:regularize');
-  // Tagging / remark option is authorized for HR Manager, Admin, and Manager
-  const canRemark = hasRole(['HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin', 'Manager']);
-  // Export to Excel is strictly reserved for HR, Admin, and Manager (Employees must not have this button)
-  const canExportAttendance = hasRole(['HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin', 'Manager']);
-  // Date-wise Shift Management is authorized for Admin, HR, and Manager
-  const canManageShifts = hasRole(['HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin', 'Manager', 'TeamLead']);
+  // Role permissions: HR, Admin, Manager, and CEO can see the whole organization's attendance
+  const canViewOrg = isCeo || hasRole(['HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin', 'Manager']);
+  const canEditTiming = isCeo || hasRole(['HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin', 'Manager']) || hasPermission('attendance:regularize');
+  // Tagging / remark option is authorized for HR Manager, Admin, Manager, and CEO
+  const canRemark = isCeo || hasRole(['HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin', 'Manager']);
+  // Export to Excel is strictly reserved for HR, Admin, Manager, and CEO (Employees must not have this button)
+  const canExportAttendance = isCeo || hasRole(['HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin', 'Manager']);
+  // Date-wise Shift Management is authorized for Admin, HR, Manager, and CEO
+  const canManageShifts = isCeo || hasRole(['HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin', 'Manager', 'TeamLead']);
 
   // Active view tab: Admin, HR, and Manager default to 'org', regular Employees have 'my'. CEO stays exclusively on 'org'
   const [activeTab, setActiveTab] = useState(() => (canViewOrg ? 'org' : 'my'));

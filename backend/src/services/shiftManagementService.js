@@ -60,6 +60,25 @@ export const shiftManagementService = {
   },
 
   /**
+   * Check if caller is Manager, CEO, HR, or Admin who is authorized to see everyone's records
+   */
+  canSeeEveryone(user) {
+    if (!user) return false;
+    if (this.isHrOrAdmin(user)) return true;
+    if (this.isManager(user)) return true;
+    const role = normalizeRole(user?.roleName || user?.role?.name || user?.role || '');
+    if (
+      role === 'ceo' ||
+      role === 'director' ||
+      (user?.email || '').toLowerCase() === 'sheetalbedi@tasknera.com' ||
+      (user?.designationTitle || '').toUpperCase() === 'CEO'
+    ) {
+      return true;
+    }
+    return false;
+  },
+
+  /**
    * Resolve caller's employee profile
    */
   async resolveCallerEmployee(user) {
@@ -75,53 +94,41 @@ export const shiftManagementService = {
    * Verify caller has permission to view or manage the target employee
    */
   async assertCanManageEmployee(currentUser, targetEmployeeId) {
-    if (this.isHrOrAdmin(currentUser)) {
+    if (this.canSeeEveryone(currentUser)) {
       return true;
     }
 
-    const callerEmp = await this.resolveCallerEmployee(currentUser);
-    if (!callerEmp) {
-      const err = new Error('Access denied: No employee profile found for your account.');
-      err.statusCode = 403;
-      throw err;
-    }
-
-    // Check if target is in caller's direct team or department
-    const targetRes = await pool.query(
-      `SELECT id, manager_id, dept_id, org_id FROM employees WHERE id = $1;`,
-      [targetEmployeeId]
-    );
-
-    if (targetRes.rows.length === 0) {
-      const err = new Error('Employee not found.');
-      err.statusCode = 404;
-      throw err;
-    }
-
-    const target = targetRes.rows[0];
-    const isDirectReport = target.manager_id === callerEmp.id;
-    const isManagerRole = this.isManager(currentUser);
-    const isDeptManager = isManagerRole && callerEmp.dept_id && target.dept_id === callerEmp.dept_id;
-
-    if (isDirectReport || isDeptManager) {
-      return true;
-    }
-
-    const err = new Error('Access denied: You are not authorized to modify shifts for this employee.');
+    const err = new Error('Access denied: Regular employees can only view their own record and cannot modify shifts.');
     err.statusCode = 403;
     throw err;
   },
 
   /**
-   * Get eligible employees for shift management
-   * - HR/Admin/Operations/CEO: All active employees in organization
-   * - Manager: Direct reports, department members, and self
-   * - Employee: Only their own profile
+   * Check if an employee record represents the CEO
+   */
+  isCeoEmployee(emp) {
+    if (!emp) return false;
+    const id = emp.id || emp.employeeId;
+    const email = (emp.email || '').toLowerCase();
+    const desig = (emp.designationTitle || emp.designation?.title || emp.desig_title || '').toLowerCase();
+    return (
+      id === 'emp-shubham-admin' ||
+      email === 'sheetalbedi@tasknera.com' ||
+      email === 'sheetal@tasknera.com' ||
+      desig.includes('ceo')
+    );
+  },
+
+  /**
+   * Get eligible employees for shift management:
+   * - Manager, CEO, HR, and Admin can see everyone's records (all active non-CEO employees)
+   * - Regular employee can see ONLY their own record
    */
   async getEligibleEmployees(currentUser) {
     const orgId = currentUser.orgId || 'org-1';
 
-    if (this.isHrOrAdmin(currentUser)) {
+    // Manager, CEO, HR, and Admin can see everyone's record (excluding CEO)
+    if (this.canSeeEveryone(currentUser)) {
       const res = await pool.query(
         `SELECT 
           e.id,
@@ -144,48 +151,22 @@ export const shiftManagementService = {
         LEFT JOIN designations ds ON ds.id = e.desig_id
         WHERE (e.org_id = $1 OR e.org_id IS NULL OR $1 = '')
           AND (e.status IS NULL OR LOWER(e.status) NOT IN ('exited', 'terminated', 'inactive', 'suspended', 'archived'))
+          AND (e.id != 'emp-shubham-admin')
+          AND LOWER(COALESCE(e.email, '')) NOT IN ('sheetalbedi@tasknera.com', 'sheetal@tasknera.com')
+          AND LOWER(COALESCE(ds.title, '')) NOT LIKE '%ceo%'
         ORDER BY e.first_name ASC, e.last_name ASC;`,
         [orgId]
       );
       return res.rows;
     }
 
+    // Every employee can see ONLY their own record
     const callerEmp = await this.resolveCallerEmployee(currentUser);
     if (!callerEmp) {
       return [];
     }
 
-    // Regular Employee: Strictly their own profile
-    if (!this.isManager(currentUser)) {
-      const selfRes = await pool.query(
-        `SELECT 
-          e.id,
-          e.employee_code AS "employeeCode",
-          e.first_name AS "firstName",
-          e.last_name AS "lastName",
-          TRIM(CONCAT(e.first_name, ' ', e.last_name)) AS "fullName",
-          e.email,
-          e.shift_timing AS "defaultShiftTiming",
-          COALESCE(e.avatar_url, u.avatar_url) AS "avatarUrl",
-          d.name AS "departmentName",
-          e.dept_id AS "departmentId",
-          e.dept_id AS "deptId",
-          ds.title AS "designationTitle",
-          e.manager_id AS "managerId",
-          (SELECT COUNT(*)::int FROM shift_assignments sa WHERE sa.employee_id = e.id AND sa.assignment_date >= DATE_TRUNC('month', CURRENT_DATE) AND sa.assignment_date < DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month') AS "customShiftCount"
-        FROM employees e
-        LEFT JOIN users u ON u.id = e.user_id
-        LEFT JOIN departments d ON d.id = e.dept_id
-        LEFT JOIN designations ds ON ds.id = e.desig_id
-        WHERE e.id = $1
-        LIMIT 1;`,
-        [callerEmp.id]
-      );
-      return selfRes.rows;
-    }
-
-    // Manager / Team Lead / Supervisor: Direct reports, department members, and themselves
-    const res = await pool.query(
+    const selfRes = await pool.query(
       `SELECT 
         e.id,
         e.employee_code AS "employeeCode",
@@ -205,14 +186,11 @@ export const shiftManagementService = {
       LEFT JOIN users u ON u.id = e.user_id
       LEFT JOIN departments d ON d.id = e.dept_id
       LEFT JOIN designations ds ON ds.id = e.desig_id
-      WHERE (e.org_id = $1 OR e.org_id IS NULL OR $1 = '')
-        AND (e.id = $2 OR e.manager_id = $2 OR (callerEmp.dept_id IS NOT NULL AND e.dept_id = $3))
-        AND (e.status IS NULL OR LOWER(e.status) NOT IN ('exited', 'terminated', 'inactive', 'suspended', 'archived'))
-      ORDER BY e.first_name ASC, e.last_name ASC;`,
-      [orgId, callerEmp.id, callerEmp.dept_id || '']
+      WHERE e.id = $1
+      LIMIT 1;`,
+      [callerEmp.id]
     );
-
-    return res.rows;
+    return selfRes.rows;
   },
 
   /**
@@ -275,15 +253,23 @@ export const shiftManagementService = {
    * Designed specifically for Admin, HR, and Managers to view all employees together.
    */
   async getOrganizationMonthlyRoster(currentUser, { month, year, startDate, endDate, departmentId }) {
-    const isHrAdmin = this.isHrOrAdmin(currentUser);
-    const isMgr = this.isManager(currentUser);
-
-    // Eligible employees: HR/Admin see all, Managers see team, Staff see self
+    // If not Manager, CEO, or HR/Admin, regular employee CANNOT see organization-wide roster
+    if (!this.canSeeEveryone(currentUser)) {
+      const callerEmp = await this.resolveCallerEmployee(currentUser);
+      if (!callerEmp) {
+        const err = new Error('Access denied: Every employee can see only their own record.');
+        err.statusCode = 403;
+        throw err;
+      }
+      return this.getEmployeeShifts(currentUser, { employeeId: callerEmp.id, startDate, endDate, month, year });
+    }
 
     const orgId = currentUser.orgId || 'org-1';
 
-    // 1. Fetch eligible employees for this caller
-    let eligibleEmployees = await this.getEligibleEmployees(currentUser);
+    // 1. Fetch eligible employees for this caller (strictly excluding CEO from roster)
+    let eligibleEmployees = (await this.getEligibleEmployees(currentUser)).filter(
+      (e) => !this.isCeoEmployee(e)
+    );
 
     // Optional department filtering
     if (departmentId && departmentId !== 'ALL' && departmentId !== '') {
@@ -699,28 +685,14 @@ export const shiftManagementService = {
       throw err;
     }
 
-    // Verify view permission
-    const isHrAdmin = this.isHrOrAdmin(currentUser);
-    if (!isHrAdmin) {
+    // Verify view permission: Manager, CEO, HR, and Admin can view everyone's records.
+    // Regular employee can ONLY view their own record.
+    if (!this.canSeeEveryone(currentUser)) {
       const callerEmp = await this.resolveCallerEmployee(currentUser);
-      if (callerEmp && callerEmp.id !== targetEmpId) {
-        // Must be direct report or department member if manager
-        const checkRes = await pool.query(
-          `SELECT manager_id, dept_id FROM employees WHERE id = $1;`,
-          [targetEmpId]
-        );
-        const target = checkRes.rows[0];
-        const isManager = this.isManager(currentUser);
-        const isAuthorized = target && (
-          target.manager_id === callerEmp.id || 
-          (isManager && callerEmp.dept_id && target.dept_id === callerEmp.dept_id)
-        );
-
-        if (!isAuthorized) {
-          const err = new Error('Access denied: You are not authorized to view this employee schedule.');
-          err.statusCode = 403;
-          throw err;
-        }
+      if (!callerEmp || callerEmp.id !== targetEmpId) {
+        const err = new Error('Access denied: Every employee can see only their own record.');
+        err.statusCode = 403;
+        throw err;
       }
     }
 
