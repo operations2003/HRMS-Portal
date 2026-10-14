@@ -31,10 +31,10 @@ export const parseShiftTiming = (shiftStr) => {
   if (!shiftStr || typeof shiftStr !== 'string') return null;
   const parts = shiftStr.split(/[-–—]|(?:\s+to\s+)/i).map((s) => s.trim());
   const parsePart = (str) => {
-    const m = str.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+    const m = str.match(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?/i);
     if (!m) return null;
     let h = parseInt(m[1], 10);
-    const min = m[2].padStart(2, '0');
+    const min = m[2] ? m[2].padStart(2, '0') : '00';
     let period = (m[3] || '').toUpperCase();
     if (!period) {
       period = h >= 12 ? 'PM' : 'AM';

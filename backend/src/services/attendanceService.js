@@ -298,6 +298,15 @@ export const calculateAutoLogoutCutoff = (record, shiftTiming, timezone = 'Asia/
     cutoff = new Date(checkInDate.getTime() + effectiveGraceMs);
   }
 
+  // CRITICAL REQUIREMENT: For employees with a 9-hour (or custom) shift schedule,
+  // ensure auto-logout will not happen prematurely after 8 hours. Cutoff must always be at least
+  // check-in + scheduled shift duration (e.g. 9 hours) + grace period.
+  const scheduledDurationMs = Math.round((shift.scheduledDurationHours || 8.0) * 3600 * 1000);
+  const minCutoffFromCheckIn = new Date(checkInDate.getTime() + scheduledDurationMs + effectiveGraceMs);
+  if (cutoff.getTime() < minCutoffFromCheckIn.getTime()) {
+    cutoff = minCutoffFromCheckIn;
+  }
+
   return cutoff;
 };
 
@@ -313,15 +322,19 @@ export const checkAndAutoLogoutRecord = async (record, shiftTimingOverride = nul
   }
 
   let shiftTiming = shiftTimingOverride;
-  if (!shiftTiming) {
-    const recDate = record.attendanceDate ? new Date(record.attendanceDate).toISOString().slice(0, 10) : null;
-    const effectiveShift = await resolveShiftForEmployeeAndDate(
-      record.employeeId || record.employee?.id,
-      recDate,
-      record.employee?.shiftTiming || '11:00 AM - 07:00 PM'
-    );
+  const recDate = record.attendanceDate ? new Date(record.attendanceDate).toISOString().slice(0, 10) : null;
+  const effectiveShift = await resolveShiftForEmployeeAndDate(
+    record.employeeId || record.employee?.id,
+    recDate,
+    record.employee?.shiftTiming || '11:00 AM - 07:00 PM'
+  );
+
+  // If effectiveShift resolved a specific shift schedule (e.g. 9-hour shift '11:00 AM - 08:00 PM' or '11 - 8 PM'),
+  // prefer it so auto-logout respects the actual 9-hour schedule and does not default to 8 hours.
+  if (!shiftTiming || shiftTiming === '11:00 AM - 07:00 PM' || (effectiveShift.shiftTiming && effectiveShift.shiftTiming !== '11:00 AM - 07:00 PM')) {
     shiftTiming = effectiveShift.shiftTiming;
   }
+
   const cutoff = calculateAutoLogoutCutoff(record, shiftTiming, record.timezone, 20);
   if (!cutoff) return record;
 
@@ -378,7 +391,8 @@ export const checkAndAutoLogoutRecord = async (record, shiftTimingOverride = nul
 };
 
 /**
- * Scans active unclosed records and auto-checks out any records exceeding shift + 10 hours
+ * Scans active unclosed records and auto-checks out any records exceeding shift + 20-minute grace period.
+ * Dynamically resolves each employee's date-wise shift schedule (including 9-hour shifts) to avoid premature logout after 8 hours.
  */
 export const autoCheckoutStaleRecords = async (orgId = null) => {
   try {
@@ -389,7 +403,13 @@ export const autoCheckoutStaleRecords = async (orgId = null) => {
     const now = new Date();
 
     for (const rec of openRecords) {
-      const shiftTiming = rec.employee?.shiftTiming || '11:00 AM - 07:00 PM';
+      const recDate = rec.attendanceDate ? new Date(rec.attendanceDate).toISOString().slice(0, 10) : null;
+      const effectiveShift = await resolveShiftForEmployeeAndDate(
+        rec.employeeId || rec.employee?.id,
+        recDate,
+        rec.employee?.shiftTiming || '11:00 AM - 07:00 PM'
+      );
+      const shiftTiming = effectiveShift.shiftTiming;
       const cutoff = calculateAutoLogoutCutoff(rec, shiftTiming, rec.timezone);
       if (cutoff && now.getTime() >= cutoff.getTime()) {
         await checkAndAutoLogoutRecord(rec, shiftTiming);
@@ -527,7 +547,12 @@ export const attendanceService = {
         if (rec.employeeId === targetEmployee.id) {
           const recDateStr = typeof rec.attendanceDate === 'string' ? rec.attendanceDate.split('T')[0] : '';
           const isPriorDate = Boolean(recDateStr && recDateStr !== todayDate);
-          await checkAndAutoLogoutRecord(rec, shiftTiming, isPriorDate);
+          const recShift = await resolveShiftForEmployeeAndDate(
+            targetEmployee.id,
+            recDateStr,
+            targetEmployee.shiftTiming || '11:00 AM - 07:00 PM'
+          );
+          await checkAndAutoLogoutRecord(rec, recShift.shiftTiming, isPriorDate);
         }
       }
     } catch {
@@ -924,12 +949,18 @@ export const attendanceService = {
       };
     }
 
-    // Auto-resolve any active unclosed records for this employee that exceeded the 10h post-shift cutoff
+    // Auto-resolve any active unclosed records for this employee that exceeded the post-shift cutoff
     try {
       const unclosed = await attendanceRepository.findActiveUnclosedRecords(employee.orgId);
       for (const rec of unclosed) {
         if (rec.employeeId === employee.id) {
-          await checkAndAutoLogoutRecord(rec, employee.shiftTiming);
+          const recDate = rec.attendanceDate ? new Date(rec.attendanceDate).toISOString().slice(0, 10) : null;
+          const effShift = await resolveShiftForEmployeeAndDate(
+            employee.id,
+            recDate,
+            employee.shiftTiming || '11:00 AM - 07:00 PM'
+          );
+          await checkAndAutoLogoutRecord(rec, effShift.shiftTiming);
         }
       }
     } catch {
@@ -1006,7 +1037,13 @@ export const attendanceService = {
       const unclosed = await attendanceRepository.findActiveUnclosedRecords(employee.orgId);
       for (const rec of unclosed) {
         if (rec.employeeId === employee.id) {
-          await checkAndAutoLogoutRecord(rec, employee.shiftTiming);
+          const recDate = rec.attendanceDate ? new Date(rec.attendanceDate).toISOString().slice(0, 10) : null;
+          const effShift = await resolveShiftForEmployeeAndDate(
+            employee.id,
+            recDate,
+            employee.shiftTiming || '11:00 AM - 07:00 PM'
+          );
+          await checkAndAutoLogoutRecord(rec, effShift.shiftTiming);
         }
       }
     } catch {

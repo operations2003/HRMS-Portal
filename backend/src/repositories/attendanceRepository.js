@@ -441,6 +441,7 @@ export const attendanceRepository = {
                       CASE 
                         WHEN e.shift_timing ILIKE '%01:00 AM%07:00 PM%' OR e.shift_timing ILIKE '%1:00 AM%7:00 PM%' THEN 18.0
                         WHEN e.shift_timing ILIKE '%06:08 PM%07:00 AM%' OR e.shift_timing ILIKE '%6:08 PM%7:00 AM%' THEN 12.87
+                        WHEN e.shift_timing ILIKE '%11%8%PM%' OR e.shift_timing ILIKE '%10%7%PM%' OR e.shift_timing ILIKE '%09:30 AM%06:30 PM%' OR e.shift_timing ILIKE '%9:30 AM%6:30 PM%' THEN 9.0
                         ELSE 8.0
                       END,
                       8.0

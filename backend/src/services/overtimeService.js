@@ -4,6 +4,7 @@ import {
   calculateAutoLogoutCutoff,
   checkAndAutoLogoutRecord,
   resolveRequesterEmployee,
+  resolveShiftForEmployeeAndDate,
 } from './attendanceService.js';
 import { isCeoOrAdmin } from '../utils/roleUtils.js';
 
@@ -41,7 +42,13 @@ export const overtimeService = {
       const unclosedList = await attendanceRepository.findActiveUnclosedRecords(employee.orgId);
       for (const rec of unclosedList) {
         if (rec.employeeId === employee.id) {
-          await checkAndAutoLogoutRecord(rec, employee.shiftTiming);
+          const recDate = rec.attendanceDate ? new Date(rec.attendanceDate).toISOString().slice(0, 10) : null;
+          const effShift = await resolveShiftForEmployeeAndDate(
+            employee.id,
+            recDate,
+            employee.shiftTiming || '11:00 AM - 07:00 PM'
+          );
+          await checkAndAutoLogoutRecord(rec, effShift.shiftTiming);
         }
       }
     } catch {
@@ -137,12 +144,24 @@ export const overtimeService = {
       const unclosedList = await attendanceRepository.findActiveUnclosedRecords(employee.orgId);
       const openRec = unclosedList.find((r) => r.employeeId === employee.id);
       if (openRec) {
-        regularRecord = await checkAndAutoLogoutRecord(openRec, employee.shiftTiming);
+        const recDate = openRec.attendanceDate ? new Date(openRec.attendanceDate).toISOString().slice(0, 10) : null;
+        const effShift = await resolveShiftForEmployeeAndDate(
+          employee.id,
+          recDate,
+          employee.shiftTiming || '11:00 AM - 07:00 PM'
+        );
+        regularRecord = await checkAndAutoLogoutRecord(openRec, effShift.shiftTiming);
       }
     } else if (!regularRecord.checkOut) {
-      const cutoff = calculateAutoLogoutCutoff(regularRecord, employee.shiftTiming, employee.timezone, 20);
+      const recDate = regularRecord.attendanceDate ? new Date(regularRecord.attendanceDate).toISOString().slice(0, 10) : null;
+      const effShift = await resolveShiftForEmployeeAndDate(
+        employee.id,
+        recDate,
+        employee.shiftTiming || '11:00 AM - 07:00 PM'
+      );
+      const cutoff = calculateAutoLogoutCutoff(regularRecord, effShift.shiftTiming, employee.timezone, 20);
       if (cutoff && new Date().getTime() >= cutoff.getTime()) {
-        regularRecord = await checkAndAutoLogoutRecord(regularRecord, employee.shiftTiming);
+        regularRecord = await checkAndAutoLogoutRecord(regularRecord, effShift.shiftTiming);
       }
     }
 

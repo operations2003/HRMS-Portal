@@ -321,14 +321,30 @@ export const EmployeeListPage = () => {
 
   const parseShiftTiming = (str) => {
     if (!str) return { fromTime: '11:00', fromPeriod: 'AM', toTime: '07:00', toPeriod: 'PM' };
-    const match = str.match(/^(\d{1,2}:\d{2})\s*(AM|PM)\s*-\s*(\d{1,2}:\d{2})\s*(AM|PM)$/i);
-    if (match) {
-      return {
-        fromTime: match[1],
-        fromPeriod: match[2].toUpperCase(),
-        toTime: match[3],
-        toPeriod: match[4].toUpperCase(),
+    const parts = str.split(/\s*[-–—+]|\s+to\s+/i).map((s) => s.trim()).filter(Boolean);
+    if (parts.length >= 2) {
+      const parsePart = (p, defaultPeriod = null) => {
+        const m = p.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?/i);
+        if (!m) return null;
+        let h = parseInt(m[1], 10);
+        const min = m[2] ? m[2].padStart(2, '0') : '00';
+        let period = (m[3] || defaultPeriod || '').toUpperCase();
+        return { hour: h, minute: min, period };
       };
+
+      const endPeriodMatch = parts[1].match(/(AM|PM)/i);
+      const endPeriod = endPeriodMatch ? endPeriodMatch[1].toUpperCase() : 'PM';
+      let startObj = parsePart(parts[0], endPeriod === 'PM' && parseInt(parts[0], 10) >= 1 && parseInt(parts[0], 10) <= 6 ? 'PM' : 'AM');
+      let endObj = parsePart(parts[1], endPeriod);
+
+      if (startObj && endObj) {
+        return {
+          fromTime: `${String(startObj.hour).padStart(2, '0')}:${startObj.minute}`,
+          fromPeriod: startObj.period || 'AM',
+          toTime: `${String(endObj.hour).padStart(2, '0')}:${endObj.minute}`,
+          toPeriod: endObj.period || 'PM',
+        };
+      }
     }
     return { fromTime: '11:00', fromPeriod: 'AM', toTime: '07:00', toPeriod: 'PM' };
   };

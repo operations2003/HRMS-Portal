@@ -29,33 +29,43 @@ import {
  */
 const parseShiftDurationHours = (shiftTiming) => {
   if (!shiftTiming || typeof shiftTiming !== 'string') return 8.0;
-  const parts = shiftTiming.split('-');
-  if (parts.length !== 2) return 8.0;
+  const parts = shiftTiming.split(/\s*[-–—+]|\s+to\s+/i).map((s) => s.trim()).filter(Boolean);
+  if (parts.length < 2) return 8.0;
 
   const parseTime = (str) => {
     const trimmed = str.trim();
-    const match12 = trimmed.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+    const match12 = trimmed.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?/i);
     if (match12) {
       let h = parseInt(match12[1], 10);
-      const m = parseInt(match12[2], 10);
+      const m = match12[2] ? parseInt(match12[2], 10) : 0;
       const period = (match12[3] || '').toUpperCase();
       if (period === 'PM' && h < 12) h += 12;
       if (period === 'AM' && h === 12) h = 0;
-      return h * 60 + m;
+      return { hour: h, minute: m };
     }
     const match24 = trimmed.match(/^(\d{1,2}):(\d{2})/);
     if (match24) {
-      return parseInt(match24[1], 10) * 60 + parseInt(match24[2], 10);
+      return { hour: parseInt(match24[1], 10), minute: parseInt(match24[2], 10) };
     }
     return null;
   };
 
-  const startM = parseTime(parts[0]);
-  const endM = parseTime(parts[1]);
-  if (startM === null || endM === null) return 8.0;
+  const endPeriodMatch = parts[1].match(/(AM|PM)/i);
+  const endPeriod = endPeriodMatch ? endPeriodMatch[1].toUpperCase() : null;
+
+  let start = parseTime(parts[0]);
+  let end = parseTime(parts[1]);
+  if (!start || !end) return 8.0;
+
+  if (!parts[0].match(/(AM|PM)/i) && endPeriod === 'PM' && start.hour >= 1 && start.hour <= 6) {
+    start.hour += 12;
+  }
+
+  let startM = start.hour * 60 + start.minute;
+  let endM = end.hour * 60 + end.minute;
+  if (endM <= startM) endM += 24 * 60;
 
   let diff = endM - startM;
-  if (diff <= 0) diff += 24 * 60;
   return parseFloat((diff / 60).toFixed(2));
 };
 
