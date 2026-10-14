@@ -424,11 +424,12 @@ export const autoCheckoutStaleRecords = async (orgId = null) => {
 };
 
 /**
- * Determine if check-in is on time ('PRESENT') or late ('LATE') based on assigned shift and grace window
- * If employee logs in on time or early (e.g. at 02:59 PM for a 03:00 PM shift), status is 'PRESENT'
- * Grace period defaults to 10 minutes after shift start.
+ * Determine if check-in is on time ('PRESENT') or late ('LATE') based on assigned shift and grace window.
+ * - If employee logs in on time or early (before login time), they are NEVER marked as late (status: 'PRESENT').
+ * - Late arrival is strictly marked only if check-in is after the 5-minute grace window past scheduled login time.
+ * Grace period defaults to 5 minutes after shift start.
  */
-export const determineAttendanceStatus = (checkInDate, shiftTiming, timezone = 'Asia/Kolkata', graceMinutes = 10) => {
+export const determineAttendanceStatus = (checkInDate, shiftTiming, timezone = 'Asia/Kolkata', graceMinutes = 5) => {
   const { hour: shiftHour, minute: shiftMin } = parseShiftStartTime(shiftTiming);
 
   let checkInHour = checkInDate.getHours();
@@ -458,13 +459,24 @@ export const determineAttendanceStatus = (checkInDate, shiftTiming, timezone = '
   const shiftStartMinutes = shiftHour * 60 + shiftMin;
   let checkInMinutes = checkInHour * 60 + checkInMinute;
 
-  // Handle overnight shift edge case (e.g. Shift starts 11:00 PM, check-in past midnight)
+  // Case 1: Early arrival for an overnight shift starting after midnight (e.g. shift starts 01:00 AM, check-in 11:55 PM previous night)
+  if (shiftHour < 6 && checkInHour >= 18) {
+    return 'PRESENT';
+  }
+
+  // Case 2: Late check-in past midnight for an evening shift (e.g. shift starts 11:00 PM, check-in past midnight)
   if (shiftHour >= 18 && checkInHour < 6) {
     checkInMinutes += 24 * 60;
   }
 
-  // If check-in is on or before shift start, or within the 10-min grace period after start
-  if (checkInMinutes <= shiftStartMinutes + graceMinutes) {
+  // If check-in is on or before shift start time (logging before or at login time) -> always PRESENT
+  if (checkInMinutes <= shiftStartMinutes) {
+    return 'PRESENT';
+  }
+
+  // Grace period: late arrival should only be marked after 5 minutes after the login time
+  const effectiveGrace = Number.isFinite(Number(graceMinutes)) ? Number(graceMinutes) : 5;
+  if (checkInMinutes <= shiftStartMinutes + effectiveGrace) {
     return 'PRESENT';
   }
 
@@ -577,9 +589,9 @@ export const attendanceService = {
       throw error;
     }
 
-    // Determine status accurately based on employee's assigned shift timing and 10-minute grace period
+    // Determine status accurately based on employee's assigned shift timing and 5-minute grace period
     const tz = data.timezone || targetEmployee.timezone || 'Asia/Kolkata';
-    const status = determineAttendanceStatus(serverNow, shiftTiming, tz, 10);
+    const status = determineAttendanceStatus(serverNow, shiftTiming, tz, 5);
 
     if (existing) {
       // If a shell record already exists (e.g. NOT_STARTED, ABSENT or initialized), update it with check-in
@@ -760,7 +772,7 @@ export const attendanceService = {
     } else {
       const tz = data.timezone || existing.timezone || targetEmployee.timezone || 'Asia/Kolkata';
       finalStatus = existing.checkIn
-        ? determineAttendanceStatus(new Date(existing.checkIn), shiftTiming, tz, 10)
+        ? determineAttendanceStatus(new Date(existing.checkIn), shiftTiming, tz, 5)
         : existing.status;
     }
 
@@ -1347,10 +1359,10 @@ export const attendanceService = {
 
     if (!finalStatus) {
       if (newCheckIn) {
-        // Intelligently evaluate whether arrival is on-time with 10-minute grace window
-        const evaluatedStatus = determineAttendanceStatus(newCheckIn, shiftTiming, tz, 10);
+        // Intelligently evaluate whether arrival is on-time with 5-minute grace window
+        const evaluatedStatus = determineAttendanceStatus(newCheckIn, shiftTiming, tz, 5);
         if (evaluatedStatus === 'PRESENT') {
-          // If check-in is within shift start + grace window, wisely set to PRESENT
+          // If check-in is within shift start + 5-minute grace window, wisely set to PRESENT
           finalStatus = 'PRESENT';
         } else {
           finalStatus = (totalHours > 0 && totalHours < 4.0) ? 'HALF_DAY' : 'LATE';

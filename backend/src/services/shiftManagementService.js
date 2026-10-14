@@ -834,7 +834,7 @@ export const shiftManagementService = {
               const attRow = attRes.rows[0];
               if (attRow.check_in && !['ON_LEAVE', 'HOLIDAY', 'HALF_DAY'].includes(attRow.status)) {
                 const tz = attRow.timezone || 'Asia/Kolkata';
-                const evaluatedStatus = determineAttendanceStatus(new Date(attRow.check_in), normLabel, tz, 10);
+                const evaluatedStatus = determineAttendanceStatus(new Date(attRow.check_in), normLabel, tz, 5);
                 let evaluatedHours = parseFloat(attRow.total_hours) || 0;
                 let evaluatedOT = 0;
                 if (attRow.check_out) {
@@ -958,7 +958,7 @@ export const shiftManagementService = {
             if (attRes.rows.length > 0 && attRes.rows[0].check_in) {
               const attRow = attRes.rows[0];
               const tz = attRow.timezone || 'Asia/Kolkata';
-              const evaluatedStatus = determineAttendanceStatus(new Date(attRow.check_in), defaultShift, tz, 10);
+              const evaluatedStatus = determineAttendanceStatus(new Date(attRow.check_in), defaultShift, tz, 5);
               let evaluatedHours = parseFloat(attRow.total_hours) || 0;
               let evaluatedOT = 0;
               if (attRow.check_out) {

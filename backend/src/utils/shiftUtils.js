@@ -29,16 +29,6 @@ export const parseTimeStr = (timeStr, defaultPeriod = null) => {
  * Parse start hour and minute from shift timing string.
  * Supports: "03:00 PM - 08:00 PM", "1:00 AM - 7:00 PM", "11:00 AM to 07:00 PM", "2:00 PM - 08:00 PM", "12 - 8 PM", etc.
  */
-export const parseShiftStartTime = (shiftTiming) => {
-  if (!shiftTiming || typeof shiftTiming !== 'string') {
-    return { hour: 11, minute: 0 };
-  }
-  const parts = shiftTiming.split(/\s*[-–—+]|\s+to\s+/i).map((s) => s.trim()).filter(Boolean);
-  const startStr = parts.length > 0 ? parts[0] : shiftTiming;
-  const parsed = parseTimeStr(startStr);
-  return parsed || { hour: 11, minute: 0 };
-};
-
 /**
  * Parse start, end, overnight flag, and scheduled duration hours from shift timing string.
  */
@@ -58,15 +48,17 @@ export const parseShiftTiming = (shiftTiming) => {
 
   const parts = shiftTiming.split(/\s*[-–—+]|\s+to\s+/i).map((s) => s.trim()).filter(Boolean);
   if (parts.length < 2) {
-    const start = parseShiftStartTime(shiftTiming);
-    const endH = (start.hour + 8) % 24;
+    const parsed = parseTimeStr(parts[0] || shiftTiming);
+    const startH = parsed ? parsed.hour : 11;
+    const startM = parsed ? parsed.minute : 0;
+    const endH = (startH + 8) % 24;
     return {
-      startHour: start.hour,
-      startMinute: start.minute,
+      startHour: startH,
+      startMinute: startM,
       endHour: endH,
-      endMinute: start.minute,
+      endMinute: startM,
       scheduledDurationHours: 8.0,
-      isOvernight: endH < start.hour,
+      isOvernight: endH < startH,
     };
   }
 
@@ -80,8 +72,12 @@ export const parseShiftTiming = (shiftTiming) => {
     return defaultShift;
   }
 
-  // If start had no AM/PM and start hour <= 6 and end period is PM, start is PM (e.g. 2 - 10 PM)
+  // If start had no AM/PM and start hour <= 6 and end period is PM, start is PM (e.g. 2 - 10 PM, 2-10 PM)
   if (!parts[0].match(/(AM|PM)/i) && endPeriod === 'PM' && start.hour >= 1 && start.hour <= 6) {
+    start.hour += 12;
+  }
+  // If start had no AM/PM and end period is AM and start hour >= 4, start is PM (e.g. 7 - 3 AM, 8 - 4 AM)
+  if (!parts[0].match(/(AM|PM)/i) && endPeriod === 'AM' && start.hour >= 4 && start.hour <= 11) {
     start.hour += 12;
   }
 
@@ -104,6 +100,16 @@ export const parseShiftTiming = (shiftTiming) => {
     scheduledDurationHours: durationHours > 0 ? durationHours : 8.0,
     isOvernight,
   };
+};
+
+/**
+ * Parse start hour and minute from shift timing string.
+ * Accurately delegates to parseShiftTiming so all shifts (e.g. "2-10 PM", "11:00 AM to 07:00 PM")
+ * correctly identify their start hour in 24-hour time.
+ */
+export const parseShiftStartTime = (shiftTiming) => {
+  const timing = parseShiftTiming(shiftTiming);
+  return { hour: timing.startHour, minute: timing.startMinute };
 };
 
 /**
