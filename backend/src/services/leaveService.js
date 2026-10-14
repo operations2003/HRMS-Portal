@@ -692,7 +692,44 @@ export const leaveService = {
     }
 
     // Verify leave type exists and belongs to employee's organization
-    const leaveType = await leaveRepository.findLeaveTypeById(data.leaveTypeId, targetEmp.orgId);
+    let leaveType = await leaveRepository.findLeaveTypeById(data.leaveTypeId, targetEmp.orgId);
+
+    // Requirement: Half Day is not an independent category.
+    // If anyone applies for a half day (either data.isHalfDay === true, or legacy selected HDL),
+    // it must strictly reduce from the Casual Leave (CL) category.
+    const isHalfDay = Boolean(data.isHalfDay) || (leaveType && String(leaveType.code || '').toUpperCase() === 'HDL');
+    const halfDayPeriod = isHalfDay ? (data.halfDayPeriod || 'FIRST_HALF') : null;
+    const dayFactor = isHalfDay ? 0.5 : 1.0;
+
+    if (isHalfDay) {
+      const clRes = await pool.query(
+        `SELECT * FROM leave_types 
+         WHERE (org_id = $1 OR org_id = 'org-1') 
+           AND (UPPER(code) = 'CL' OR LOWER(name) = 'casual leave') 
+           AND status = 'Active' 
+         LIMIT 1;`,
+        [targetEmp.orgId || 'org-1']
+      );
+      if (clRes.rows.length > 0) {
+        leaveType = {
+          id: clRes.rows[0].id,
+          orgId: clRes.rows[0].org_id,
+          name: clRes.rows[0].name,
+          code: clRes.rows[0].code,
+          description: clRes.rows[0].description,
+          daysPerYear: parseFloat(clRes.rows[0].days_per_year) || 0,
+          isPaid: clRes.rows[0].is_paid,
+          requiresApproval: clRes.rows[0].requires_approval,
+          carryForwardDays: parseFloat(clRes.rows[0].carry_forward_days) || 0,
+          status: clRes.rows[0].status,
+          genderEligibility: clRes.rows[0].gender_eligibility,
+        };
+        data.leaveTypeId = leaveType.id;
+        data.isHalfDay = true;
+        data.halfDayPeriod = halfDayPeriod;
+      }
+    }
+
     if (!leaveType) {
       const error = new Error('Selected leave type does not exist or is not available for this organization.');
       error.statusCode = 400;
@@ -726,10 +763,6 @@ export const leaveService = {
       error.statusCode = 400;
       throw error;
     }
-
-    const isHalfDay = Boolean(data.isHalfDay);
-    const halfDayPeriod = isHalfDay ? data.halfDayPeriod : null;
-    const dayFactor = isHalfDay ? 0.5 : 1.0;
 
     let startDate;
     let endDate;

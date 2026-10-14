@@ -28,10 +28,9 @@ import { useAuth } from '../../context/AuthContext.jsx';
 
 const DEFAULT_LEAVE_CATEGORIES = [
   { id: 'lt-pl', name: 'Planned Leave', code: 'PL', description: 'Pre-planned annual leave and scheduled vacations', genderEligibility: 'ALL' },
-  { id: 'lt-cl', name: 'Casual Leave', code: 'CL', description: 'Casual leave for personal affairs and short breaks', genderEligibility: 'ALL' },
+  { id: 'lt-cl', name: 'Casual Leave', code: 'CL', description: 'Casual leave for personal affairs, short breaks, and half days', genderEligibility: 'ALL' },
   { id: 'lt-sl', name: 'Sick Leave', code: 'SL', description: 'Medical leave for illness or health recovery', genderEligibility: 'ALL' },
   { id: 'lt-hl', name: 'Holiday', code: 'HL', description: 'Official public holiday or declared company day-off', genderEligibility: 'ALL' },
-  { id: 'lt-hdl', name: 'Half Day', code: 'HDL', description: 'Half-day leave for morning or afternoon session (0.5 day)', genderEligibility: 'ALL' },
   { id: 'lt-awol', name: 'Absent Without Leave(AWOL)', code: 'AWOL', description: 'Unauthorized absence without prior notice or approved leave', genderEligibility: 'ALL' },
   { id: 'lt-lop', name: 'Leave Without Pay', code: 'LWP', description: 'Unpaid leave of absence / Leave Without Pay (LWP)', genderEligibility: 'ALL' },
   { id: 'lt-ml', name: 'Maternity Leave', code: 'ML', description: 'Maternity leave for prenatal, postnatal, and childcare recovery', genderEligibility: 'FEMALE' },
@@ -284,7 +283,8 @@ export const ApplyLeaveModal = ({
   const effectiveLeaveTypes = baseTypes.filter((lt) => {
     const code = String(lt.code || '').trim().toUpperCase();
     const name = String(lt.name || '').trim().toLowerCase();
-    if (code === 'UPL' || name.includes('unplanned')) {
+    // Exclude Unplanned and Half Day standalone categories
+    if (code === 'UPL' || name.includes('unplanned') || code === 'HDL' || name.includes('half day')) {
       return false;
     }
 
@@ -548,11 +548,24 @@ export const ApplyLeaveModal = ({
   };
 
   const handleHalfDayToggle = (checked) => {
-    setFormData((prev) => ({
-      ...prev,
-      isHalfDay: checked,
-      endDate: checked ? prev.startDate : prev.endDate,
-    }));
+    setFormData((prev) => {
+      let targetLtId = prev.leaveTypeId;
+      if (checked) {
+        // Requirement: Half Day must strictly be deducted from Casual Leave (CL) category
+        const clType = effectiveLeaveTypes.find(
+          (lt) => String(lt.code).toUpperCase() === 'CL' || String(lt.name).toLowerCase().includes('casual')
+        );
+        if (clType) {
+          targetLtId = clType.id;
+        }
+      }
+      return {
+        ...prev,
+        isHalfDay: checked,
+        leaveTypeId: targetLtId,
+        endDate: checked ? prev.startDate : prev.endDate,
+      };
+    });
   };
 
   const handleAddSpecificDate = () => {
@@ -761,8 +774,11 @@ export const ApplyLeaveModal = ({
               onChange={(e) => handleHalfDayToggle(e.target.checked)}
               className="w-4 h-4 rounded text-brand-600 focus:ring-brand-500 border-slate-300"
             />
-            <label htmlFor="isHalfDay" className="text-xs font-bold text-slate-800 cursor-pointer">
-              Apply for Half Day Leave (0.5 Day)
+            <label htmlFor="isHalfDay" className="text-xs font-bold text-slate-800 cursor-pointer flex items-center gap-1.5 flex-wrap">
+              <span>Apply for Half Day Leave (0.5 Day)</span>
+              <span className="text-[10px] text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded-full font-medium">
+                Deducted from Casual Leave (CL)
+              </span>
             </label>
           </div>
 

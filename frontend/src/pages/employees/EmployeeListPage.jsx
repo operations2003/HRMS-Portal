@@ -202,13 +202,12 @@ export const EmployeeListPage = () => {
   const [endInternshipTarget, setEndInternshipTarget] = useState(null);
   const [isEndingInternship, setIsEndingInternship] = useState(false);
 
-  // Leave Quotas & Entitlements State (Decided by Admin) - 11 Standard Company Categories
+  // Leave Quotas & Entitlements State (Decided by Admin) - Standard Company Categories
   const [leaveTypes, setLeaveTypes] = useState([
     { id: 'lt-pl', name: 'Planned Leave', code: 'PL', daysPerYear: 0, description: 'Pre-planned annual leave and scheduled vacations', genderEligibility: 'ALL' },
-    { id: 'lt-cl', name: 'Casual Leave', code: 'CL', daysPerYear: 0, description: 'Casual leave for personal affairs and short breaks', genderEligibility: 'ALL' },
+    { id: 'lt-cl', name: 'Casual Leave', code: 'CL', daysPerYear: 0, description: 'Casual leave for personal affairs, short breaks, and half days', genderEligibility: 'ALL' },
     { id: 'lt-sl', name: 'Sick Leave', code: 'SL', daysPerYear: 0, description: 'Medical leave for illness or health recovery', genderEligibility: 'ALL' },
     { id: 'lt-hl', name: 'Holiday', code: 'HL', daysPerYear: 0, description: 'Official public holiday or declared company day-off', genderEligibility: 'ALL' },
-    { id: 'lt-hdl', name: 'Half Day', code: 'HDL', daysPerYear: 0, description: 'Half-day leave for morning or afternoon session (0.5 day)', genderEligibility: 'ALL' },
     { id: 'lt-awol', name: 'Absent Without Leave(AWOL)', code: 'AWOL', daysPerYear: 0, description: 'Unauthorized absence without prior notice or approved leave', genderEligibility: 'ALL' },
     { id: 'lt-lop', name: 'Leave Without Pay', code: 'LWP', daysPerYear: 0, description: 'Unpaid leave of absence / Leave Without Pay (LWP)', genderEligibility: 'ALL' },
     { id: 'lt-ml', name: 'Maternity Leave', code: 'ML', daysPerYear: 0, description: 'Maternity leave for prenatal, postnatal, and childcare recovery', genderEligibility: 'FEMALE' },
@@ -220,7 +219,6 @@ export const EmployeeListPage = () => {
     'lt-cl': 0,
     'lt-sl': 0,
     'lt-hl': 0,
-    'lt-hdl': 0,
     'lt-awol': 0,
     'lt-lop': 0,
     'lt-ml': 0,

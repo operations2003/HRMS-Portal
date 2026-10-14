@@ -175,7 +175,10 @@ export const leaveRepository = {
   async findLeaveTypes(orgId, gender = null) {
     let sql = `
       SELECT * FROM leave_types
-      WHERE (org_id = $1 OR org_id = 'org-1') AND status = 'Active'
+      WHERE (org_id = $1 OR org_id = 'org-1') 
+        AND status = 'Active'
+        AND UPPER(code) != 'HDL' 
+        AND LOWER(name) != 'half day'
     `;
     const values = [orgId || 'org-1'];
     if (gender) {

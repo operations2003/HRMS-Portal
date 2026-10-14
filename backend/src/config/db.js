@@ -3,6 +3,10 @@ import { config } from './index.js';
 
 const { Pool, Client } = pg;
 
+// Ensure Postgres DATE types (OID 1082) are always returned as plain 'YYYY-MM-DD' strings,
+// preventing timezone shifts (e.g. UTC+5:30 IST) that shift dates by -1 day (Sunday becoming Saturday).
+pg.types.setTypeParser(1082, (val) => val);
+
 /**
  * Validates and sanitizes database connection URLs:
  * - Strips accidental surrounding quotes

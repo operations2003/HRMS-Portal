@@ -931,11 +931,13 @@ export const DateWiseShiftPage = () => {
       ]);
       const types = typesRes.status === 'fulfilled' ? typesRes.value : [];
       const balances = balancesRes.status === 'fulfilled' ? balancesRes.value : [];
-      const validTypes = Array.isArray(types) ? types : [];
+      const validTypes = Array.isArray(types)
+        ? types.filter((t) => t.code?.toUpperCase() !== 'HDL' && t.name?.toLowerCase() !== 'half day')
+        : [];
       setCellLeaveTypes(validTypes);
       setCellLeaveBalances(Array.isArray(balances) ? balances : []);
       if (validTypes.length > 0) {
-        const preferred = validTypes.find((t) => ['CL', 'PL', 'SL'].includes(t.code)) || validTypes[0];
+        const preferred = validTypes.find((t) => t.code === 'CL') || validTypes.find((t) => ['PL', 'SL'].includes(t.code)) || validTypes[0];
         setSelectedCellLeaveTypeId(preferred.id);
       }
     } catch (e) {
@@ -1024,9 +1026,15 @@ export const DateWiseShiftPage = () => {
 
     try {
       setIsApplyingCellLeave(true);
+      let targetLeaveTypeId = selectedCellLeaveTypeId;
+      if (isCellHalfDay) {
+        const clType = cellLeaveTypes.find((t) => t.code === 'CL' || t.name?.toLowerCase().includes('casual'));
+        if (clType) targetLeaveTypeId = clType.id;
+      }
+
       await leaveService.applyLeave({
         employeeId: employee.id,
-        leaveTypeId: selectedCellLeaveTypeId,
+        leaveTypeId: targetLeaveTypeId,
         dates: [dateKey],
         startDate: dateKey,
         endDate: dateKey,
@@ -1035,8 +1043,8 @@ export const DateWiseShiftPage = () => {
         reason: cellLeaveReason.trim() || `Applied from Monthly Roster on ${dateKey}`,
       });
 
-      const selectedLt = cellLeaveTypes.find((t) => t.id === selectedCellLeaveTypeId);
-      const ltName = selectedLt?.name || selectedLt?.code || 'Leave';
+      const selectedLt = cellLeaveTypes.find((t) => t.id === targetLeaveTypeId);
+      const ltName = isCellHalfDay ? 'Casual Leave (CL)' : (selectedLt?.name || selectedLt?.code || 'Leave');
       const daysCount = isCellHalfDay ? '0.5 day' : '1.0 day';
       toast.success(`Leave applied successfully! Deducted ${daysCount} from ${ltName} bucket for ${employee.fullName}.`);
       setSelectedMatrixCellDetails(null);
@@ -2122,7 +2130,11 @@ export const DateWiseShiftPage = () => {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setIsCellHalfDay(true)}
+                      onClick={() => {
+                        setIsCellHalfDay(true);
+                        const cl = cellLeaveTypes.find((t) => t.code === 'CL' || t.name?.toLowerCase().includes('casual'));
+                        if (cl) setSelectedCellLeaveTypeId(cl.id);
+                      }}
                       className={`p-2 rounded-lg border text-xs font-bold text-center transition-all cursor-pointer ${
                         isCellHalfDay
                           ? 'bg-amber-50 border-amber-500 text-amber-800 dark:bg-amber-950/40 dark:border-amber-500 dark:text-amber-300'
@@ -2130,7 +2142,7 @@ export const DateWiseShiftPage = () => {
                       }`}
                     >
                       <div>Half Day</div>
-                      <div className="text-[10px] font-normal text-slate-500">Deducts 0.5 Day</div>
+                      <div className="text-[10px] font-normal text-slate-500">Deducts 0.5 Day (CL)</div>
                     </button>
                   </div>
                 </div>

@@ -254,11 +254,15 @@ export const shiftManagementService = {
    */
 
   async getOrganizationMonthlyRoster(currentUser, { month, year, startDate, endDate, departmentId, employeeId }) {
-    // If not Manager, CEO, or HR/Admin, regular employee CANNOT see monthly roster
+    // If not Manager, CEO, or HR/Admin, regular employee can only view their own record
     if (!this.canSeeEveryone(currentUser)) {
-      const err = new Error('Access denied: Monthly roster is only accessible to HR, Managers, and Administrators.');
-      err.statusCode = 403;
-      throw err;
+      const callerEmp = await this.resolveCallerEmployee(currentUser);
+      if (!callerEmp) {
+        const err = new Error('Access denied: Caller employee record not found.');
+        err.statusCode = 403;
+        throw err;
+      }
+      employeeId = callerEmp.id;
     }
 
     const orgId = currentUser.orgId || 'org-1';
@@ -677,11 +681,6 @@ export const shiftManagementService = {
    * Monthly roster is accessible exclusively to HR, Managers, Admin, and CEO.
    */
   async getEmployeeShifts(currentUser, { employeeId, startDate, endDate, month, year, departmentId }) {
-    if (!this.canSeeEveryone(currentUser)) {
-      const err = new Error('Access denied: Monthly roster is only accessible to HR, Managers, and Administrators.');
-      err.statusCode = 403;
-      throw err;
-    }
     return this.getOrganizationMonthlyRoster(currentUser, { employeeId, startDate, endDate, month, year, departmentId });
   },
 

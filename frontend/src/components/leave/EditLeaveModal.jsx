@@ -28,10 +28,9 @@ import { isUnpaidLeave } from './ApplyLeaveModal.jsx';
 
 const DEFAULT_LEAVE_CATEGORIES = [
   { id: 'lt-pl', name: 'Planned Leave', code: 'PL', description: 'Pre-planned annual leave and scheduled vacations', genderEligibility: 'ALL' },
-  { id: 'lt-cl', name: 'Casual Leave', code: 'CL', description: 'Casual leave for personal affairs and short breaks', genderEligibility: 'ALL' },
+  { id: 'lt-cl', name: 'Casual Leave', code: 'CL', description: 'Casual leave for personal affairs, short breaks, and half days', genderEligibility: 'ALL' },
   { id: 'lt-sl', name: 'Sick Leave', code: 'SL', description: 'Medical leave for illness or health recovery', genderEligibility: 'ALL' },
   { id: 'lt-hl', name: 'Holiday', code: 'HL', description: 'Official public holiday or declared company day-off', genderEligibility: 'ALL' },
-  { id: 'lt-hdl', name: 'Half Day', code: 'HDL', description: 'Half-day leave for morning or afternoon session (0.5 day)', genderEligibility: 'ALL' },
   { id: 'lt-awol', name: 'Absent Without Leave(AWOL)', code: 'AWOL', description: 'Unauthorized absence without prior notice or approved leave', genderEligibility: 'ALL' },
   { id: 'lt-lop', name: 'Leave Without Pay', code: 'LWP', description: 'Unpaid leave of absence / Leave Without Pay (LWP)', genderEligibility: 'ALL' },
   { id: 'lt-ml', name: 'Maternity Leave', code: 'ML', description: 'Maternity leave for prenatal, postnatal, and childcare recovery', genderEligibility: 'FEMALE' },
@@ -64,7 +63,8 @@ export const EditLeaveModal = ({
   const baseTypes = leaveTypes && leaveTypes.length > 0 ? [...leaveTypes] : [...DEFAULT_LEAVE_CATEGORIES];
   const availableLeaveTypes = baseTypes.filter((lt) => {
     const code = String(lt.code || '').trim().toUpperCase();
-    if (code === 'UPL') return false;
+    const name = String(lt.name || '').trim().toLowerCase();
+    if (code === 'UPL' || code === 'HDL' || name.includes('half day')) return false;
     const ge = String(lt.genderEligibility || lt.gender_eligibility || 'ALL').toUpperCase();
     if (ge === 'FEMALE' && employeeGender === 'MALE') return false;
     if (ge === 'MALE' && employeeGender === 'FEMALE') return false;
@@ -263,8 +263,14 @@ export const EditLeaveModal = ({
 
     try {
       setSubmitting(true);
+      let targetLtId = formData.leaveTypeId;
+      if (formData.isHalfDay) {
+        const clType = availableLeaveTypes.find((lt) => lt.code === 'CL' || lt.name?.toLowerCase().includes('casual'));
+        if (clType) targetLtId = clType.id;
+      }
+
       const payload = {
-        leaveTypeId: formData.leaveTypeId,
+        leaveTypeId: targetLtId,
         isHalfDay: formData.isHalfDay,
         halfDayPeriod: formData.isHalfDay ? formData.halfDayPeriod : null,
         reason: formData.reason.trim(),
@@ -515,10 +521,20 @@ export const EditLeaveModal = ({
             <input
               type="checkbox"
               checked={formData.isHalfDay}
-              onChange={(e) => setFormData((prev) => ({ ...prev, isHalfDay: e.target.checked }))}
+              onChange={(e) => {
+                const checked = e.target.checked;
+                let targetLtId = formData.leaveTypeId;
+                if (checked) {
+                  const clType = availableLeaveTypes.find((lt) => lt.code === 'CL' || lt.name?.toLowerCase().includes('casual'));
+                  if (clType) targetLtId = clType.id;
+                }
+                setFormData((prev) => ({ ...prev, isHalfDay: checked, leaveTypeId: targetLtId }));
+              }}
               className="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
             />
-            <span className="text-xs font-bold text-slate-800">Half Day Session</span>
+            <span className="text-xs font-bold text-slate-800">
+              Half Day Session (0.5 Day — Deducted from Casual Leave)
+            </span>
           </label>
 
           {formData.isHalfDay && (
