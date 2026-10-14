@@ -69,7 +69,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
           name: 'Monthly Roster & Schedule',
           path: '/roster',
           icon: CalendarCheck,
-          roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin', 'Manager', 'TeamLead', 'Employee'],
+          roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin', 'Manager', 'TeamLead', 'CEO'],
         },
       ],
     },

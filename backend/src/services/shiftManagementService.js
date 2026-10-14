@@ -252,16 +252,13 @@ export const shiftManagementService = {
    * Get organization-wide or team monthly roster in rows (employees) and columns (days 1..N)
    * Designed specifically for Admin, HR, and Managers to view all employees together.
    */
-  async getOrganizationMonthlyRoster(currentUser, { month, year, startDate, endDate, departmentId }) {
-    // If not Manager, CEO, or HR/Admin, regular employee CANNOT see organization-wide roster
+
+  async getOrganizationMonthlyRoster(currentUser, { month, year, startDate, endDate, departmentId, employeeId }) {
+    // If not Manager, CEO, or HR/Admin, regular employee CANNOT see monthly roster
     if (!this.canSeeEveryone(currentUser)) {
-      const callerEmp = await this.resolveCallerEmployee(currentUser);
-      if (!callerEmp) {
-        const err = new Error('Access denied: Every employee can see only their own record.');
-        err.statusCode = 403;
-        throw err;
-      }
-      return this.getEmployeeShifts(currentUser, { employeeId: callerEmp.id, startDate, endDate, month, year });
+      const err = new Error('Access denied: Monthly roster is only accessible to HR, Managers, and Administrators.');
+      err.statusCode = 403;
+      throw err;
     }
 
     const orgId = currentUser.orgId || 'org-1';
@@ -270,6 +267,11 @@ export const shiftManagementService = {
     let eligibleEmployees = (await this.getEligibleEmployees(currentUser)).filter(
       (e) => !this.isCeoEmployee(e)
     );
+
+    // Optional employeeId filtering (if specific employee selected)
+    if (employeeId && employeeId !== 'ALL' && employeeId !== 'all') {
+      eligibleEmployees = eligibleEmployees.filter((e) => e.id === employeeId);
+    }
 
     // Optional department filtering
     if (departmentId && departmentId !== 'ALL' && departmentId !== '') {
@@ -493,7 +495,8 @@ export const shiftManagementService = {
         const leave = empLeaves.find((l) => dateKey >= l.startDate && dateKey <= l.endDate) || null;
         const att = attendanceByEmpAndDate.get(`${emp.id}_${dateKey}`) || null;
 
-        const isSunday = day.isSunday || day.dayName === 'Sun' || day.isWeekend;
+        // US-based calendar: ONLY Sundays are Weekly Off. Saturdays are normal working shifts.
+        const isSunday = day.dayName === 'Sun' || day.isSunday === true;
 
         let shiftType = 'SHIFT';
         let shiftLabel = defaultTiming;
@@ -642,8 +645,8 @@ export const shiftManagementService = {
       });
     }
 
-    return {
-      isAllEmployees: true,
+    const result = {
+      isAllEmployees: eligibleEmployees.length > 1,
       range: { startDate: start, endDate: end },
       month: m,
       year: y,
@@ -660,209 +663,26 @@ export const shiftManagementService = {
         totalHolidays: holidayRes.rows.length,
       },
     };
+
+    if (eligibleEmployees.length === 1) {
+      result.employee = eligibleEmployees[0];
+      result.defaultShiftTiming = eligibleEmployees[0].defaultShiftTiming;
+    }
+
+    return result;
   },
 
   /**
-   * Get shift schedule for a specific employee and date range
+   * Get shift schedule and monthly roster for employee(s) and date range.
+   * Monthly roster is accessible exclusively to HR, Managers, Admin, and CEO.
    */
   async getEmployeeShifts(currentUser, { employeeId, startDate, endDate, month, year, departmentId }) {
-    if (employeeId === 'ALL' || employeeId === 'all') {
-      return this.getOrganizationMonthlyRoster(currentUser, { startDate, endDate, month, year, departmentId });
-    }
-
-    const orgId = currentUser.orgId || 'org-1';
-
-    // Fall back to caller employee if not specified
-    let targetEmpId = employeeId;
-    if (!targetEmpId) {
-      const callerEmp = await this.resolveCallerEmployee(currentUser);
-      targetEmpId = callerEmp?.id;
-    }
-
-    if (!targetEmpId) {
-      const err = new Error('Employee ID is required.');
-      err.statusCode = 400;
-      throw err;
-    }
-
-    // Verify view permission: Manager, CEO, HR, and Admin can view everyone's records.
-    // Regular employee can ONLY view their own record.
     if (!this.canSeeEveryone(currentUser)) {
-      const callerEmp = await this.resolveCallerEmployee(currentUser);
-      if (!callerEmp || callerEmp.id !== targetEmpId) {
-        const err = new Error('Access denied: Every employee can see only their own record.');
-        err.statusCode = 403;
-        throw err;
-      }
-    }
-
-    // Fetch target employee profile
-    const empRes = await pool.query(
-      `SELECT 
-        e.id,
-        e.employee_code AS "employeeCode",
-        e.first_name AS "firstName",
-        e.last_name AS "lastName",
-        TRIM(CONCAT(e.first_name, ' ', e.last_name)) AS "fullName",
-        e.email,
-        e.shift_timing AS "defaultShiftTiming",
-        COALESCE(e.avatar_url, u.avatar_url) AS "avatarUrl",
-        d.name AS "departmentName",
-        ds.title AS "designationTitle"
-      FROM employees e
-      LEFT JOIN users u ON u.id = e.user_id
-      LEFT JOIN departments d ON d.id = e.dept_id
-      LEFT JOIN designations ds ON ds.id = e.desig_id
-      WHERE e.id = $1 AND (e.org_id = $2 OR e.org_id IS NULL OR $2 = '');`,
-      [targetEmpId, orgId]
-    );
-
-    if (empRes.rows.length === 0) {
-      const err = new Error('Employee not found.');
-      err.statusCode = 404;
+      const err = new Error('Access denied: Monthly roster is only accessible to HR, Managers, and Administrators.');
+      err.statusCode = 403;
       throw err;
     }
-
-    const employee = empRes.rows[0];
-
-    // Compute range
-    let start = startDate;
-    let end = endDate;
-
-    if (!start || !end) {
-      const y = year ? parseInt(year, 10) : new Date().getFullYear();
-      const m = month ? parseInt(month, 10) : new Date().getMonth() + 1;
-      const mStr = String(m).padStart(2, '0');
-      start = `${y}-${mStr}-01`;
-      const lastDay = new Date(y, m, 0).getDate();
-      end = `${y}-${mStr}-${String(lastDay).padStart(2, '0')}`;
-    }
-
-    // 1. Fetch custom shift assignments
-    const shiftRes = await pool.query(
-      `SELECT 
-        id,
-        TO_CHAR(assignment_date, 'YYYY-MM-DD') AS "assignmentDate",
-        shift_type AS "shiftType",
-        shift_start_time AS "shiftStartTime",
-        shift_end_time AS "shiftEndTime",
-        shift_label AS "shiftLabel",
-        is_overnight AS "isOvernight",
-        notes,
-        source,
-        created_at AS "createdAt",
-        updated_at AS "updatedAt"
-      FROM shift_assignments
-      WHERE employee_id = $1 
-        AND assignment_date >= $2::date 
-        AND assignment_date <= $3::date
-      ORDER BY assignment_date ASC;`,
-      [targetEmpId, start, end]
-    );
-
-    // 2. Fetch approved leaves in this range
-    const leavesRes = await pool.query(
-      `SELECT 
-        lr.id,
-        TO_CHAR(lr.start_date, 'YYYY-MM-DD') AS "startDate",
-        TO_CHAR(COALESCE(lr.end_date, lr.start_date), 'YYYY-MM-DD') AS "endDate",
-        lr.is_half_day AS "isHalfDay",
-        lr.status,
-        COALESCE(lt.name, lr.leave_type_id, 'Leave') AS "leaveName",
-        COALESCE(lt.code, 'LV') AS "leaveCode"
-      FROM leave_requests lr
-      LEFT JOIN leave_types lt ON lt.id = lr.leave_type_id
-      WHERE lr.employee_id = $1
-        AND UPPER(lr.status) = 'APPROVED'
-        AND lr.start_date <= $3::date 
-        AND COALESCE(lr.end_date, lr.start_date) >= $2::date;`,
-      [targetEmpId, start, end]
-    );
-
-    // 3. Fetch actual attendance records in this range
-    const attRes = await pool.query(
-      `SELECT 
-        id,
-        TO_CHAR(attendance_date, 'YYYY-MM-DD') AS "attendanceDate",
-        check_in AS "checkIn",
-        check_out AS "checkOut",
-        total_hours AS "totalHours",
-        status,
-        break_duration_minutes AS "breakDurationMinutes",
-        overtime_hours AS "overtimeHours",
-        is_regularized AS "isRegularized",
-        notes
-      FROM attendance_records
-      WHERE employee_id = $1
-        AND attendance_date >= $2::date
-        AND attendance_date <= $3::date
-      ORDER BY attendance_date ASC;`,
-      [targetEmpId, start, end]
-    );
-
-    const customShiftsByDate = {};
-    for (const s of shiftRes.rows) {
-      const dStr = typeof s.assignmentDate === 'string' 
-        ? s.assignmentDate.slice(0, 10) 
-        : new Date(s.assignmentDate).toISOString().slice(0, 10);
-      customShiftsByDate[dStr] = s;
-    }
-
-    // US-based calendar: Indian holidays are not considered (leave only on Sundays)
-    const holidaysByDate = {};
-    const holidayRes = { rows: [] };
-
-    const attendanceByDate = {};
-    for (const a of attRes.rows) {
-      const dStr = a.attendanceDate;
-      const totalHoursNum = parseFloat(a.totalHours) || 0;
-      
-      let workMinutes = 0;
-      if (a.checkIn && a.checkOut) {
-        const diffMs = new Date(a.checkOut).getTime() - new Date(a.checkIn).getTime();
-        workMinutes = Math.max(0, Math.round(diffMs / 60000) - (parseInt(a.breakDurationMinutes, 10) || 0));
-      } else if (totalHoursNum > 0) {
-        workMinutes = Math.round(totalHoursNum * 60);
-      }
-
-      let formattedWorkHours = '-';
-      if (workMinutes > 0) {
-        const hrs = Math.floor(workMinutes / 60);
-        const mins = workMinutes % 60;
-        formattedWorkHours = `${hrs}h ${mins}m`;
-      } else if (a.checkIn && !a.checkOut) {
-        formattedWorkHours = 'In Progress';
-      } else if (['ABSENT', 'NOT_STARTED'].includes((a.status || '').toUpperCase())) {
-        formattedWorkHours = '0h 0m';
-      }
-
-      attendanceByDate[dStr] = {
-        id: a.id,
-        attendanceDate: dStr,
-        checkIn: a.checkIn,
-        checkOut: a.checkOut,
-        totalHours: totalHoursNum,
-        workMinutes,
-        formattedWorkHours,
-        status: (a.status || 'PRESENT').toUpperCase(),
-        breakDurationMinutes: parseInt(a.breakDurationMinutes, 10) || 0,
-        overtimeHours: parseFloat(a.overtimeHours) || 0,
-        isRegularized: Boolean(a.isRegularized),
-        notes: a.notes || '',
-      };
-    }
-
-    return {
-      employee,
-      range: { startDate: start, endDate: end },
-      defaultShiftTiming: employee.defaultShiftTiming || '11:00 AM - 07:00 PM',
-      customAssignments: shiftRes.rows,
-      customShiftsByDate,
-      holidaysByDate,
-      approvedLeaves: leavesRes.rows,
-      attendanceByDate,
-      attendanceRecords: attRes.rows,
-    };
+    return this.getOrganizationMonthlyRoster(currentUser, { employeeId, startDate, endDate, month, year, departmentId });
   },
 
   /**

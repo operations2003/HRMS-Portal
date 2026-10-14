@@ -181,7 +181,7 @@ export const App = () => {
                 path="shifts"
                 element={
                   <PermissionRoute
-                    roles={['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin', 'Manager', 'TeamLead', 'Employee']}
+                    roles={['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin', 'Manager', 'TeamLead', 'CEO']}
                   >
                     <DateWiseShiftPage />
                   </PermissionRoute>
@@ -191,7 +191,7 @@ export const App = () => {
                 path="roster"
                 element={
                   <PermissionRoute
-                    roles={['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin', 'Manager', 'TeamLead', 'Employee']}
+                    roles={['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin', 'Manager', 'TeamLead', 'CEO']}
                   >
                     <DateWiseShiftPage />
                   </PermissionRoute>

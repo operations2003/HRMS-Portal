@@ -11,12 +11,14 @@ router.use(authenticate);
 // 1. Get eligible employees that caller can schedule
 router.get(
   '/eligible-employees',
+  requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin', 'Manager', 'TeamLead', 'CEO']),
   shiftManagementController.getEligibleEmployees
 );
 
 // 2. Get shift assignments / schedule for employee and date range
 router.get(
   '/assignments',
+  requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin', 'Manager', 'TeamLead', 'CEO']),
   shiftManagementController.getAssignments
 );
 
