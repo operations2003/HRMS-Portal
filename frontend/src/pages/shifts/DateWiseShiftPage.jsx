@@ -112,6 +112,7 @@ export const DateWiseShiftPage = () => {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState(() => {
     return canEditShifts ? 'ALL' : '';
   });
+  const [employees, setEmployees] = useState([]);
   const [employeeSearch, setEmployeeSearch] = useState('');
   const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
   const [employeeFilterTab, setEmployeeFilterTab] = useState('ALL'); // 'ALL' | 'CUSTOM'
