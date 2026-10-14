@@ -2,6 +2,7 @@ import { pool } from '../config/db.js';
 import { parseShiftTiming } from '../utils/shiftUtils.js';
 import { logger } from '../utils/logger.js';
 import { nanoid } from 'nanoid';
+import { determineAttendanceStatus, calculateWorkingHoursAndOvertime } from './attendanceService.js';
 
 const normalizeRole = (r) => (r || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -314,12 +315,14 @@ export const shiftManagementService = {
       const currD = String(curr.getDate()).padStart(2, '0');
       const dateKey = `${currY}-${currM}-${currD}`;
       const dayOfWeek = curr.getDay();
-      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+      const isSunday = dayOfWeek === 0;
+      const isWeekend = isSunday;
       days.push({
         dayNumber: curr.getDate(),
         dateKey,
         dayName: weekdayNames[dayOfWeek],
         isWeekend,
+        isSunday,
       });
       curr.setDate(curr.getDate() + 1);
     }
@@ -510,18 +513,21 @@ export const shiftManagementService = {
         const leave = empLeaves.find((l) => dateKey >= l.startDate && dateKey <= l.endDate) || null;
         const att = attendanceByEmpAndDate.get(`${emp.id}_${dateKey}`) || null;
 
+        const isSunday = day.isSunday || day.dayName === 'Sun' || day.isWeekend;
+
         let shiftType = 'SHIFT';
         let shiftLabel = defaultTiming;
         let shortLabel = defaultShort;
 
-        if (custom) {
-          shiftType = (custom.shiftType || 'SHIFT').toUpperCase();
-          shiftLabel = custom.shiftLabel || (shiftType === 'WO' ? 'Weekly Off' : defaultTiming);
-          shortLabel = this.getShortShiftLabel(shiftLabel, custom.shiftStartTime, custom.shiftEndTime);
-        } else if (day.isWeekend) {
+        if (isSunday) {
+          // Sunday is marked as Week Off for everyone in the monthly schedule roster
           shiftType = 'WO';
           shiftLabel = 'Weekly Off';
           shortLabel = 'WO';
+        } else if (custom) {
+          shiftType = (custom.shiftType || 'SHIFT').toUpperCase();
+          shiftLabel = custom.shiftLabel || (shiftType === 'WO' ? 'Weekly Off' : defaultTiming);
+          shortLabel = this.getShortShiftLabel(shiftLabel, custom.shiftStartTime, custom.shiftEndTime);
         }
 
         // Distinct Half Day detection
@@ -534,28 +540,25 @@ export const shiftManagementService = {
           att?.status === 'HALF_DAY'
         );
 
-        // Leave detection (excluding half days)
+        // Leave detection (excluding half days, excluding Sunday which is standard Weekly Off)
         const isLeave = Boolean(
-          (leave && !isHalfDay) ||
-          ['CL', 'PL', 'SL', 'LOP', 'LWP', 'ML', 'PTL', 'SBL'].includes(shiftType) ||
-          /casual\s*leave|planned\s*leave|sick\s*leave/i.test(shiftLabel) ||
-          att?.status === 'ON_LEAVE'
+          (!isSunday && leave && !isHalfDay) ||
+          (['CL', 'PL', 'SL', 'LOP', 'LWP', 'ML', 'PTL', 'SBL'].includes(shiftType)) ||
+          (!isSunday && /casual\s*leave|planned\s*leave|sick\s*leave/i.test(shiftLabel)) ||
+          (!isSunday && att?.status === 'ON_LEAVE')
         );
 
-        const isWeeklyOff = shiftType === 'WO';
+        const isWeeklyOff = shiftType === 'WO' || isSunday;
 
         // Override determination:
         // A day is an override if the custom shift explicitly alters the standard schedule:
-        // 1. Working on weekend (weekend day where shiftType !== 'WO')
-        // 2. Off on a weekday (weekday where shiftType === 'WO')
-        // 3. Different timing on weekday (weekday working day where shortLabel !== defaultShort)
+        // 1. Off on a weekday (weekday where shiftType === 'WO')
+        // 2. Different timing on weekday (weekday working day where shortLabel !== defaultShort)
         let isOverride = false;
-        if (custom && !isLeave && !isHalfDay) {
-          if (day.isWeekend && !isWeeklyOff) {
+        if (custom && !isLeave && !isHalfDay && !isSunday) {
+          if (isWeeklyOff) {
             isOverride = true;
-          } else if (!day.isWeekend && isWeeklyOff) {
-            isOverride = true;
-          } else if (!day.isWeekend && !isWeeklyOff && shortLabel !== defaultShort) {
+          } else if (!isWeeklyOff && shortLabel !== defaultShort) {
             isOverride = true;
           }
         }
@@ -565,16 +568,15 @@ export const shiftManagementService = {
           totalOverridesCount++;
         }
 
-        if (isWeeklyOff) {
+        if (isSunday || isWeeklyOff) {
           weeklyOffDaysCount++;
         } else {
           scheduledDaysCount++;
-        }
-
-        if (isHalfDay) {
-          halfDaysCount++;
-        } else if (isLeave) {
-          leaveDaysCount++;
+          if (isHalfDay) {
+            halfDaysCount++;
+          } else if (isLeave) {
+            leaveDaysCount++;
+          }
         }
 
         if (att) {
@@ -589,7 +591,10 @@ export const shiftManagementService = {
         let displayType = 'SHIFT';
         let cellText = shortLabel;
 
-        if (holiday) {
+        if (isSunday || isWeeklyOff) {
+          displayType = 'WO';
+          cellText = 'WO';
+        } else if (holiday) {
           displayType = 'HOLIDAY';
           cellText = 'Holiday';
         } else if (isHalfDay) {
@@ -598,9 +603,6 @@ export const shiftManagementService = {
         } else if (isLeave) {
           displayType = 'LEAVE';
           cellText = leave?.leaveCode || (['CL', 'PL', 'SL', 'LOP', 'LWP'].includes(shiftType) ? shiftType : 'Leave');
-        } else if (isWeeklyOff) {
-          displayType = 'WO';
-          cellText = 'WO';
         } else if (isOverride) {
           displayType = 'OVERRIDE';
           cellText = shortLabel;
@@ -611,6 +613,7 @@ export const shiftManagementService = {
           dayNumber: day.dayNumber,
           dayName: day.dayName,
           isWeekend: day.isWeekend,
+          isSunday,
           shiftType,
           shiftLabel,
           shortLabel,
@@ -1037,6 +1040,58 @@ export const shiftManagementService = {
             userId,
           ]
         );
+
+        // 4. Immediately synchronize with attendance_records for this employee and date
+        try {
+          if (normType === 'WO') {
+            await client.query(
+              `UPDATE attendance_records
+               SET status = 'WEEKEND', 
+                   notes = COALESCE(notes || ' | ', '') || 'Shift updated to Weekly Off (WO)',
+                   updated_at = NOW()
+               WHERE employee_id = $1 AND attendance_date = $2::date AND status IN ('ABSENT', 'NOT_STARTED');`,
+              [employeeId, dStr]
+            );
+          } else if (normLabel) {
+            const attRes = await client.query(
+              `SELECT id, check_in, check_out, status, timezone, break_duration_minutes, total_hours
+               FROM attendance_records
+               WHERE employee_id = $1 AND attendance_date = $2::date;`,
+              [employeeId, dStr]
+            );
+            if (attRes.rows.length > 0) {
+              const attRow = attRes.rows[0];
+              if (attRow.check_in && !['ON_LEAVE', 'HOLIDAY', 'HALF_DAY'].includes(attRow.status)) {
+                const tz = attRow.timezone || 'Asia/Kolkata';
+                const evaluatedStatus = determineAttendanceStatus(new Date(attRow.check_in), normLabel, tz, 10);
+                let evaluatedHours = parseFloat(attRow.total_hours) || 0;
+                let evaluatedOT = 0;
+                if (attRow.check_out) {
+                  const recalc = calculateWorkingHoursAndOvertime({
+                    checkIn: attRow.check_in,
+                    checkOut: attRow.check_out,
+                    breakDurationMinutes: attRow.break_duration_minutes,
+                    shiftTiming: normLabel,
+                  });
+                  evaluatedHours = recalc.totalHours;
+                  evaluatedOT = recalc.overtimeHours;
+                }
+                await client.query(
+                  `UPDATE attendance_records
+                   SET status = $1,
+                       total_hours = $2,
+                       overtime_hours = $3,
+                       notes = COALESCE(notes || ' | ', '') || '[SHIFT_UPDATED: ' || $4 || ']',
+                       updated_at = NOW()
+                   WHERE id = $5;`,
+                  [evaluatedStatus, evaluatedHours, evaluatedOT, normLabel, attRow.id]
+                );
+              }
+            }
+          }
+        } catch (attSyncErr) {
+          logger.warn('SHIFT_MANAGEMENT', `Attendance re-sync skipped for ${employeeId} on ${dStr}: ${attSyncErr.message}`);
+        }
       }
 
       await client.query('COMMIT');
@@ -1118,6 +1173,43 @@ export const shiftManagementService = {
           );
 
           resetCount++;
+
+          // Re-evaluate existing attendance record against employee's contract default shift
+          try {
+            const empRes = await client.query('SELECT shift_timing FROM employees WHERE id = $1', [employeeId]);
+            const defaultShift = empRes.rows[0]?.shift_timing || '11:00 AM - 07:00 PM';
+            const attRes = await client.query(
+              `SELECT id, check_in, check_out, status, timezone, break_duration_minutes, total_hours
+               FROM attendance_records
+               WHERE employee_id = $1 AND attendance_date = $2::date;`,
+              [employeeId, dStr]
+            );
+            if (attRes.rows.length > 0 && attRes.rows[0].check_in) {
+              const attRow = attRes.rows[0];
+              const tz = attRow.timezone || 'Asia/Kolkata';
+              const evaluatedStatus = determineAttendanceStatus(new Date(attRow.check_in), defaultShift, tz, 10);
+              let evaluatedHours = parseFloat(attRow.total_hours) || 0;
+              let evaluatedOT = 0;
+              if (attRow.check_out) {
+                const recalc = calculateWorkingHoursAndOvertime({
+                  checkIn: attRow.check_in,
+                  checkOut: attRow.check_out,
+                  breakDurationMinutes: attRow.break_duration_minutes,
+                  shiftTiming: defaultShift,
+                });
+                evaluatedHours = recalc.totalHours;
+                evaluatedOT = recalc.overtimeHours;
+              }
+              await client.query(
+                `UPDATE attendance_records
+                 SET status = $1, total_hours = $2, overtime_hours = $3, notes = COALESCE(notes || ' | ', '') || '[REVERTED_DEFAULT_SHIFT]', updated_at = NOW()
+                 WHERE id = $4;`,
+                [evaluatedStatus, evaluatedHours, evaluatedOT, attRow.id]
+              );
+            }
+          } catch (rSyncErr) {
+            logger.warn('SHIFT_MANAGEMENT', `Attendance re-sync on reset skipped: ${rSyncErr.message}`);
+          }
         }
       }
 

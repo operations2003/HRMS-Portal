@@ -39,14 +39,16 @@ import { Select } from '../../components/common/Select.jsx';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
 import { shiftService } from '../../services/shiftService.js';
 import { employeeService } from '../../services/employeeService.js';
+import { leaveService } from '../../services/leaveService.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 
 const PRESET_SHIFTS = [
   { label: '11:00 AM - 07:00 PM', desc: 'Standard Day (8 hrs)' },
   { label: '10:00 AM - 07:00 PM', desc: 'General Day (9 hrs)' },
+  { label: '09:00 AM - 06:00 PM', desc: 'Morning Shift (8 hrs)' },
   { label: '02:00 PM - 10:00 PM', desc: 'Evening Shift (8 hrs)' },
-  { label: '06:00 AM - 02:00 PM', desc: 'Morning Shift (8 hrs)' },
+  { label: '06:00 AM - 02:00 PM', desc: 'Early Morning (8 hrs)' },
   { label: '10:00 PM - 06:00 AM', desc: 'Night / Overnight Shift (8 hrs)' },
 ];
 
@@ -62,6 +64,21 @@ const formatTime12h = (isoString) => {
   } catch {
     return '';
   }
+};
+
+/**
+ * Format 12-hour AM/PM string to 24-hour HH:MM:00 (e.g. "11:00 AM" -> "11:00:00", "07:00 PM" -> "19:00:00")
+ */
+const formatTime24h = (time12h) => {
+  if (!time12h || typeof time12h !== 'string') return null;
+  const match = time12h.trim().match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?/i);
+  if (!match) return null;
+  let h = parseInt(match[1], 10);
+  const m = match[2] ? match[2] : '00';
+  const period = (match[3] || '').toUpperCase();
+  if (period === 'PM' && h < 12) h += 12;
+  if (period === 'AM' && h === 12) h = 0;
+  return `${String(h).padStart(2, '0')}:${m}:00`;
 };
 
 export const DateWiseShiftPage = () => {
@@ -127,10 +144,31 @@ export const DateWiseShiftPage = () => {
   const [selectedDayDetails, setSelectedDayDetails] = useState(null);
 
   // Organization Roster Matrix State (When "All Employees" is selected)
-  const [allEmployeesViewMode, setAllEmployeesViewMode] = useState('DATE_WISE'); // 'DATE_WISE' | 'MATRIX'
+  // Default to 'MATRIX' for Excel-like structure
+  const [allEmployeesViewMode, setAllEmployeesViewMode] = useState('MATRIX'); // 'MATRIX' | 'DATE_WISE'
   const [selectedDepartmentFilter, setSelectedDepartmentFilter] = useState('ALL');
   const [matrixSearch, setMatrixSearch] = useState('');
   const [selectedMatrixCellDetails, setSelectedMatrixCellDetails] = useState(null);
+
+  // Matrix Cell Action Modal State (Change Shift Timing & Apply Leave with bucket deduction)
+  const [matrixModalTab, setMatrixModalTab] = useState('SHIFT'); // 'SHIFT' | 'LEAVE' | 'ATTENDANCE'
+  const [cellShiftType, setCellShiftType] = useState('SHIFT'); // 'SHIFT' | 'WO'
+  const [cellSelectedPreset, setCellSelectedPreset] = useState('11:00 AM - 07:00 PM');
+  const [cellCustomStart, setCellCustomStart] = useState('');
+  const [cellCustomEnd, setCellCustomEnd] = useState('');
+  const [cellIsCustom, setCellIsCustom] = useState(false);
+  const [cellShiftNotes, setCellShiftNotes] = useState('');
+  const [isSavingCellShift, setIsSavingCellShift] = useState(false);
+
+  // Leave application states for cell
+  const [cellLeaveTypes, setCellLeaveTypes] = useState([]);
+  const [cellLeaveBalances, setCellLeaveBalances] = useState([]);
+  const [isLoadingCellLeaves, setIsLoadingCellLeaves] = useState(false);
+  const [selectedCellLeaveTypeId, setSelectedCellLeaveTypeId] = useState('');
+  const [isCellHalfDay, setIsCellHalfDay] = useState(false);
+  const [cellHalfDayPeriod, setCellHalfDayPeriod] = useState('FIRST_HALF');
+  const [cellLeaveReason, setCellLeaveReason] = useState('');
+  const [isApplyingCellLeave, setIsApplyingCellLeave] = useState(false);
 
   // Today ISO Date string
   const todayDateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
@@ -357,15 +395,18 @@ export const DateWiseShiftPage = () => {
       const dateKey = `${currentYear}-${mStr}-${dayStr}`;
 
       const dateObj = new Date(currentYear, currentMonth - 1, d);
-      const isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
+      const isSunday = dateObj.getDay() === 0;
+      const isWeekend = isSunday;
 
       const customAssignment = scheduleData?.customShiftsByDate?.[dateKey] || null;
       const holiday = scheduleData?.holidaysByDate?.[dateKey] || null;
-      const approvedLeave = (scheduleData?.approvedLeaves || []).find((l) => {
-        const start = l.startDate?.slice(0, 10);
-        const end = l.endDate?.slice(0, 10);
-        return dateKey >= start && dateKey <= end;
-      });
+      const approvedLeave = !isSunday
+        ? (scheduleData?.approvedLeaves || []).find((l) => {
+            const start = l.startDate?.slice(0, 10);
+            const end = l.endDate?.slice(0, 10);
+            return dateKey >= start && dateKey <= end;
+          })
+        : null;
       const attendance = scheduleData?.attendanceByDate?.[dateKey] || null;
 
       const isHalfDay = Boolean(
@@ -379,6 +420,7 @@ export const DateWiseShiftPage = () => {
         dayNumber: d,
         dateKey,
         isWeekend,
+        isSunday,
         customAssignment,
         holiday,
         approvedLeave,
@@ -625,6 +667,7 @@ export const DateWiseShiftPage = () => {
       const dayValues = days.map((d) => {
         const cell = r.cells[d.dateKey];
         if (!cell) return '-';
+        if (d.dayName === 'Sun' || cell.isSunday || cell.shiftType === 'WO' || cell.displayType === 'WO') return 'Weekly Off';
         if (cell.holiday) return `Holiday (${cell.holiday.name || 'Holiday'})`;
         if (cell.isHalfDay || cell.displayType === 'HALF_DAY') return 'Half Day';
         if (cell.leave || cell.displayType === 'LEAVE') {
@@ -632,7 +675,6 @@ export const DateWiseShiftPage = () => {
           const lName = cell.leave?.leaveName || cell.cellText || 'Leave';
           return `"${lCode ? `${lCode}: ${lName}` : lName}"`;
         }
-        if (cell.shiftType === 'WO' || cell.displayType === 'WO') return 'Weekly Off';
         const shift = cell.shiftLabel || emp.defaultShiftTiming || 'Shift';
         const att = cell.attendance ? ` [Att: ${cell.attendance.status} ${cell.attendance.formattedWorkHours}]` : '';
         return `"${shift}${att}"`;
@@ -801,6 +843,164 @@ export const DateWiseShiftPage = () => {
       toast.error('Failed to load shift change history.');
     } finally {
       setIsLoadingHistory(false);
+    }
+  };
+
+  // Open Matrix Cell Modal (Excel-like Interactive Editor)
+  const handleOpenMatrixCell = async (employee, dateKey, cell) => {
+    setSelectedMatrixCellDetails({ employee, dateKey, cell });
+    setMatrixModalTab('SHIFT');
+
+    const isSunday = cell.isSunday || (dateKey ? new Date(`${dateKey}T00:00:00`).getDay() === 0 : false);
+
+    if (cell.shiftType === 'WO' || isSunday) {
+      setCellShiftType('WO');
+      setCellSelectedPreset('11:00 AM - 07:00 PM');
+      setCellIsCustom(false);
+    } else {
+      setCellShiftType('SHIFT');
+      const timing = cell.shiftLabel || employee.defaultShiftTiming || '11:00 AM - 07:00 PM';
+      const foundPreset = PRESET_SHIFTS.find((p) => p.label === timing);
+      if (foundPreset) {
+        setCellSelectedPreset(foundPreset.label);
+        setCellIsCustom(false);
+      } else {
+        setCellSelectedPreset('11:00 AM - 07:00 PM');
+        setCellIsCustom(true);
+        if (cell.customAssignment?.shiftStartTime && cell.customAssignment?.shiftEndTime) {
+          setCellCustomStart(cell.customAssignment.shiftStartTime.slice(0, 5));
+          setCellCustomEnd(cell.customAssignment.shiftEndTime.slice(0, 5));
+        }
+      }
+    }
+    setCellShiftNotes(cell.customAssignment?.notes || '');
+    setIsCellHalfDay(false);
+    setCellHalfDayPeriod('FIRST_HALF');
+    setCellLeaveReason('');
+
+    // Fetch leave types and employee balances in background
+    try {
+      setIsLoadingCellLeaves(true);
+      const [typesRes, balancesRes] = await Promise.allSettled([
+        leaveService.getLeaveTypes({ all: true }),
+        leaveService.getEmployeeBalances(employee.id, currentYear),
+      ]);
+      const types = typesRes.status === 'fulfilled' ? typesRes.value : [];
+      const balances = balancesRes.status === 'fulfilled' ? balancesRes.value : [];
+      const validTypes = Array.isArray(types) ? types : [];
+      setCellLeaveTypes(validTypes);
+      setCellLeaveBalances(Array.isArray(balances) ? balances : []);
+      if (validTypes.length > 0) {
+        const preferred = validTypes.find((t) => ['CL', 'PL', 'SL'].includes(t.code)) || validTypes[0];
+        setSelectedCellLeaveTypeId(preferred.id);
+      }
+    } catch (e) {
+      console.warn('Failed to load leave types/balances for cell modal:', e.message);
+    } finally {
+      setIsLoadingCellLeaves(false);
+    }
+  };
+
+  // Save Shift Timing from Matrix Cell Modal
+  const handleSaveMatrixCellShift = async () => {
+    if (!selectedMatrixCellDetails) return;
+    const { employee, dateKey } = selectedMatrixCellDetails;
+
+    try {
+      setIsSavingCellShift(true);
+      let payload = {
+        employeeId: employee.id,
+        dates: [dateKey],
+        shiftType: cellShiftType,
+        notes: cellShiftNotes.trim(),
+      };
+
+      if (cellShiftType === 'WO') {
+        payload.shiftLabel = 'Weekly Off';
+      } else if (cellIsCustom) {
+        if (!cellCustomStart || !cellCustomEnd) {
+          toast.error('Please enter both custom start time and end time.');
+          setIsSavingCellShift(false);
+          return;
+        }
+        const sTime = `${cellCustomStart}:00`;
+        const eTime = `${cellCustomEnd}:00`;
+        payload.shiftStartTime = sTime;
+        payload.shiftEndTime = eTime;
+        payload.shiftLabel = `${formatTime12h(`2000-01-01T${sTime}`)} - ${formatTime12h(`2000-01-01T${eTime}`)}`;
+      } else {
+        payload.shiftLabel = cellSelectedPreset;
+        const [startPart, endPart] = cellSelectedPreset.split(/\s*-\s*/);
+        if (startPart && endPart) {
+          payload.shiftStartTime = formatTime24h(startPart);
+          payload.shiftEndTime = formatTime24h(endPart);
+        }
+      }
+
+      const res = await shiftService.assignShifts(payload);
+      toast.success(res.message || `Shift updated for ${employee.fullName} on ${dateKey}. Daily login/logout timing updated.`);
+      setSelectedMatrixCellDetails(null);
+      await fetchSchedule();
+    } catch (err) {
+      toast.error(err.message || 'Failed to update shift timing.');
+    } finally {
+      setIsSavingCellShift(false);
+    }
+  };
+
+  // Reset Shift Timing from Matrix Cell Modal back to contract default
+  const handleResetMatrixCellShift = async () => {
+    if (!selectedMatrixCellDetails) return;
+    const { employee, dateKey } = selectedMatrixCellDetails;
+    try {
+      setIsSavingCellShift(true);
+      await shiftService.resetShifts({
+        employeeId: employee.id,
+        dates: [dateKey],
+      });
+      toast.success(`Reset ${dateKey} back to contract default shift for ${employee.fullName}.`);
+      setSelectedMatrixCellDetails(null);
+      await fetchSchedule();
+    } catch (err) {
+      toast.error(err.message || 'Failed to reset shift timing.');
+    } finally {
+      setIsSavingCellShift(false);
+    }
+  };
+
+  // Apply Leave from Matrix Cell Modal (deducts from bucket)
+  const handleApplyMatrixCellLeave = async () => {
+    if (!selectedMatrixCellDetails) return;
+    const { employee, dateKey } = selectedMatrixCellDetails;
+
+    if (!selectedCellLeaveTypeId) {
+      toast.error('Please select a leave category.');
+      return;
+    }
+
+    try {
+      setIsApplyingCellLeave(true);
+      await leaveService.applyLeave({
+        employeeId: employee.id,
+        leaveTypeId: selectedCellLeaveTypeId,
+        dates: [dateKey],
+        startDate: dateKey,
+        endDate: dateKey,
+        isHalfDay: isCellHalfDay,
+        halfDayPeriod: isCellHalfDay ? cellHalfDayPeriod : null,
+        reason: cellLeaveReason.trim() || `Applied from Monthly Roster on ${dateKey}`,
+      });
+
+      const selectedLt = cellLeaveTypes.find((t) => t.id === selectedCellLeaveTypeId);
+      const ltName = selectedLt?.name || selectedLt?.code || 'Leave';
+      const daysCount = isCellHalfDay ? '0.5 day' : '1.0 day';
+      toast.success(`Leave applied successfully! Deducted ${daysCount} from ${ltName} bucket for ${employee.fullName}.`);
+      setSelectedMatrixCellDetails(null);
+      await fetchSchedule();
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || 'Failed to apply leave.');
+    } finally {
+      setIsApplyingCellLeave(false);
     }
   };
 
@@ -1764,37 +1964,45 @@ export const DateWiseShiftPage = () => {
                     <table className="w-full text-left border-collapse text-xs">
                       <thead>
                         <tr className="bg-slate-100/95 dark:bg-slate-800/95 border-b border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold select-none">
-                          {/* Sticky 1: Employee Column */}
-                          <th className="sticky left-0 z-30 bg-slate-100 dark:bg-slate-800 p-2.5 w-[220px] min-w-[220px] max-w-[220px] border-r border-slate-200 dark:border-slate-700 shadow-xs">
-                            Employee
+                          {/* Sticky 1: Employee Name Column */}
+                          <th className="sticky left-0 z-30 bg-slate-100 dark:bg-slate-800 p-2.5 w-[240px] min-w-[240px] max-w-[240px] border-r border-slate-200 dark:border-slate-700 shadow-xs">
+                            <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">
+                              <Users className="w-3.5 h-3.5 text-brand-500 shrink-0" />
+                              <span>Employee Name</span>
+                            </div>
                           </th>
-                          {/* Non-sticky 2: Default Shift */}
-                          <th className="p-2.5 min-w-[140px] border-r border-slate-200 dark:border-slate-700">
-                            Default Shift
-                          </th>
-                          {/* Days columns 1..N */}
-                          {scheduleData?.days?.map((day) => (
-                            <th
-                              key={day.dateKey}
-                              className={`p-1.5 text-center min-w-[62px] border-r border-slate-200/60 dark:border-slate-700/60 ${
-                                day.isWeekend ? 'bg-slate-200/50 dark:bg-slate-800/50 text-rose-500' : ''
-                              }`}
-                            >
-                              <div className="text-[10px] uppercase font-bold text-slate-400">
-                                {day.dayName}
-                              </div>
-                              <div className={`text-xs font-bold inline-block px-1.5 py-0.2 rounded ${
-                                day.dateKey === todayDateStr ? 'bg-brand-600 text-white shadow-2xs' : ''
-                              }`}>
-                                {String(day.dayNumber).padStart(2, '0')}
-                              </div>
-                              {day.holiday && (
-                                <div className="text-[9px] text-rose-500 font-semibold truncate" title={day.holiday.name}>
-                                  🎉
+                          {/* Days columns 1..N directly following employee column */}
+                          {scheduleData?.days?.map((day) => {
+                            const isSun = day.dayName === 'Sun' || day.isSunday;
+                            return (
+                              <th
+                                key={day.dateKey}
+                                className={`p-1.5 text-center min-w-[64px] border-r border-slate-200/60 dark:border-slate-700/60 transition-colors ${
+                                  isSun
+                                    ? 'bg-rose-100/70 dark:bg-rose-950/40 text-rose-600 font-extrabold border-rose-200 dark:border-rose-900/50'
+                                    : 'bg-slate-100/60 dark:bg-slate-850/60'
+                                }`}
+                              >
+                                <div className={`text-[10px] uppercase font-extrabold ${isSun ? 'text-rose-600 dark:text-rose-400' : 'text-slate-400'}`}>
+                                  {day.dayName}
                                 </div>
-                              )}
-                            </th>
-                          ))}
+                                <div className={`text-xs font-bold inline-block px-1.5 py-0.2 rounded ${
+                                  day.dateKey === todayDateStr
+                                    ? 'bg-brand-600 text-white shadow-2xs'
+                                    : isSun
+                                    ? 'text-rose-700 dark:text-rose-300'
+                                    : ''
+                                }`}>
+                                  {String(day.dayNumber).padStart(2, '0')}
+                                </div>
+                                {day.holiday && (
+                                  <div className="text-[9px] text-rose-500 font-semibold truncate" title={day.holiday.name}>
+                                    🎉
+                                  </div>
+                                )}
+                              </th>
+                            );
+                          })}
                           {/* Right summary totals */}
                           <th className="p-2 text-center min-w-[50px] bg-slate-50 dark:bg-slate-850 border-r border-slate-200 dark:border-slate-700" title="Scheduled Days">
                             Sched
@@ -1822,38 +2030,29 @@ export const DateWiseShiftPage = () => {
                       <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
                         {filteredRosterRows.map((row) => (
                           <tr key={row.employee.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
-                            {/* Sticky 1: Employee */}
-                            <td className="sticky left-0 z-20 bg-white dark:bg-slate-900 hover:bg-slate-50/90 dark:hover:bg-slate-800/90 p-2.5 w-[220px] min-w-[220px] max-w-[220px] border-r border-slate-200 dark:border-slate-700 shadow-xs">
-                              <button
-                                type="button"
-                                onClick={() => setSelectedEmployeeId(row.employee.id)}
-                                className="flex items-center gap-2.5 text-left w-full cursor-pointer group"
-                                title="Click to view this employee's individual schedule calendar"
-                              >
+                            {/* Sticky 1: Employee Name */}
+                            <td className="sticky left-0 z-20 bg-white dark:bg-slate-900 hover:bg-slate-50/90 dark:hover:bg-slate-800/90 p-2.5 w-[240px] min-w-[240px] max-w-[240px] border-r border-slate-200 dark:border-slate-700 shadow-xs">
+                              <div className="flex items-center gap-2.5 text-left w-full">
                                 <Avatar
                                   src={row.employee.avatarUrl}
                                   name={row.employee.fullName}
                                   size="sm"
                                   shape="rounded-lg"
                                 />
-                                <div className="min-w-0">
-                                  <div className="font-semibold text-slate-900 dark:text-white truncate group-hover:text-brand-600 transition-colors">
+                                <div className="min-w-0 flex-1">
+                                  <div className="font-semibold text-slate-900 dark:text-white truncate">
                                     {row.employee.fullName}
                                   </div>
-                                  <div className="text-[10px] text-slate-400 flex items-center gap-1.5">
+                                  <div className="text-[10px] text-slate-400 flex items-center gap-1.5 truncate">
                                     <span className="font-mono font-medium">{row.employee.employeeCode}</span>
                                     <span>•</span>
                                     <span className="truncate">{row.employee.departmentName}</span>
                                   </div>
+                                  <div className="text-[9px] text-brand-600 dark:text-brand-400 flex items-center gap-1 mt-0.5 truncate" title={`Contract Default: ${row.employee.defaultShiftTiming}`}>
+                                    <Clock className="w-2.5 h-2.5 shrink-0" />
+                                    <span className="truncate">{row.employee.defaultShiftTiming || '11:00 AM - 07:00 PM'}</span>
+                                  </div>
                                 </div>
-                              </button>
-                            </td>
-
-                            {/* Non-sticky 2: Default Shift */}
-                            <td className="p-2.5 border-r border-slate-200 dark:border-slate-700 text-[11px] text-slate-600 dark:text-slate-300 font-medium whitespace-nowrap">
-                              <div className="flex items-center gap-1">
-                                <Clock className="w-3 h-3 text-brand-500 shrink-0" />
-                                <span className="truncate">{row.employee.defaultShiftTiming || '11:00 AM - 07:00 PM'}</span>
                               </div>
                             </td>
 
@@ -1868,24 +2067,33 @@ export const DateWiseShiftPage = () => {
                                 );
                               }
 
+                              const isSun = day.dayName === 'Sun' || cell.isSunday;
                               const isOverride = Boolean(cell.isOverride || cell.displayType === 'OVERRIDE');
                               const hasHoliday = Boolean(cell.holiday || cell.displayType === 'HOLIDAY');
                               const isHalfDay = Boolean(cell.isHalfDay || cell.displayType === 'HALF_DAY');
                               const hasLeave = Boolean((cell.leave || cell.displayType === 'LEAVE') && !isHalfDay);
-                              const isWO = Boolean(cell.shiftType === 'WO' || cell.displayType === 'WO');
+                              const isWO = Boolean(cell.shiftType === 'WO' || cell.displayType === 'WO' || isSun);
                               const att = cell.attendance;
 
                               return (
                                 <td
                                   key={day.dateKey}
-                                  onClick={() => setSelectedMatrixCellDetails({ employee: row.employee, dateKey: day.dateKey, cell })}
-                                  className={`p-1.5 text-center border-r border-slate-100 dark:border-slate-800/60 cursor-pointer transition-all hover:bg-brand-50/50 dark:hover:bg-brand-950/30 ${
-                                    day.isWeekend ? 'bg-slate-50/40 dark:bg-slate-850/40' : ''
+                                  onClick={() => handleOpenMatrixCell(row.employee, day.dateKey, cell)}
+                                  className={`p-1.5 text-center border-r border-slate-100 dark:border-slate-800/60 cursor-pointer transition-all hover:bg-brand-50/60 dark:hover:bg-brand-950/40 hover:ring-1 hover:ring-brand-400 select-none group relative ${
+                                    isSun ? 'bg-rose-50/20 dark:bg-rose-950/10' : ''
                                   }`}
-                                  title={`${row.employee.fullName} | ${day.dateKey}\n${isHalfDay ? 'Half Day' : hasHoliday ? `Holiday (${cell.holiday?.name || 'Holiday'})` : hasLeave ? `Leave (${cell.leave?.leaveName || cell.cellText || 'Leave'})` : isWO ? 'Weekly Off' : cell.shiftLabel}${isOverride ? ' (✨ Override)' : ''}${att ? `\nAtt: ${att.status} (${att.formattedWorkHours})` : ''}`}
+                                  title={`Click to edit shift timing or apply leave\n${row.employee.fullName} | ${day.dateKey}\n${isHalfDay ? 'Half Day' : hasHoliday ? `Holiday (${cell.holiday?.name || 'Holiday'})` : hasLeave ? `Leave (${cell.leave?.leaveName || cell.cellText || 'Leave'})` : isWO ? 'Weekly Off (WO)' : cell.shiftLabel}${isOverride ? ' (✨ Override)' : ''}${att ? `\nAtt: ${att.status} (${att.formattedWorkHours})` : ''}`}
                                 >
                                   <div className="flex flex-col items-center justify-center gap-0.5 min-h-[36px]">
-                                    {hasHoliday ? (
+                                    {isSun || isWO ? (
+                                      <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                        isSun 
+                                          ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200' 
+                                          : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                                      }`}>
+                                        WO
+                                      </span>
+                                    ) : hasHoliday ? (
                                       <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200">
                                         Holiday
                                       </span>
@@ -1896,10 +2104,6 @@ export const DateWiseShiftPage = () => {
                                     ) : hasLeave ? (
                                       <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300 border border-orange-200">
                                         {cell.leave?.leaveCode || cell.cellText || 'Leave'}
-                                      </span>
-                                    ) : isWO ? (
-                                      <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-                                        WO
                                       </span>
                                     ) : isOverride ? (
                                       <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-700 shadow-2xs">
@@ -2086,7 +2290,7 @@ export const DateWiseShiftPage = () => {
               <span>Wed</span>
               <span>Thu</span>
               <span>Fri</span>
-              <span className="text-rose-500">Sat</span>
+              <span>Sat</span>
               <span className="text-rose-500">Sun</span>
             </div>
 
@@ -2183,7 +2387,11 @@ export const DateWiseShiftPage = () => {
 
                     {/* Middle Section: Shift & Leave Badges */}
                     <div className="space-y-1 my-1">
-                      {hasHoliday ? (
+                      {day.isSunday || isWO ? (
+                        <div className="text-[10px] font-bold text-emerald-800 bg-emerald-100 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 rounded px-1.5 py-0.5">
+                          Weekly Off
+                        </div>
+                      ) : hasHoliday ? (
                         <div className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded px-1.5 py-0.5 truncate" title={day.holiday.name}>
                           🎉 {day.holiday.name}
                         </div>
@@ -2194,10 +2402,6 @@ export const DateWiseShiftPage = () => {
                       ) : hasLeave ? (
                         <div className="text-[10px] font-semibold text-orange-800 bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-800 rounded px-1.5 py-0.5 truncate" title={day.approvedLeave.leaveName}>
                           ⛱️ {day.approvedLeave.leaveName}
-                        </div>
-                      ) : isWO ? (
-                        <div className="text-[10px] font-bold text-emerald-800 bg-emerald-100 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 rounded px-1.5 py-0.5">
-                          Weekly Off
                         </div>
                       ) : isCustom ? (
                         <div className="text-[10px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 rounded px-1.5 py-0.5 truncate" title={`Custom Shift: ${day.customAssignment.shiftLabel}`}>
@@ -2530,132 +2734,549 @@ export const DateWiseShiftPage = () => {
       )}
 
       {/* =================================================================== */}
-      {/* 8. Cell Inspector Modal for Organization Roster Matrix Grid         */}
+      {/* 8. Interactive Excel-Like Cell Action Modal                         */}
       {/* =================================================================== */}
       {selectedMatrixCellDetails && (
         <Modal
           isOpen={Boolean(selectedMatrixCellDetails)}
           onClose={() => setSelectedMatrixCellDetails(null)}
-          title={`Roster Details: ${selectedMatrixCellDetails.dateKey}`}
-          subtitle={`${selectedMatrixCellDetails.employee.fullName} (${selectedMatrixCellDetails.employee.employeeCode})`}
-          maxWidth="max-w-md"
+          title={`Edit Schedule & Attendance`}
+          subtitle={`${selectedMatrixCellDetails.employee.fullName} • ${selectedMatrixCellDetails.dateKey}`}
+          maxWidth="max-w-xl"
         >
           <div className="space-y-4 text-xs">
-            {/* Employee Quick Header */}
-            <div className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+            {/* Employee Quick Info Header */}
+            <div className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700">
               <Avatar
                 src={selectedMatrixCellDetails.employee.avatarUrl}
                 name={selectedMatrixCellDetails.employee.fullName}
                 size="md"
               />
               <div className="flex-1 min-w-0">
-                <p className="font-bold text-slate-900 dark:text-white truncate">
-                  {selectedMatrixCellDetails.employee.fullName}
-                </p>
-                <p className="text-[11px] text-slate-400 truncate">
-                  {selectedMatrixCellDetails.employee.designationTitle || 'Staff'} • {selectedMatrixCellDetails.employee.departmentName || 'General'}
-                </p>
-              </div>
-            </div>
-
-            {/* Shift Timing Details */}
-            <div className="p-3 bg-white dark:bg-slate-850 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Assigned Shift</span>
-                {selectedMatrixCellDetails.cell.isOverride ? (
-                  <Badge variant="brand" size="xs">✨ Date Override</Badge>
-                ) : selectedMatrixCellDetails.cell.shiftType === 'WO' ? (
-                  <Badge variant="neutral" size="xs">Weekly Off</Badge>
-                ) : (
-                  <Badge variant="neutral" size="xs">Default Contract</Badge>
-                )}
-              </div>
-              <p className="text-sm font-bold text-slate-900 dark:text-white">
-                {selectedMatrixCellDetails.cell.shiftLabel}
-              </p>
-              {selectedMatrixCellDetails.cell.customAssignment?.notes && (
-                <p className="text-[11px] text-slate-500 italic">
-                  Remarks: {selectedMatrixCellDetails.cell.customAssignment.notes}
-                </p>
-              )}
-            </div>
-
-            {/* Attendance Punch Details if any */}
-            {selectedMatrixCellDetails.cell.attendance ? (
-              <div className="p-3 bg-emerald-50/60 dark:bg-emerald-950/20 rounded-xl border border-emerald-200 dark:border-emerald-800/40 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">Attendance Punches</span>
-                  <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200">
-                    {selectedMatrixCellDetails.cell.attendance.status}
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-bold text-slate-900 dark:text-white truncate text-sm">
+                    {selectedMatrixCellDetails.employee.fullName}
+                  </p>
+                  <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                    {selectedMatrixCellDetails.employee.employeeCode}
                   </span>
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-slate-700 dark:text-slate-300">
-                  <div>
-                    <span className="text-[10px] text-slate-400 block">Check-In</span>
-                    <span className="font-semibold">{formatTime12h(selectedMatrixCellDetails.cell.attendance.checkIn) || '-'}</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-400 block">Check-Out</span>
-                    <span className="font-semibold">{formatTime12h(selectedMatrixCellDetails.cell.attendance.checkOut) || 'Active / None'}</span>
-                  </div>
-                  <div className="col-span-2 pt-1 border-t border-emerald-200/60 dark:border-emerald-800/40 flex justify-between">
-                    <span className="text-[11px] text-slate-500">Total Worked:</span>
-                    <span className="font-bold text-emerald-700 dark:text-emerald-300">{selectedMatrixCellDetails.cell.attendance.formattedWorkHours}</span>
-                  </div>
+                <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  <span className="truncate">{selectedMatrixCellDetails.employee.departmentName || 'General'}</span>
+                  <span>•</span>
+                  <span className="truncate text-brand-600 dark:text-brand-400 font-medium">
+                    Contract: {selectedMatrixCellDetails.employee.defaultShiftTiming || '11:00 AM - 07:00 PM'}
+                  </span>
                 </div>
               </div>
-            ) : (
-              <div className="p-2.5 text-center text-[11px] text-slate-400 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">
-                No punch attendance record logged for this date.
+            </div>
+
+            {/* Current Day Status Banner */}
+            <div className="p-2.5 rounded-lg border bg-white dark:bg-slate-850 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-slate-400 shrink-0" />
+                <span className="font-semibold text-slate-700 dark:text-slate-300">
+                  {formatRosterDateHeading(selectedMatrixCellDetails.dateKey)}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                {selectedMatrixCellDetails.cell.shiftType === 'WO' || selectedMatrixCellDetails.cell.isSunday ? (
+                  <Badge variant="neutral" size="xs">🛑 Weekly Off (WO)</Badge>
+                ) : selectedMatrixCellDetails.cell.holiday ? (
+                  <Badge variant="rose" size="xs">🎉 {selectedMatrixCellDetails.cell.holiday.name}</Badge>
+                ) : selectedMatrixCellDetails.cell.isHalfDay ? (
+                  <Badge variant="amber" size="xs">🌗 Half Day</Badge>
+                ) : selectedMatrixCellDetails.cell.leave ? (
+                  <Badge variant="warning" size="xs">🏖️ {selectedMatrixCellDetails.cell.leave.leaveName || 'Leave'}</Badge>
+                ) : selectedMatrixCellDetails.cell.isOverride ? (
+                  <Badge variant="brand" size="xs">✨ Override: {selectedMatrixCellDetails.cell.shiftLabel}</Badge>
+                ) : (
+                  <Badge variant="neutral" size="xs">🕒 {selectedMatrixCellDetails.cell.shiftLabel || selectedMatrixCellDetails.employee.defaultShiftTiming}</Badge>
+                )}
+              </div>
+            </div>
+
+            {/* Navigation Tabs */}
+            <div className="flex border-b border-slate-200 dark:border-slate-700 gap-1">
+              <button
+                type="button"
+                onClick={() => setMatrixModalTab('SHIFT')}
+                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer ${
+                  matrixModalTab === 'SHIFT'
+                    ? 'border-brand-600 text-brand-600 dark:text-brand-400'
+                    : 'border-transparent text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5" />
+                <span>Change Shift Timing</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setMatrixModalTab('LEAVE')}
+                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer ${
+                  matrixModalTab === 'LEAVE'
+                    ? 'border-brand-600 text-brand-600 dark:text-brand-400'
+                    : 'border-transparent text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                <Sun className="w-3.5 h-3.5" />
+                <span>Apply Leave (Bucket Deduction)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setMatrixModalTab('ATTENDANCE')}
+                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer ${
+                  matrixModalTab === 'ATTENDANCE'
+                    ? 'border-brand-600 text-brand-600 dark:text-brand-400'
+                    : 'border-transparent text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                <Activity className="w-3.5 h-3.5" />
+                <span>Punches & Attendance</span>
+              </button>
+            </div>
+
+            {/* TAB 1: CHANGE SHIFT TIMING */}
+            {matrixModalTab === 'SHIFT' && (
+              <div className="space-y-4 pt-1">
+                {!canEditShifts ? (
+                  <div className="p-3 bg-amber-50 dark:bg-amber-950/20 text-amber-800 dark:text-amber-300 rounded-lg border border-amber-200">
+                    You do not have permissions to modify shift timings.
+                  </div>
+                ) : (
+                  <>
+                    {/* Shift Mode: Regular Working Shift vs Weekly Off */}
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
+                        Shift Schedule Mode
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setCellShiftType('SHIFT')}
+                          className={`p-2 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                            cellShiftType === 'SHIFT'
+                              ? 'bg-brand-50 border-brand-500 text-brand-700 dark:bg-brand-950/50 dark:border-brand-500 dark:text-brand-300 shadow-2xs'
+                              : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50'
+                          }`}
+                        >
+                          <Clock className="w-3.5 h-3.5" />
+                          <span>Working Shift Timing</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCellShiftType('WO')}
+                          className={`p-2 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                            cellShiftType === 'WO'
+                              ? 'bg-rose-50 border-rose-500 text-rose-700 dark:bg-rose-950/50 dark:border-rose-500 dark:text-rose-300 shadow-2xs'
+                              : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50'
+                          }`}
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>Weekly Off (WO)</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Presets & Custom Timings */}
+                    {cellShiftType === 'SHIFT' && (
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
+                            Select Shift Preset
+                          </label>
+                          <div className="grid grid-cols-2 gap-2">
+                            {PRESET_SHIFTS.map((preset) => {
+                              const isSelected = !cellIsCustom && cellSelectedPreset === preset.label;
+                              return (
+                                <button
+                                  key={preset.label}
+                                  type="button"
+                                  onClick={() => {
+                                    setCellSelectedPreset(preset.label);
+                                    setCellIsCustom(false);
+                                  }}
+                                  className={`p-2 rounded-lg border text-left transition-all cursor-pointer ${
+                                    isSelected
+                                      ? 'bg-brand-50 border-brand-500 text-brand-900 dark:bg-brand-950/40 dark:border-brand-500 dark:text-brand-300 ring-1 ring-brand-500/30'
+                                      : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-brand-300'
+                                  }`}
+                                >
+                                  <div className="font-bold text-[11px] flex items-center justify-between">
+                                    <span>{preset.label}</span>
+                                    {isSelected && <Check className="w-3 h-3 text-brand-600 shrink-0" />}
+                                  </div>
+                                  <div className="text-[10px] text-slate-400 truncate">{preset.desc}</div>
+                                </button>
+                              );
+                            })}
+
+                            <button
+                              type="button"
+                              onClick={() => setCellIsCustom(true)}
+                              className={`p-2 rounded-lg border text-left transition-all cursor-pointer ${
+                                cellIsCustom
+                                  ? 'bg-brand-50 border-brand-500 text-brand-900 dark:bg-brand-950/40 dark:border-brand-500 dark:text-brand-300 ring-1 ring-brand-500/30'
+                                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-brand-300'
+                              }`}
+                            >
+                              <div className="font-bold text-[11px] flex items-center justify-between">
+                                <span>Custom Shift</span>
+                                {cellIsCustom && <Check className="w-3 h-3 text-brand-600 shrink-0" />}
+                              </div>
+                              <div className="text-[10px] text-slate-400">Specify custom hours</div>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Custom Time inputs */}
+                        {cellIsCustom && (
+                          <div className="p-3 bg-brand-50/40 dark:bg-brand-950/20 rounded-xl border border-brand-200 dark:border-brand-800/40 space-y-2">
+                            <span className="font-bold text-[11px] text-brand-800 dark:text-brand-300 block">
+                              Custom Shift Start & End
+                            </span>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="text-[10px] text-slate-500 block mb-1">Start Time (24h)</label>
+                                <input
+                                  type="time"
+                                  value={cellCustomStart}
+                                  onChange={(e) => setCellCustomStart(e.target.value)}
+                                  className="w-full px-2 py-1.5 text-xs rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 font-mono"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[10px] text-slate-500 block mb-1">End Time (24h)</label>
+                                <input
+                                  type="time"
+                                  value={cellCustomEnd}
+                                  onChange={(e) => setCellCustomEnd(e.target.value)}
+                                  className="w-full px-2 py-1.5 text-xs rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 font-mono"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Remarks Input */}
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1">
+                        Remarks / Reason (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={cellShiftNotes}
+                        onChange={(e) => setCellShiftNotes(e.target.value)}
+                        placeholder="e.g. Covering project deadline, client visit"
+                        className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800"
+                      />
+                    </div>
+
+                    <div className="p-2.5 bg-blue-50/70 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-900/40 flex items-start gap-2 text-[11px] text-blue-800 dark:text-blue-300">
+                      <Info className="w-4 h-4 shrink-0 mt-0.5 text-blue-500" />
+                      <span>
+                        Updated shift timing will automatically re-evaluate this employee's check-in/out punctuality (Late vs Present) and recalculate overtime for {selectedMatrixCellDetails.dateKey}.
+                      </span>
+                    </div>
+
+                    {/* Bottom Actions */}
+                    <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                      {selectedMatrixCellDetails.cell.isOverride ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          icon={RotateCcw}
+                          onClick={handleResetMatrixCellShift}
+                          disabled={isSavingCellShift}
+                          className="text-xs text-rose-600 border-rose-200 hover:bg-rose-50"
+                        >
+                          Revert to Contract Default
+                        </Button>
+                      ) : (
+                        <div />
+                      )}
+
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setSelectedMatrixCellDetails(null)}
+                          disabled={isSavingCellShift}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          icon={Check}
+                          onClick={handleSaveMatrixCellShift}
+                          loading={isSavingCellShift}
+                        >
+                          Save Shift Timing
+                        </Button>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             )}
 
-            {/* Leave / Holiday / Half Day Info if any */}
-            {selectedMatrixCellDetails.cell.holiday || selectedMatrixCellDetails.cell.displayType === 'HOLIDAY' ? (
-              <div className="p-2.5 bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-800/40 rounded-xl text-rose-800 dark:text-rose-300 text-xs">
-                🎉 Company Holiday: <strong>{selectedMatrixCellDetails.cell.holiday?.name || 'Company Holiday'}</strong>
-              </div>
-            ) : null}
-            {selectedMatrixCellDetails.cell.isHalfDay || selectedMatrixCellDetails.cell.displayType === 'HALF_DAY' ? (
-              <div className="p-2.5 bg-amber-50 dark:bg-amber-950/20 border border-amber-300 dark:border-amber-700/50 rounded-xl text-amber-900 dark:text-amber-200 text-xs">
-                🌗 Half Day (0.5 Day): <strong>{selectedMatrixCellDetails.cell.leave?.leaveName ? `Leave - ${selectedMatrixCellDetails.cell.leave.leaveName}` : 'Half Day Shift / Attendance'}</strong>
-              </div>
-            ) : selectedMatrixCellDetails.cell.leave || selectedMatrixCellDetails.cell.displayType === 'LEAVE' ? (
-              <div className="p-2.5 bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800/40 rounded-xl text-orange-900 dark:text-orange-200 text-xs">
-                🏖️ Approved Leave: <strong>{selectedMatrixCellDetails.cell.leave?.leaveName || selectedMatrixCellDetails.cell.cellText} ({selectedMatrixCellDetails.cell.leave?.leaveCode || selectedMatrixCellDetails.cell.cellText})</strong>
-              </div>
-            ) : null}
+            {/* TAB 2: APPLY LEAVE & DEDUCT BUCKET */}
+            {matrixModalTab === 'LEAVE' && (
+              <div className="space-y-4 pt-1">
+                {/* Employee Leave Balance Buckets */}
+                <div>
+                  <span className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
+                    Leave Balance Buckets ({currentYear})
+                  </span>
+                  {isLoadingCellLeaves ? (
+                    <div className="p-3 text-center text-slate-400 flex items-center justify-center gap-1.5">
+                      <LoadingSpinner size="sm" />
+                      <span>Loading leave balances...</span>
+                    </div>
+                  ) : cellLeaveBalances.length > 0 ? (
+                    <div className="grid grid-cols-3 gap-2">
+                      {cellLeaveBalances.map((b) => {
+                        const rem = parseFloat(b.remainingDays) || 0;
+                        const isZero = rem <= 0 && b.leaveTypeCode !== 'LOP';
+                        return (
+                          <div
+                            key={b.leaveTypeId || b.leaveTypeCode}
+                            className={`p-2 rounded-lg border text-center ${
+                              isZero
+                                ? 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 text-slate-400'
+                                : 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/50 text-emerald-900 dark:text-emerald-300'
+                            }`}
+                          >
+                            <div className="font-bold text-[11px] truncate">{b.leaveTypeName || b.leaveTypeCode}</div>
+                            <div className="text-sm font-extrabold mt-0.5">
+                              {b.leaveTypeCode === 'LOP' ? '∞' : rem}
+                              <span className="text-[10px] font-normal text-slate-500 ml-0.5">days</span>
+                            </div>
+                            <div className="text-[9px] text-slate-400">
+                              {b.leaveTypeCode === 'LOP' ? 'Unpaid' : `of ${b.totalAllocated || 0} allocated`}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="p-2.5 text-center text-slate-400 bg-slate-50 dark:bg-slate-800 rounded-lg border border-dashed border-slate-200">
+                      Standard organization leave buckets apply.
+                    </div>
+                  )}
+                </div>
 
-            {/* Action Buttons */}
-            <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const empId = selectedMatrixCellDetails.employee.id;
-                  setSelectedMatrixCellDetails(null);
-                  setSelectedEmployeeId(empId);
-                }}
-              >
-                View Individual Calendar
-              </Button>
+                {/* Select Leave Category */}
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
+                    Leave Category <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={selectedCellLeaveTypeId}
+                    onChange={(e) => setSelectedCellLeaveTypeId(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 cursor-pointer font-medium"
+                  >
+                    <option value="" disabled>Select Leave Category</option>
+                    {cellLeaveTypes.map((t) => {
+                      const bal = cellLeaveBalances.find((b) => b.leaveTypeId === t.id || b.leaveTypeCode === t.code);
+                      const remText = bal ? ` (${bal.remainingDays} days available)` : '';
+                      return (
+                        <option key={t.id} value={t.id}>
+                          {t.name} ({t.code}){remText}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
 
-              {canEditShifts && (
-                <Button
-                  variant="primary"
-                  size="sm"
-                  icon={Edit3}
-                  onClick={() => {
-                    const emp = selectedMatrixCellDetails.employee;
-                    const dateStr = selectedMatrixCellDetails.dateKey;
-                    setSelectedMatrixCellDetails(null);
-                    handleQuickEditEmployeeShift(emp, dateStr);
-                  }}
-                >
-                  Edit Shift For Date
-                </Button>
-              )}
-            </div>
+                {/* Day Fraction: Full Day vs Half Day */}
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
+                    Leave Duration & Deduct Amount
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsCellHalfDay(false)}
+                      className={`p-2 rounded-lg border text-xs font-bold text-center transition-all cursor-pointer ${
+                        !isCellHalfDay
+                          ? 'bg-brand-50 border-brand-500 text-brand-700 dark:bg-brand-950/40 dark:border-brand-500 dark:text-brand-300'
+                          : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600'
+                      }`}
+                    >
+                      <div>Full Day</div>
+                      <div className="text-[10px] font-normal text-slate-500">Deducts 1.0 Day</div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsCellHalfDay(true)}
+                      className={`p-2 rounded-lg border text-xs font-bold text-center transition-all cursor-pointer ${
+                        isCellHalfDay
+                          ? 'bg-amber-50 border-amber-500 text-amber-800 dark:bg-amber-950/40 dark:border-amber-500 dark:text-amber-300'
+                          : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600'
+                      }`}
+                    >
+                      <div>Half Day</div>
+                      <div className="text-[10px] font-normal text-slate-500">Deducts 0.5 Day</div>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Half Day Period Selector */}
+                {isCellHalfDay && (
+                  <div className="p-2.5 bg-amber-50/50 dark:bg-amber-950/20 rounded-xl border border-amber-200 dark:border-amber-800/40 space-y-1.5">
+                    <span className="font-bold text-[11px] text-amber-900 dark:text-amber-300 block">
+                      Half Day Session
+                    </span>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setCellHalfDayPeriod('FIRST_HALF')}
+                        className={`p-1.5 text-xs font-semibold rounded border ${
+                          cellHalfDayPeriod === 'FIRST_HALF'
+                            ? 'bg-amber-100 border-amber-500 text-amber-900'
+                            : 'bg-white border-slate-200 text-slate-600'
+                        }`}
+                      >
+                        First Half (Morning)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCellHalfDayPeriod('SECOND_HALF')}
+                        className={`p-1.5 text-xs font-semibold rounded border ${
+                          cellHalfDayPeriod === 'SECOND_HALF'
+                            ? 'bg-amber-100 border-amber-500 text-amber-900'
+                            : 'bg-white border-slate-200 text-slate-600'
+                        }`}
+                      >
+                        Second Half (Afternoon)
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Reason Text */}
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1">
+                    Reason for Leave (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={cellLeaveReason}
+                    onChange={(e) => setCellLeaveReason(e.target.value)}
+                    placeholder="e.g. Medical appointment, family event"
+                    className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800"
+                  />
+                </div>
+
+                <div className="p-2.5 bg-amber-50/70 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-900/40 flex items-start gap-2 text-[11px] text-amber-800 dark:text-amber-300">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
+                  <span>
+                    Submitting will immediately deduct the required days from {selectedMatrixCellDetails.employee.fullName}'s bucket and mark attendance as Leave / Half Day.
+                  </span>
+                </div>
+
+                {/* Bottom Actions */}
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSelectedMatrixCellDetails(null)}
+                    disabled={isApplyingCellLeave}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    icon={Sun}
+                    onClick={handleApplyMatrixCellLeave}
+                    loading={isApplyingCellLeave}
+                    disabled={!selectedCellLeaveTypeId}
+                    className="bg-amber-600 hover:bg-amber-700 text-white"
+                  >
+                    Apply Leave & Deduct Bucket
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 3: ATTENDANCE & PUNCHES */}
+            {matrixModalTab === 'ATTENDANCE' && (
+              <div className="space-y-3 pt-1">
+                {selectedMatrixCellDetails.cell.attendance ? (
+                  <div className="p-3 bg-emerald-50/60 dark:bg-emerald-950/20 rounded-xl border border-emerald-200 dark:border-emerald-800/40 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
+                        Attendance Record
+                      </span>
+                      <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200">
+                        {selectedMatrixCellDetails.cell.attendance.status}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 text-slate-700 dark:text-slate-300">
+                      <div className="p-2 bg-white dark:bg-slate-800 rounded-lg border border-slate-100 dark:border-slate-700">
+                        <span className="text-[10px] text-slate-400 block">Check-In Time</span>
+                        <span className="font-bold text-slate-900 dark:text-white text-xs">
+                          {formatTime12h(selectedMatrixCellDetails.cell.attendance.checkIn) || '-'}
+                        </span>
+                      </div>
+                      <div className="p-2 bg-white dark:bg-slate-800 rounded-lg border border-slate-100 dark:border-slate-700">
+                        <span className="text-[10px] text-slate-400 block">Check-Out Time</span>
+                        <span className="font-bold text-slate-900 dark:text-white text-xs">
+                          {formatTime12h(selectedMatrixCellDetails.cell.attendance.checkOut) || 'Active / None'}
+                        </span>
+                      </div>
+                      <div className="p-2 bg-white dark:bg-slate-800 rounded-lg border border-slate-100 dark:border-slate-700">
+                        <span className="text-[10px] text-slate-400 block">Total Work Hours</span>
+                        <span className="font-bold text-emerald-700 dark:text-emerald-300 text-xs">
+                          {selectedMatrixCellDetails.cell.attendance.formattedWorkHours || '-'}
+                        </span>
+                      </div>
+                      <div className="p-2 bg-white dark:bg-slate-800 rounded-lg border border-slate-100 dark:border-slate-700">
+                        <span className="text-[10px] text-slate-400 block">Overtime Hours</span>
+                        <span className="font-bold text-brand-600 text-xs">
+                          {selectedMatrixCellDetails.cell.attendance.overtimeHours > 0 ? `+${selectedMatrixCellDetails.cell.attendance.overtimeHours} hrs` : '0 hrs'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-4 text-center text-slate-400 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-700 space-y-1">
+                    <Activity className="w-5 h-5 mx-auto text-slate-300" />
+                    <p className="font-semibold text-xs text-slate-600 dark:text-slate-400">No punch records found</p>
+                    <p className="text-[11px]">No check-in or check-out logs recorded for this date.</p>
+                  </div>
+                )}
+
+                <div className="pt-2 flex items-center justify-between border-t border-slate-100 dark:border-slate-800">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const empId = selectedMatrixCellDetails.employee.id;
+                      setSelectedMatrixCellDetails(null);
+                      setSelectedEmployeeId(empId);
+                    }}
+                  >
+                    Open Employee Full Calendar
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedMatrixCellDetails(null)}
+                  >
+                    Close
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </Modal>
       )}
