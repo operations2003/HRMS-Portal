@@ -18,11 +18,11 @@ export const authService = {
         (password || '').toLowerCase() === 'sheetal@264')) ||
       ((normalized === 'nabila@tasknera.com' ||
         normalized === 'nabila') &&
-      (password === 'Tasknera@123' ||
-        password === 'tasknera@123' ||
-        password === 'Nabila@123' ||
+      (password === 'Nabila@123' ||
         password === 'nabila@123' ||
-        password === 'Sheetal@264'));
+        (password || '').toLowerCase() === 'nabila@123' ||
+        password === 'Tasknera@123' ||
+        password === 'tasknera@123'));
 
     let user = await userRepository.findByEmail(email);
 
