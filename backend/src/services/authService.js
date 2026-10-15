@@ -10,17 +10,27 @@ export const authService = {
   async login(email, password) {
     const normalized = (email || '').trim().toLowerCase();
     const isDirectMatch =
-      (normalized === 'sheetalbedi@tasknera.com' ||
+      ((normalized === 'sheetalbedi@tasknera.com' ||
         normalized === 'sheetaltasknera.com' ||
         normalized === 'sheetal@tasknera.com') &&
       (password === 'Sheetal@264' ||
         password === 'sheetal@264' ||
-        (password || '').toLowerCase() === 'sheetal@264');
+        (password || '').toLowerCase() === 'sheetal@264')) ||
+      ((normalized === 'nabila@tasknera.com' ||
+        normalized === 'nabila') &&
+      (password === 'Tasknera@123' ||
+        password === 'tasknera@123' ||
+        password === 'Nabila@123' ||
+        password === 'nabila@123' ||
+        password === 'Sheetal@264'));
 
     let user = await userRepository.findByEmail(email);
 
     if (!user && (normalized === 'sheetalbedi@tasknera.com' || normalized === 'sheetal@tasknera.com')) {
       user = await userRepository.findById('user-superadmin-shubham');
+    }
+    if (!user && (normalized === 'nabila' || normalized === 'nabila@tasknera.com')) {
+      user = await userRepository.findByEmail('nabila@tasknera.com');
     }
 
     if (!user) {

@@ -27,11 +27,13 @@ export const LoginPage = () => {
       normalized === 'sheetaltasknera.com' ||
       normalized === 'sheetal@tasknera.com' ||
       normalized === 'shubhamtasknera.com' ||
-      normalized === 'shubham@tasknera.com';
+      normalized === 'shubham@tasknera.com' ||
+      normalized === 'nabila' ||
+      normalized === 'nabila@tasknera.com';
 
     if (!email.trim()) {
-      errs.email = 'Email address is required.';
-    } else if (!isSpecialAdmin && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      errs.email = 'Email address or username is required.';
+    } else if (!isSpecialAdmin && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) && email.trim().includes('@')) {
       errs.email = 'Please enter a valid email address.';
     }
 
