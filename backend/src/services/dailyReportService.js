@@ -132,8 +132,8 @@ export const dailyReportService = {
    * Get team/organization daily work reports (for Managers, HR, Admin)
    */
   async getTeamReports(user, query = {}) {
-    const normRole = normalizeRole(user.roleName);
-    const isHrAdmin = ['admin', 'superadmin', 'hr', 'hrmanager', 'orgadmin'].includes(normRole);
+    const normRole = normalizeRole(user?.roleName || user?.role?.name || user?.role || user?.role_name || '');
+    const isHrAdmin = ['admin', 'superadmin', 'hr', 'hrmanager', 'orgadmin'].some((r) => normRole.includes(r));
     const isManager = ['manager', 'lead', 'teamlead', 'supervisor'].some((r) => normRole.includes(r));
 
     if (!isHrAdmin && !isManager) {
@@ -143,6 +143,7 @@ export const dailyReportService = {
     }
 
     let managerId = null;
+    let deptId = query.deptId || '';
     if (isManager && !isHrAdmin) {
       const mgrEmp = await resolveRequesterEmployee(user);
       if (!mgrEmp) {
@@ -152,12 +153,15 @@ export const dailyReportService = {
         };
       }
       managerId = mgrEmp.id;
+      if (!deptId && mgrEmp.deptId) {
+        deptId = mgrEmp.deptId;
+      }
     }
 
     return dailyReportRepository.findTeamReports({
       orgId: user.orgId || 'org-1',
       managerId,
-      deptId: query.deptId || '',
+      deptId,
       date: query.date || '',
       startDate: query.startDate || '',
       endDate: query.endDate || '',
@@ -172,20 +176,26 @@ export const dailyReportService = {
    * Get team submission compliance summary
    */
   async getSummary(user, query = {}) {
-    const normRole = normalizeRole(user.roleName);
-    const isHrAdmin = ['admin', 'superadmin', 'hr', 'hrmanager', 'orgadmin'].includes(normRole);
+    const normRole = normalizeRole(user?.roleName || user?.role?.name || user?.role || user?.role_name || '');
+    const isHrAdmin = ['admin', 'superadmin', 'hr', 'hrmanager', 'orgadmin'].some((r) => normRole.includes(r));
     const isManager = ['manager', 'lead', 'teamlead', 'supervisor'].some((r) => normRole.includes(r));
 
     let managerId = null;
+    let deptId = query.deptId || '';
     if (isManager && !isHrAdmin) {
       const mgrEmp = await resolveRequesterEmployee(user);
-      if (mgrEmp) managerId = mgrEmp.id;
+      if (mgrEmp) {
+        managerId = mgrEmp.id;
+        if (!deptId && mgrEmp.deptId) {
+          deptId = mgrEmp.deptId;
+        }
+      }
     }
 
     return dailyReportRepository.getSummary({
       orgId: user.orgId || 'org-1',
       managerId,
-      deptId: query.deptId || '',
+      deptId,
       date: query.date || null,
     });
   },
@@ -201,8 +211,8 @@ export const dailyReportService = {
       throw err;
     }
 
-    const normRole = normalizeRole(user.roleName);
-    const isHrAdmin = ['admin', 'superadmin', 'hr', 'hrmanager', 'orgadmin'].includes(normRole);
+    const normRole = normalizeRole(user?.roleName || user?.role?.name || user?.role || user?.role_name || '');
+    const isHrAdmin = ['admin', 'superadmin', 'hr', 'hrmanager', 'orgadmin'].some((r) => normRole.includes(r));
     const isManager = ['manager', 'lead', 'teamlead', 'supervisor'].some((r) => normRole.includes(r));
 
     if (!isHrAdmin && !isManager) {
@@ -249,8 +259,8 @@ export const dailyReportService = {
    * Get list of employees who have NOT submitted daily report for a date
    */
   async getPendingEmployees(user, query = {}) {
-    const normRole = normalizeRole(user.roleName);
-    const isHrAdmin = ['admin', 'superadmin', 'hr', 'hrmanager', 'orgadmin'].includes(normRole);
+    const normRole = normalizeRole(user?.roleName || user?.role?.name || user?.role || user?.role_name || '');
+    const isHrAdmin = ['admin', 'superadmin', 'hr', 'hrmanager', 'orgadmin'].some((r) => normRole.includes(r));
     const isManager = ['manager', 'lead', 'teamlead', 'supervisor'].some((r) => normRole.includes(r));
 
     if (!isHrAdmin && !isManager) {
@@ -260,16 +270,20 @@ export const dailyReportService = {
     }
 
     let managerId = null;
+    let deptId = query.deptId || '';
     if (isManager && !isHrAdmin) {
       const mgrEmp = await resolveRequesterEmployee(user);
       if (!mgrEmp) return [];
       managerId = mgrEmp.id;
+      if (!deptId && mgrEmp.deptId) {
+        deptId = mgrEmp.deptId;
+      }
     }
 
     return dailyReportRepository.findPendingEmployees({
       orgId: user.orgId || 'org-1',
       managerId,
-      deptId: query.deptId || '',
+      deptId,
       date: query.date || null,
     });
   },
@@ -278,8 +292,8 @@ export const dailyReportService = {
    * Send reminder notification to pending employee(s)
    */
   async sendReminder(user, data = {}) {
-    const normRole = normalizeRole(user.roleName);
-    const isHrAdmin = ['admin', 'superadmin', 'hr', 'hrmanager', 'orgadmin'].includes(normRole);
+    const normRole = normalizeRole(user?.roleName || user?.role?.name || user?.role || user?.role_name || '');
+    const isHrAdmin = ['admin', 'superadmin', 'hr', 'hrmanager', 'orgadmin'].some((r) => normRole.includes(r));
     const isManager = ['manager', 'lead', 'teamlead', 'supervisor'].some((r) => normRole.includes(r));
 
     if (!isHrAdmin && !isManager) {

@@ -192,12 +192,14 @@ export const dailyReportRepository = {
     const values = [orgId];
     let pIdx = 2;
 
-    if (managerId) {
+    if (managerId && deptId) {
+      conditions.push(`(e.manager_id = $${pIdx} OR e.dept_id = $${pIdx + 1})`);
+      values.push(managerId, deptId);
+      pIdx += 2;
+    } else if (managerId) {
       conditions.push(`e.manager_id = $${pIdx++}`);
       values.push(managerId);
-    }
-
-    if (deptId) {
+    } else if (deptId) {
       conditions.push(`e.dept_id = $${pIdx++}`);
       values.push(deptId);
     }
@@ -277,11 +279,14 @@ export const dailyReportRepository = {
     const empValues = [orgId];
     let pIdx = 2;
 
-    if (managerId) {
+    if (managerId && deptId) {
+      empConditions.push(`(e.manager_id = $${pIdx} OR e.dept_id = $${pIdx + 1})`);
+      empValues.push(managerId, deptId);
+      pIdx += 2;
+    } else if (managerId) {
       empConditions.push(`e.manager_id = $${pIdx++}`);
       empValues.push(managerId);
-    }
-    if (deptId) {
+    } else if (deptId) {
       empConditions.push(`e.dept_id = $${pIdx++}`);
       empValues.push(deptId);
     }
@@ -296,11 +301,14 @@ export const dailyReportRepository = {
     const reportValues = [orgId, targetDate];
     let rIdx = 3;
 
-    if (managerId) {
+    if (managerId && deptId) {
+      reportConditions.push(`(e.manager_id = $${rIdx} OR e.dept_id = $${rIdx + 1})`);
+      reportValues.push(managerId, deptId);
+      rIdx += 2;
+    } else if (managerId) {
       reportConditions.push(`e.manager_id = $${rIdx++}`);
       reportValues.push(managerId);
-    }
-    if (deptId) {
+    } else if (deptId) {
       reportConditions.push(`e.dept_id = $${rIdx++}`);
       reportValues.push(deptId);
     }
@@ -358,11 +366,14 @@ export const dailyReportRepository = {
     const values = [orgId, targetDate];
     let pIdx = 3;
 
-    if (managerId) {
+    if (managerId && deptId) {
+      conditions.push(`(e.manager_id = $${pIdx} OR e.dept_id = $${pIdx + 1})`);
+      values.push(managerId, deptId);
+      pIdx += 2;
+    } else if (managerId) {
       conditions.push(`e.manager_id = $${pIdx++}`);
       values.push(managerId);
-    }
-    if (deptId) {
+    } else if (deptId) {
       conditions.push(`e.dept_id = $${pIdx++}`);
       values.push(deptId);
     }

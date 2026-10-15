@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 
 import { dailyReportService } from "../../services/dailyReportService.js";
+import { departmentService } from "../../services/departmentService.js";
 
 const fmtDate = (d) => {
   if (!d) return "-";
@@ -259,11 +260,13 @@ const PendingEmployeeCard = ({ employee, onRemind, isReminding }) => {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export const DailyReportPage = () => {
-  const { hasRole } = useAuth();
+  const { user, hasRole } = useAuth();
   const { addToast } = useToast();
 
-  const isManager = hasRole(["Manager", "HR", "HRManager", "Admin", "SuperAdmin", "OrgAdmin"]);
-  const [activeTab, setActiveTab] = useState("my");
+  const userRoleStr = (user?.roleName || user?.role?.name || user?.role || '').toLowerCase().trim();
+  const isHr = ['hr', 'hrmanager', 'admin', 'superadmin', 'orgadmin'].some((r) => userRoleStr.includes(r));
+  const isManager = isHr || ['manager', 'lead', 'teamlead', 'supervisor'].some((r) => userRoleStr.includes(r)) || hasRole(["Manager", "HR", "HRManager", "Admin", "SuperAdmin", "OrgAdmin"]);
+  const [activeTab, setActiveTab] = useState(() => (isManager ? "team" : "my"));
 
   const todayISO = getISODate();
   const yesterdayISO = getYesterdayISODate();
@@ -284,7 +287,8 @@ export const DailyReportPage = () => {
   const [teamReports, setTeamReports] = useState([]);
   const [loadingTeam, setLoadingTeam] = useState(false);
   const [summary, setSummary] = useState(null);
-  const [teamFilters, setTeamFilters] = useState({ search: "", date: todayISO, status: "" });
+  const [teamFilters, setTeamFilters] = useState({ search: "", date: todayISO, status: "", deptId: "" });
+  const [departments, setDepartments] = useState([]);
   const [teamPage, setTeamPage] = useState(1);
   const [teamTotal, setTeamTotal] = useState(0);
   const TEAM_PAGE_SIZE = 15;
@@ -294,6 +298,14 @@ export const DailyReportPage = () => {
   const [loadingPending, setLoadingPending] = useState(false);
   const [remindingId, setRemindingId] = useState(null);
   const [remindingAll, setRemindingAll] = useState(false);
+
+  // Load departments list for department filter
+  useEffect(() => {
+    departmentService.getAllDepartments().then((res) => {
+      const list = res?.items || res?.data || (Array.isArray(res) ? res : []);
+      setDepartments(list);
+    }).catch(() => {});
+  }, []);
 
   // ── Fetch Report for Selected Date ──────────────────────────────────────────
   const fetchReportForDate = useCallback(async (targetDate) => {
@@ -340,10 +352,14 @@ export const DailyReportPage = () => {
       if (teamFilters.search) params.search = teamFilters.search;
       if (teamFilters.date) params.date = teamFilters.date;
       if (teamFilters.status) params.status = teamFilters.status;
+      if (teamFilters.deptId) params.deptId = teamFilters.deptId;
 
       const [teamData, sumData] = await Promise.all([
         dailyReportService.getTeamReports(params),
-        dailyReportService.getSummary(teamFilters.date),
+        dailyReportService.getSummary({
+          date: teamFilters.date || undefined,
+          deptId: teamFilters.deptId || undefined,
+        }),
       ]);
       setTeamReports(teamData.data || []);
       setTeamTotal(teamData.meta?.pagination?.total || 0);
@@ -359,14 +375,17 @@ export const DailyReportPage = () => {
     setLoadingPending(true);
     try {
       const targetDate = teamFilters.date || todayISO;
-      const res = await dailyReportService.getPendingEmployees({ date: targetDate });
+      const res = await dailyReportService.getPendingEmployees({
+        date: targetDate,
+        deptId: teamFilters.deptId || undefined,
+      });
       setPendingList(res.data || []);
     } catch {
       addToast("Failed to load pending employees list.", "error");
     } finally {
       setLoadingPending(false);
     }
-  }, [teamFilters.date, todayISO, addToast]);
+  }, [teamFilters.date, teamFilters.deptId, todayISO, addToast]);
 
   const handleSubmit = async () => {
     if (!form.workSummary.trim()) {
@@ -443,7 +462,7 @@ export const DailyReportPage = () => {
       fetchTeam(1);
       fetchPending();
     }
-  }, [activeTab, teamFilters.date]);
+  }, [activeTab, teamFilters.date, teamFilters.deptId, teamFilters.status, isManager]);
 
   const updateForm = (key, val) => setForm((p) => ({ ...p, [key]: val }));
   const todayDisplayStr = new Date().toLocaleDateString("en-IN", {
@@ -457,7 +476,7 @@ export const DailyReportPage = () => {
   const TABS = [
     { key: "my", label: "Submit / Edit Report", icon: PenLine },
     { key: "history", label: "My History", icon: Clock },
-    ...(isManager ? [{ key: "team", label: "Team Reports", icon: Users }] : []),
+    ...(isManager ? [{ key: "team", label: isHr ? "All Organization Reports" : "Team Reports", icon: Users }] : []),
   ];
 
   return (
@@ -734,15 +753,66 @@ export const DailyReportPage = () => {
             </div>
           </div>
 
+          {/* Quick Date Presets Bar */}
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Date Preset:</span>
+              <button
+                type="button"
+                onClick={() => setTeamFilters((p) => ({ ...p, date: todayISO }))}
+                className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
+                  teamFilters.date === todayISO
+                    ? "bg-brand-600 text-white shadow-xs"
+                    : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                Today
+              </button>
+              <button
+                type="button"
+                onClick={() => setTeamFilters((p) => ({ ...p, date: yesterdayISO }))}
+                className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
+                  teamFilters.date === yesterdayISO
+                    ? "bg-brand-600 text-white shadow-xs"
+                    : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                Yesterday
+              </button>
+              <button
+                type="button"
+                onClick={() => setTeamFilters((p) => ({ ...p, date: "" }))}
+                className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
+                  !teamFilters.date
+                    ? "bg-brand-600 text-white shadow-xs"
+                    : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                All Dates
+              </button>
+            </div>
+
+            {teamFilters.date && (
+              <div className="text-xs text-slate-500 font-medium">
+                Showing reports for: <span className="font-bold text-slate-700">{fmtDate(teamFilters.date)}</span>
+              </div>
+            )}
+            {!teamFilters.date && (
+              <div className="text-xs text-brand-600 font-medium bg-brand-50 px-2 py-0.5 rounded-md border border-brand-200">
+                All dates mode (recent reports history)
+              </div>
+            )}
+          </div>
+
           {/* Filter Toolbar */}
           <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-4">
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
               {/* Search */}
               <div className="relative sm:col-span-1">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  placeholder="Search name or summary..."
+                  placeholder="Search employee or notes..."
                   value={teamFilters.search}
                   onChange={(e) => setTeamFilters((p) => ({ ...p, search: e.target.value }))}
                   className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
@@ -759,6 +829,20 @@ export const DailyReportPage = () => {
                   className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
                 />
               </div>
+
+              {/* Department Selector */}
+              <select
+                value={teamFilters.deptId}
+                onChange={(e) => setTeamFilters((p) => ({ ...p, deptId: e.target.value }))}
+                className="w-full py-2 px-3 text-xs rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
+              >
+                <option value="">All Departments</option>
+                {departments.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
 
               {/* Status (relevant for submitted tab) */}
               <select
@@ -785,7 +869,17 @@ export const DailyReportPage = () => {
                   }}
                   className="flex-1"
                 >
-                  Apply Filter
+                  Filter
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setTeamFilters({ search: "", date: todayISO, status: "", deptId: "" });
+                  }}
+                  title="Reset Filters"
+                >
+                  Reset
                 </Button>
                 <Button
                   variant="outline"
@@ -795,6 +889,7 @@ export const DailyReportPage = () => {
                     fetchTeam(1);
                     fetchPending();
                   }}
+                  title="Refresh Reports"
                 />
               </div>
             </div>
@@ -808,13 +903,45 @@ export const DailyReportPage = () => {
               </p>
 
               {loadingTeam ? (
-                <LoadingSpinner message="Loading team reports..." />
+                <LoadingSpinner message="Loading daily reports..." />
               ) : teamReports.length === 0 ? (
-                <EmptyState
-                  icon={Users}
-                  title="No team reports found"
-                  description="Try adjusting your date/search filters or switch to 'Pending Employees' to see who has not submitted yet."
-                />
+                <div className="bg-white rounded-2xl border border-slate-200/80 p-8 text-center space-y-4">
+                  <div className="w-12 h-12 rounded-2xl bg-slate-50 text-slate-400 flex items-center justify-center mx-auto">
+                    <Users className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900">
+                      {teamFilters.date === todayISO ? "No Daily Reports Submitted Yet Today" : "No Daily Reports Found"}
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+                      {teamFilters.date === todayISO
+                        ? "Employees typically submit their daily work summary before punching out at the end of their shift. You can view yesterday's reports or all past submissions below."
+                        : "No daily work reports match your active search, date, or department filters."}
+                    </p>
+                  </div>
+                  <div className="flex items-center justify-center gap-2 flex-wrap pt-2">
+                    {teamFilters.date === todayISO && (
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => {
+                          setTeamFilters((p) => ({ ...p, date: yesterdayISO }));
+                        }}
+                      >
+                        View Yesterday's Reports ({fmtDate(yesterdayISO)})
+                      </Button>
+                    )}
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        setTeamFilters({ search: "", date: "", status: "", deptId: "" });
+                      }}
+                    >
+                      View All Recent Reports
+                    </Button>
+                  </div>
+                </div>
               ) : (
                 <div className="space-y-3">
                   {teamReports.map((r) => (
