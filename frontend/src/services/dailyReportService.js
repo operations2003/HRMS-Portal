@@ -43,11 +43,17 @@ export const dailyReportService = {
   },
 
   /**
-   * Get summary & compliance rate for a date
-   * @param {string} date - YYYY-MM-DD
+   * Get summary & compliance rate for a date or filter parameters
+   * @param {string|Object} dateOrParams - YYYY-MM-DD or { date, deptId }
    */
-  async getSummary(date) {
-    const query = date ? `?date=${encodeURIComponent(date)}` : '';
+  async getSummary(dateOrParams) {
+    let query = '';
+    if (typeof dateOrParams === 'string') {
+      query = dateOrParams ? `?date=${encodeURIComponent(dateOrParams)}` : '';
+    } else if (dateOrParams && typeof dateOrParams === 'object') {
+      const searchParams = new URLSearchParams(dateOrParams).toString();
+      query = searchParams ? `?${searchParams}` : '';
+    }
     const res = await http.get(`/v1/daily-reports/summary${query}`);
     return res;
   },
