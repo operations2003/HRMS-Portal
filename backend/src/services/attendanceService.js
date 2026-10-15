@@ -390,11 +390,21 @@ export const checkAndAutoLogoutRecord = async (record, shiftTimingOverride = nul
   return updated;
 };
 
+const lastAutoCheckoutTimes = new Map();
+const AUTO_CHECKOUT_COOLDOWN_MS = 60 * 1000; // 60 seconds
+
 /**
  * Scans active unclosed records and auto-checks out any records exceeding shift + 20-minute grace period.
  * Dynamically resolves each employee's date-wise shift schedule (including 9-hour shifts) to avoid premature logout after 8 hours.
  */
-export const autoCheckoutStaleRecords = async (orgId = null) => {
+export const autoCheckoutStaleRecords = async (orgId = null, force = false) => {
+  const cacheKey = orgId || 'global';
+  const nowMs = Date.now();
+  if (!force && lastAutoCheckoutTimes.has(cacheKey) && (nowMs - lastAutoCheckoutTimes.get(cacheKey) < AUTO_CHECKOUT_COOLDOWN_MS)) {
+    return 0;
+  }
+  lastAutoCheckoutTimes.set(cacheKey, nowMs);
+
   try {
     const openRecords = await attendanceRepository.findActiveUnclosedRecords(orgId);
     if (!openRecords || openRecords.length === 0) return 0;
@@ -402,24 +412,49 @@ export const autoCheckoutStaleRecords = async (orgId = null) => {
     let autoClosedCount = 0;
     const now = new Date();
 
-    for (const rec of openRecords) {
-      const recDate = rec.attendanceDate ? new Date(rec.attendanceDate).toISOString().slice(0, 10) : null;
-      const effectiveShift = await resolveShiftForEmployeeAndDate(
-        rec.employeeId || rec.employee?.id,
-        recDate,
-        rec.employee?.shiftTiming || '11:00 AM - 07:00 PM'
-      );
-      const shiftTiming = effectiveShift.shiftTiming;
-      const cutoff = calculateAutoLogoutCutoff(rec, shiftTiming, rec.timezone);
-      if (cutoff && now.getTime() >= cutoff.getTime()) {
-        await checkAndAutoLogoutRecord(rec, shiftTiming);
-        autoClosedCount++;
-      }
-    }
+    await Promise.all(
+      openRecords.map(async (rec) => {
+        const recDate = rec.attendanceDate ? new Date(rec.attendanceDate).toISOString().slice(0, 10) : null;
+        const effectiveShift = await resolveShiftForEmployeeAndDate(
+          rec.employeeId || rec.employee?.id,
+          recDate,
+          rec.employee?.shiftTiming || '11:00 AM - 07:00 PM'
+        );
+        const shiftTiming = effectiveShift.shiftTiming;
+        const cutoff = calculateAutoLogoutCutoff(rec, shiftTiming, rec.timezone);
+        if (cutoff && now.getTime() >= cutoff.getTime()) {
+          await checkAndAutoLogoutRecord(rec, shiftTiming);
+          autoClosedCount++;
+        }
+      })
+    );
     return autoClosedCount;
   } catch (err) {
     console.error('Error in autoCheckoutStaleRecords:', err.message);
     return 0;
+  }
+};
+
+const lastSyncSweepTimes = new Map();
+const SYNC_SWEEP_COOLDOWN_MS = 60 * 1000; // 60 seconds
+
+export const triggerPeriodicSyncSweeps = async (orgId, startDate, endDate, targetDate, force = false) => {
+  const sweepKey = `${orgId || 'default'}:${startDate || ''}:${endDate || ''}:${targetDate || ''}`;
+  const now = Date.now();
+  if (!force && lastSyncSweepTimes.has(sweepKey) && (now - lastSyncSweepTimes.get(sweepKey) < SYNC_SWEEP_COOLDOWN_MS)) {
+    return;
+  }
+  lastSyncSweepTimes.set(sweepKey, now);
+
+  try {
+    await attendanceRepository.syncApprovedLeaves(orgId, startDate, endDate);
+    const [tY, tM, tD] = targetDate.split('-').map(Number);
+    const isSunday = new Date(tY, tM - 1, tD).getDay() === 0;
+    if (!isSunday && targetDate >= new Date().toISOString().split('T')[0]) {
+      await attendanceRepository.syncDailyAbsences(orgId, targetDate);
+    }
+  } catch (absErr) {
+    logger.warn('AttendanceService', `Failed periodic sync sweep: ${absErr.message}`);
   }
 };
 
@@ -1171,19 +1206,10 @@ export const attendanceService = {
     // Automatically resolve stale sessions before returning team view
     await autoCheckoutStaleRecords(user.orgId);
 
-    // Sync daily absences and approved leaves for target date
+    // Sync daily absences and approved leaves for target date (throttled to 60s)
     const singleDate = query.date || (query.startDate && query.startDate === query.endDate ? query.startDate : null);
     const targetDate = singleDate || new Date().toISOString().split('T')[0];
-    try {
-      await attendanceRepository.syncApprovedLeaves(user.orgId, query.startDate, query.endDate);
-      const [tY, tM, tD] = targetDate.split('-').map(Number);
-      const isSunday = new Date(tY, tM - 1, tD).getDay() === 0;
-      if (!isSunday && targetDate >= new Date().toISOString().split('T')[0]) {
-        await attendanceRepository.syncDailyAbsences(user.orgId, targetDate);
-      }
-    } catch (absErr) {
-      logger.warn('AttendanceService', `Failed to sync daily absences for team: ${absErr.message}`);
-    }
+    await triggerPeriodicSyncSweeps(user.orgId, query.startDate, query.endDate, targetDate);
 
     return attendanceRepository.findTeamAttendance(deptId, user.orgId, query);
   },
@@ -1219,19 +1245,10 @@ export const attendanceService = {
     // Automatically resolve stale sessions across organization before returning view
     await autoCheckoutStaleRecords(user.orgId);
 
-    // Sync daily absences and approved leaves for target date / range
+    // Sync daily absences and approved leaves for target date / range (throttled to 60s)
     const singleDate = query.date || (query.startDate && query.startDate === query.endDate ? query.startDate : null);
     const targetDate = singleDate || new Date().toISOString().split('T')[0];
-    try {
-      await attendanceRepository.syncApprovedLeaves(user.orgId, query.startDate, query.endDate);
-      const [tY, tM, tD] = targetDate.split('-').map(Number);
-      const isSunday = new Date(tY, tM - 1, tD).getDay() === 0;
-      if (!isSunday && targetDate >= new Date().toISOString().split('T')[0]) {
-        await attendanceRepository.syncDailyAbsences(user.orgId, targetDate);
-      }
-    } catch (absErr) {
-      logger.warn('AttendanceService', `Failed to sync daily absences: ${absErr.message}`);
-    }
+    await triggerPeriodicSyncSweeps(user.orgId, query.startDate, query.endDate, targetDate);
 
     const [attendanceData, summary] = await Promise.all([
       attendanceRepository.findAllOrgAttendance(user.orgId, query),

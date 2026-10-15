@@ -110,6 +110,22 @@ export const AttendanceHistoryTable = ({
     });
   }, [records]);
 
+  // Local debounced search to prevent violent table flickering and re-fetching on every single keystroke
+  const [localSearch, setLocalSearch] = React.useState(filters.search || '');
+
+  React.useEffect(() => {
+    setLocalSearch(filters.search || '');
+  }, [filters.search]);
+
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      if ((filters.search || '') !== localSearch) {
+        onFilterChange && onFilterChange('search', localSearch);
+      }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [localSearch]);
+
   // Live timer tick updating break duration in real time when any displayed records are on break
   const [, setTick] = React.useState(0);
   React.useEffect(() => {
@@ -243,8 +259,8 @@ export const AttendanceHistoryTable = ({
                 <Input
                   type="text"
                   placeholder="Search employee..."
-                  value={filters.search || ''}
-                  onChange={(e) => onFilterChange && onFilterChange('search', e.target.value)}
+                  value={localSearch}
+                  onChange={(e) => setLocalSearch(e.target.value)}
                   icon={Search}
                 />
               </div>
@@ -338,15 +354,15 @@ export const AttendanceHistoryTable = ({
         </div>
       </div>
 
-      {/* 1. Loading State */}
-      {isLoading && (
+      {/* 1. Loading State (Full card ONLY when there are no records in view) */}
+      {isLoading && (!displayRecords || displayRecords.length === 0) && (
         <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm p-12 text-center">
           <LoadingSpinner message="Loading attendance records from server..." />
         </div>
       )}
 
       {/* 2. Error State */}
-      {!isLoading && error && (
+      {!isLoading && error && (!displayRecords || displayRecords.length === 0) && (
         <div className="bg-white rounded-3xl border border-rose-200 shadow-sm p-8 text-center space-y-3">
           <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
             <AlertTriangle className="w-6 h-6" />
@@ -382,8 +398,13 @@ export const AttendanceHistoryTable = ({
       )}
 
       {/* 4. Responsive Table / Card Layout */}
-      {!isLoading && !error && displayRecords && displayRecords.length > 0 && (
-        <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
+      {displayRecords && displayRecords.length > 0 && (
+        <div className={`relative bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden transition-opacity duration-200 ${isLoading ? 'opacity-70 pointer-events-none' : 'opacity-100'}`}>
+          {isLoading && (
+            <div className="absolute top-0 inset-x-0 h-1 bg-brand-500/20 overflow-hidden z-20">
+              <div className="w-full h-full bg-brand-600 animate-pulse origin-left" />
+            </div>
+          )}
           {/* Mobile Card Layout (Visible on Small Screens) */}
           <div className="block md:hidden divide-y divide-slate-100">
             {displayRecords.map((row, idx) => {

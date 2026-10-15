@@ -704,54 +704,41 @@ export const attendanceRepository = {
         dateFilter = 'AND lr.end_date >= $2::date';
       }
 
-      const leaveRes = await pool.query(
-        `SELECT lr.id, lr.employee_id, lr.start_date::text, lr.end_date::text,
-                lr.is_half_day, lr.total_days, lt.name as leave_name, lt.code as leave_code,
-                e.org_id
-         FROM leave_requests lr
-         JOIN employees e ON e.id = lr.employee_id
-         LEFT JOIN leave_types lt ON lt.id = lr.leave_type_id
-         WHERE lr.status = 'APPROVED'
-           AND e.org_id = $1
-           ${dateFilter};`,
+      // High-performance set-based batch insert/update for approved leaves using generate_series
+      await pool.query(
+        `INSERT INTO attendance_records (
+          id, org_id, employee_id, attendance_date, timezone,
+          total_hours, status, notes, source, created_at, updated_at
+        )
+        SELECT
+          'att-lve-' || lr.employee_id || '-' || TO_CHAR(d::date, 'YYYY-MM-DD'),
+          e.org_id,
+          lr.employee_id,
+          d::date,
+          'Asia/Kolkata',
+          0.00,
+          CASE WHEN lr.is_half_day THEN 'HALF_DAY' ELSE 'ON_LEAVE' END,
+          COALESCE(lt.name, 'Leave') || CASE WHEN lr.is_half_day THEN ' (Half Day Approved)' ELSE ' (Approved)' END,
+          'LEAVE_ASSIGNMENT',
+          NOW(),
+          NOW()
+        FROM leave_requests lr
+        JOIN employees e ON e.id = lr.employee_id
+        LEFT JOIN leave_types lt ON lt.id = lr.leave_type_id
+        CROSS JOIN LATERAL generate_series(lr.start_date, COALESCE(lr.end_date, lr.start_date), '1 day'::interval) AS d
+        WHERE lr.status = 'APPROVED'
+          AND e.org_id = $1
+          ${dateFilter}
+        ON CONFLICT (employee_id, attendance_date)
+        DO UPDATE SET
+          status = EXCLUDED.status,
+          source = 'LEAVE_ASSIGNMENT',
+          notes = EXCLUDED.notes,
+          updated_at = NOW()
+        WHERE attendance_records.status IN ('ABSENT', 'NOT_STARTED')
+           OR (attendance_records.check_in IS NULL AND attendance_records.status NOT IN ('ON_LEAVE', 'HALF_DAY'));`,
         params
       );
-
-      for (const row of leaveRes.rows) {
-        let curStr = row.start_date;
-        const endStr = row.end_date;
-
-        while (curStr <= endStr) {
-          const recordId = `att-lve-${row.employee_id}-${curStr}`;
-          const leaveName = row.leave_name || 'Leave';
-          const isHalfDay = Boolean(row.is_half_day);
-          const attStatus = isHalfDay ? 'HALF_DAY' : 'ON_LEAVE';
-          const notes = isHalfDay ? `${leaveName} (Half Day Approved)` : `${leaveName} (Approved)`;
-
-          await pool.query(
-            `INSERT INTO attendance_records (
-              id, org_id, employee_id, attendance_date, timezone,
-              total_hours, status, notes, source, created_at, updated_at
-            ) VALUES (
-              $1, $2, $3, $4::date, 'Asia/Kolkata',
-              0.00, $5, $6, 'LEAVE_ASSIGNMENT', NOW(), NOW()
-            )
-            ON CONFLICT (employee_id, attendance_date)
-            DO UPDATE SET
-              status = EXCLUDED.status,
-              source = 'LEAVE_ASSIGNMENT',
-              notes = EXCLUDED.notes,
-              updated_at = NOW()
-            WHERE attendance_records.status IN ('ABSENT', 'NOT_STARTED')
-               OR (attendance_records.check_in IS NULL AND attendance_records.status NOT IN ('ON_LEAVE', 'HALF_DAY'));`,
-            [recordId, row.org_id, row.employee_id, curStr, attStatus, notes]
-          );
-
-          const [y, m, d] = curStr.split('-').map(Number);
-          const nextDt = new Date(Date.UTC(y, m - 1, d + 1));
-          curStr = nextDt.toISOString().split('T')[0];
-        }
-      }
     } catch (err) {
       logger.warn('AttendanceRepository', `Failed to sync approved leaves: ${err.message}`);
     }
@@ -789,7 +776,7 @@ export const attendanceRepository = {
       return 0;
     }
 
-    // 1. For today: Fix any premature 'ABSENT' records where shift hasn't even started yet
+    // 1. For today: Fix any premature 'ABSENT' records where shift hasn't even started yet (batch)
     if (cleanTargetDate === todayStr) {
       const prematureRes = await pool.query(
         `SELECT a.id, a.employee_id, 
@@ -807,21 +794,23 @@ export const attendanceRepository = {
         [orgId, cleanTargetDate]
       );
 
-      for (const row of prematureRes.rows) {
-        if (!hasShiftStarted(row.shift_timing, cleanTargetDate)) {
-          await pool.query(
-            `UPDATE attendance_records
-             SET status = 'NOT_STARTED',
-                 source = 'SYSTEM_UPCOMING_SHIFT',
-                 notes = 'Shift Not Started'
-             WHERE id = $1;`,
-            [row.id]
-          );
-        }
+      const prematureToFix = prematureRes.rows
+        .filter((row) => !hasShiftStarted(row.shift_timing, cleanTargetDate))
+        .map((r) => r.id);
+
+      if (prematureToFix.length > 0) {
+        await pool.query(
+          `UPDATE attendance_records
+           SET status = 'NOT_STARTED',
+               source = 'SYSTEM_UPCOMING_SHIFT',
+               notes = 'Shift Not Started'
+           WHERE id = ANY($1);`,
+          [prematureToFix]
+        );
       }
 
       // 2. Also, if any records for today are 'NOT_STARTED', but their shift has now started and check_in is NULL,
-      // transition them to ABSENT!
+      // transition them to ABSENT (batch)
       const pendingRes = await pool.query(
         `SELECT a.id, a.employee_id, 
            COALESCE(
@@ -837,18 +826,20 @@ export const attendanceRepository = {
         [orgId, cleanTargetDate]
       );
 
-      for (const row of pendingRes.rows) {
-        if (hasShiftStarted(row.shift_timing, cleanTargetDate)) {
-          await pool.query(
-            `UPDATE attendance_records
-             SET status = 'ABSENT',
-                 source = 'SYSTEM_ABSENCE_CUTOFF',
-                 notes = 'Auto-marked Absent: Did not log in at slot timing',
-                 updated_at = NOW()
-             WHERE id = $1;`,
-            [row.id]
-          );
-        }
+      const pendingToAbsent = pendingRes.rows
+        .filter((row) => hasShiftStarted(row.shift_timing, cleanTargetDate))
+        .map((r) => r.id);
+
+      if (pendingToAbsent.length > 0) {
+        await pool.query(
+          `UPDATE attendance_records
+           SET status = 'ABSENT',
+               source = 'SYSTEM_ABSENCE_CUTOFF',
+               notes = 'Auto-marked Absent: Did not log in at slot timing',
+               updated_at = NOW()
+           WHERE id = ANY($1);`,
+          [pendingToAbsent]
+        );
       }
     }
 
@@ -897,51 +888,49 @@ export const attendanceRepository = {
     const candidateRes = await pool.query(candidateSql, [orgId, cleanTargetDate]);
     let markedAbsentCount = 0;
 
-    for (const emp of candidateRes.rows) {
-      const shiftStarted = hasShiftStarted(emp.shift_timing, cleanTargetDate);
-      let status = 'ABSENT';
-      let source = 'SYSTEM_ABSENCE_CUTOFF';
-      let notes = 'Auto-marked Absent: Did not log in for the day';
+    if (candidateRes.rows.length > 0) {
+      const placeholders = [];
+      const values = [];
+      let pIdx = 1;
 
-      if (cleanTargetDate === todayStr) {
-        if (!shiftStarted) {
-          status = 'NOT_STARTED';
-          source = 'SYSTEM_UPCOMING_SHIFT';
-          notes = 'Shift Not Started';
-        } else {
-          status = 'ABSENT';
-          source = 'SYSTEM_ABSENCE_CUTOFF';
-          notes = 'Auto-marked Absent: Did not log in at slot timing';
+      for (const emp of candidateRes.rows) {
+        const shiftStarted = hasShiftStarted(emp.shift_timing, cleanTargetDate);
+        let status = 'ABSENT';
+        let source = 'SYSTEM_ABSENCE_CUTOFF';
+        let notes = 'Auto-marked Absent: Did not log in for the day';
+
+        if (cleanTargetDate === todayStr) {
+          if (!shiftStarted) {
+            status = 'NOT_STARTED';
+            source = 'SYSTEM_UPCOMING_SHIFT';
+            notes = 'Shift Not Started';
+          } else {
+            status = 'ABSENT';
+            source = 'SYSTEM_ABSENCE_CUTOFF';
+            notes = 'Auto-marked Absent: Did not log in at slot timing';
+          }
         }
+
+        if (status === 'ABSENT') {
+          markedAbsentCount++;
+        }
+
+        const id = `att-abs-${emp.id}-${cleanTargetDate}`;
+        placeholders.push(
+          `($${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}::date, 'Asia/Kolkata', NULL, NULL, 0.00, $${pIdx++}, $${pIdx++}, $${pIdx++}, NOW(), NOW())`
+        );
+        values.push(id, orgId, emp.id, cleanTargetDate, status, source, notes);
       }
 
-      const insSql = `
-        INSERT INTO attendance_records (
+      await pool.query(
+        `INSERT INTO attendance_records (
           id, org_id, employee_id, attendance_date, timezone,
           check_in, check_out, total_hours, status,
           source, notes, created_at, updated_at
-        ) VALUES (
-          $1, $2, $3, $4::date, 'Asia/Kolkata',
-          NULL, NULL, 0.00, $5,
-          $6, $7, NOW(), NOW()
-        )
-        ON CONFLICT (employee_id, attendance_date) DO NOTHING;
-      `;
-
-      const id = `att-abs-${emp.id}-${cleanTargetDate}`;
-      const insRes = await pool.query(insSql, [
-        id,
-        orgId,
-        emp.id,
-        cleanTargetDate,
-        status,
-        source,
-        notes,
-      ]);
-
-      if (insRes.rowCount > 0 && status === 'ABSENT') {
-        markedAbsentCount++;
-      }
+        ) VALUES ${placeholders.join(', ')}
+        ON CONFLICT (employee_id, attendance_date) DO NOTHING;`,
+        values
+      );
     }
 
     return markedAbsentCount;

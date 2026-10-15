@@ -14,7 +14,15 @@ export const AuthProvider = ({ children }) => {
     }
   });
   const [token, setToken] = useState(() => localStorage.getItem('hrms_token') || null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => {
+    try {
+      const storedToken = localStorage.getItem('hrms_token');
+      const storedUser = localStorage.getItem('hrms_user');
+      return !(storedToken && storedUser);
+    } catch {
+      return true;
+    }
+  });
   const [todayAttendanceRecord, setTodayAttendanceRecord] = useState(null);
 
   useEffect(() => {
