@@ -1,5 +1,24 @@
 import { pool } from '../config/db.js';
 
+const formatDate = (val) => {
+  if (!val) return null;
+  if (typeof val === 'string') return val.split('T')[0];
+  if (val instanceof Date) {
+    return isNaN(val.getTime()) ? null : val.toISOString().split('T')[0];
+  }
+  const d = new Date(val);
+  return isNaN(d.getTime()) ? String(val).slice(0, 10) : d.toISOString().split('T')[0];
+};
+
+const formatDateTime = (val) => {
+  if (!val) return null;
+  if (val instanceof Date) {
+    return isNaN(val.getTime()) ? null : val.toISOString();
+  }
+  const d = new Date(val);
+  return isNaN(d.getTime()) ? null : d.toISOString();
+};
+
 const mapExitRow = (row) => {
   if (!row) return null;
   const fullName = `${row.first_name || ''} ${row.last_name || ''}`.trim() || 'Staff';
@@ -30,10 +49,10 @@ const mapExitRow = (row) => {
       department: { id: row.dept_id, name: row.department_name || '', title: row.department_name || '' },
       designation: { id: row.desig_id, title: row.designation_title || '', name: row.designation_title || '' },
     },
-    resignationDate: row.resignation_date ? row.resignation_date.toISOString().split('T')[0] : null,
+    resignationDate: formatDate(row.resignation_date),
     noticePeriodDays: row.notice_period_days,
-    requestedLastWorkingDay: row.requested_last_working_day ? row.requested_last_working_day.toISOString().split('T')[0] : null,
-    approvedLastWorkingDay: row.approved_last_working_day ? row.approved_last_working_day.toISOString().split('T')[0] : null,
+    requestedLastWorkingDay: formatDate(row.requested_last_working_day),
+    approvedLastWorkingDay: formatDate(row.approved_last_working_day),
     exitType: row.exit_type,
     reason: row.reason,
     comments: row.comments || '',
@@ -42,12 +61,12 @@ const mapExitRow = (row) => {
     managerFeedback: row.manager_feedback || '',
     managerRating: row.manager_rating ? parseFloat(row.manager_rating) : null,
     managerRehireEligible: row.manager_rehire_eligible,
-    managerReviewedAt: row.manager_reviewed_at ? new Date(row.manager_reviewed_at).toISOString() : null,
-    hrReviewedAt: row.hr_reviewed_at ? new Date(row.hr_reviewed_at).toISOString() : null,
+    managerReviewedAt: formatDateTime(row.manager_reviewed_at),
+    hrReviewedAt: formatDateTime(row.hr_reviewed_at),
     hrComments: row.hr_comments || '',
     documentId: row.document_id,
-    createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
-    updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : null,
+    createdAt: formatDateTime(row.created_at),
+    updatedAt: formatDateTime(row.updated_at),
   };
 };
 
@@ -67,13 +86,13 @@ const mapClearanceRow = (row) => {
     assignedTo: row.assigned_to,
     clearedBy: row.cleared_by,
     clearedByName: row.u_first_name ? `${row.u_first_name} ${row.u_last_name || ''}`.trim() : null,
-    clearedAt: row.cleared_at ? new Date(row.cleared_at).toISOString() : null,
-    completedAt: row.completed_at ? new Date(row.completed_at).toISOString() : null,
+    clearedAt: formatDateTime(row.cleared_at),
+    completedAt: formatDateTime(row.completed_at),
     remarks: row.remarks || '',
     comments: row.comments || '',
     recoveryAmount: parseFloat(row.recovery_amount) || 0.0,
-    createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
-    updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : null,
+    createdAt: formatDateTime(row.created_at),
+    updatedAt: formatDateTime(row.updated_at),
   };
 };
 
@@ -84,18 +103,18 @@ const mapOffboardingRow = (row) => {
     orgId: row.org_id,
     exitRequestId: row.exit_request_id,
     employeeId: row.employee_id,
-    lastWorkingDay: row.last_working_day ? row.last_working_day.toISOString().split('T')[0] : null,
+    lastWorkingDay: formatDate(row.last_working_day),
     offboardingStatus: row.offboarding_status,
     clearanceStatus: row.clearance_status,
     accessRemovalStatus: row.access_removal_status,
     assetStatus: row.asset_status,
     hrCompletionStatus: row.hr_completion_status,
-    completedDate: row.completed_date ? row.completed_date.toISOString().split('T')[0] : null,
-    completedAt: row.completed_at ? new Date(row.completed_at).toISOString() : null,
+    completedDate: formatDate(row.completed_date),
+    completedAt: formatDateTime(row.completed_at),
     processedBy: row.processed_by,
     notes: row.notes || '',
-    createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
-    updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : null,
+    createdAt: formatDateTime(row.created_at),
+    updatedAt: formatDateTime(row.updated_at),
   };
 };
 
@@ -106,8 +125,8 @@ const mapFnfRow = (row) => {
     orgId: row.org_id,
     exitRequestId: row.exit_request_id,
     employeeId: row.employee_id,
-    lastWorkingDay: row.last_working_day ? row.last_working_day.toISOString().split('T')[0] : null,
-    settlementDate: row.settlement_date ? row.settlement_date.toISOString().split('T')[0] : null,
+    lastWorkingDay: formatDate(row.last_working_day),
+    settlementDate: formatDate(row.settlement_date),
     dailyRate: parseFloat(row.daily_rate) || 0,
     payableDays: parseFloat(row.payable_days) || 0,
     salaryPayable: parseFloat(row.salary_payable) || 0,
@@ -125,11 +144,11 @@ const mapFnfRow = (row) => {
     paymentStatus: row.payment_status,
     approvalStatus: row.approval_status || 'PENDING',
     approvedBy: row.approved_by,
-    approvedAt: row.approved_at ? new Date(row.approved_at).toISOString() : null,
-    disbursedAt: row.disbursed_at ? new Date(row.disbursed_at).toISOString() : null,
+    approvedAt: formatDateTime(row.approved_at),
+    disbursedAt: formatDateTime(row.disbursed_at),
     notes: row.notes || '',
-    createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
-    updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : null,
+    createdAt: formatDateTime(row.created_at),
+    updatedAt: formatDateTime(row.updated_at),
   };
 };
 
