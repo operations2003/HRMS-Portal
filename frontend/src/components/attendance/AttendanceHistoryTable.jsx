@@ -835,6 +835,12 @@ export const AttendanceHistoryTable = ({
                         >
                           {formatHoursToClock(row.totalHours)}
                         </span>
+                        {Array.isArray(row.sessions) && row.sessions.length > 1 && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200 mt-0.5">
+                            <Clock className="w-2.5 h-2.5" />
+                            {row.sessions.length} shifts
+                          </span>
+                        )}
                         {row.isOnBreak ? (
                           <span className="text-[11px] text-amber-700 font-bold block animate-pulse">
                             On Break · {getLiveBreakMinutes(row.currentBreakStart)}m

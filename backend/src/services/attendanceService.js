@@ -40,6 +40,7 @@ import {
   parseShiftStartTime,
   parseShiftTiming,
   hasShiftStarted,
+  getSlotForTimestamp,
 } from '../utils/shiftUtils.js';
 
 export {
@@ -47,6 +48,7 @@ export {
   parseShiftStartTime,
   parseShiftTiming,
   hasShiftStarted,
+  getSlotForTimestamp,
 };
 
 /**
@@ -263,11 +265,35 @@ export const createDateInTimezone = (y, m, d, h, min, s = 0, timezone = 'Asia/Ko
 export const calculateAutoLogoutCutoff = (record, shiftTiming, timezone = 'Asia/Kolkata', graceMinutes = 20) => {
   if (!record || !record.checkIn) return null;
 
-  const checkInDate = new Date(record.checkIn);
-  if (isNaN(checkInDate.getTime())) return null;
-
+  const tz = timezone || record.timezone || 'Asia/Kolkata';
   const shift = parseShiftTiming(shiftTiming);
-  const tz = timezone || 'Asia/Kolkata';
+
+  let effectiveCheckIn = new Date(record.checkIn);
+  if (isNaN(effectiveCheckIn.getTime())) return null;
+
+  // For split shifts, determine which slot is currently active
+  let activeSlot = shift;
+  if (shift.isSplitShift && Array.isArray(shift.slots) && shift.slots.length > 0) {
+    const sessions = Array.isArray(record.sessions) ? record.sessions : [];
+    const openSession = sessions.find((s) => s.checkIn && !s.checkOut);
+    if (openSession) {
+      if (openSession.checkIn) {
+        const parsedOpenCheckIn = new Date(openSession.checkIn);
+        if (!isNaN(parsedOpenCheckIn.getTime())) {
+          effectiveCheckIn = parsedOpenCheckIn;
+        }
+      }
+      if (Number.isInteger(openSession.sessionIndex) && shift.slots[openSession.sessionIndex - 1]) {
+        activeSlot = shift.slots[openSession.sessionIndex - 1];
+      } else if (openSession.slotLabel) {
+        activeSlot = shift.slots.find((s) => s.label === openSession.slotLabel) || shift.slots[0];
+      } else {
+        activeSlot = getSlotForTimestamp(shiftTiming, effectiveCheckIn, tz);
+      }
+    } else {
+      activeSlot = getSlotForTimestamp(shiftTiming, effectiveCheckIn, tz);
+    }
+  }
 
   // Extract calendar date (YYYY-MM-DD) in employee timezone
   let dateStr = '';
@@ -280,29 +306,27 @@ export const calculateAutoLogoutCutoff = (record, shiftTiming, timezone = 'Asia/
   }
   if (!dateStr || dateStr.length !== 10) {
     try {
-      dateStr = checkInDate.toLocaleDateString('en-CA', { timeZone: tz });
+      dateStr = effectiveCheckIn.toLocaleDateString('en-CA', { timeZone: tz });
     } catch {
-      dateStr = checkInDate.toISOString().split('T')[0];
+      dateStr = effectiveCheckIn.toISOString().split('T')[0];
     }
   }
 
   const [year, month, day] = dateStr.split('-').map(Number);
-  const shiftEndDate = createDateInTimezone(year, month, shift.isOvernight ? day + 1 : day, shift.endHour, shift.endMinute, 0, tz);
+  const shiftEndDate = createDateInTimezone(year, month, activeSlot.isOvernight ? day + 1 : day, activeSlot.endHour, activeSlot.endMinute, 0, tz);
 
   // Auto-logout cutoff is exactly 20 minutes after the scheduled shift end time
   const effectiveGraceMs = (Number(graceMinutes) || 20) * 60 * 1000;
   let cutoff = new Date(shiftEndDate.getTime() + effectiveGraceMs);
 
   // In case check-in occurred after scheduled cutoff (e.g. late punch), ensure cutoff is after check-in
-  if (cutoff.getTime() <= checkInDate.getTime()) {
-    cutoff = new Date(checkInDate.getTime() + effectiveGraceMs);
+  if (cutoff.getTime() <= effectiveCheckIn.getTime()) {
+    cutoff = new Date(effectiveCheckIn.getTime() + effectiveGraceMs);
   }
 
-  // CRITICAL REQUIREMENT: For employees with a 9-hour (or custom) shift schedule,
-  // ensure auto-logout will not happen prematurely after 8 hours. Cutoff must always be at least
-  // check-in + scheduled shift duration (e.g. 9 hours) + grace period.
-  const scheduledDurationMs = Math.round((shift.scheduledDurationHours || 8.0) * 3600 * 1000);
-  const minCutoffFromCheckIn = new Date(checkInDate.getTime() + scheduledDurationMs + effectiveGraceMs);
+  // Ensure auto-logout will not happen prematurely
+  const scheduledDurationMs = Math.round((activeSlot.scheduledDurationHours || 8.0) * 3600 * 1000);
+  const minCutoffFromCheckIn = new Date(effectiveCheckIn.getTime() + scheduledDurationMs + effectiveGraceMs);
   if (cutoff.getTime() < minCutoffFromCheckIn.getTime()) {
     cutoff = minCutoffFromCheckIn;
   }
@@ -329,8 +353,7 @@ export const checkAndAutoLogoutRecord = async (record, shiftTimingOverride = nul
     record.employee?.shiftTiming || '11:00 AM - 07:00 PM'
   );
 
-  // If effectiveShift resolved a specific shift schedule (e.g. 9-hour shift '11:00 AM - 08:00 PM' or '11 - 8 PM'),
-  // prefer it so auto-logout respects the actual 9-hour schedule and does not default to 8 hours.
+  // If effectiveShift resolved a specific shift schedule, prefer it
   if (!shiftTiming || shiftTiming === '11:00 AM - 07:00 PM' || (effectiveShift.shiftTiming && effectiveShift.shiftTiming !== '11:00 AM - 07:00 PM')) {
     shiftTiming = effectiveShift.shiftTiming;
   }
@@ -345,6 +368,7 @@ export const checkAndAutoLogoutRecord = async (record, shiftTimingOverride = nul
 
   // Record the scheduled automatic logout time as the attendance logout timestamp
   const effectiveCheckOut = cutoff;
+  const parsedShift = parseShiftTiming(shiftTiming);
 
   // If currently on break, close open break cleanly at effective check-out time
   let breakHistory = Array.isArray(record.breakHistory) ? [...record.breakHistory] : [];
@@ -360,13 +384,71 @@ export const checkAndAutoLogoutRecord = async (record, shiftTimingOverride = nul
     });
   }
 
-  const calc = calculateWorkingHoursAndOvertime({
-    checkIn: record.checkIn,
-    checkOut: effectiveCheckOut,
-    breakHistory,
-    breakDurationMinutes: record.breakDurationMinutes,
-    shiftTiming,
-  });
+  let sessions = Array.isArray(record.sessions) ? [...record.sessions] : [];
+  let openSessionIdx = sessions.findIndex((s) => s.checkIn && !s.checkOut);
+
+  let totalHours = 0.0;
+  let overtimeHours = 0.0;
+  let breakMinutes = record.breakDurationMinutes || 0;
+
+  if (parsedShift.isSplitShift) {
+    const sessionCheckIn = openSessionIdx >= 0 && sessions[openSessionIdx].checkIn
+      ? new Date(sessions[openSessionIdx].checkIn)
+      : new Date(record.checkIn);
+    const sessionCalc = calculateWorkingHoursAndOvertime({
+      checkIn: sessionCheckIn,
+      checkOut: effectiveCheckOut,
+      breakHistory,
+      breakDurationMinutes: record.breakDurationMinutes,
+      shiftTiming: parsedShift.slots[openSessionIdx]?.label || shiftTiming,
+    });
+
+    if (openSessionIdx >= 0) {
+      sessions[openSessionIdx] = {
+        ...sessions[openSessionIdx],
+        checkOut: effectiveCheckOut.toISOString(),
+        durationSeconds: sessionCalc.grossSeconds,
+        durationHours: sessionCalc.totalHours,
+        breakDurationMinutes: sessionCalc.breakDurationMinutes,
+      };
+    } else {
+      sessions.push({
+        sessionIndex: sessions.length + 1,
+        slotLabel: parsedShift.slots[sessions.length]?.label || shiftTiming,
+        checkIn: sessionCheckIn.toISOString(),
+        checkOut: effectiveCheckOut.toISOString(),
+        durationSeconds: sessionCalc.grossSeconds,
+        durationHours: sessionCalc.totalHours,
+        breakDurationMinutes: sessionCalc.breakDurationMinutes,
+      });
+    }
+
+    const sumHours = sessions.reduce((sum, s) => sum + (Number(s.durationHours) || 0), 0);
+    totalHours = parseFloat(sumHours.toFixed(2));
+    const sched = parsedShift.scheduledDurationHours || 6.0;
+    overtimeHours = totalHours > sched ? parseFloat((totalHours - sched).toFixed(2)) : 0.0;
+    breakMinutes = sessionCalc.breakDurationMinutes;
+  } else {
+    const calc = calculateWorkingHoursAndOvertime({
+      checkIn: record.checkIn,
+      checkOut: effectiveCheckOut,
+      breakHistory,
+      breakDurationMinutes: record.breakDurationMinutes,
+      shiftTiming,
+    });
+    totalHours = calc.totalHours;
+    overtimeHours = calc.overtimeHours;
+    breakMinutes = calc.breakDurationMinutes;
+    if (sessions.length > 0 && openSessionIdx >= 0) {
+      sessions[openSessionIdx] = {
+        ...sessions[openSessionIdx],
+        checkOut: effectiveCheckOut.toISOString(),
+        durationHours: totalHours,
+        durationSeconds: calc.grossSeconds,
+        breakDurationMinutes: breakMinutes,
+      };
+    }
+  }
 
   const scheduledIso = cutoff.toISOString();
   const processedIso = now.toISOString();
@@ -375,14 +457,18 @@ export const checkAndAutoLogoutRecord = async (record, shiftTimingOverride = nul
     ? `${record.notes} | ${autoLogoutNote}`
     : autoLogoutNote;
 
+  const primaryCheckIn = sessions[0]?.checkIn ? new Date(sessions[0].checkIn) : record.checkIn;
+
   const updated = await attendanceRepository.update(record.id, {
+    checkIn: primaryCheckIn,
     checkOut: effectiveCheckOut,
-    totalHours: calc.totalHours,
-    overtimeHours: calc.overtimeHours,
+    totalHours,
+    overtimeHours,
     isOnBreak: false,
     currentBreakStart: null,
     breakHistory,
-    breakDurationMinutes: calc.breakDurationMinutes,
+    breakDurationMinutes: breakMinutes,
+    sessions,
     status: record.status || 'PRESENT',
     notes: updatedNotes,
   });
@@ -608,6 +694,7 @@ export const attendanceService = {
 
     // Check for existing attendance record for this employee today
     let existing = await attendanceRepository.findByEmployeeAndDate(targetEmployee.id, todayDate, targetEmployee.orgId);
+    const parsedShift = parseShiftTiming(shiftTiming);
 
     if (existing && existing.checkIn && !existing.checkOut) {
       // Check if this existing record is already past cutoff
@@ -626,13 +713,83 @@ export const attendanceService = {
 
     // Determine status accurately based on employee's assigned shift timing and 5-minute grace period
     const tz = data.timezone || targetEmployee.timezone || 'Asia/Kolkata';
-    const status = determineAttendanceStatus(serverNow, shiftTiming, tz, 5);
+
+    // SPECIAL HANDLING: Split Shift (Dual Login Shifts, e.g. Atul: 1 PM - 4 PM & 10 PM - 1 AM)
+    if (parsedShift.isSplitShift && existing && existing.checkIn && existing.checkOut) {
+      const existingSessions = Array.isArray(existing.sessions) ? existing.sessions : [];
+      const completedSessions = existingSessions.filter((s) => s.checkIn && s.checkOut);
+      const totalSlots = parsedShift.slots.length;
+
+      if (completedSessions.length >= totalSlots) {
+        const error = new Error(`Employee has already completed all ${totalSlots} assigned shifts for today (${todayDate}). Duplicate check-in is not permitted.`);
+        error.statusCode = 409;
+        throw error;
+      }
+
+      // Starting next shift (e.g. Shift 2)
+      const nextSlotIndex = completedSessions.length;
+      const targetSlot = parsedShift.slots[nextSlotIndex] || parsedShift.slots[parsedShift.slots.length - 1];
+      const slotStatus = determineAttendanceStatus(serverNow, targetSlot.label, tz, 5);
+
+      const newSession = {
+        sessionIndex: completedSessions.length + 1,
+        slotLabel: targetSlot.label,
+        checkIn: serverNow.toISOString(),
+        checkOut: null,
+        status: slotStatus,
+        source: data.source || 'WEB',
+        breakDurationMinutes: 0,
+        breakHistory: [],
+      };
+
+      const updatedSessions = [...existingSessions, newSession];
+      const sessionNote = `[SHIFT_${newSession.sessionIndex}_LOGIN at ${serverNow.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}]`;
+      const combinedNotes = existing.notes ? `${existing.notes} | ${sessionNote}` : sessionNote;
+
+      return attendanceRepository.update(existing.id, {
+        checkIn: serverNow,
+        checkOut: null,
+        status: slotStatus,
+        isOnBreak: false,
+        currentBreakStart: null,
+        sessions: updatedSessions,
+        source: data.source || 'WEB',
+        notes: combinedNotes,
+        location: data.location || existing.location || {},
+      });
+    }
+
+    if (!parsedShift.isSplitShift && existing && existing.checkIn && existing.checkOut) {
+      const checkOutTime = new Date(existing.checkOut).toLocaleTimeString();
+      const error = new Error(`Employee has already completed their shift and checked out for today at ${checkOutTime}. Duplicate check-in is not permitted.`);
+      error.statusCode = 409;
+      throw error;
+    }
+
+    // First check-in of the day
+    const activeSlot = parsedShift.isSplitShift ? parsedShift.slots[0] : parsedShift;
+    const status = determineAttendanceStatus(serverNow, activeSlot.label || shiftTiming, tz, 5);
+
+    const initialSessions = [
+      {
+        sessionIndex: 1,
+        slotLabel: activeSlot.label || shiftTiming,
+        checkIn: serverNow.toISOString(),
+        checkOut: null,
+        status,
+        source: data.source || 'WEB',
+        breakDurationMinutes: 0,
+        breakHistory: [],
+      },
+    ];
 
     if (existing) {
       // If a shell record already exists (e.g. NOT_STARTED, ABSENT or initialized), update it with check-in
       return attendanceRepository.update(existing.id, {
         checkIn: serverNow,
+        checkOut: null,
         status,
+        sessions: initialSessions,
         source: data.source || 'WEB',
         notes: data.notes !== undefined ? data.notes : (existing.source?.startsWith('SYSTEM_') ? '' : existing.notes || ''),
         location: data.location || existing.location || {},
@@ -656,6 +813,7 @@ export const attendanceService = {
       ipAddress: reqIp || '',
       location: data.location || {},
       notes: data.notes || '',
+      sessions: initialSessions,
     });
   },
 
@@ -784,18 +942,78 @@ export const attendanceService = {
       });
     }
 
-    // Accurately compute working duration and overtime using centralized calculator
-    const calculation = calculateWorkingHoursAndOvertime({
-      checkIn: checkInTime,
-      checkOut: serverNow,
-      breakHistory,
-      breakDurationMinutes: data.breakDurationMinutes,
-      shiftTiming,
-    });
+    const parsedShift = parseShiftTiming(shiftTiming);
 
-    const totalHours = calculation.totalHours;
-    const overtimeHours = calculation.overtimeHours;
-    const breakMinutes = calculation.breakDurationMinutes;
+    let sessions = Array.isArray(existing.sessions) ? [...existing.sessions] : [];
+    let openSessionIdx = sessions.findIndex((s) => s.checkIn && !s.checkOut);
+
+    let totalHours = 0.0;
+    let overtimeHours = 0.0;
+    let breakMinutes = parseInt(data.breakDurationMinutes, 10) || existing.breakDurationMinutes || 0;
+
+    if (parsedShift.isSplitShift) {
+      const sessionCheckIn = openSessionIdx >= 0 && sessions[openSessionIdx].checkIn
+        ? new Date(sessions[openSessionIdx].checkIn)
+        : checkInTime;
+      const slotLabel = (openSessionIdx >= 0 && parsedShift.slots[openSessionIdx]?.label) || shiftTiming;
+      const sessionCalc = calculateWorkingHoursAndOvertime({
+        checkIn: sessionCheckIn,
+        checkOut: serverNow,
+        breakHistory,
+        breakDurationMinutes: data.breakDurationMinutes,
+        shiftTiming: slotLabel,
+      });
+
+      if (openSessionIdx >= 0) {
+        sessions[openSessionIdx] = {
+          ...sessions[openSessionIdx],
+          checkOut: serverNow.toISOString(),
+          durationSeconds: sessionCalc.grossSeconds,
+          durationHours: sessionCalc.totalHours,
+          breakDurationMinutes: sessionCalc.breakDurationMinutes,
+        };
+      } else {
+        sessions.push({
+          sessionIndex: sessions.length + 1,
+          slotLabel,
+          checkIn: checkInTime.toISOString(),
+          checkOut: serverNow.toISOString(),
+          durationSeconds: sessionCalc.grossSeconds,
+          durationHours: sessionCalc.totalHours,
+          breakDurationMinutes: sessionCalc.breakDurationMinutes,
+        });
+      }
+
+      const sumHours = sessions.reduce((sum, s) => sum + (Number(s.durationHours) || 0), 0);
+      totalHours = parseFloat(sumHours.toFixed(2));
+      const scheduledDuration = parsedShift.scheduledDurationHours || 6.0;
+      overtimeHours = totalHours > scheduledDuration
+        ? parseFloat((totalHours - scheduledDuration).toFixed(2))
+        : 0.0;
+      breakMinutes = sessionCalc.breakDurationMinutes;
+    } else {
+      const calculation = calculateWorkingHoursAndOvertime({
+        checkIn: checkInTime,
+        checkOut: serverNow,
+        breakHistory,
+        breakDurationMinutes: data.breakDurationMinutes,
+        shiftTiming,
+      });
+
+      totalHours = calculation.totalHours;
+      overtimeHours = calculation.overtimeHours;
+      breakMinutes = calculation.breakDurationMinutes;
+
+      if (sessions.length > 0 && openSessionIdx >= 0) {
+        sessions[openSessionIdx] = {
+          ...sessions[openSessionIdx],
+          checkOut: serverNow.toISOString(),
+          durationHours: totalHours,
+          durationSeconds: calculation.grossSeconds,
+          breakDurationMinutes: breakMinutes,
+        };
+      }
+    }
 
     // Determine final status
     let finalStatus = 'PRESENT';
@@ -818,7 +1036,10 @@ export const attendanceService = {
         : data.notes
       : existing.notes;
 
+    const primaryCheckIn = sessions[0]?.checkIn ? new Date(sessions[0].checkIn) : checkInTime;
+
     return attendanceRepository.update(existing.id, {
+      checkIn: primaryCheckIn,
       checkOut: serverNow,
       totalHours,
       status: finalStatus,
@@ -827,6 +1048,7 @@ export const attendanceService = {
       breakHistory,
       breakDurationMinutes: breakMinutes,
       overtimeHours,
+      sessions,
       notes: updatedNotes,
       location: data.location || existing.location,
     });

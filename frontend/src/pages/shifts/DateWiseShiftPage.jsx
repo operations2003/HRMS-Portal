@@ -44,6 +44,7 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 
 const PRESET_SHIFTS = [
+  { label: '01:00 PM - 04:00 PM, 10:00 PM - 01:00 AM', desc: '1 - 4 PM & 10 PM - 1 AM (6 hrs Split)' },
   { label: '11:00 AM - 08:00 PM', desc: '11 - 8 PM (9 hrs)' },
   { label: '12:00 PM - 06:00 PM', desc: '12 - 6 PM (6 hrs)' },
   { label: '02:00 PM - 08:00 PM', desc: '2 - 8 PM (6 hrs)' },

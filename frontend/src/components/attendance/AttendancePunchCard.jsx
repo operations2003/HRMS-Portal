@@ -24,12 +24,9 @@ import {
   formatLiveBreakDuration,
 } from '../../utils/timeUtils.js';
 
-/**
- * Parse scheduled duration hours from shift timing string (e.g. "11:00 AM - 07:00 PM" -> 8.0)
- */
-const parseShiftDurationHours = (shiftTiming) => {
-  if (!shiftTiming || typeof shiftTiming !== 'string') return 8.0;
-  const parts = shiftTiming.split(/\s*[-–—+]|\s+to\s+/i).map((s) => s.trim()).filter(Boolean);
+const parseSingleSegmentHours = (segment) => {
+  if (!segment || typeof segment !== 'string') return 8.0;
+  const parts = segment.split(/\s*[-–—+]|\s+to\s+/i).map((s) => s.trim()).filter(Boolean);
   if (parts.length < 2) return 8.0;
 
   const parseTime = (str) => {
@@ -67,6 +64,20 @@ const parseShiftDurationHours = (shiftTiming) => {
 
   let diff = endM - startM;
   return parseFloat((diff / 60).toFixed(2));
+};
+
+/**
+ * Parse scheduled duration hours from shift timing string (e.g. "11:00 AM - 07:00 PM" -> 8.0,
+ * or "01:00 PM - 04:00 PM, 10:00 PM - 01:00 AM" -> 6.0)
+ */
+const parseShiftDurationHours = (shiftTiming) => {
+  if (!shiftTiming || typeof shiftTiming !== 'string') return 8.0;
+  const segments = shiftTiming.split(/\s*[,;]\s*|\s+(?:and|&)\s+/i).map((s) => s.trim()).filter(Boolean);
+  if (segments.length > 1) {
+    const total = segments.reduce((sum, seg) => sum + parseSingleSegmentHours(seg), 0);
+    return parseFloat(total.toFixed(2));
+  }
+  return parseSingleSegmentHours(shiftTiming);
 };
 
 /**
@@ -177,7 +188,15 @@ export const AttendancePunchCard = ({
       if (todayRecord?.checkIn && !todayRecord?.checkOut) {
         const checkInTime = new Date(todayRecord.checkIn).getTime();
         const grossElapsedSeconds = Math.max(0, Math.floor((now.getTime() - checkInTime) / 1000));
-        const netWorkingSeconds = Math.max(0, grossElapsedSeconds - totalBreakSecs);
+        let priorSessionsSecs = 0;
+        if (Array.isArray(todayRecord?.sessions)) {
+          for (const s of todayRecord.sessions) {
+            if (s.checkIn && s.checkOut) {
+              priorSessionsSecs += s.durationSeconds || Math.round((Number(s.durationHours) || 0) * 3600);
+            }
+          }
+        }
+        const netWorkingSeconds = Math.max(0, priorSessionsSecs + grossElapsedSeconds - totalBreakSecs);
         setElapsedTime(formatHMS(netWorkingSeconds));
 
         // Overtime: work hours beyond scheduled shift duration (universal for all roles)
@@ -191,6 +210,13 @@ export const AttendancePunchCard = ({
           setOvertimeElapsed('00:00:00');
           setIsOvertimeActive(false);
         }
+      } else if (todayRecord?.sessions?.some((s) => s.checkIn && s.checkOut)) {
+        // Between shifts or completed: show cumulative completed time
+        const completedSecs = todayRecord.sessions
+          .filter((s) => s.checkIn && s.checkOut)
+          .reduce((sum, s) => sum + (s.durationSeconds || Math.round((Number(s.durationHours) || 0) * 3600)), 0);
+        setElapsedTime(formatHMS(completedSecs));
+        setIsOvertimeActive(false);
       } else {
         setIsOvertimeActive(false);
       }
@@ -201,8 +227,24 @@ export const AttendancePunchCard = ({
     return () => clearInterval(interval);
   }, [todayRecord, assignedShift]);
 
+  const isSplitShift = assignedShift?.includes(',') || assignedShift?.includes(';') || /\band\b|\b&\b/i.test(assignedShift);
+  const splitSlots = isSplitShift
+    ? assignedShift.split(/[,;]|\b(?:and|&)\b/i).map((s) => s.trim()).filter(Boolean)
+    : [assignedShift];
+
+  const sessions = Array.isArray(todayRecord?.sessions) ? todayRecord.sessions : [];
+  const completedSessions = sessions.filter((s) => s.checkIn && s.checkOut);
+
   const hasCheckedIn = Boolean(todayRecord?.checkIn);
   const hasCheckedOut = Boolean(todayRecord?.checkOut);
+  const isActivelyOnShift = Boolean(todayRecord?.checkIn && !todayRecord?.checkOut);
+  const hasCompletedAllShifts = isSplitShift
+    ? completedSessions.length >= splitSlots.length && !isActivelyOnShift
+    : Boolean(todayRecord?.checkIn && todayRecord?.checkOut);
+  const isBetweenShifts = isSplitShift && completedSessions.length > 0 && completedSessions.length < splitSlots.length && !isActivelyOnShift;
+  const currentSlotIndex = completedSessions.length;
+  const nextSlotLabel = isBetweenShifts ? splitSlots[currentSlotIndex] : null;
+
   const isOnBreak = Boolean(todayRecord?.isOnBreak);
   const breakHistory = Array.isArray(todayRecord?.breakHistory) ? todayRecord.breakHistory : [];
 
@@ -224,7 +266,7 @@ export const AttendancePunchCard = ({
     </span>
   );
 
-  if (hasCheckedIn && !hasCheckedOut) {
+  if (isActivelyOnShift) {
     if (isOnBreak) {
       const breakStartFormatted = formatTimeWithTimezone(todayRecord?.currentBreakStart, userTimezone);
       const breakMins = Math.floor(ongoingBreakSeconds / 60);
@@ -247,19 +289,27 @@ export const AttendancePunchCard = ({
         </span>
       );
     } else {
+      const shiftOrdinal = isSplitShift ? `Shift ${completedSessions.length + 1} of ${splitSlots.length}` : 'Active Shift';
       statusBadge = (
         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 ring-1 ring-emerald-500/20">
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-          Logged In • Active Shift
+          Logged In • {shiftOrdinal}
         </span>
       );
     }
-  } else if (hasCheckedIn && hasCheckedOut) {
+  } else if (isBetweenShifts) {
+    statusBadge = (
+      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-2xs">
+        <Clock className="w-3.5 h-3.5 text-indigo-600" />
+        Shift 1 Finished · Ready for Shift 2
+      </span>
+    );
+  } else if (hasCompletedAllShifts) {
     const isAutoLoggedOut = todayRecord?.notes?.includes('[SYSTEM_AUTO_LOGOUT]');
     statusBadge = (
       <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-200 shadow-2xs">
         <CheckCircle2 className="w-3.5 h-3.5 text-sky-600" />
-        {isAutoLoggedOut ? 'Auto-Logged Out (Shift Grace Period)' : `Completed (${todayRecord.status || 'HALF_DAY'})`}
+        {isAutoLoggedOut ? 'Auto-Logged Out (Shift Grace Period)' : `Completed (${todayRecord.status || 'PRESENT'})`}
       </span>
     );
   }
@@ -303,12 +353,38 @@ export const AttendancePunchCard = ({
           <div className="shrink-0">{statusBadge}</div>
         </div>
 
-        {/* Assigned Shift Pill */}
-        <div className="mb-4">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-50/80 border border-brand-200/80 text-brand-800 text-xs font-bold">
-            <Clock className="w-3.5 h-3.5 text-brand-600 shrink-0" />
-            <span>Shift: {assignedShift || '11:00 AM - 07:00 PM'}</span>
-          </div>
+        {/* Assigned Shift Pill(s) */}
+        <div className="mb-4 flex flex-wrap gap-2">
+          {isSplitShift ? (
+            splitSlots.map((slot, sIdx) => {
+              const isPast = completedSessions.length > sIdx;
+              const isCurrent = isActivelyOnShift && completedSessions.length === sIdx;
+              return (
+                <div
+                  key={sIdx}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border transition-all ${
+                    isPast
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                      : isCurrent
+                      ? 'bg-brand-50 text-brand-800 border-brand-300 ring-2 ring-brand-500/30 animate-pulse'
+                      : 'bg-slate-50 text-slate-600 border-slate-200'
+                  }`}
+                >
+                  <Clock className={`w-3.5 h-3.5 shrink-0 ${isCurrent ? 'text-brand-600' : isPast ? 'text-emerald-600' : 'text-slate-400'}`} />
+                  <span>
+                    Shift {sIdx + 1}: {slot}
+                    {isPast && ' ✓'}
+                    {isCurrent && ' (Active)'}
+                  </span>
+                </div>
+              );
+            })
+          ) : (
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-50/80 border border-brand-200/80 text-brand-800 text-xs font-bold">
+              <Clock className="w-3.5 h-3.5 text-brand-600 shrink-0" />
+              <span>Shift: {assignedShift || '11:00 AM - 07:00 PM'}</span>
+            </div>
+          )}
         </div>
 
         {/* Large Digital Clock with Clean AM/PM & Timezone */}
@@ -367,6 +443,31 @@ export const AttendancePunchCard = ({
           </div>
         )}
 
+        {/* Intermediate Split Shift Banner */}
+        {isBetweenShifts && (
+          <div className="p-4 rounded-2xl bg-indigo-50/80 border border-indigo-200/90 shadow-2xs flex items-center justify-between gap-3 text-indigo-900 animate-in fade-in duration-200">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0 shadow-xs ring-1 ring-indigo-300/40">
+                <CheckCircle2 className="w-5 h-5 text-indigo-600" />
+              </div>
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wider text-indigo-800 flex items-center gap-1.5">
+                  <span>Shift 1 Completed · Shift 2 Ready</span>
+                </div>
+                <div className="text-xs text-indigo-700 mt-0.5">
+                  Shift 1 recorded. Next shift: <strong className="font-semibold text-indigo-950">{nextSlotLabel || '10:00 PM - 01:00 AM'}</strong>. Click Login below when ready.
+                </div>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-[11px] text-indigo-600 font-medium">Shift 1 Worked</div>
+              <div className="text-base sm:text-lg font-black font-mono text-indigo-950">
+                {formatHoursToClock(completedSessions[0]?.durationHours || 0)}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* 2x2 Clean Metrics Grid - Eliminates squishing & overlapping */}
         <div className="grid grid-cols-2 gap-3.5">
           {/* 1. Login Time */}
@@ -375,7 +476,9 @@ export const AttendancePunchCard = ({
               <div className="w-5 h-5 rounded-md bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
                 <LogIn className="w-3 h-3" />
               </div>
-              <span className="truncate">Login Time</span>
+              <span className="truncate">
+                {isSplitShift && completedSessions.length > 0 && isActivelyOnShift ? `Shift ${completedSessions.length + 1} Login` : 'Login Time'}
+              </span>
             </div>
             <div className="text-base sm:text-lg font-bold text-slate-900 font-mono tracking-tight truncate">
               {todayRecord?.checkIn ? formatTimeOnly(todayRecord.checkIn) : '— : —'}
@@ -388,10 +491,16 @@ export const AttendancePunchCard = ({
               <div className="w-5 h-5 rounded-md bg-rose-100 text-rose-700 flex items-center justify-center shrink-0">
                 <LogOut className="w-3 h-3" />
               </div>
-              <span className="truncate">Logout Time</span>
+              <span className="truncate">
+                {isBetweenShifts ? 'Shift 1 Logout' : 'Logout Time'}
+              </span>
             </div>
             <div className="text-base sm:text-lg font-bold text-slate-900 font-mono tracking-tight truncate">
-              {todayRecord?.checkOut ? formatTimeOnly(todayRecord.checkOut) : '— : —'}
+              {isBetweenShifts && completedSessions[0]?.checkOut
+                ? formatTimeOnly(completedSessions[0].checkOut)
+                : todayRecord?.checkOut
+                ? formatTimeOnly(todayRecord.checkOut)
+                : '— : —'}
             </div>
           </div>
 
@@ -542,9 +651,9 @@ export const AttendancePunchCard = ({
             isLoading={isPunchingIn}
             onClick={handleLoginClick}
           >
-            {isPunchingIn ? 'Logging In...' : 'Login'}
+            {isPunchingIn ? 'Logging In...' : isSplitShift ? `Login (Shift 1: ${splitSlots[0] || '1:00 PM - 4:00 PM'})` : 'Login'}
           </Button>
-        ) : !hasCheckedOut ? (
+        ) : isActivelyOnShift ? (
           /* 2. Show Break control + Logout when active */
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
             {isOnBreak ? (
@@ -583,14 +692,32 @@ export const AttendancePunchCard = ({
               isLoading={isPunchingOut}
               onClick={handleDirectLogout}
             >
-              {isPunchingOut ? 'Logging Out...' : 'Logout'}
+              {isPunchingOut ? 'Logging Out...' : isSplitShift ? `Logout (Shift ${completedSessions.length + 1})` : 'Logout'}
             </Button>
           </div>
+        ) : isBetweenShifts ? (
+          /* 2b. Split Shift intermediate: Log in to Shift 2 */
+          <Button
+            type="button"
+            variant="primary"
+            size="lg"
+            className="w-full justify-center !py-3.5 text-sm font-bold shadow-md shadow-brand-500/20 transition-all hover:scale-[1.01]"
+            icon={LogIn}
+            disabled={isPunchingIn || isPunchingOut}
+            isLoading={isPunchingIn}
+            onClick={handleLoginClick}
+          >
+            {isPunchingIn ? 'Logging In to Shift 2...' : `Login (Shift 2: ${nextSlotLabel || '10:00 PM - 01:00 AM'})`}
+          </Button>
         ) : (
-          /* 3. Both completed */
+          /* 3. Both / all completed */
           <div className="w-full p-4 rounded-2xl bg-gradient-to-r from-slate-50 via-emerald-50/40 to-slate-50 border border-slate-200/90 text-center flex items-center justify-center gap-2.5 text-sm font-bold text-slate-700 shadow-2xs">
             <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-            <span>Workday Completed • Logged Out for Today</span>
+            <span>
+              {isSplitShift
+                ? `Workday Completed • Both Shifts Finished (Total: ${formatHoursToClock(todayRecord?.totalHours || 0)})`
+                : 'Workday Completed • Logged Out for Today'}
+            </span>
           </div>
         )}
       </div>

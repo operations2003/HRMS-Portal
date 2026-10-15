@@ -23,6 +23,7 @@ const mapAttendanceRow = (row) => {
     currentBreakStart: row.currentBreakStart ? new Date(row.currentBreakStart).toISOString() : null,
     breakDurationMinutes: parseInt(row.breakDurationMinutes, 10) || 0,
     breakHistory: Array.isArray(row.breakHistory) ? row.breakHistory : [],
+    sessions: Array.isArray(row.sessions) ? row.sessions : (typeof row.sessions === 'string' ? (row.sessions.startsWith('[') ? JSON.parse(row.sessions) : []) : []),
     overtimeHours: parseFloat(row.overtimeHours) || 0.0,
     source: row.source || 'WEB',
     ipAddress: row.ipAddress || '',
@@ -82,6 +83,7 @@ const BASE_ATTENDANCE_SELECT = `
     a.is_on_break AS "isOnBreak",
     a.current_break_start AS "currentBreakStart",
     a.break_history AS "breakHistory",
+    a.sessions,
     a.break_duration_minutes AS "breakDurationMinutes",
     a.overtime_hours AS "overtimeHours",
     a.source,
@@ -220,18 +222,19 @@ export const attendanceRepository = {
     const ipAddress = data.ipAddress || '';
     const location = typeof data.location === 'object' ? JSON.stringify(data.location) : '{}';
     const notes = data.notes || '';
+    const sessions = typeof data.sessions === 'object' ? JSON.stringify(data.sessions) : (typeof data.sessions === 'string' ? data.sessions : '[]');
 
     const sql = `
       INSERT INTO attendance_records (
         id, org_id, employee_id, attendance_date, timezone,
         check_in, check_out, total_hours, status, shift_id,
         break_duration_minutes, overtime_hours, source, ip_address,
-        location, notes
+        location, notes, sessions
       ) VALUES (
         $1, $2, $3, $4::date, $5,
         $6, $7, $8, $9, $10,
         $11, $12, $13, $14,
-        $15::jsonb, $16
+        $15::jsonb, $16, $17::jsonb
       )
       RETURNING id;
     `;
@@ -253,6 +256,7 @@ export const attendanceRepository = {
       ipAddress,
       location,
       notes,
+      sessions,
     ]);
 
     return this.findById(id, orgId);
@@ -341,6 +345,11 @@ export const attendanceRepository = {
     if (data.location !== undefined) {
       setClauses.push(`location = $${paramIndex++}::jsonb`);
       values.push(typeof data.location === 'object' ? JSON.stringify(data.location) : '{}');
+    }
+
+    if (data.sessions !== undefined) {
+      setClauses.push(`sessions = $${paramIndex++}::jsonb`);
+      values.push(typeof data.sessions === 'object' ? JSON.stringify(data.sessions) : (typeof data.sessions === 'string' ? data.sessions : '[]'));
     }
 
     if (setClauses.length === 0) {

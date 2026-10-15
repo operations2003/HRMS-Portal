@@ -241,6 +241,46 @@ export const AttendanceDetailModal = ({
           </div>
         </div>
 
+        {/* Multi-Shift / Split Shift Sessions Breakdown */}
+        {Array.isArray(record.sessions) && record.sessions.length > 0 && (
+          <div className="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-200/80 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-xs font-bold text-indigo-900 uppercase tracking-wider">
+                <Clock className="w-4 h-4 text-indigo-600" />
+                Shift Sessions ({record.sessions.length})
+              </div>
+              <span className="text-xs font-medium text-indigo-700">
+                Total Worked: <strong>{formatHoursToClock(record.totalHours)}</strong>
+              </span>
+            </div>
+            <div className="space-y-1.5">
+              {record.sessions.map((s, idx) => (
+                <div
+                  key={s.sessionIndex || idx}
+                  className="flex items-center justify-between text-xs px-3 py-2 rounded-xl bg-white border border-indigo-100/90 shadow-2xs"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-800 font-bold text-[10px] flex items-center justify-center shrink-0">
+                      {idx + 1}
+                    </span>
+                    <div>
+                      <span className="font-semibold text-indigo-950">
+                        Shift {idx + 1}: {s.slotLabel || (idx === 0 ? '01:00 PM - 04:00 PM' : '10:00 PM - 01:00 AM')}
+                      </span>
+                      <div className="text-[11px] text-slate-500">
+                        {s.checkIn ? formatTimestamp(s.checkIn) : '—'} → {s.checkOut ? formatTimestamp(s.checkOut) : 'In Progress (Active)'}
+                      </div>
+                    </div>
+                  </div>
+                  <span className="font-mono font-bold text-indigo-950">
+                    {s.durationHours !== undefined ? formatHoursToClock(s.durationHours) : '—'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Break Sessions History Breakdown */}
         {((Array.isArray(record.breakHistory) && record.breakHistory.length > 0) || (record.breakDurationMinutes > 0) || record.isOnBreak) && (
           <div className="p-4 rounded-2xl bg-amber-50/50 border border-amber-200/70 space-y-2">

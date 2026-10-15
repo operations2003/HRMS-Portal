@@ -30,9 +30,9 @@ export const parseTimeStr = (timeStr, defaultPeriod = null) => {
  * Supports: "03:00 PM - 08:00 PM", "1:00 AM - 7:00 PM", "11:00 AM to 07:00 PM", "2:00 PM - 08:00 PM", "12 - 8 PM", etc.
  */
 /**
- * Parse start, end, overnight flag, and scheduled duration hours from shift timing string.
+ * Parse a single shift timing segment (e.g. "01:00 PM - 04:00 PM" or "10:00 PM - 01:00 AM").
  */
-export const parseShiftTiming = (shiftTiming) => {
+export const parseSingleShiftTiming = (shiftTiming) => {
   const defaultShift = {
     startHour: 11,
     startMinute: 0,
@@ -40,6 +40,7 @@ export const parseShiftTiming = (shiftTiming) => {
     endMinute: 0,
     scheduledDurationHours: 8.0,
     isOvernight: false,
+    label: shiftTiming || '11:00 AM - 07:00 PM',
   };
 
   if (!shiftTiming || typeof shiftTiming !== 'string') {
@@ -59,6 +60,7 @@ export const parseShiftTiming = (shiftTiming) => {
       endMinute: startM,
       scheduledDurationHours: 8.0,
       isOvernight: endH < startH,
+      label: shiftTiming,
     };
   }
 
@@ -97,9 +99,142 @@ export const parseShiftTiming = (shiftTiming) => {
     startMinute: start.minute,
     endHour: end.hour,
     endMinute: end.minute,
+    durationHours: durationHours > 0 ? durationHours : 8.0,
     scheduledDurationHours: durationHours > 0 ? durationHours : 8.0,
     isOvernight,
+    label: shiftTiming.trim(),
   };
+};
+
+/**
+ * Parse start, end, overnight flag, and scheduled duration hours from shift timing string.
+ * Supports both single shifts (e.g. "11:00 AM - 07:00 PM") and split / multi-shifts
+ * (e.g. "01:00 PM - 04:00 PM, 10:00 PM - 01:00 AM").
+ */
+export const parseShiftTiming = (shiftTiming) => {
+  if (!shiftTiming || typeof shiftTiming !== 'string') {
+    const single = parseSingleShiftTiming(shiftTiming);
+    return {
+      ...single,
+      isSplitShift: false,
+      slots: [{ ...single, slotIndex: 1 }],
+    };
+  }
+
+  // Split on comma, semicolon, or " and " / " & "
+  const rawSegments = shiftTiming.split(/\s*[,;]\s*|\s+(?:and|&)\s+/i).map((s) => s.trim()).filter(Boolean);
+
+  if (rawSegments.length > 1) {
+    const slots = rawSegments.map((seg, idx) => {
+      const s = parseSingleShiftTiming(seg);
+      return {
+        ...s,
+        index: idx,
+        slotIndex: idx + 1,
+        label: seg,
+      };
+    });
+
+    const totalDuration = parseFloat(
+      slots.reduce((sum, s) => sum + (s.scheduledDurationHours || 0), 0).toFixed(2)
+    );
+
+    return {
+      startHour: slots[0].startHour,
+      startMinute: slots[0].startMinute,
+      endHour: slots[slots.length - 1].endHour,
+      endMinute: slots[slots.length - 1].endMinute,
+      scheduledDurationHours: totalDuration > 0 ? totalDuration : 8.0,
+      isOvernight: slots.some((s) => s.isOvernight),
+      isSplitShift: true,
+      slots,
+    };
+  }
+
+  const single = parseSingleShiftTiming(shiftTiming);
+  return {
+    ...single,
+    isSplitShift: false,
+    slots: [{ ...single, slotIndex: 1 }],
+  };
+};
+
+/**
+ * Determine which slot in a split shift matches a specific time or date (defaulting to current time in Asia/Kolkata).
+ */
+export const getSlotForTimestamp = (shiftTiming, targetDateOrTime = null, timezone = 'Asia/Kolkata') => {
+  const parsed = parseShiftTiming(shiftTiming);
+  if (!parsed.isSplitShift || !parsed.slots || parsed.slots.length <= 1) {
+    return parsed.slots?.[0] || parsed;
+  }
+
+  let dateObj;
+  if (!targetDateOrTime) {
+    dateObj = new Date();
+  } else if (targetDateOrTime instanceof Date) {
+    dateObj = targetDateOrTime;
+  } else {
+    dateObj = new Date(targetDateOrTime);
+    if (isNaN(dateObj.getTime())) dateObj = new Date();
+  }
+
+  let h = dateObj.getHours();
+  let m = dateObj.getMinutes();
+  try {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone || 'Asia/Kolkata',
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: false,
+    });
+    const parts = formatter.formatToParts(dateObj);
+    const hPart = parts.find((p) => p.type === 'hour');
+    const mPart = parts.find((p) => p.type === 'minute');
+    if (hPart) {
+      let ph = parseInt(hPart.value, 10);
+      if (ph === 24) ph = 0;
+      h = ph;
+    }
+    if (mPart) m = parseInt(mPart.value, 10);
+  } catch {
+    // fallback
+  }
+
+  const currentMins = h * 60 + m;
+
+  // Find slot where current time falls within [start - 120m, end + 60m]
+  for (const slot of parsed.slots) {
+    let startMins = slot.startHour * 60 + slot.startMinute;
+    let endMins = slot.endHour * 60 + slot.endMinute;
+    if (slot.isOvernight && endMins <= startMins) {
+      endMins += 24 * 60;
+    }
+
+    // Check same-day span
+    let compTime = currentMins;
+    if (slot.isOvernight && currentMins < slot.startHour * 60 - 120 && currentMins <= slot.endHour * 60 + 60) {
+      compTime += 24 * 60;
+    }
+
+    if (compTime >= startMins - 120 && compTime <= endMins + 60) {
+      return slot;
+    }
+  }
+
+  // Fallback: closest slot start
+  let bestSlot = parsed.slots[0];
+  let minDiff = Infinity;
+  for (const slot of parsed.slots) {
+    let startMins = slot.startHour * 60 + slot.startMinute;
+    let diff = Math.abs(currentMins - startMins);
+    if (diff > 12 * 60) diff = 24 * 60 - diff;
+    if (diff < minDiff) {
+      minDiff = diff;
+      bestSlot = slot;
+    }
+  }
+
+  return bestSlot;
 };
 
 /**

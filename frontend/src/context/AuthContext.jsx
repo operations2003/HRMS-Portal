@@ -189,15 +189,33 @@ export const AuthProvider = ({ children }) => {
   const userRoleStr = (user?.roleName || user?.role?.name || user?.role || '').toLowerCase().replace(/[^a-z0-9]/g, '');
   const isAdmin = ['admin', 'superadmin', 'orgadmin'].includes(userRoleStr);
 
+  const userShiftStr = (
+    todayAttendanceRecord?.employee?.shiftTiming ||
+    todayAttendanceRecord?.shiftTiming ||
+    user?.shiftTiming ||
+    ''
+  );
+  const isSplitShift = userShiftStr.includes(',') || userShiftStr.includes(';') || /\band\b|\b&\b/i.test(userShiftStr);
+  const splitSlotsCount = isSplitShift ? userShiftStr.split(/[,;]|\b(?:and|&)\b/i).map((s) => s.trim()).filter(Boolean).length : 1;
+
+  const sessions = Array.isArray(todayAttendanceRecord?.sessions) ? todayAttendanceRecord.sessions : [];
+  const completedSessions = sessions.filter((s) => s.checkIn && s.checkOut);
+
+  // If on a split shift and only the first shift is completed, employee is NOT logged out for the day yet
+  const hasCompletedAllShiftsToday = isSplitShift
+    ? (completedSessions.length >= splitSlotsCount && !todayAttendanceRecord?.checkIn) ||
+      (completedSessions.length >= splitSlotsCount && Boolean(todayAttendanceRecord?.checkOut))
+    : Boolean(todayAttendanceRecord?.checkOut);
+
   const hasCheckedInToday = Boolean(todayAttendanceRecord?.checkIn);
-  const hasCheckedOutToday = Boolean(todayAttendanceRecord?.checkOut);
+  const isActivelyLoggedIn = Boolean(todayAttendanceRecord?.checkIn && !todayAttendanceRecord?.checkOut);
 
   // When HR, Employee, or Manager logs out for the day (or has not logged in):
-  // isLoggedOutForDay: true if employee has punched out today
+  // isLoggedOutForDay: true if employee has completed all assigned shifts today
   // isWorkdayActive: true if Admin OR actively checked in and not checked out
   // canOperate: true if Admin OR actively checked in and not checked out
-  const isLoggedOutForDay = !isAdmin && hasCheckedOutToday;
-  const isWorkdayActive = isAdmin || (hasCheckedInToday && !hasCheckedOutToday);
+  const isLoggedOutForDay = !isAdmin && hasCompletedAllShiftsToday;
+  const isWorkdayActive = isAdmin || isActivelyLoggedIn;
   const canOperate = isWorkdayActive;
 
   return (
