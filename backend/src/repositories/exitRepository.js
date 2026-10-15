@@ -1,5 +1,26 @@
 import { pool } from '../config/db.js';
 
+const formatDate = (val) => {
+  if (!val) return null;
+  if (typeof val === 'string') return val.split('T')[0];
+  if (val instanceof Date) {
+    const year = val.getFullYear();
+    const month = String(val.getMonth() + 1).padStart(2, '0');
+    const day = String(val.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  try {
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return String(val).split('T')[0];
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  } catch {
+    return String(val).split('T')[0];
+  }
+};
+
 const mapExitRow = (row) => {
   if (!row) return null;
   const fullName = `${row.first_name || ''} ${row.last_name || ''}`.trim() || 'Staff';
@@ -30,10 +51,10 @@ const mapExitRow = (row) => {
       department: { id: row.dept_id, name: row.department_name || '', title: row.department_name || '' },
       designation: { id: row.desig_id, title: row.designation_title || '', name: row.designation_title || '' },
     },
-    resignationDate: row.resignation_date ? row.resignation_date.toISOString().split('T')[0] : null,
+    resignationDate: formatDate(row.resignation_date),
     noticePeriodDays: row.notice_period_days,
-    requestedLastWorkingDay: row.requested_last_working_day ? row.requested_last_working_day.toISOString().split('T')[0] : null,
-    approvedLastWorkingDay: row.approved_last_working_day ? row.approved_last_working_day.toISOString().split('T')[0] : null,
+    requestedLastWorkingDay: formatDate(row.requested_last_working_day),
+    approvedLastWorkingDay: formatDate(row.approved_last_working_day),
     exitType: row.exit_type,
     reason: row.reason,
     comments: row.comments || '',
@@ -84,13 +105,13 @@ const mapOffboardingRow = (row) => {
     orgId: row.org_id,
     exitRequestId: row.exit_request_id,
     employeeId: row.employee_id,
-    lastWorkingDay: row.last_working_day ? row.last_working_day.toISOString().split('T')[0] : null,
+    lastWorkingDay: formatDate(row.last_working_day),
     offboardingStatus: row.offboarding_status,
     clearanceStatus: row.clearance_status,
     accessRemovalStatus: row.access_removal_status,
     assetStatus: row.asset_status,
     hrCompletionStatus: row.hr_completion_status,
-    completedDate: row.completed_date ? row.completed_date.toISOString().split('T')[0] : null,
+    completedDate: formatDate(row.completed_date),
     completedAt: row.completed_at ? new Date(row.completed_at).toISOString() : null,
     processedBy: row.processed_by,
     notes: row.notes || '',
@@ -106,8 +127,8 @@ const mapFnfRow = (row) => {
     orgId: row.org_id,
     exitRequestId: row.exit_request_id,
     employeeId: row.employee_id,
-    lastWorkingDay: row.last_working_day ? row.last_working_day.toISOString().split('T')[0] : null,
-    settlementDate: row.settlement_date ? row.settlement_date.toISOString().split('T')[0] : null,
+    lastWorkingDay: formatDate(row.last_working_day),
+    settlementDate: formatDate(row.settlement_date),
     dailyRate: parseFloat(row.daily_rate) || 0,
     payableDays: parseFloat(row.payable_days) || 0,
     salaryPayable: parseFloat(row.salary_payable) || 0,
