@@ -17,7 +17,8 @@ const testShifts = [
   { input: 'WFH', expectedType: 'SHIFT', expectedLabel: 'Work From Home (09:00 - 18:00)', start: '09:00:00' },
   { input: 'WO', expectedType: 'WO', expectedLabel: 'Weekly Off' },
   { input: 'OFF', expectedType: 'WO', expectedLabel: 'Weekly Off' },
-  { input: 'HD', expectedType: 'HD', expectedLabel: 'Holiday' },
+  { input: 'HD', expectedType: 'HD', expectedLabel: 'Half Day' },
+  { input: 'HL', expectedType: 'HL', expectedLabel: 'Holiday' },
   { input: 'CL', expectedType: 'CL', expectedLabel: 'Casual Leave' },
   { input: 'NA', expectedType: 'NA', expectedLabel: 'Not Assigned' },
 ];
