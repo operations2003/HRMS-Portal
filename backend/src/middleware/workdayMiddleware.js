@@ -43,7 +43,6 @@ export const enforceActiveWorkday = async (req, res, next) => {
     const isExempt =
       rawPath.includes('/attendance') ||
       rawPath.includes('/roster') ||
-      rawPath.includes('/daily-reports') ||
       rawPath.includes('/v1/auth/') ||
       rawPath.includes('/auth/logout') ||
       rawPath.includes('/auth/login') ||

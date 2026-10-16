@@ -30,7 +30,6 @@ import expenseRoutes from './expenseRoutes.js';
 import analyticsRoutes from './analyticsRoutes.js';
 import payrollRoutes from './payrollRoutes.js';
 import policyRoutes from './policyRoutes.js';
-import dailyReportRoutes from './dailyReportRoutes.js';
 import appsumoRoutes from './appsumoRoutes.js';
 import rosterRoutes from './rosterRoutes.js';
 import shiftRoutes from './shiftRoutes.js';
@@ -88,7 +87,6 @@ router.use('/v1/expenses', expenseRoutes);
 router.use('/v1/analytics', analyticsRoutes);
 router.use('/v1/payroll', payrollRoutes);
 router.use('/v1/policies', policyRoutes);
-router.use('/v1/daily-reports', dailyReportRoutes);
 router.use('/v1/roster', rosterRoutes);
 router.use('/v1/shifts', shiftRoutes);
 

@@ -37,7 +37,6 @@ import { TrainingPage } from './pages/training/TrainingPage.jsx';
 import { EngagementPage } from './pages/engagement/EngagementPage.jsx';
 import { ProbationDashboardPage } from './pages/probation/ProbationDashboardPage.jsx';
 import { ReportsPage } from './pages/reports/ReportsPage.jsx';
-import { DailyReportPage } from './pages/daily-reports/DailyReportPage.jsx';
 import { DateWiseShiftPage } from './pages/shifts/DateWiseShiftPage.jsx';
 import { ForbiddenPage } from './pages/common/ForbiddenPage.jsx';
 import { NotFoundPage } from './pages/common/NotFoundPage.jsx';
@@ -507,16 +506,6 @@ export const App = () => {
                 element={
                   <PermissionRoute permission={['employee:read']}>
                     <ReportsPage />
-                  </PermissionRoute>
-                }
-              />
-
-              {/* Daily Work Reports */}
-              <Route
-                path="daily-reports"
-                element={
-                  <PermissionRoute permission={['employee:read']}>
-                    <DailyReportPage />
                   </PermissionRoute>
                 }
               />
