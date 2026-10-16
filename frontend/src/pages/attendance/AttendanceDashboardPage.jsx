@@ -227,8 +227,7 @@ export const AttendanceDashboardPage = () => {
         selectedEditTimingRecord ||
         selectedRemarkRecord ||
         selectedConvertRecord ||
-        isExportModalOpen ||
-        isReportModalOpen
+        isExportModalOpen
       ) {
         return;
       }
@@ -248,7 +247,6 @@ export const AttendanceDashboardPage = () => {
     selectedRemarkRecord,
     selectedConvertRecord,
     isExportModalOpen,
-    isReportModalOpen,
   ]);
 
   // Load departments for export filter selector
