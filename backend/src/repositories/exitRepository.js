@@ -4,21 +4,27 @@ const formatDate = (val) => {
   if (!val) return null;
   if (typeof val === 'string') return val.split('T')[0];
   if (val instanceof Date) {
+    if (isNaN(val.getTime())) return null;
     const year = val.getFullYear();
     const month = String(val.getMonth() + 1).padStart(2, '0');
     const day = String(val.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   }
-  try {
-    const d = new Date(val);
-    if (isNaN(d.getTime())) return String(val).split('T')[0];
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  } catch {
-    return String(val).split('T')[0];
+  const d = new Date(val);
+  if (isNaN(d.getTime())) return String(val).slice(0, 10);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const formatDateTime = (val) => {
+  if (!val) return null;
+  if (val instanceof Date) {
+    return isNaN(val.getTime()) ? null : val.toISOString();
   }
+  const d = new Date(val);
+  return isNaN(d.getTime()) ? null : d.toISOString();
 };
 
 const mapExitRow = (row) => {
@@ -63,12 +69,12 @@ const mapExitRow = (row) => {
     managerFeedback: row.manager_feedback || '',
     managerRating: row.manager_rating ? parseFloat(row.manager_rating) : null,
     managerRehireEligible: row.manager_rehire_eligible,
-    managerReviewedAt: row.manager_reviewed_at ? new Date(row.manager_reviewed_at).toISOString() : null,
-    hrReviewedAt: row.hr_reviewed_at ? new Date(row.hr_reviewed_at).toISOString() : null,
+    managerReviewedAt: formatDateTime(row.manager_reviewed_at),
+    hrReviewedAt: formatDateTime(row.hr_reviewed_at),
     hrComments: row.hr_comments || '',
     documentId: row.document_id,
-    createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
-    updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : null,
+    createdAt: formatDateTime(row.created_at),
+    updatedAt: formatDateTime(row.updated_at),
   };
 };
 
@@ -88,13 +94,13 @@ const mapClearanceRow = (row) => {
     assignedTo: row.assigned_to,
     clearedBy: row.cleared_by,
     clearedByName: row.u_first_name ? `${row.u_first_name} ${row.u_last_name || ''}`.trim() : null,
-    clearedAt: row.cleared_at ? new Date(row.cleared_at).toISOString() : null,
-    completedAt: row.completed_at ? new Date(row.completed_at).toISOString() : null,
+    clearedAt: formatDateTime(row.cleared_at),
+    completedAt: formatDateTime(row.completed_at),
     remarks: row.remarks || '',
     comments: row.comments || '',
     recoveryAmount: parseFloat(row.recovery_amount) || 0.0,
-    createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
-    updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : null,
+    createdAt: formatDateTime(row.created_at),
+    updatedAt: formatDateTime(row.updated_at),
   };
 };
 
@@ -112,11 +118,11 @@ const mapOffboardingRow = (row) => {
     assetStatus: row.asset_status,
     hrCompletionStatus: row.hr_completion_status,
     completedDate: formatDate(row.completed_date),
-    completedAt: row.completed_at ? new Date(row.completed_at).toISOString() : null,
+    completedAt: formatDateTime(row.completed_at),
     processedBy: row.processed_by,
     notes: row.notes || '',
-    createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
-    updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : null,
+    createdAt: formatDateTime(row.created_at),
+    updatedAt: formatDateTime(row.updated_at),
   };
 };
 
@@ -146,11 +152,11 @@ const mapFnfRow = (row) => {
     paymentStatus: row.payment_status,
     approvalStatus: row.approval_status || 'PENDING',
     approvedBy: row.approved_by,
-    approvedAt: row.approved_at ? new Date(row.approved_at).toISOString() : null,
-    disbursedAt: row.disbursed_at ? new Date(row.disbursed_at).toISOString() : null,
+    approvedAt: formatDateTime(row.approved_at),
+    disbursedAt: formatDateTime(row.disbursed_at),
     notes: row.notes || '',
-    createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
-    updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : null,
+    createdAt: formatDateTime(row.created_at),
+    updatedAt: formatDateTime(row.updated_at),
   };
 };
 
