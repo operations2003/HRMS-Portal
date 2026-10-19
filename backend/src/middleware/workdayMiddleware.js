@@ -43,6 +43,9 @@ export const enforceActiveWorkday = async (req, res, next) => {
     const isExempt =
       rawPath.includes('/attendance') ||
       rawPath.includes('/roster') ||
+      rawPath.includes('/shifts') ||
+      rawPath.includes('/v1/shifts') ||
+      rawPath.includes('/v1/roster') ||
       rawPath.includes('/v1/auth/') ||
       rawPath.includes('/auth/logout') ||
       rawPath.includes('/auth/login') ||
@@ -69,16 +72,19 @@ export const enforceActiveWorkday = async (req, res, next) => {
       todayDate = new Date().toISOString().split('T')[0];
     }
 
-    // Query employee's latest attendance for today or active unclosed record,
-    // along with any active in-progress overtime session count in a single query
+    // Query employee's latest attendance for today or active unclosed record from past days (e.g. overnight shift),
+    // strictly ignoring future dates (> todayDate), along with any active in-progress overtime session count
     const query = `
       SELECT 
         a.id, a.check_in, a.check_out, a.attendance_date,
         (SELECT COUNT(*)::int FROM overtime_records o WHERE o.employee_id = $1 AND o.status = 'IN_PROGRESS') AS active_ot_count
       FROM attendance_records a
       WHERE a.employee_id = $1
-        AND (a.attendance_date = $2::date OR a.check_out IS NULL)
-      ORDER BY a.attendance_date DESC, a.created_at DESC
+        AND (
+          a.attendance_date = $2::date 
+          OR (a.attendance_date < $2::date AND a.check_in IS NOT NULL AND a.check_out IS NULL)
+        )
+      ORDER BY (a.attendance_date = $2::date) DESC, a.attendance_date DESC, a.created_at DESC
       LIMIT 1;
     `;
     const result = await pool.query(query, [employeeId, todayDate]);

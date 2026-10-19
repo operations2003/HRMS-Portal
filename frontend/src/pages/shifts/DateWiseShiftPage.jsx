@@ -834,7 +834,7 @@ export const DateWiseShiftPage = () => {
       await fetchSchedule();
       await fetchEmployees();
     } catch (err) {
-      toast.error(err.message || 'Failed to assign shift timings.');
+      toast.error(err.response?.data?.message || err.message || 'Failed to assign shift timings.');
     } finally {
       setIsSaving(false);
     }
@@ -868,7 +868,7 @@ export const DateWiseShiftPage = () => {
       await fetchSchedule();
       await fetchEmployees();
     } catch (err) {
-      toast.error(err.message || 'Failed to reset shifts.');
+      toast.error(err.response?.data?.message || err.message || 'Failed to reset shifts.');
     } finally {
       setIsSaving(false);
     }
@@ -987,7 +987,7 @@ export const DateWiseShiftPage = () => {
       setSelectedMatrixCellDetails(null);
       await fetchSchedule();
     } catch (err) {
-      toast.error(err.message || 'Failed to update shift timing.');
+      toast.error(err.response?.data?.message || err.message || 'Failed to update shift timing.');
     } finally {
       setIsSavingCellShift(false);
     }
@@ -1007,7 +1007,7 @@ export const DateWiseShiftPage = () => {
       setSelectedMatrixCellDetails(null);
       await fetchSchedule();
     } catch (err) {
-      toast.error(err.message || 'Failed to reset shift timing.');
+      toast.error(err.response?.data?.message || err.message || 'Failed to reset shift timing.');
     } finally {
       setIsSavingCellShift(false);
     }

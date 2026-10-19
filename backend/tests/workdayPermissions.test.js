@@ -145,6 +145,36 @@ async function runTests() {
     assert.strictEqual(isNextCalled(), true);
   });
 
+  await test('POST /api/v1/shifts/assign is exempt (HR/Managers can update roster & shift timings anytime)', async () => {
+    const { req, res, next, isNextCalled } = createMockReqRes({
+      method: 'POST',
+      url: '/api/v1/shifts/assign',
+      user: { id: 'hr-1', employeeId: 'emp-hr', roleName: 'HR' },
+    });
+    await enforceActiveWorkday(req, res, next);
+    assert.strictEqual(isNextCalled(), true);
+  });
+
+  await test('POST /api/v1/shifts/reset is exempt (HR/Managers can reset shifts anytime)', async () => {
+    const { req, res, next, isNextCalled } = createMockReqRes({
+      method: 'POST',
+      url: '/api/v1/shifts/reset',
+      user: { id: 'hr-1', employeeId: 'emp-hr', roleName: 'HR' },
+    });
+    await enforceActiveWorkday(req, res, next);
+    assert.strictEqual(isNextCalled(), true);
+  });
+
+  await test('POST /api/v1/roster/assign is exempt', async () => {
+    const { req, res, next, isNextCalled } = createMockReqRes({
+      method: 'POST',
+      url: '/api/v1/roster/assign',
+      user: { id: 'hr-1', employeeId: 'emp-hr', roleName: 'HR' },
+    });
+    await enforceActiveWorkday(req, res, next);
+    assert.strictEqual(isNextCalled(), true);
+  });
+
   // --- 4. Workday Status Enforcement for HR / Manager / Employee ---
   console.log('\n--- 4. Workday Status Enforcement for HR, Manager, Employee ---');
 
@@ -270,6 +300,32 @@ async function runTests() {
     await enforceActiveWorkday(req, res, next);
 
     assert.strictEqual(isNextCalled(), true, 'Actively logged in employee must be allowed to make changes');
+  });
+
+  await test('When Employee has a future approved leave record (check_in: null) but is actively logged in today: ALLOWS changes', async () => {
+    // Simulates the bug where future dates sorted higher than today's active check-in
+    pool.query = async (sql, params) => {
+      return {
+        rows: [
+          {
+            id: 'att-today-1',
+            check_in: new Date('2026-10-08T09:30:00Z'),
+            check_out: null, // actively checked in today!
+            attendance_date: '2026-10-08',
+          },
+        ],
+      };
+    };
+
+    const { req, res, next, isNextCalled } = createMockReqRes({
+      method: 'POST',
+      url: '/api/v1/tasks',
+      user: { id: 'emp-1', employeeId: 'emp-1', roleName: 'Employee' },
+    });
+
+    await enforceActiveWorkday(req, res, next);
+
+    assert.strictEqual(isNextCalled(), true, 'Actively logged in employee with future leave must be allowed to make changes');
   });
 
   // Restore pool.query
