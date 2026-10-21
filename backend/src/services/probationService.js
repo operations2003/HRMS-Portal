@@ -35,12 +35,17 @@ export const probationService = {
         LIMIT 1
       ) pe ON true
       WHERE e.org_id = $1
+        AND e.status = 'Active'
     `;
     const params = [orgId];
 
+    // Default: Only show employees in probation or extended, unless specific status filter is applied
     if (filters.status) {
       params.push(filters.status);
       sql += ` AND e.probation_status = $${params.length}`;
+    } else {
+      // By default, only show IN_PROBATION and EXTENDED employees (exclude NOT_ELIGIBLE, CONFIRMED, REJECTED)
+      sql += ` AND e.probation_status IN ('IN_PROBATION', 'EXTENDED')`;
     }
     if (filters.managerId) {
       params.push(filters.managerId);
@@ -58,15 +63,30 @@ export const probationService = {
 
     const res = await query(sql, params);
 
-    // Compute summary stats
+    // Compute summary stats from ALL active employees (not just filtered records)
+    const statsRes = await query(
+      `SELECT 
+         COUNT(*) FILTER (WHERE probation_status = 'IN_PROBATION') AS total_in_probation,
+         COUNT(*) FILTER (WHERE probation_status = 'IN_PROBATION' AND probation_end_date < CURRENT_DATE) AS overdue_count,
+         COUNT(*) FILTER (WHERE probation_status = 'IN_PROBATION' AND probation_end_date >= CURRENT_DATE AND probation_end_date <= CURRENT_DATE + INTERVAL '14 days') AS approaching_expiry_count,
+         COUNT(*) FILTER (WHERE probation_status = 'CONFIRMED') AS confirmed_count,
+         COUNT(*) FILTER (WHERE probation_status = 'NOT_ELIGIBLE') AS not_eligible_count,
+         COUNT(*) FILTER (WHERE probation_status = 'EXTENDED') AS extended_count,
+         COUNT(*) FILTER (WHERE probation_status = 'REJECTED') AS rejected_count
+       FROM employees 
+       WHERE org_id = $1 AND status = 'Active'`,
+      [orgId]
+    );
+
+    const statsRow = statsRes.rows[0] || {};
     const stats = {
-      totalInProbation: res.rows.filter((r) => r.probation_status === 'IN_PROBATION').length,
-      overdueCount: res.rows.filter((r) => r.is_overdue).length,
-      approachingExpiryCount: res.rows.filter((r) => r.is_approaching_expiry).length,
-      confirmedCount: res.rows.filter((r) => r.probation_status === 'CONFIRMED').length,
-      notEligibleCount: res.rows.filter((r) => r.probation_status === 'NOT_ELIGIBLE').length,
-      extendedCount: res.rows.filter((r) => r.probation_status === 'EXTENDED').length,
-      rejectedCount: res.rows.filter((r) => r.probation_status === 'REJECTED').length,
+      totalInProbation: parseInt(statsRow.total_in_probation || 0, 10),
+      overdueCount: parseInt(statsRow.overdue_count || 0, 10),
+      approachingExpiryCount: parseInt(statsRow.approaching_expiry_count || 0, 10),
+      confirmedCount: parseInt(statsRow.confirmed_count || 0, 10),
+      notEligibleCount: parseInt(statsRow.not_eligible_count || 0, 10),
+      extendedCount: parseInt(statsRow.extended_count || 0, 10),
+      rejectedCount: parseInt(statsRow.rejected_count || 0, 10),
     };
 
     return { stats, records: res.rows };
