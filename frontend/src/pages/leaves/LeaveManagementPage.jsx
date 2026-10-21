@@ -22,6 +22,7 @@ import {
   PieChart,
   Edit3,
   Trash2,
+  Search,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
@@ -91,6 +92,10 @@ export const LeaveManagementPage = () => {
   const [statusFilter, setStatusFilter] = useState(
     searchParams.get('status') || ''
   );
+
+  // Search Query
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
 
   // Modals state
   const [isApplyModalOpen, setIsApplyModalOpen] = useState(false);
@@ -218,6 +223,7 @@ export const LeaveManagementPage = () => {
         if (activeTab === 'my') {
           const res = await leaveService.getMyLeaves({
             status: statusFilter,
+            search: debouncedSearch || undefined,
             page,
             limit: 15,
           });
@@ -226,6 +232,7 @@ export const LeaveManagementPage = () => {
         } else if (activeTab === 'team') {
           const res = await leaveService.getTeamLeaves({
             status: statusFilter,
+            search: debouncedSearch || undefined,
             page,
             limit: 15,
           });
@@ -238,7 +245,7 @@ export const LeaveManagementPage = () => {
         setLoading(false);
       }
     },
-    [activeTab, statusFilter]
+    [activeTab, statusFilter, debouncedSearch]
   );
 
   useEffect(() => {
@@ -247,6 +254,14 @@ export const LeaveManagementPage = () => {
       fetchTeamStats();
     }
   }, [fetchMetadata, fetchTeamStats, canViewTeam]);
+
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery.trim());
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   useEffect(() => {
     fetchRecords(1);
@@ -1098,10 +1113,33 @@ export const LeaveManagementPage = () => {
           )}
         </div>
 
-        <div className="text-xs text-slate-500 font-medium">
-          Showing {records.length} {records.length === 1 ? 'request' : 'requests'}
-          {pagination?.total ? ` of ${pagination.total}` : ''}
-          {statusFilter ? ` (${statusFilter === 'ON_LEAVE_TODAY' ? 'On Leave Today' : statusFilter})` : ''}
+        {/* Search Input */}
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={activeTab === 'team' ? 'Search employee name...' : 'Search leave type, reason...'}
+              className="pl-9 pr-8 py-2 w-56 sm:w-64 text-sm rounded-xl border border-slate-200 bg-slate-50/50 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-400 transition-all"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                title="Clear search"
+              >
+                <XCircle className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+          <div className="text-xs text-slate-500 font-medium whitespace-nowrap">
+            Showing {records.length} {records.length === 1 ? 'request' : 'requests'}
+            {pagination?.total ? ` of ${pagination.total}` : ''}
+            {statusFilter ? ` (${statusFilter === 'ON_LEAVE_TODAY' ? 'On Leave Today' : statusFilter})` : ''}
+          </div>
         </div>
       </div>
 

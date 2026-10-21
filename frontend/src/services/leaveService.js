@@ -89,6 +89,7 @@ export const leaveService = {
   async getMyLeaves(params = {}) {
     const query = new URLSearchParams();
     if (params.status) query.append('status', params.status);
+    if (params.search) query.append('search', params.search);
     if (params.page) query.append('page', params.page);
     if (params.limit) query.append('limit', params.limit);
     const queryString = query.toString() ? `?${query.toString()}` : '';
@@ -107,6 +108,7 @@ export const leaveService = {
   async getTeamLeaves(params = {}) {
     const query = new URLSearchParams();
     if (params.status) query.append('status', params.status);
+    if (params.search) query.append('search', params.search);
     if (params.page) query.append('page', params.page);
     if (params.limit) query.append('limit', params.limit);
     const queryString = query.toString() ? `?${query.toString()}` : '';
