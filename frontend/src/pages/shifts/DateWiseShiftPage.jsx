@@ -714,6 +714,7 @@ export const DateWiseShiftPage = () => {
         if (!cell) return '-';
         if (d.dayName === 'Sun' || cell.isSunday || cell.shiftType === 'WO' || cell.displayType === 'WO') return 'Weekly Off';
         if (cell.holiday) return `Holiday (${cell.holiday.name || 'Holiday'})`;
+        if (cell.shiftType === 'HL' || cell.shiftType === 'HOLIDAY' || cell.cellText === 'HL' || cell.displayType === 'HOLIDAY') return 'Holiday (HL)';
         if (cell.isHalfDay || cell.displayType === 'HALF_DAY') return 'Half Day';
         if (cell.leave || cell.displayType === 'LEAVE') {
           const lCode = cell.leave?.leaveCode || cell.cellText || '';
@@ -1389,14 +1390,16 @@ export const DateWiseShiftPage = () => {
                       const cell = row.cells?.[day.dateKey];
                       const isSun = day.dayName === 'Sun' || cell?.isSunday;
                       const isWO = cell?.shiftType === 'WO' || cell?.displayType === 'WO' || isSun;
-                      const isHalfDay = Boolean(cell?.isHalfDay || cell?.displayType === 'HALF_DAY');
-                      const isLeave = Boolean((cell?.leave || cell?.displayType === 'LEAVE') && !isHalfDay);
+                      const isHoliday = cell?.holiday || cell?.shiftType === 'HL' || cell?.shiftType === 'HOLIDAY' || cell?.displayType === 'HOLIDAY';
+                      const isHalfDay = Boolean(!isHoliday && (cell?.isHalfDay || cell?.displayType === 'HALF_DAY'));
+                      const isLeave = Boolean(!isHoliday && (cell?.leave || cell?.displayType === 'LEAVE') && !isHalfDay);
                       const isOverride = Boolean(cell?.isOverride || cell?.displayType === 'OVERRIDE');
                       const isNA = cell?.shortLabel === 'NA' || cell?.displayType === 'NA';
                       const text = cell?.cellText || cell?.shortLabel || (isWO ? 'WO' : '-');
                       const att = cell?.attendance;
 
                       const isYellowBadge = isHalfDay || isLeave || ['CL', 'PL', 'SL', 'HD', 'UP', 'LEAVE'].includes(text);
+                      const isHolidayBadge = isHoliday || text === 'HL' || text === 'HOLIDAY';
 
                       return (
                         <td
@@ -1424,7 +1427,11 @@ export const DateWiseShiftPage = () => {
                           title={(canEditShifts ? 'Click to edit shift or apply leave\n' : 'Click to view day details\n') + row.employee.fullName + ' | ' + day.dateKey + '\nShift: ' + (cell?.shiftLabel || (isWO ? 'Weekly Off (WO)' : text)) + (isOverride ? ' (Override)' : '')}
                         >
                           <div className="flex flex-col items-center justify-center min-h-[30px] leading-tight">
-                            {isYellowBadge ? (
+                            {isHolidayBadge ? (
+                              <span className="inline-block px-1.5 py-0.5 rounded text-[11px] font-bold bg-rose-100 text-rose-900 border border-rose-300 shadow-2xs leading-none">
+                                HL
+                              </span>
+                            ) : isYellowBadge ? (
                               <span className="inline-block px-1.5 py-0.5 rounded text-[11px] font-bold bg-[#fef08a] text-amber-950 border border-amber-300 shadow-2xs leading-none">
                                 {text === 'Half Day' ? 'HD' : text}
                               </span>
@@ -1788,8 +1795,8 @@ export const DateWiseShiftPage = () => {
               <div className="flex items-center gap-1.5">
                 {selectedMatrixCellDetails.cell.shiftType === 'WO' || selectedMatrixCellDetails.cell.isSunday ? (
                   <Badge variant="neutral" size="xs">🛑 Weekly Off (WO)</Badge>
-                ) : selectedMatrixCellDetails.cell.holiday ? (
-                  <Badge variant="rose" size="xs">🎉 {selectedMatrixCellDetails.cell.holiday.name}</Badge>
+                ) : selectedMatrixCellDetails.cell.holiday || selectedMatrixCellDetails.cell.shiftType === 'HL' || selectedMatrixCellDetails.cell.shiftType === 'HOLIDAY' ? (
+                  <Badge variant="rose" size="xs">🎉 {selectedMatrixCellDetails.cell.holiday?.name || 'Holiday (HL)'}</Badge>
                 ) : selectedMatrixCellDetails.cell.isHalfDay ? (
                   <Badge variant="amber" size="xs">🌗 Half Day</Badge>
                 ) : selectedMatrixCellDetails.cell.leave ? (

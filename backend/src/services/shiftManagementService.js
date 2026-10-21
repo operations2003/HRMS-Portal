@@ -517,14 +517,16 @@ export const shiftManagementService = {
           shortLabel = this.getShortShiftLabel(shiftLabel, custom.shiftStartTime, custom.shiftEndTime);
         }
 
-        // Distinct Half Day detection
+        // Distinct Half Day detection (excluding HL which is Holiday roster code, not Half Day)
         const isHalfDay = Boolean(
-          leave?.isHalfDay ||
-          leave?.leaveCode === 'HDL' ||
-          (leave?.leaveName && leave.leaveName.toLowerCase().includes('half')) ||
-          shiftType === 'HD' ||
-          /half\s*day/i.test(shiftLabel) ||
-          att?.status === 'HALF_DAY'
+          shiftType !== 'HL' && shiftType !== 'HOLIDAY' && (
+            leave?.isHalfDay ||
+            leave?.leaveCode === 'HDL' ||
+            (leave?.leaveName && leave.leaveName.toLowerCase().includes('half')) ||
+            shiftType === 'HD' ||
+            /half\s*day/i.test(shiftLabel) ||
+            att?.status === 'HALF_DAY'
+          )
         );
 
         // Leave detection (excluding half days, excluding Sunday which is standard Weekly Off)
@@ -557,6 +559,9 @@ export const shiftManagementService = {
 
         if (isSunday || isWeeklyOff) {
           weeklyOffDaysCount++;
+        } else if (shiftType === 'HL' || shiftType === 'HOLIDAY') {
+          // HL roster code counts as Holiday (similar to database holidays)
+          // Don't count it as leave or half day
         } else if (isHalfDay) {
           halfDaysCount++;
           scheduledDaysCount += 0.5;
@@ -586,6 +591,10 @@ export const shiftManagementService = {
         } else if (holiday) {
           displayType = 'HOLIDAY';
           cellText = 'Holiday';
+        } else if (shiftType === 'HL' || shiftType === 'HOLIDAY') {
+          // HL = Holiday roster code (distinct from Half Day)
+          displayType = 'HOLIDAY';
+          cellText = 'HL';
         } else if (isHalfDay) {
           displayType = 'HALF_DAY';
           cellText = 'HD';
