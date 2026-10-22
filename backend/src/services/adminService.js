@@ -4,7 +4,7 @@ import { adminRepository } from '../repositories/adminRepository.js';
 import { orgRepository } from '../repositories/orgRepository.js';
 import { userService } from './userService.js';
 import { hashPassword } from '../utils/passwordUtils.js';
-import { pool } from '../config/db.js';
+import { pool, query } from '../config/db.js';
 
 /**
  * Remove sensitive passwordHash from user object
@@ -23,6 +23,7 @@ export const adminService = {
 
   /**
    * List all users with optional filtering by status, role, search query
+   * Excludes users whose linked employee has Exited, Terminated, or Inactive status
    */
   async listUsers({ orgId, status, roleId, search }) {
     let users = await userRepository.findAll();
@@ -30,6 +31,27 @@ export const adminService = {
     // Filter by organization if specified
     if (orgId) {
       users = users.filter((u) => u.orgId === orgId);
+    }
+
+    // CRITICAL FIX: Filter out users whose employee record is Exited/Terminated/Inactive
+    // This prevents inactive employees from appearing in Enterprise Console
+    try {
+      const employeeStatusRes = await query(
+        `SELECT user_id, status FROM employees WHERE user_id IS NOT NULL`
+      );
+      const employeeStatusMap = {};
+      employeeStatusRes.rows.forEach((row) => {
+        employeeStatusMap[row.user_id] = row.status;
+      });
+
+      users = users.filter((u) => {
+        const empStatus = employeeStatusMap[u.id];
+        // If user has no employee record, keep them (might be admin-only account)
+        // If user has employee record, only keep if status is Active
+        return !empStatus || empStatus === 'Active';
+      });
+    } catch (err) {
+      console.warn('Failed to filter by employee status:', err.message);
     }
 
     // Filter by status
