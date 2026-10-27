@@ -92,7 +92,8 @@ export const exitChecklistService = {
       throw err;
     }
 
-    // Auto-heal: Ensure any employees with an active or processed exit request have an exit checklist
+    // Auto-heal & Realtime Directory Sync:
+    // 1. Ensure any employees with an active or processed exit request have an exit checklist
     try {
       const orphanExits = await pool.query(`
         SELECT er.id, er.org_id, er.employee_id, er.resignation_date,
@@ -101,7 +102,7 @@ export const exitChecklistService = {
         FROM exit_requests er
         LEFT JOIN exit_checklists ec ON er.employee_id = ec.employee_id
         WHERE er.org_id = $1 AND ec.id IS NULL
-        LIMIT 20;
+        LIMIT 50;
       `, [currentUser.orgId]);
 
       for (const orphan of orphanExits.rows) {
@@ -116,6 +117,45 @@ export const exitChecklistService = {
       }
     } catch (healErr) {
       logger.warn('EXIT_CHECKLIST', `Non-blocking auto-heal in getAllExitChecklists failed: ${healErr.message}`);
+    }
+
+    // 2. Ensure any employees with an exited/completed/terminated/notice status or completed internship in Employee Directory have an exit checklist
+    try {
+      const orphanEmployees = await pool.query(`
+        SELECT e.id AS employee_id, e.org_id, e.status, e.internship_status, e.internship_end_date,
+               e.first_name, e.last_name, e.employee_code, e.updated_at
+        FROM employees e
+        LEFT JOIN exit_checklists ec ON e.id = ec.employee_id
+        WHERE e.org_id = $1 
+          AND ec.id IS NULL
+          AND (
+            LOWER(e.status) IN ('exited', 'completed', 'terminated', 'notice period', 'resigned', 'inactive')
+            OR UPPER(COALESCE(e.internship_status, '')) IN ('COMPLETED', 'ENDED')
+          )
+        LIMIT 50;
+      `, [currentUser.orgId]);
+
+      for (const orphan of orphanEmployees.rows) {
+        const todayStr = new Date().toISOString().split('T')[0];
+        const dateStr = orphan.internship_end_date
+          ? (orphan.internship_end_date instanceof Date ? orphan.internship_end_date.toISOString().split('T')[0] : String(orphan.internship_end_date).slice(0, 10))
+          : (orphan.updated_at ? (orphan.updated_at instanceof Date ? orphan.updated_at.toISOString().split('T')[0] : String(orphan.updated_at).slice(0, 10)) : todayStr);
+        const isInternship = String(orphan.internship_status || '').toUpperCase() === 'COMPLETED' || String(orphan.status || '').toLowerCase() === 'completed';
+        const note = isInternship
+          ? `Internship completed for ${orphan.first_name} ${orphan.last_name || ''} (${orphan.employee_code || orphan.employee_id}). Auto-reflected in Exit Checklist.`
+          : `Auto-reflected in Exit Checklist from Employee Directory status (${orphan.status}) for ${orphan.first_name} ${orphan.last_name || ''}.`;
+
+        await exitChecklistRepository.create({
+          orgId: orphan.org_id,
+          employeeId: orphan.employee_id,
+          resignationDate: dateStr,
+          lastWorkingDay: dateStr,
+          createdBy: currentUser.id,
+          notes: note,
+        }).catch((e) => logger.warn('AUTO_SYNC_EMP_CHECKLIST', e.message));
+      }
+    } catch (empHealErr) {
+      logger.warn('EXIT_CHECKLIST', `Non-blocking employee auto-sync failed: ${empHealErr.message}`);
     }
 
     return exitChecklistRepository.findAll({

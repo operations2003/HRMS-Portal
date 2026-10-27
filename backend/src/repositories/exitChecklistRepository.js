@@ -99,6 +99,12 @@ export const exitChecklistRepository = {
     try {
       await client.query('BEGIN');
 
+      let validCreatedBy = null;
+      if (createdBy) {
+        const uCheck = await client.query('SELECT id FROM users WHERE id = $1 LIMIT 1;', [createdBy]);
+        if (uCheck.rows.length > 0) validCreatedBy = uCheck.rows[0].id;
+      }
+
       const checklistId = `chk-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
       const insertChecklistQuery = `
         INSERT INTO exit_checklists (
@@ -113,7 +119,7 @@ export const exitChecklistRepository = {
         employeeId,
         resignationDate,
         lastWorkingDay,
-        createdBy || null,
+        validCreatedBy,
         notes,
       ]);
 

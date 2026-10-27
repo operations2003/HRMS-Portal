@@ -389,6 +389,44 @@ export const employeeService = {
         );
       }
 
+      // AUTO-PROVISION EXIT CHECKLIST:
+      // If employee's internship or employment status is updated to completed/exited/notice/resigned/terminated/inactive
+      // in Employee Directory, directly reflect in Exit Checklist without requiring manual initiation.
+      const statusLower = String(data.status || updated?.status || '').trim().toLowerCase();
+      const internshipStatusUpper = String(data.internshipStatus || updated?.internshipStatus || '').trim().toUpperCase();
+      const empTypeLower = String(data.employmentType || updated?.employmentType || existing?.employmentType || '').trim().toLowerCase();
+
+      const isExitStatus = ['exited', 'completed', 'terminated', 'notice period', 'resigned', 'inactive'].includes(statusLower);
+      const isInternshipDone =
+        internshipStatusUpper === 'COMPLETED' ||
+        internshipStatusUpper === 'ENDED' ||
+        (empTypeLower.includes('intern') && (statusLower === 'completed' || statusLower === 'exited'));
+
+      if (isExitStatus || isInternshipDone) {
+        try {
+          const autoChecklist = await this.ensureExitChecklistForEmployee(
+            updated || existing,
+            {
+              status: data.status || updated?.status || existing?.status,
+              internshipStatus: data.internshipStatus || updated?.internshipStatus,
+              resignationDate: data.resignationDate || data.internshipEndDate || updated?.internshipEndDate,
+              lastWorkingDay: data.lastWorkingDay || data.internshipEndDate || updated?.internshipEndDate,
+              notes:
+                data.notes ||
+                (isInternshipDone
+                  ? `Internship concluded for ${updated.firstName} ${updated.lastName || ''} in Employee Directory.`
+                  : `Status updated to '${data.status || updated.status}' in Employee Directory.`),
+            },
+            currentUser
+          );
+          if (autoChecklist) {
+            updated.exitChecklist = autoChecklist;
+          }
+        } catch (autoErr) {
+          logger.warn('EMPLOYEE_UPDATE_EXIT_AUTO', `Could not auto-provision exit checklist: ${autoErr.message}`);
+        }
+      }
+
       return updated;
     } catch (err) {
       throw handlePostgresError(err, { ...existing, ...data });
@@ -414,9 +452,9 @@ export const employeeService = {
   },
 
   /**
-   * Deprovision and mark employee profile as Exited (with associated user deactivation)
+   * Deprovision and mark employee profile as Exited (with associated user deactivation and auto-exit checklist)
    */
-  async deactivateEmployee(id, reason = 'Employee marked as exited') {
+  async deactivateEmployee(id, reason = 'Employee marked as exited', currentUser = null) {
     const existing = await employeeRepository.findById(id);
     if (!existing) {
       const error = new Error(`Employee with ID '${id}' not found.`);
@@ -432,7 +470,146 @@ export const employeeService = {
       await userRepository.update(existing.userId, { status: 'Inactive' });
     }
 
+    // Auto-provision Exit Checklist for the deactivated / exited employee
+    try {
+      await this.ensureExitChecklistForEmployee(
+        updatedEmp || existing,
+        {
+          status: 'Exited',
+          notes: reason || `Employee deactivated and marked as Exited in Employee Directory`,
+        },
+        currentUser
+      );
+    } catch (autoErr) {
+      logger.warn('DEACTIVATE_EMPLOYEE_EXIT_AUTO', `Could not auto-provision exit checklist: ${autoErr.message}`);
+    }
+
     return updatedEmp;
+  },
+
+  /**
+   * Automatically ensure an employee has an Exit Checklist and Clearance records
+   * whenever internship or employment ends or status changes in Employee Directory.
+   */
+  async ensureExitChecklistForEmployee(employee, options = {}, currentUser = null) {
+    if (!employee || !employee.id) return null;
+    const orgId = employee.orgId || 'org-1';
+
+    // 1. Format dates (fallback to today if none provided)
+    const todayStr = new Date().toISOString().split('T')[0];
+    const resignationDate = options.resignationDate
+      ? (typeof options.resignationDate === 'string' ? options.resignationDate.slice(0, 10) : todayStr)
+      : todayStr;
+    const lastWorkingDay = options.lastWorkingDay
+      ? (typeof options.lastWorkingDay === 'string' ? options.lastWorkingDay.slice(0, 10) : resignationDate)
+      : resignationDate;
+
+    // Check if currentUser is a valid foreign key in users
+    let validUserId = null;
+    if (currentUser?.id) {
+      const uCheck = await pool.query('SELECT id FROM users WHERE id = $1 LIMIT 1;', [currentUser.id]);
+      if (uCheck.rows.length > 0) validUserId = uCheck.rows[0].id;
+    }
+
+    // 2. Check if active checklist already exists
+    let exitChecklist = await exitChecklistRepository.findActiveByEmployeeId(employee.id, orgId);
+    if (!exitChecklist) {
+      exitChecklist = await exitChecklistRepository.create({
+        orgId,
+        employeeId: employee.id,
+        resignationDate,
+        lastWorkingDay,
+        createdBy: validUserId,
+        notes: options.notes || `Auto-provisioned from Employee Directory (${options.status || employee.status || 'Exit'})`,
+      });
+      logger.info(
+        'AUTO_EXIT_CHECKLIST',
+        `Exit checklist ${exitChecklist.id} auto-created for employee ${employee.id} (${employee.firstName} ${employee.lastName || ''})`
+      );
+    }
+
+    // 3. Ensure Exit Request and Offboarding records exist so all exit tabs are populated
+    try {
+      const existingExitReq = await exitRepository.findByEmployeeId(employee.id, orgId);
+      if (!existingExitReq) {
+        const isInternship =
+          String(options.internshipStatus || employee.internshipStatus || '').toUpperCase() === 'COMPLETED' ||
+          String(employee.employmentType || '').toLowerCase().includes('intern');
+        const exitReq = await exitRepository.create({
+          orgId,
+          employeeId: employee.id,
+          resignationDate,
+          noticePeriodDays: 0,
+          requestedLastWorkingDay: lastWorkingDay,
+          approvedLastWorkingDay: lastWorkingDay,
+          exitType: isInternship ? 'CONTRACT_END' : (options.status === 'Terminated' ? 'INVOLUNTARY' : 'VOLUNTARY'),
+          reason: options.notes || `[AUTO_EXIT] Direct workflow transition from Employee Directory.`,
+          comments: options.notes || `Auto-created exit request for ${employee.firstName} ${employee.lastName || ''}`,
+          status: 'EXIT_PROCESSING',
+          currentStage: 'CLEARANCE_IN_PROGRESS',
+          submittedBy: validUserId,
+        });
+
+        await exitRepository.upsertOffboarding({
+          orgId,
+          exitRequestId: exitReq.id,
+          employeeId: employee.id,
+          lastWorkingDay,
+          offboardingStatus: 'CLEARANCES_PENDING',
+          clearanceStatus: 'PENDING',
+          accessRemovalStatus: 'ACTIVE',
+          assetStatus: 'PENDING',
+          hrCompletionStatus: 'IN_PROGRESS',
+          processedBy: validUserId,
+          notes: options.notes || `Direct clearance pipeline for ${employee.firstName} ${employee.lastName || ''}`,
+        });
+
+        const defaultTasks = [
+          {
+            orgId,
+            exitRequestId: exitReq.id,
+            employeeId: employee.id,
+            checklistCategory: 'ASSETS_RETURNED',
+            departmentScope: 'IT',
+            taskTitle: 'Hardware, Laptop & Asset Handover',
+            description: 'Physical inspection and recovery of company issued hardware, access card, and accessories.',
+          },
+          {
+            orgId,
+            exitRequestId: exitReq.id,
+            employeeId: employee.id,
+            checklistCategory: 'KT_COMPLETED',
+            departmentScope: 'DEPARTMENT',
+            taskTitle: 'Project Knowledge Transfer & Repository Handover',
+            description: 'Handover of project documentation, work artifacts, credentials, and codebases.',
+          },
+          {
+            orgId,
+            exitRequestId: exitReq.id,
+            employeeId: employee.id,
+            checklistCategory: 'SYSTEM_ACCESS_REVOKED',
+            departmentScope: 'IT',
+            taskTitle: 'Revoke Email, Slack & Portal System Access',
+            description: 'De-provisioning email, repository access, and internal communications.',
+          },
+          {
+            orgId,
+            exitRequestId: exitReq.id,
+            employeeId: employee.id,
+            checklistCategory: 'FNF_SETTLEMENT',
+            departmentScope: 'FINANCE',
+            taskTitle: 'Final Stipend / Salary Settlement & Experience Release',
+            description: 'Settlement of final dues and release of formal Completion / Experience Certificate.',
+          },
+        ];
+
+        await exitRepository.createClearanceBatch(defaultTasks).catch(() => {});
+      }
+    } catch (offboardingErr) {
+      logger.warn('AUTO_EXIT_OFFBOARDING', `Non-blocking offboarding setup error: ${offboardingErr.message}`);
+    }
+
+    return exitChecklist;
   },
 
   /**
@@ -507,105 +684,22 @@ export const employeeService = {
       internshipEndDate: endDate,
     });
 
-    // 8. Auto-provision Exit Checklist for the Intern
+    // 8. Auto-provision Exit Checklist and Offboarding Clearances for the Intern
     let exitChecklist = null;
     try {
-      const existingChecklist = await exitChecklistRepository.findActiveByEmployeeId(employee.id, employee.orgId);
-      if (!existingChecklist) {
-        exitChecklist = await exitChecklistRepository.create({
-          orgId: employee.orgId,
-          employeeId: employee.id,
+      exitChecklist = await this.ensureExitChecklistForEmployee(
+        updatedEmp || employee,
+        {
+          status: 'Completed',
+          internshipStatus: 'COMPLETED',
           resignationDate: endDate,
           lastWorkingDay: endDate,
-          createdBy: currentUser?.id || null,
           notes: options.notes || `End of Internship for ${employee.firstName} ${employee.lastName || ''} (${employee.employeeCode || employee.id}). Auto-routed to Exit Checklist on ${endDate}.`,
-        });
-        logger.info('END_INTERNSHIP', `Exit checklist ${exitChecklist.id} auto-created for intern ${employee.id}`);
-      } else {
-        exitChecklist = existingChecklist;
-      }
+        },
+        currentUser
+      );
     } catch (checklistErr) {
       logger.warn('END_INTERNSHIP', `Could not auto-generate exit checklist: ${checklistErr.message}`);
-    }
-
-    // 9. Auto-provision Offboarding Clearance Pipeline
-    try {
-      const existingExitReq = await exitRepository.findByEmployeeId(employee.id, employee.orgId);
-      if (!existingExitReq) {
-        const exitReq = await exitRepository.create({
-          orgId: employee.orgId,
-          employeeId: employee.id,
-          resignationDate: endDate,
-          noticePeriodDays: 0,
-          requestedLastWorkingDay: endDate,
-          approvedLastWorkingDay: endDate,
-          exitType: 'INTERNSHIP_COMPLETION',
-          reason: `[INTERNSHIP_COMPLETION] Official conclusion of internship on ${endDate}.`,
-          comments: options.notes || `End of Internship for ${employee.firstName} ${employee.lastName || ''}`,
-          status: 'EXIT_PROCESSING',
-          currentStage: 'CLEARANCE_IN_PROGRESS',
-          submittedBy: currentUser?.id || null,
-        });
-
-        await exitRepository.upsertOffboarding({
-          orgId: employee.orgId,
-          exitRequestId: exitReq.id,
-          employeeId: employee.id,
-          lastWorkingDay: endDate,
-          offboardingStatus: 'CLEARANCES_PENDING',
-          clearanceStatus: 'PENDING',
-          accessRemovalStatus: 'ACTIVE',
-          assetStatus: 'PENDING',
-          hrCompletionStatus: 'IN_PROGRESS',
-          processedBy: currentUser?.id || null,
-          notes: `End of internship offboarding clearance for ${employee.firstName} ${employee.lastName || ''}`,
-        });
-
-        const defaultTasks = [
-          {
-            orgId: employee.orgId,
-            exitRequestId: exitReq.id,
-            employeeId: employee.id,
-            checklistCategory: 'ASSETS_RETURNED',
-            departmentScope: 'IT',
-            taskTitle: 'Hardware, Laptop & Asset Handover',
-            description: 'Physical inspection and recovery of company issued hardware, access card, and accessories.',
-          },
-          {
-            orgId: employee.orgId,
-            exitRequestId: exitReq.id,
-            employeeId: employee.id,
-            checklistCategory: 'KT_COMPLETED',
-            departmentScope: 'DEPARTMENT',
-            taskTitle: 'Project Knowledge Transfer & Repository Handover',
-            description: 'Handover of project documentation, work artifacts, credentials, and codebases.',
-          },
-          {
-            orgId: employee.orgId,
-            exitRequestId: exitReq.id,
-            employeeId: employee.id,
-            checklistCategory: 'SYSTEM_ACCESS_REVOKED',
-            departmentScope: 'IT',
-            taskTitle: 'Revoke Email, Slack & Portal System Access',
-            description: 'De-provisioning intern email, repository access, and internal communications.',
-          },
-          {
-            orgId: employee.orgId,
-            exitRequestId: exitReq.id,
-            employeeId: employee.id,
-            checklistCategory: 'FNF_SETTLEMENT',
-            departmentScope: 'FINANCE',
-            taskTitle: 'Final Stipend Settlement & Internship Certificate Release',
-            description: 'Settlement of final stipend dues and release of formal Internship Completion Certificate.',
-          },
-        ];
-
-        for (const t of defaultTasks) {
-          await exitRepository.createClearanceTask(t);
-        }
-      }
-    } catch (offboardingErr) {
-      logger.warn('END_INTERNSHIP', `Could not auto-generate offboarding clearances: ${offboardingErr.message}`);
     }
 
     // 10. In-app notification for intern

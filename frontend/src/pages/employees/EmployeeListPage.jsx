@@ -902,7 +902,12 @@ export const EmployeeListPage = () => {
 
       if (editingEmployee) {
         await employeeService.updateEmployee(editingEmployee.id, payload);
-        toast.success(`Profile for '${formData.firstName} ${formData.lastName}' updated successfully.`);
+        const isExitStatus = ['Exited', 'Terminated', 'Notice Period', 'Resigned', 'Completed', 'Inactive'].includes(payload.status);
+        if (isExitStatus) {
+          toast.success(`Profile for '${formData.firstName} ${formData.lastName}' updated to ${payload.status} and automatically reflected in Exit Checklist.`);
+        } else {
+          toast.success(`Profile for '${formData.firstName} ${formData.lastName}' updated successfully.`);
+        }
       } else {
         await employeeService.createEmployee(payload);
         toast.success(`Employee '${formData.firstName} ${formData.lastName}' registered successfully with portal credentials.`);
@@ -940,7 +945,7 @@ export const EmployeeListPage = () => {
     try {
       setIsEndingInternship(true);
       const res = await employeeService.endInternship(endInternshipTarget.id);
-      toast.success('Internship ended and Exit Checklist successfully initiated.');
+      toast.success('Internship concluded and automatically reflected in Exit Checklist.');
       const todayStr = new Date().toISOString().split('T')[0];
       const updatedData = res?.data || res || {};
 
@@ -1780,6 +1785,11 @@ export const EmployeeListPage = () => {
               options={[
                 { value: 'Active', label: 'Active' },
                 { value: 'On Leave', label: 'On Leave' },
+                { value: 'Notice Period', label: 'Notice Period' },
+                { value: 'Resigned', label: 'Resigned' },
+                { value: 'Exited', label: 'Exited' },
+                { value: 'Terminated', label: 'Terminated' },
+                { value: 'Completed', label: 'Completed (Internship / Contract)' },
                 { value: 'Inactive', label: 'Inactive' },
               ]}
             />

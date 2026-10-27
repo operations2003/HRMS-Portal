@@ -197,6 +197,12 @@ export const exitRepository = {
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       RETURNING *;
     `;
+    let validSubmittedBy = null;
+    if (data.submittedBy) {
+      const uRes = await pool.query('SELECT id FROM users WHERE id = $1 LIMIT 1;', [data.submittedBy]);
+      if (uRes.rows.length > 0) validSubmittedBy = uRes.rows[0].id;
+    }
+
     const params = [
       id,
       data.orgId,
@@ -210,7 +216,7 @@ export const exitRepository = {
       data.comments || '',
       data.status || 'SUBMITTED',
       data.currentStage || 'MANAGER_REVIEW',
-      data.submittedBy || null,
+      validSubmittedBy,
       data.documentId || null,
     ];
 
@@ -508,6 +514,10 @@ export const exitRepository = {
     ];
     const { rows } = await pool.query(query, params);
     return mapClearanceRow(rows[0]);
+  },
+
+  async createClearanceTask(data) {
+    return this.createCustomClearanceTask(data);
   },
 
   /**
