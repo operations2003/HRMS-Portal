@@ -303,6 +303,12 @@ export const exitChecklistRepository = {
    * Update checklist item status (Pending / Completed)
    */
   async updateItemStatus(itemId, { status, completedBy = null, notes = null }) {
+    let validCompletedBy = null;
+    if (completedBy) {
+      const uRes = await pool.query('SELECT id FROM users WHERE id = $1 LIMIT 1;', [completedBy]);
+      if (uRes.rows.length > 0) validCompletedBy = uRes.rows[0].id;
+    }
+
     const query = `
       UPDATE exit_checklist_items
       SET 
@@ -314,7 +320,7 @@ export const exitChecklistRepository = {
       WHERE id = $4::varchar
       RETURNING *;
     `;
-    const { rows } = await pool.query(query, [status, completedBy, notes, itemId]);
+    const { rows } = await pool.query(query, [status, validCompletedBy, notes, itemId]);
     return rows[0] ? mapItemRow(rows[0]) : null;
   },
 
@@ -322,6 +328,12 @@ export const exitChecklistRepository = {
    * Mark exit checklist as completed
    */
   async markChecklistCompleted(checklistId, completedBy) {
+    let validCompletedBy = null;
+    if (completedBy) {
+      const uRes = await pool.query('SELECT id FROM users WHERE id = $1 LIMIT 1;', [completedBy]);
+      if (uRes.rows.length > 0) validCompletedBy = uRes.rows[0].id;
+    }
+
     const query = `
       UPDATE exit_checklists
       SET 
@@ -332,7 +344,7 @@ export const exitChecklistRepository = {
       WHERE id = $2
       RETURNING *;
     `;
-    await pool.query(query, [completedBy, checklistId]);
+    await pool.query(query, [validCompletedBy, checklistId]);
     return this.findById(checklistId);
   },
 

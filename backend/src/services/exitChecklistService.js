@@ -267,7 +267,31 @@ export const exitChecklistService = {
       notes: data.notes !== undefined ? data.notes : null,
     });
 
-    return exitChecklistRepository.findById(checklistId);
+    const updatedChecklist = await exitChecklistRepository.findById(checklistId);
+
+    // AUTOMATION: If all items are completed and nothing is pending,
+    // automatically complete the entire exit checklist,
+    // update employee profile status to 'Exited', deactivate user portal account,
+    // and sync offboarding pipeline so they automatically disappear from the active Employee Directory.
+    if (
+      formattedStatus === 'Completed' &&
+      updatedChecklist &&
+      updatedChecklist.isAllItemsCompleted &&
+      updatedChecklist.status !== 'Completed'
+    ) {
+      try {
+        await this.completeExitChecklist(currentUser, checklistId);
+        logger.info(
+          'AUTO_EXIT_COMPLETE',
+          `All items completed for checklist ${checklistId}. Employee ${updatedChecklist.employeeId} automatically finalized and removed from Employee Directory.`
+        );
+        return await exitChecklistRepository.findById(checklistId);
+      } catch (autoCompErr) {
+        logger.warn('AUTO_EXIT_COMPLETE', `Automatic checklist completion error: ${autoCompErr.message}`);
+      }
+    }
+
+    return updatedChecklist;
   },
 
   /**
@@ -318,10 +342,16 @@ export const exitChecklistService = {
       currentUser.id
     );
 
-    // 2. Mark Employee profile as Exited
+    // 2. Mark Employee profile as Exited (and complete internship status if intern)
     const emp = await employeeRepository.findById(checklist.employeeId);
     if (emp) {
-      await employeeRepository.update(emp.id, { status: 'Exited' });
+      const isIntern =
+        String(emp.employmentType || '').toLowerCase().includes('intern') ||
+        (emp.internshipStatus && String(emp.internshipStatus).trim() !== '');
+      await employeeRepository.update(emp.id, {
+        status: 'Exited',
+        ...(isIntern ? { internshipStatus: 'COMPLETED' } : {}),
+      });
 
       // 3. Deactivate portal user account if linked
       if (emp.userId) {
@@ -333,14 +363,21 @@ export const exitChecklistService = {
       }
     }
 
-    // 4. Synchronize legacy exit_requests if active record exists
+    // 4. Synchronize exit_requests and employee_offboardings
     try {
       const legacyExit = await exitRepository.findByEmployeeId(checklist.employeeId, currentUser.orgId);
-      if (legacyExit && ['APPROVED', 'NOTICE_PERIOD', 'CLEARANCE_IN_PROGRESS', 'EXIT_PROCESSING'].includes(legacyExit.status)) {
+      if (legacyExit) {
         await exitRepository.update(legacyExit.id, {
           status: 'COMPLETED',
           currentStage: 'COMPLETED',
         });
+        await exitRepository.updateOffboarding(legacyExit.id, {
+          offboardingStatus: 'COMPLETED',
+          clearanceStatus: 'CLEARED',
+          hrCompletionStatus: 'COMPLETED',
+          accessRemovalStatus: 'DEPROVISIONED',
+          processedBy: currentUser.id,
+        }).catch(() => {});
       }
     } catch {
       // Ignore legacy sync if not applicable

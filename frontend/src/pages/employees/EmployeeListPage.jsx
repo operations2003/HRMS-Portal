@@ -536,11 +536,15 @@ export const EmployeeListPage = () => {
         page,
         limit: 10,
       });
-      const rawEmployees = res.employees || [];
-      // Completely hide resigned, exited, and terminated staff from active employee directory
-      const activeOnly = rawEmployees.filter(
-        (e) => !['exited', 'terminated', 'inactive'].includes((e.status || '').toLowerCase())
-      );
+      // Completely hide resigned, exited, terminated, and completed staff from active employee directory
+      const activeOnly = rawEmployees.filter((e) => {
+        const s = (e.status || '').toLowerCase();
+        const intStatus = (e.internshipStatus || '').toUpperCase();
+        if (statusFilter) {
+          return s === statusFilter.toLowerCase();
+        }
+        return !['exited', 'terminated', 'inactive', 'completed', 'resigned'].includes(s) && intStatus !== 'COMPLETED';
+      });
       setEmployees(activeOnly);
       setPagination(res.pagination);
     } catch (err) {
@@ -1424,9 +1428,13 @@ export const EmployeeListPage = () => {
               onChange={(e) => setStatusFilter(e.target.value)}
               placeholder="All Statuses"
               options={[
-                { value: '', label: 'All Statuses' },
+                { value: '', label: 'Active Directory (Current Staff)' },
                 { value: 'Active', label: 'Active' },
                 { value: 'On Leave', label: 'On Leave' },
+                { value: 'Notice Period', label: 'Notice Period' },
+                { value: 'Exited', label: 'Exited / Alumni' },
+                { value: 'Completed', label: 'Completed (Interns/Contract)' },
+                { value: 'Inactive', label: 'Inactive' },
               ]}
             />
           </div>

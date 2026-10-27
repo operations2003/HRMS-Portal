@@ -152,12 +152,17 @@ export const employeeRepository = {
     if (status && status !== 'ALL' && status !== 'all') {
       conditions.push(`LOWER(e.status) = LOWER($${paramIndex++})`);
       values.push(status);
-      if (!includeExited && !['exited', 'terminated', 'inactive'].includes(status.toLowerCase())) {
-        conditions.push(`LOWER(e.status) NOT IN ('exited', 'terminated', 'inactive', 'suspended', 'archived')`);
+      if (!includeExited && !['exited', 'terminated', 'inactive', 'completed'].includes(status.toLowerCase())) {
+        conditions.push(`LOWER(e.status) NOT IN ('exited', 'terminated', 'inactive', 'completed', 'suspended', 'archived')`);
       }
     } else if (!includeExited) {
-      // Exited/resigned employees are hidden across all operational modules by default
-      conditions.push(`LOWER(e.status) NOT IN ('exited', 'terminated', 'inactive', 'suspended', 'archived')`);
+      // Exited, resigned, and completed employees are hidden from active employee directory by default
+      conditions.push(`LOWER(e.status) NOT IN ('exited', 'terminated', 'inactive', 'completed', 'suspended', 'archived')`);
+      conditions.push(`UPPER(COALESCE(e.internship_status, '')) NOT IN ('COMPLETED', 'ENDED')`);
+      conditions.push(`NOT EXISTS (
+        SELECT 1 FROM exit_checklists ec 
+        WHERE ec.employee_id = e.id AND ec.status = 'Completed'
+      )`);
     }
 
     if (managerId) {

@@ -49,10 +49,15 @@ export const ExitChecklistDetailCard = ({
     const newStatus = item.status === 'Completed' ? 'Pending' : 'Completed';
     try {
       setUpdatingItemId(item.id);
-      await exitService.updateChecklistItemStatus(checklist.id, item.id, {
+      const res = await exitService.updateChecklistItemStatus(checklist.id, item.id, {
         status: newStatus,
       });
-      toast.success(`'${item.title}' marked as ${newStatus}.`);
+      const updatedData = res?.checklist || res?.data || res || {};
+      if (updatedData.status === 'Completed' || updatedData.isAllItemsCompleted) {
+        toast.success(`All exit items completed! Exit finalized and ${checklist.employeeName} automatically archived from Employee Directory.`);
+      } else {
+        toast.success(`'${item.title}' marked as ${newStatus}.`);
+      }
       onRefresh?.();
     } catch (err) {
       const msg = err.response?.data?.message || err.message || 'Failed to update item status.';
