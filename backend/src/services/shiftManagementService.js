@@ -228,7 +228,7 @@ export const shiftManagementService = {
       const eM = match[5] && match[5] !== '00' ? `:${match[5]}` : '';
       const eAmPm = match[6] ? match[6].toUpperCase() : (eH <= 11 || eH === 12 ? 'PM' : '');
 
-      return `${sH}${sM} - ${eH}${eM} ${eAmPm || 'PM'}`.trim();
+      return `${sH}${sM}${sAmPm ? ' ' + sAmPm : ''} - ${eH}${eM} ${eAmPm || 'PM'}`.trim();
     }
 
     if (startTime && endTime) {

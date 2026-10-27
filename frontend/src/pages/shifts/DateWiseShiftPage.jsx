@@ -1305,7 +1305,13 @@ export const DateWiseShiftPage = () => {
           </div>
           <div className="flex items-center gap-1.5">
             <span className="font-semibold text-slate-800 dark:text-slate-200 text-[11px]">11 - 8 PM</span>
-            <span>Working Shifts</span>
+            <span>Standard Shift</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/80 shadow-2xs">
+              10:30 – 7:30
+            </span>
+            <span>Custom Override</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#fef08a] text-amber-950 border border-amber-300 shadow-2xs">CL / PL / SL / HD / UP</span>
@@ -1363,7 +1369,7 @@ export const DateWiseShiftPage = () => {
                   {scheduleData?.days?.map((day) => (
                     <th
                       key={day.dateKey}
-                      className="p-1.5 text-center min-w-[62px] max-w-[76px] border-r border-blue-800 bg-[#1e3a8a] text-white font-extrabold text-xs"
+                      className="p-1.5 text-center min-w-[68px] max-w-[80px] border-r border-blue-800 bg-[#1e3a8a] text-white font-extrabold text-xs"
                     >
                       {day.dayNumber}
                     </th>
@@ -1385,7 +1391,7 @@ export const DateWiseShiftPage = () => {
                     return (
                       <th
                         key={'dayName-' + day.dateKey}
-                        className={'p-1 text-center min-w-[62px] max-w-[76px] border-r border-blue-800 text-[10px] font-bold ' + (
+                        className={'p-1 text-center min-w-[68px] max-w-[80px] border-r border-blue-800 text-[10px] font-bold ' + (
                           isSun ? 'bg-blue-950 text-amber-300' : 'bg-[#1e3a8a] text-blue-100'
                         )}
                       >
@@ -1435,6 +1441,9 @@ export const DateWiseShiftPage = () => {
                       const isYellowBadge = isHalfDay || isLeave || ['CL', 'PL', 'SL', 'HD', 'UP', 'LEAVE'].includes(text);
                       const isHolidayBadge = isHoliday || text === 'HL' || text === 'HOLIDAY';
 
+                      const isTimeRange = typeof text === 'string' && /[-–—]/.test(text) && /\d/.test(text);
+                      const timeParts = isTimeRange ? text.split(/\s*[-–—]\s*/) : null;
+
                       return (
                         <td
                           key={day.dateKey}
@@ -1455,12 +1464,12 @@ export const DateWiseShiftPage = () => {
                               });
                             }
                           }}
-                          className={'p-1 text-center min-w-[62px] max-w-[76px] border-r border-slate-100 dark:border-slate-800 cursor-pointer transition-all hover:bg-blue-50/70 dark:hover:bg-blue-950/40 hover:ring-1 hover:ring-blue-400 select-none ' + (
+                          className={'p-1 text-center min-w-[68px] max-w-[80px] border-r border-slate-100 dark:border-slate-800 cursor-pointer transition-all hover:bg-blue-50/70 dark:hover:bg-blue-950/40 hover:ring-1 hover:ring-blue-400 select-none overflow-hidden ' + (
                             isSun ? 'bg-slate-50/60 dark:bg-slate-850/40' : ''
                           )}
                           title={(canEditShifts ? 'Click to edit shift or apply leave\n' : 'Click to view day details\n') + row.employee.fullName + ' | ' + day.dateKey + '\nShift: ' + (cell?.shiftLabel || (isWO ? 'Weekly Off (WO)' : text)) + (isOverride ? ' (Override)' : '')}
                         >
-                          <div className="flex flex-col items-center justify-center min-h-[30px] leading-tight">
+                          <div className="flex flex-col items-center justify-center min-h-[30px] leading-tight overflow-hidden w-full">
                             {isHolidayBadge ? (
                               <span className="inline-block px-1.5 py-0.5 rounded text-[11px] font-bold bg-rose-100 text-rose-900 border border-rose-300 shadow-2xs leading-none">
                                 HL
@@ -1477,10 +1486,37 @@ export const DateWiseShiftPage = () => {
                               <span className="text-[11px] font-medium text-slate-300 dark:text-slate-600">
                                 NA
                               </span>
+                            ) : isOverride ? (
+                              <div
+                                className="w-full px-1 py-0.5 rounded bg-indigo-50/90 dark:bg-indigo-950/60 border border-indigo-200/90 dark:border-indigo-800/60 flex flex-col items-center justify-center shadow-2xs overflow-hidden"
+                                title={cell?.shiftLabel || text}
+                              >
+                                {timeParts && timeParts.length === 2 ? (
+                                  <>
+                                    <span className="text-[10px] font-black text-indigo-700 dark:text-indigo-300 leading-none truncate max-w-full tracking-tight">
+                                      {timeParts[0]}
+                                    </span>
+                                    <span className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 leading-none mt-0.5 truncate max-w-full tracking-tight">
+                                      {timeParts[1]}
+                                    </span>
+                                  </>
+                                ) : (
+                                  <span className="text-[10.5px] font-black text-indigo-700 dark:text-indigo-300 truncate max-w-full block leading-none">
+                                    {text}
+                                  </span>
+                                )}
+                              </div>
+                            ) : isTimeRange && timeParts && timeParts.length === 2 ? (
+                              <div className="flex flex-col items-center justify-center leading-none py-0.5 w-full overflow-hidden">
+                                <span className="text-[10.5px] font-bold text-slate-800 dark:text-slate-200 leading-none truncate max-w-full tracking-tight">
+                                  {timeParts[0]}
+                                </span>
+                                <span className="text-[9px] font-medium text-slate-500 dark:text-slate-400 leading-none mt-0.5 truncate max-w-full tracking-tight">
+                                  {timeParts[1]}
+                                </span>
+                              </div>
                             ) : (
-                              <span className={'text-[11px] font-semibold whitespace-nowrap ' + (
-                                isOverride ? 'text-indigo-700 dark:text-indigo-300 font-bold' : 'text-slate-800 dark:text-slate-200'
-                              )}>
+                              <span className="text-[11px] font-semibold text-slate-800 dark:text-slate-200 truncate max-w-full block leading-tight">
                                 {text}
                               </span>
                             )}

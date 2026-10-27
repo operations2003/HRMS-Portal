@@ -932,17 +932,20 @@ export const RosterPreviewPage = () => {
                         const isChanged = day.diffStatus === 'CHANGED';
                         const isOverridden = day.isOverridden;
 
+                        const isTimeRange = typeof style.label === 'string' && /[-–—]/.test(style.label) && /\d/.test(style.label);
+                        const timeParts = isTimeRange ? style.label.split(/\s*[-–—]\s*/) : null;
+
                         return (
                           <td
                             key={idx}
                             onClick={() => handleOpenCellEditor(emp, day, empIdx, idx)}
-                            className={`p-1 text-center border-r border-slate-100 cursor-pointer select-none transition-all group relative hover:bg-brand-50/40 ${
+                            className={`p-1 text-center min-w-[70px] max-w-[85px] overflow-hidden border-r border-slate-100 cursor-pointer select-none transition-all group relative hover:bg-brand-50/40 ${
                               day.weekday === 'Sun' ? 'bg-red-50/20' : ''
                             }`}
                             title={`Click to edit shift timing or assign leave for ${emp.rosterEmployeeName} on ${day.date}`}
                           >
                             <div
-                              className={`text-[10px] px-1 py-1 rounded border leading-tight relative font-medium transition-all group-hover:scale-105 group-hover:shadow-xs group-hover:ring-1 group-hover:ring-brand-400 ${style.bg} ${
+                              className={`text-[10px] px-1 py-1 rounded border leading-tight relative font-medium transition-all group-hover:scale-105 group-hover:shadow-xs group-hover:ring-1 group-hover:ring-brand-400 overflow-hidden ${style.bg} ${
                                 isChanged ? 'ring-1 ring-amber-400' : ''
                               } ${isOverridden ? 'ring-2 ring-purple-500 font-bold' : ''}`}
                             >
@@ -964,7 +967,18 @@ export const RosterPreviewPage = () => {
                                   title="Manually Overridden"
                                 />
                               )}
-                              <span className="block truncate">{style.label}</span>
+                              {timeParts && timeParts.length === 2 ? (
+                                <div className="flex flex-col items-center justify-center leading-none">
+                                  <span className="text-[9.5px] font-bold leading-none truncate max-w-full">
+                                    {timeParts[0]}
+                                  </span>
+                                  <span className="text-[8.5px] font-semibold opacity-85 leading-none mt-0.5 truncate max-w-full">
+                                    {timeParts[1]}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="block truncate">{style.label}</span>
+                              )}
                             </div>
                           </td>
                         );
