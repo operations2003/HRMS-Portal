@@ -940,7 +940,7 @@ export const EmployeeListPage = () => {
     try {
       setIsEndingInternship(true);
       const res = await employeeService.endInternship(endInternshipTarget.id);
-      toast.success('Internship ended successfully.');
+      toast.success('Internship ended and Exit Checklist successfully initiated.');
       const todayStr = new Date().toISOString().split('T')[0];
       const updatedData = res?.data || res || {};
 
@@ -3227,9 +3227,20 @@ export const EmployeeListPage = () => {
                     </div>
                   )}
                   {isInternshipEnded(viewingEmployee) && (
-                    <div className="text-xs text-purple-800 bg-purple-50/80 p-2.5 rounded-lg border border-purple-200 flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-purple-600 shrink-0" />
-                      <span>Internship completed{viewingEmployee.internshipEndDate ? ` on ${viewingEmployee.internshipEndDate}` : ''}. All historical records, attendance, and documents are preserved.</span>
+                    <div className="space-y-2">
+                      <div className="text-xs text-purple-800 bg-purple-50/80 p-2.5 rounded-lg border border-purple-200 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-purple-600 shrink-0" />
+                          <span>Internship completed{viewingEmployee.internshipEndDate ? ` on ${viewingEmployee.internshipEndDate}` : ''}. Routed to Exit Checklist.</span>
+                        </div>
+                        <button
+                          type="button"
+                          className="text-xs text-purple-700 hover:text-purple-900 font-bold underline cursor-pointer shrink-0"
+                          onClick={() => navigate('/exit/checklist?tab=checklist')}
+                        >
+                          View Exit Checklist →
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -3466,9 +3477,9 @@ export const EmployeeListPage = () => {
           if (!isEndingInternship) setEndInternshipTarget(null);
         }}
         onConfirm={handleConfirmEndInternship}
-        title="End Internship"
-        message="Are you sure you want to end this internship? This action will update the intern's status."
-        confirmText="Confirm"
+        title="End Internship & Route to Exit Checklist"
+        message={`Are you sure you want to conclude the internship for ${endInternshipTarget?.firstName || ''} ${endInternshipTarget?.lastName || ''}? This action will record their internship completion and automatically initiate their Exit Checklist & clearances.`}
+        confirmText="Conclude & Initiate Exit Checklist"
         cancelText="Cancel"
         variant="danger"
         isLoading={isEndingInternship}

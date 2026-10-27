@@ -123,6 +123,11 @@ export const ExitChecklistDetailCard = ({
                 <Badge variant="neutral" size="sm">
                   {checklist.employeeCode || 'EMP'}
                 </Badge>
+                {((checklist.notes || '').toLowerCase().includes('internship') || (checklist.designation || '').toLowerCase().includes('intern')) && (
+                  <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-800 border border-purple-200 shadow-2xs">
+                    🎓 Internship Exit
+                  </span>
+                )}
                 <Badge
                   variant={isProcessCompleted ? 'success' : 'brand'}
                   size="sm"

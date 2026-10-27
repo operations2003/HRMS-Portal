@@ -146,9 +146,15 @@ export const InitiateExitModal = ({ isOpen, onClose, onSuccess }) => {
               {employees.map((emp) => {
                 const name = `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || emp.name || emp.fullName;
                 const dept = emp.department?.name || emp.department || '';
+                const isIntern =
+                  emp.employmentType === 'intern' ||
+                  emp.employmentType === 'internship' ||
+                  (emp.designation?.title || '').toLowerCase().includes('intern');
                 return (
                   <option key={emp.id} value={emp.id}>
-                    {name} ({emp.employeeCode || emp.empCode || 'EMP'}) {dept ? `— ${dept}` : ''} [{emp.status}]
+                    {name} ({emp.employeeCode || emp.empCode || 'EMP'}) {dept ? `— ${dept}` : ''} [
+                    {emp.status === 'Completed' ? 'Internship Completed' : emp.status}
+                    {isIntern ? ' • Intern' : ''}]
                   </option>
                 );
               })}

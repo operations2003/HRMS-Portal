@@ -4,9 +4,13 @@ import { userRepository } from '../repositories/userRepository.js';
 import { roleRepository } from '../repositories/roleRepository.js';
 import { designationRepository } from '../repositories/designationRepository.js';
 import { leaveRepository } from '../repositories/leaveRepository.js';
+import { exitChecklistRepository } from '../repositories/exitChecklistRepository.js';
+import { exitRepository } from '../repositories/exitRepository.js';
+import { notificationRepository } from '../repositories/notificationRepository.js';
 import { hashPassword } from '../utils/passwordUtils.js';
 import { appsumoService } from './appsumoService.js';
 import { pool } from '../config/db.js';
+import { logger } from '../utils/logger.js';
 
 /**
  * Handle PostgreSQL specific error codes for Employee domain
@@ -503,7 +507,126 @@ export const employeeService = {
       internshipEndDate: endDate,
     });
 
-    // 8. Audit log for compliance and timeline tracking
+    // 8. Auto-provision Exit Checklist for the Intern
+    let exitChecklist = null;
+    try {
+      const existingChecklist = await exitChecklistRepository.findActiveByEmployeeId(employee.id, employee.orgId);
+      if (!existingChecklist) {
+        exitChecklist = await exitChecklistRepository.create({
+          orgId: employee.orgId,
+          employeeId: employee.id,
+          resignationDate: endDate,
+          lastWorkingDay: endDate,
+          createdBy: currentUser?.id || null,
+          notes: options.notes || `End of Internship for ${employee.firstName} ${employee.lastName || ''} (${employee.employeeCode || employee.id}). Auto-routed to Exit Checklist on ${endDate}.`,
+        });
+        logger.info('END_INTERNSHIP', `Exit checklist ${exitChecklist.id} auto-created for intern ${employee.id}`);
+      } else {
+        exitChecklist = existingChecklist;
+      }
+    } catch (checklistErr) {
+      logger.warn('END_INTERNSHIP', `Could not auto-generate exit checklist: ${checklistErr.message}`);
+    }
+
+    // 9. Auto-provision Offboarding Clearance Pipeline
+    try {
+      const existingExitReq = await exitRepository.findByEmployeeId(employee.id, employee.orgId);
+      if (!existingExitReq) {
+        const exitReq = await exitRepository.create({
+          orgId: employee.orgId,
+          employeeId: employee.id,
+          resignationDate: endDate,
+          noticePeriodDays: 0,
+          requestedLastWorkingDay: endDate,
+          approvedLastWorkingDay: endDate,
+          exitType: 'INTERNSHIP_COMPLETION',
+          reason: `[INTERNSHIP_COMPLETION] Official conclusion of internship on ${endDate}.`,
+          comments: options.notes || `End of Internship for ${employee.firstName} ${employee.lastName || ''}`,
+          status: 'EXIT_PROCESSING',
+          currentStage: 'CLEARANCE_IN_PROGRESS',
+          submittedBy: currentUser?.id || null,
+        });
+
+        await exitRepository.upsertOffboarding({
+          orgId: employee.orgId,
+          exitRequestId: exitReq.id,
+          employeeId: employee.id,
+          lastWorkingDay: endDate,
+          offboardingStatus: 'CLEARANCES_PENDING',
+          clearanceStatus: 'PENDING',
+          accessRemovalStatus: 'ACTIVE',
+          assetStatus: 'PENDING',
+          hrCompletionStatus: 'IN_PROGRESS',
+          processedBy: currentUser?.id || null,
+          notes: `End of internship offboarding clearance for ${employee.firstName} ${employee.lastName || ''}`,
+        });
+
+        const defaultTasks = [
+          {
+            orgId: employee.orgId,
+            exitRequestId: exitReq.id,
+            employeeId: employee.id,
+            checklistCategory: 'ASSETS_RETURNED',
+            departmentScope: 'IT',
+            taskTitle: 'Hardware, Laptop & Asset Handover',
+            description: 'Physical inspection and recovery of company issued hardware, access card, and accessories.',
+          },
+          {
+            orgId: employee.orgId,
+            exitRequestId: exitReq.id,
+            employeeId: employee.id,
+            checklistCategory: 'KT_COMPLETED',
+            departmentScope: 'DEPARTMENT',
+            taskTitle: 'Project Knowledge Transfer & Repository Handover',
+            description: 'Handover of project documentation, work artifacts, credentials, and codebases.',
+          },
+          {
+            orgId: employee.orgId,
+            exitRequestId: exitReq.id,
+            employeeId: employee.id,
+            checklistCategory: 'SYSTEM_ACCESS_REVOKED',
+            departmentScope: 'IT',
+            taskTitle: 'Revoke Email, Slack & Portal System Access',
+            description: 'De-provisioning intern email, repository access, and internal communications.',
+          },
+          {
+            orgId: employee.orgId,
+            exitRequestId: exitReq.id,
+            employeeId: employee.id,
+            checklistCategory: 'FNF_SETTLEMENT',
+            departmentScope: 'FINANCE',
+            taskTitle: 'Final Stipend Settlement & Internship Certificate Release',
+            description: 'Settlement of final stipend dues and release of formal Internship Completion Certificate.',
+          },
+        ];
+
+        for (const t of defaultTasks) {
+          await exitRepository.createClearanceTask(t);
+        }
+      }
+    } catch (offboardingErr) {
+      logger.warn('END_INTERNSHIP', `Could not auto-generate offboarding clearances: ${offboardingErr.message}`);
+    }
+
+    // 10. In-app notification for intern
+    if (employee.userId) {
+      try {
+        await notificationRepository.create({
+          orgId: employee.orgId,
+          userId: employee.userId,
+          eventType: 'INTERNSHIP_ENDED',
+          title: 'Internship Concluded & Exit Checklist Initiated',
+          message: `Your internship has officially ended on ${endDate}. Your Exit Clearance Checklist is now active.`,
+          entityType: 'EXIT_CHECKLIST',
+          entityId: exitChecklist?.id || employee.id,
+          actionUrl: '/exit/checklist?tab=my',
+        });
+      } catch {
+        // Non-blocking
+      }
+    }
+
+    // 11. Audit log for compliance and timeline tracking
     try {
       await pool.query(
         `INSERT INTO admin_audit_logs (id, org_id, user_id, action_type, target_entity, target_id, changes, ip_address, created_at)
@@ -522,6 +645,7 @@ export const employeeService = {
             newStatus: 'Completed',
             internshipStatus: 'COMPLETED',
             internshipEndDate: endDate,
+            exitChecklistId: exitChecklist?.id || null,
             endedBy: currentUser?.email || 'HR/Admin',
           }),
           'Internal HRMS',
@@ -531,6 +655,9 @@ export const employeeService = {
       // Non-blocking
     }
 
-    return updatedEmp;
+    return {
+      ...updatedEmp,
+      exitChecklist,
+    };
   },
 };

@@ -391,9 +391,16 @@ export const ExitChecklistPage = () => {
                           }`}
                         >
                           <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
-                              {chk.employeeName}
-                            </span>
+                            <div className="flex items-center gap-1.5 truncate">
+                              <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                                {chk.employeeName}
+                              </span>
+                              {((chk.notes || '').toLowerCase().includes('internship') || (chk.designation || '').toLowerCase().includes('intern')) && (
+                                <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-purple-100 text-purple-800 font-bold shrink-0">
+                                  Intern
+                                </span>
+                              )}
+                            </div>
                             <Badge
                               variant={chk.status === 'Completed' ? 'success' : 'brand'}
                               size="sm"
