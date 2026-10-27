@@ -2,6 +2,7 @@ import { exitChecklistRepository } from '../repositories/exitChecklistRepository
 import { employeeRepository } from '../repositories/employeeRepository.js';
 import { userRepository } from '../repositories/userRepository.js';
 import { exitRepository } from '../repositories/exitRepository.js';
+import { pool } from '../config/db.js';
 import { logger } from '../utils/logger.js';
 
 export const exitChecklistService = {
@@ -47,12 +48,6 @@ export const exitChecklistService = {
       throw err;
     }
 
-    if (emp.status === 'Exited' || emp.status === 'Terminated') {
-      const err = new Error(`Cannot initiate exit process: Employee profile is already '${emp.status}'.`);
-      err.statusCode = 400;
-      throw err;
-    }
-
     // Check if an active exit checklist is already in progress
     const existing = await exitChecklistRepository.findActiveByEmployeeId(emp.id, currentUser.orgId);
     if (existing && existing.status === 'In Progress') {
@@ -95,6 +90,32 @@ export const exitChecklistService = {
       const err = new Error('Access denied: Only HR and Admin can view all employees exit checklists.');
       err.statusCode = 403;
       throw err;
+    }
+
+    // Auto-heal: Ensure any employees with an active or processed exit request have an exit checklist
+    try {
+      const orphanExits = await pool.query(`
+        SELECT er.id, er.org_id, er.employee_id, er.resignation_date,
+               er.requested_last_working_day, er.approved_last_working_day,
+               er.reason, er.submitted_by
+        FROM exit_requests er
+        LEFT JOIN exit_checklists ec ON er.employee_id = ec.employee_id
+        WHERE er.org_id = $1 AND ec.id IS NULL
+        LIMIT 20;
+      `, [currentUser.orgId]);
+
+      for (const orphan of orphanExits.rows) {
+        await exitChecklistRepository.create({
+          orgId: orphan.org_id,
+          employeeId: orphan.employee_id,
+          resignationDate: orphan.resignation_date || new Date().toISOString().split('T')[0],
+          lastWorkingDay: orphan.approved_last_working_day || orphan.requested_last_working_day || orphan.resignation_date || new Date().toISOString().split('T')[0],
+          createdBy: orphan.submitted_by || currentUser.id,
+          notes: orphan.reason || 'Auto-synced from Exit Request',
+        }).catch(() => {});
+      }
+    } catch (healErr) {
+      logger.warn('EXIT_CHECKLIST', `Non-blocking auto-heal in getAllExitChecklists failed: ${healErr.message}`);
     }
 
     return exitChecklistRepository.findAll({

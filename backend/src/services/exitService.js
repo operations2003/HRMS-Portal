@@ -1,4 +1,5 @@
 import { exitRepository } from '../repositories/exitRepository.js';
+import { exitChecklistRepository } from '../repositories/exitChecklistRepository.js';
 import { employeeRepository } from '../repositories/employeeRepository.js';
 import { userRepository } from '../repositories/userRepository.js';
 import { workflowRepository } from '../repositories/workflowRepository.js';
@@ -101,6 +102,23 @@ export const exitService = {
         comments: data.reason.trim(),
       }
     );
+
+    // Auto-provision standard Exit Checklist (5 clearance items)
+    try {
+      const existingChecklist = await exitChecklistRepository.findActiveByEmployeeId(emp.id, currentUser.orgId);
+      if (!existingChecklist) {
+        await exitChecklistRepository.create({
+          orgId: currentUser.orgId,
+          employeeId: emp.id,
+          resignationDate: exitRequest.resignationDate,
+          lastWorkingDay: exitRequest.requestedLastWorkingDay || exitRequest.resignationDate,
+          createdBy: currentUser.id,
+          notes: exitRequest.reason || 'Voluntary resignation',
+        });
+      }
+    } catch (chkErr) {
+      logger.warn(`Failed to auto-provision exit checklist on resignation for ${emp.id}: ${chkErr.message}`);
+    }
 
     // Notify assigned manager if exists
     if (hasManager) {
@@ -1554,6 +1572,23 @@ export const exitService = {
       processedBy: currentUser.id,
       notes: `Termination initiated by ${currentUser.email || 'HR'}. Category: ${data.terminationCategory || 'Company Decision'}`,
     });
+
+    // Auto-provision standard Exit Checklist (5 clearance items) if none exists yet
+    try {
+      const existingChecklist = await exitChecklistRepository.findActiveByEmployeeId(emp.id, currentUser.orgId);
+      if (!existingChecklist) {
+        await exitChecklistRepository.create({
+          orgId: currentUser.orgId,
+          employeeId: emp.id,
+          resignationDate: exitRequest.resignationDate || effectiveDate,
+          lastWorkingDay: effectiveDate,
+          createdBy: currentUser.id,
+          notes: `Involuntary Exit: ${fullReason}`,
+        });
+      }
+    } catch (chkErr) {
+      logger.warn(`Failed to auto-provision exit checklist during involuntary exit for ${emp.id}: ${chkErr.message}`);
+    }
 
     // Auto-provision clearance tasks if none exist yet
     const existingClearances = await exitRepository.findClearancesByRequestId(exitRequest.id);

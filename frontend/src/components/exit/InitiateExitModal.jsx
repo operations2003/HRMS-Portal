@@ -50,10 +50,8 @@ export const InitiateExitModal = ({ isOpen, onClose, onSuccess }) => {
         ? res
         : [];
 
-      // Filter only employees eligible for exit (not already Exited, Terminated, or Inactive)
-      const eligible = list.filter(
-        (e) => !['Exited', 'Terminated', 'Inactive'].includes(e.status)
-      );
+      // Filter employees: allow active, notice period, completed internship and exited employees needing formal clearance
+      const eligible = list.filter((e) => e.status !== 'Inactive');
       setEmployees(eligible);
       if (eligible.length > 0 && !selectedEmployeeId) {
         setSelectedEmployeeId(eligible[0].id);
