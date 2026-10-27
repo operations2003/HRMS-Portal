@@ -37,6 +37,7 @@ import { Avatar } from '../../components/common/Avatar.jsx';
 import { Input } from '../../components/common/Input.jsx';
 import { Select } from '../../components/common/Select.jsx';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
+import { TimePicker12 } from '../../components/common/TimePicker12.jsx';
 import { shiftService } from '../../services/shiftService.js';
 import { employeeService } from '../../services/employeeService.js';
 import { leaveService } from '../../services/leaveService.js';
@@ -44,6 +45,7 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 
 const PRESET_SHIFTS = [
+  { label: '10:30 AM - 07:30 PM', desc: '10:30 AM - 7:30 PM (9 hrs custom example)' },
   { label: '01:00 PM - 04:00 PM, 10:00 PM - 01:00 AM', desc: '1 - 4 PM & 10 PM - 1 AM (6 hrs Split)' },
   { label: '11:00 AM - 08:00 PM', desc: '11 - 8 PM (9 hrs)' },
   { label: '12:00 PM - 06:00 PM', desc: '12 - 6 PM (6 hrs)' },
@@ -72,6 +74,38 @@ const formatTime12h = (isoString) => {
   } catch {
     return '';
   }
+};
+
+/**
+ * Helper to convert "HH:mm" 24h to { hour, minute, period }
+ */
+const time24ToObj = (time24, defaultObj = { hour: '10', minute: '30', period: 'AM' }) => {
+  if (!time24) return defaultObj;
+  const parts = time24.split(':');
+  let h = parseInt(parts[0], 10);
+  if (isNaN(h)) return defaultObj;
+  const m = String(parts[1] || '00').slice(0, 2);
+  const period = h >= 12 ? 'PM' : 'AM';
+  let h12 = h % 12;
+  if (h12 === 0) h12 = 12;
+  return {
+    hour: String(h12).padStart(2, '0'),
+    minute: m.padStart(2, '0'),
+    period,
+  };
+};
+
+/**
+ * Helper to convert { hour, minute, period } to "HH:mm" 24h
+ */
+const objToTime24 = (obj) => {
+  if (!obj) return '10:00';
+  let h = parseInt(obj.hour, 10);
+  if (isNaN(h)) h = 12;
+  if (obj.period === 'PM' && h < 12) h += 12;
+  if (obj.period === 'AM' && h === 12) h = 0;
+  const m = String(obj.minute || '00').padStart(2, '0');
+  return `${String(h).padStart(2, '0')}:${m}`;
 };
 
 /**
@@ -819,7 +853,7 @@ export const DateWiseShiftPage = () => {
           }
           payload.shiftStartTime = `${customStartTime}:00`;
           payload.shiftEndTime = `${customEndTime}:00`;
-          payload.shiftLabel = `${customStartTime} - ${customEndTime}`;
+          payload.shiftLabel = `${formatTime12h(`2000-01-01T${customStartTime}:00`)} - ${formatTime12h(`2000-01-01T${customEndTime}:00`)}`;
         } else {
           payload.shiftLabel = selectedPreset;
         }
@@ -1585,21 +1619,67 @@ export const DateWiseShiftPage = () => {
                     })}
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
-                    <Input
-                      label="Start Time (e.g. 14:00)"
-                      type="time"
-                      value={customStartTime}
-                      onChange={(e) => setCustomStartTime(e.target.value)}
-                      required
-                    />
-                    <Input
-                      label="End Time (e.g. 22:00)"
-                      type="time"
-                      value={customEndTime}
-                      onChange={(e) => setCustomEndTime(e.target.value)}
-                      required
-                    />
+                  <div className="space-y-3 p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
+                    {/* Quick Custom Examples */}
+                    <div className="flex flex-wrap items-center gap-2 p-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                      <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                        Quick Examples:
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCustomStartTime('10:30');
+                          setCustomEndTime('19:30');
+                        }}
+                        className={`text-xs font-bold px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
+                          customStartTime === '10:30' && customEndTime === '19:30'
+                            ? 'bg-brand-600 text-white border-brand-600 shadow-xs'
+                            : 'bg-brand-50 text-brand-700 border-brand-200 hover:bg-brand-100'
+                        }`}
+                      >
+                        ⭐ 10:30 AM – 7:30 PM (9 hrs)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCustomStartTime('22:00');
+                          setCustomEndTime('04:00');
+                        }}
+                        className={`text-xs font-bold px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
+                          customStartTime === '22:00' && customEndTime === '04:00'
+                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                            : 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
+                        }`}
+                      >
+                        🌙 10:00 PM – 4:00 AM (Overnight)
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <TimePicker12
+                        label="Start Time (Select AM / PM)"
+                        value={time24ToObj(customStartTime, { hour: '10', minute: '30', period: 'AM' })}
+                        onChange={(val) => setCustomStartTime(objToTime24(val))}
+                        required
+                        extraPresets={[
+                          { label: '10:30 AM', onClick: () => setCustomStartTime('10:30') },
+                          { label: '10:00 AM', onClick: () => setCustomStartTime('10:00') },
+                          { label: '11:00 AM', onClick: () => setCustomStartTime('11:00') },
+                        ]}
+                      />
+                      <TimePicker12
+                        label="End Time (Select AM / PM)"
+                        value={time24ToObj(customEndTime, { hour: '07', minute: '30', period: 'PM' })}
+                        onChange={(val) => setCustomEndTime(objToTime24(val))}
+                        required
+                        extraPresets={[
+                          { label: '07:30 PM', onClick: () => setCustomEndTime('19:30') },
+                          { label: '07:00 PM', onClick: () => setCustomEndTime('19:00') },
+                          { label: '08:00 PM', onClick: () => setCustomEndTime('20:00') },
+                        ]}
+                      />
+                    </div>
                   </div>
                 )}
               </div>
@@ -1939,29 +2019,66 @@ export const DateWiseShiftPage = () => {
 
                         {/* Custom Time inputs */}
                         {cellIsCustom && (
-                          <div className="p-3 bg-brand-50/40 dark:bg-brand-950/20 rounded-xl border border-brand-200 dark:border-brand-800/40 space-y-2">
-                            <span className="font-bold text-[11px] text-brand-800 dark:text-brand-300 block">
-                              Custom Shift Start & End
-                            </span>
-                            <div className="grid grid-cols-2 gap-3">
-                              <div>
-                                <label className="text-[10px] text-slate-500 block mb-1">Start Time (24h)</label>
-                                <input
-                                  type="time"
-                                  value={cellCustomStart}
-                                  onChange={(e) => setCellCustomStart(e.target.value)}
-                                  className="w-full px-2 py-1.5 text-xs rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 font-mono"
-                                />
-                              </div>
-                              <div>
-                                <label className="text-[10px] text-slate-500 block mb-1">End Time (24h)</label>
-                                <input
-                                  type="time"
-                                  value={cellCustomEnd}
-                                  onChange={(e) => setCellCustomEnd(e.target.value)}
-                                  className="w-full px-2 py-1.5 text-xs rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 font-mono"
-                                />
-                              </div>
+                          <div className="p-3 bg-brand-50/40 dark:bg-brand-950/20 rounded-2xl border border-brand-200 dark:border-brand-800/40 space-y-3">
+                            {/* Quick Custom Examples */}
+                            <div className="flex flex-wrap items-center gap-2 p-2 bg-white dark:bg-slate-800 rounded-xl border border-brand-200/80 dark:border-brand-800/60">
+                              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                                Quick Examples:
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setCellCustomStart('10:30');
+                                  setCellCustomEnd('19:30');
+                                }}
+                                className={`text-xs font-bold px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
+                                  cellCustomStart === '10:30' && cellCustomEnd === '19:30'
+                                    ? 'bg-brand-600 text-white border-brand-600 shadow-xs'
+                                    : 'bg-brand-50 text-brand-700 border-brand-200 hover:bg-brand-100'
+                                }`}
+                              >
+                                ⭐ 10:30 AM – 7:30 PM (9 hrs)
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setCellCustomStart('22:00');
+                                  setCellCustomEnd('04:00');
+                                }}
+                                className={`text-xs font-bold px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
+                                  cellCustomStart === '22:00' && cellCustomEnd === '04:00'
+                                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                                    : 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
+                                }`}
+                              >
+                                🌙 10:00 PM – 4:00 AM (Overnight)
+                              </button>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              <TimePicker12
+                                label="Start Time (Select AM / PM)"
+                                value={time24ToObj(cellCustomStart, { hour: '10', minute: '30', period: 'AM' })}
+                                onChange={(val) => setCellCustomStart(objToTime24(val))}
+                                required
+                                extraPresets={[
+                                  { label: '10:30 AM', onClick: () => setCellCustomStart('10:30') },
+                                  { label: '10:00 AM', onClick: () => setCellCustomStart('10:00') },
+                                  { label: '11:00 AM', onClick: () => setCellCustomStart('11:00') },
+                                ]}
+                              />
+                              <TimePicker12
+                                label="End Time (Select AM / PM)"
+                                value={time24ToObj(cellCustomEnd, { hour: '07', minute: '30', period: 'PM' })}
+                                onChange={(val) => setCellCustomEnd(objToTime24(val))}
+                                required
+                                extraPresets={[
+                                  { label: '07:30 PM', onClick: () => setCellCustomEnd('19:30') },
+                                  { label: '07:00 PM', onClick: () => setCellCustomEnd('19:00') },
+                                  { label: '08:00 PM', onClick: () => setCellCustomEnd('20:00') },
+                                ]}
+                              />
                             </div>
                           </div>
                         )}
