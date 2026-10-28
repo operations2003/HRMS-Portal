@@ -536,6 +536,7 @@ export const EmployeeListPage = () => {
         page,
         limit: 10,
       });
+      const rawEmployees = res?.employees || res?.data || res?.items || (Array.isArray(res) ? res : []);
       // Completely hide resigned, exited, terminated, and completed staff from active employee directory
       const activeOnly = rawEmployees.filter((e) => {
         const s = (e.status || '').toLowerCase();
@@ -546,7 +547,7 @@ export const EmployeeListPage = () => {
         return !['exited', 'terminated', 'inactive', 'completed', 'resigned'].includes(s) && intStatus !== 'COMPLETED';
       });
       setEmployees(activeOnly);
-      setPagination(res.pagination);
+      setPagination(res?.pagination || null);
     } catch (err) {
       setError(err.message || 'Failed to load employee directory.');
     } finally {
