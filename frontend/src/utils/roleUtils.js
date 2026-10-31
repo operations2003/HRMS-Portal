@@ -88,3 +88,65 @@ export const filterNonCeoEmployees = (employees) => {
   if (!Array.isArray(employees)) return [];
   return employees.filter((emp) => !isCeoOrAdmin(emp));
 };
+
+
+/**
+ * Checks whether an employee or user belongs to the Learning & Development (L&D / LND) Department
+ * or has an L&D related role/designation.
+ *
+ * @param {Object} userOrEmp
+ * @returns {boolean}
+ */
+export const isLdDepartmentUser = (userOrEmp) => {
+  if (!userOrEmp) return false;
+
+  const role = (
+    userOrEmp.roleName ||
+    userOrEmp.role_name ||
+    userOrEmp.role?.name ||
+    userOrEmp.user?.roleName ||
+    userOrEmp.user?.role?.name ||
+    (typeof userOrEmp.role === 'string' ? userOrEmp.role : '') ||
+    ''
+  ).toLowerCase().trim();
+
+  if (
+    role.includes('ld') ||
+    role.includes('l&d') ||
+    role.includes('lnd') ||
+    role.includes('learning') ||
+    role.includes('trainer') ||
+    role.includes('training')
+  ) {
+    return true;
+  }
+
+  const deptName = (
+    userOrEmp.departmentName ||
+    userOrEmp.department?.name ||
+    userOrEmp.deptName ||
+    (typeof userOrEmp.department === 'string' ? userOrEmp.department : '') ||
+    ''
+  ).toLowerCase().trim();
+
+  const deptCode = (
+    userOrEmp.departmentCode ||
+    userOrEmp.department?.code ||
+    userOrEmp.deptCode ||
+    ''
+  ).toLowerCase().trim();
+
+  const deptId = (userOrEmp.deptId || userOrEmp.dept_id || '').toLowerCase().trim();
+
+  return (
+    deptName === 'learning & development' ||
+    deptName === 'learning and development' ||
+    deptName.includes('learning') ||
+    deptName.includes('l&d') ||
+    deptName.includes('lnd') ||
+    deptCode === 'l&d' ||
+    deptCode === 'ld' ||
+    deptCode === 'lnd' ||
+    deptId === 'dept-ld'
+  );
+};

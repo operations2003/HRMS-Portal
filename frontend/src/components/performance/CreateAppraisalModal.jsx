@@ -8,14 +8,15 @@ import { performanceService } from '../../services/performanceService.js';
 import { employeeService } from '../../services/employeeService.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
-import { filterNonCeoEmployees } from '../../utils/roleUtils.js';
+import { filterNonCeoEmployees, isLdDepartmentUser } from '../../utils/roleUtils.js';
 
 export const CreateAppraisalModal = ({ isOpen, onClose, onSuccess }) => {
   const toast = useToast();
   const { user, hasRole } = useAuth();
   const userRoleStr = (user?.roleName || user?.role?.name || user?.role || '').toLowerCase().trim();
   const isAdmin = ['admin', 'superadmin', 'orgadmin'].some((r) => userRoleStr.includes(r));
-  const isHR = !isAdmin && ['hr', 'hrmanager'].some((r) => userRoleStr.includes(r));
+  const isLnd = isLdDepartmentUser(user);
+  const isHR = !isAdmin && (['hr', 'hrmanager'].some((r) => userRoleStr.includes(r)) || isLnd);
   const isManagerOnly = !isAdmin && !isHR && (['manager', 'lead', 'supervisor'].some((r) => userRoleStr.includes(r)) || hasRole('Manager'));
 
   const [periods, setPeriods] = useState([]);

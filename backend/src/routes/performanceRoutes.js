@@ -18,6 +18,18 @@ const router = Router();
 // All performance routes require authentication
 router.use(authenticate);
 
+const reviewerRoles = [
+  'Manager',
+  'HR',
+  'HRManager',
+  'Admin',
+  'SuperAdmin',
+  'OrgAdmin',
+  'LND',
+  'LD',
+  'Learning & Development',
+];
+
 // =========================================================================
 // 1. Periods
 // =========================================================================
@@ -60,7 +72,7 @@ router.get(
 
 router.get(
   '/team',
-  requireRoles(['Manager', 'HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']),
+  requireRoles(reviewerRoles),
   authorize(['performance:read', 'performance:write']),
   performanceController.getTeamRecords
 );
@@ -77,7 +89,7 @@ router.get(
 
 router.post(
   '/records',
-  requireRoles(['Manager', 'HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']),
+  requireRoles(reviewerRoles),
   authorize(['performance:write']),
   validate(validateCreateRecord),
   performanceController.createRecord
@@ -110,7 +122,7 @@ router.post(
 
 router.post(
   '/records/:id/manager-review',
-  requireRoles(['Manager', 'HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']),
+  requireRoles(reviewerRoles),
   authorize(['performance:write', 'workflow:action']),
   validate(validateManagerReview),
   performanceController.managerReview

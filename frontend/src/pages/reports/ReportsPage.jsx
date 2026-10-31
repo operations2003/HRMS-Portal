@@ -46,7 +46,7 @@ import { employeeService } from '../../services/employeeService.js';
 import { performanceReportService } from '../../services/performanceReportService.js';
 import { notificationService } from '../../services/notificationService.js';
 import { PrintableReportDossier } from '../../components/performance/PrintableReportDossier.jsx';
-import { filterNonCeoEmployees } from '../../utils/roleUtils.js';
+import { filterNonCeoEmployees, isLdDepartmentUser } from '../../utils/roleUtils.js';
 
 
 
@@ -55,15 +55,16 @@ export const ReportsPage = () => {
   const userRoleStr = (user?.roleName || user?.role?.name || user?.role || '').toLowerCase().trim();
   const isAdmin = ['admin', 'superadmin', 'orgadmin'].some((r) => userRoleStr.includes(r));
   const isHR = !isAdmin && ['hr', 'hrmanager'].some((r) => userRoleStr.includes(r));
-  const isManager = !isAdmin && !isHR && (['manager', 'lead', 'supervisor'].some((r) => userRoleStr.includes(r)) || hasRole('Manager'));
-  const isEmployeeOnly = !isAdmin && !isHR && !isManager;
+  const isLnd = isLdDepartmentUser(user);
+  const isManager = !isAdmin && !isHR && !isLnd && (['manager', 'lead', 'supervisor'].some((r) => userRoleStr.includes(r)) || hasRole('Manager'));
+  const isEmployeeOnly = !isAdmin && !isHR && !isManager && !isLnd;
 
-  // Role permissions per prompt requirements:
+  // Role permissions:
   // Admin: can review other employees, does NOT have own performance review
-  // HR: can review other employees AND has own performance review
+  // HR & L&D: can review other employees AND has own performance review
   // Manager: can review direct reportees AND has own performance review
   // Employee: ONLY has own performance review ("My Performance") and CANNOT review or send reports to anyone
-  const canReviewOthers = isAdmin || isHR || isManager;
+  const canReviewOthers = isAdmin || isHR || isManager || isLnd;
   const hasOwnReview = !isAdmin;
 
   // View mode: 'reviews' (give/review evaluations) | 'my' (view own report dossier)

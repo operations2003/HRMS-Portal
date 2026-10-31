@@ -4,7 +4,7 @@ import { workflowRepository } from '../repositories/workflowRepository.js';
 import { notificationService } from './notificationService.js';
 import { validateEmployeeId } from '../validators/managerValidator.js';
 import { logger } from '../utils/logger.js';
-import { isCeoOrAdmin, checkIsEmployeeCeoOrAdmin } from '../utils/roleUtils.js';
+import { isCeoOrAdmin, checkIsEmployeeCeoOrAdmin, isLdDepartmentUser } from '../utils/roleUtils.js';
 
 export const performanceService = {
   /**
@@ -13,7 +13,7 @@ export const performanceService = {
   isHrOrAdmin(currentUser) {
     const role = (currentUser.roleName || '').toLowerCase();
     const hasManage = Array.isArray(currentUser.permissions) && currentUser.permissions.includes('performance:manage');
-    return ['admin', 'superadmin', 'orgadmin', 'hr', 'hrmanager', 'ld hr', 'l&d hr'].includes(role) || hasManage;
+    return ['admin', 'superadmin', 'orgadmin', 'hr', 'hrmanager', 'ld hr', 'l&d hr'].includes(role) || hasManage || isLdDepartmentUser(currentUser);
   },
 
   /**

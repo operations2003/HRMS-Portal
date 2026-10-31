@@ -1,4 +1,7 @@
 import { sendError } from '../utils/apiResponse.js';
+import { isLdDepartmentUser } from '../utils/roleUtils.js';
+
+export { isLdDepartmentUser };
 
 /**
  * Normalizes role string for comparison
@@ -37,6 +40,15 @@ export const authorize = (requiredPermissions) => {
       if (normalizeRole(req.user.roleName) === normalizeRole(perm)) return true;
       return false;
     });
+
+    // Grant access to Learning & Development personnel for performance, training, and review workflows
+    if (
+      !hasPermission &&
+      isLdDepartmentUser(req.user) &&
+      permissions.some((p) => p.startsWith('performance:') || p.startsWith('training:') || p === 'workflow:action')
+    ) {
+      return next();
+    }
 
     if (!hasPermission) {
       return sendError(
@@ -78,6 +90,12 @@ export const requireRoles = (allowedRoles) => {
       return next();
     }
 
+    // Allow Learning & Development personnel if allowedRoles permits LND / LD or if reviewing performance/training
+    const allowsLd = normAllowed.some((r) => ['ld', 'lnd', 'learningdevelopment'].includes(r));
+    if (allowsLd && isLdDepartmentUser(req.user)) {
+      return next();
+    }
+
     return sendError(
       res,
       'Access Forbidden: Your role is not authorized for this resource.',
@@ -98,33 +116,7 @@ export const canManageTraining = (user) => {
     return true;
   }
 
-  // Any role with L&D or Training in title
-  if (
-    normRole.includes('ld') ||
-    normRole.includes('l&d') ||
-    normRole.includes('learning') ||
-    normRole.includes('training') ||
-    normRole.includes('trainer')
-  ) {
-    return true;
-  }
-
-  // Any personnel in the Learning & Development department
-  const deptName = (user.departmentName || user.department?.name || user.deptName || '').toLowerCase().trim();
-  const deptCode = (user.departmentCode || user.department?.code || user.deptCode || '').toLowerCase().trim();
-  const deptId = (user.deptId || '').toLowerCase().trim();
-
-  const isLdDept = (
-    deptName === 'learning & development' ||
-    deptName === 'learning and development' ||
-    deptName.includes('learning') ||
-    deptName.includes('l&d') ||
-    deptCode === 'l&d' ||
-    deptCode === 'ld' ||
-    deptId === 'dept-ld'
-  );
-
-  return isLdDept;
+  return isLdDepartmentUser(user);
 };
 
 /**
@@ -145,5 +137,3 @@ export const authorizeTrainingManager = (req, res, next) => {
     403
   );
 };
-
-
