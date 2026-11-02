@@ -82,6 +82,11 @@ export const parseSingleShiftTiming = (shiftTiming) => {
   if (!parts[0].match(/(AM|PM)/i) && endPeriod === 'AM' && start.hour >= 4 && start.hour <= 11) {
     start.hour += 12;
   }
+  // If start was specified as 12:00 AM (00:00) but end is afternoon/evening (>= 13:00 / 1:00 PM),
+  // this is a common typo where 12 noon was written as 12 AM (creating an accidental 20h shift).
+  if (start.hour === 0 && end.hour >= 13 && end.hour <= 23) {
+    start.hour = 12;
+  }
 
   let startMinutes = start.hour * 60 + start.minute;
   let endMinutes = end.hour * 60 + end.minute;

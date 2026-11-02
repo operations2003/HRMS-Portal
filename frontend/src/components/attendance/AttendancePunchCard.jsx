@@ -57,6 +57,9 @@ const parseSingleSegmentHours = (segment) => {
   if (!parts[0].match(/(AM|PM)/i) && endPeriod === 'PM' && start.hour >= 1 && start.hour <= 6) {
     start.hour += 12;
   }
+  if (start.hour === 0 && end.hour >= 13 && end.hour <= 23) {
+    start.hour = 12;
+  }
 
   let startM = start.hour * 60 + start.minute;
   let endM = end.hour * 60 + end.minute;

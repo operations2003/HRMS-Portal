@@ -332,10 +332,15 @@ export const EmployeeListPage = () => {
 
       const endPeriodMatch = parts[1].match(/(AM|PM)/i);
       const endPeriod = endPeriodMatch ? endPeriodMatch[1].toUpperCase() : 'PM';
-      let startObj = parsePart(parts[0], endPeriod === 'PM' && parseInt(parts[0], 10) >= 1 && parseInt(parts[0], 10) <= 6 ? 'PM' : 'AM');
+      const startHourNum = parseInt(parts[0], 10);
+      const isStartPm = endPeriod === 'PM' && ((startHourNum >= 1 && startHourNum <= 6) || startHourNum === 12);
+      let startObj = parsePart(parts[0], isStartPm ? 'PM' : 'AM');
       let endObj = parsePart(parts[1], endPeriod);
 
       if (startObj && endObj) {
+        if (startObj.hour === 12 && startObj.period === 'AM' && endPeriod === 'PM') {
+          startObj.period = 'PM';
+        }
         return {
           fromTime: `${String(startObj.hour).padStart(2, '0')}:${startObj.minute}`,
           fromPeriod: startObj.period || 'AM',

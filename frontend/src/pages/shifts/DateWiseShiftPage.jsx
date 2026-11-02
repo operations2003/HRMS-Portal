@@ -237,10 +237,10 @@ export const DateWiseShiftPage = () => {
         console.warn('[ShiftPage] shiftService.getEligibleEmployees warning:', err.message);
       }
 
-      // If empty and user is HR/Admin/Manager, fallback to universal employeeService
+      // If empty and user is HR/Admin/Manager, fallback to universal employeeService (including exited employees)
       if ((!Array.isArray(list) || list.length === 0) && canEditShifts) {
         try {
-          const empRes = await employeeService.listEmployees({ limit: 500 });
+          const empRes = await employeeService.listEmployees({ limit: 500, includeExited: true });
           list = empRes?.employees || empRes?.data || empRes?.items || [];
         } catch (err) {
           console.warn('[ShiftPage] employeeService fallback warning:', err.message);
@@ -1423,6 +1423,15 @@ export const DateWiseShiftPage = () => {
                       <div className="text-xs text-slate-700 dark:text-slate-300 truncate font-medium" title={row.employee.designationTitle || 'Staff'}>
                         {row.employee.designationTitle || 'Staff'}
                       </div>
+                      {row.employee.status && ['exited', 'notice period', 'completed', 'terminated'].includes(row.employee.status.toLowerCase()) && (
+                        <span className={`inline-block text-[10px] px-1.5 py-0.5 rounded font-medium mt-0.5 ${
+                          row.employee.status.toLowerCase() === 'notice period'
+                            ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
+                            : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                        }`}>
+                          {row.employee.status}
+                        </span>
+                      )}
                     </td>
 
                     {/* Day Cells 1..N */}

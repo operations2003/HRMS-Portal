@@ -137,6 +137,12 @@ export const shiftManagementService = {
           e.last_name AS "lastName",
           TRIM(CONCAT(e.first_name, ' ', e.last_name)) AS "fullName",
           e.email,
+          e.status,
+          COALESCE(
+            (SELECT ec.last_working_day FROM exit_checklists ec WHERE ec.employee_id = e.id ORDER BY ec.created_at DESC LIMIT 1),
+            (SELECT ec.resignation_date FROM exit_checklists ec WHERE ec.employee_id = e.id ORDER BY ec.created_at DESC LIMIT 1),
+            e.internship_end_date
+          ) AS "lastWorkingDay",
           e.shift_timing AS "defaultShiftTiming",
           COALESCE(e.avatar_url, u.avatar_url) AS "avatarUrl",
           d.name AS "departmentName",
@@ -150,7 +156,17 @@ export const shiftManagementService = {
         LEFT JOIN departments d ON d.id = e.dept_id
         LEFT JOIN designations ds ON ds.id = e.desig_id
         WHERE (e.org_id = $1 OR e.org_id IS NULL OR $1 = '')
-          AND (e.status IS NULL OR LOWER(e.status) NOT IN ('exited', 'terminated', 'inactive', 'suspended', 'archived'))
+          AND (
+            e.status IS NULL 
+            OR LOWER(e.status) NOT IN ('suspended', 'archived')
+            OR EXISTS (SELECT 1 FROM exit_checklists ec WHERE ec.employee_id = e.id)
+            OR EXISTS (SELECT 1 FROM attendance_records ar WHERE ar.employee_id = e.id)
+            OR EXISTS (SELECT 1 FROM shift_assignments sa WHERE sa.employee_id = e.id)
+          )
+          AND (
+            LOWER(COALESCE(e.status, '')) NOT IN ('suspended', 'archived')
+            OR EXISTS (SELECT 1 FROM exit_checklists ec WHERE ec.employee_id = e.id)
+          )
           AND (e.id != 'emp-shubham-admin')
           AND LOWER(COALESCE(e.email, '')) NOT IN ('sheetalbedi@tasknera.com', 'sheetal@tasknera.com')
           AND LOWER(COALESCE(ds.title, '')) NOT LIKE '%ceo%'
@@ -303,6 +319,21 @@ export const shiftManagementService = {
         m = parseInt(parts[1], 10) || m;
       }
     }
+
+    // Only show employees who worked during this period:
+    // Exited/Completed employees whose last working day was prior to this period (lwd < start) are excluded.
+    eligibleEmployees = eligibleEmployees.filter((emp) => {
+      const isExited = ['exited', 'completed', 'terminated'].includes((emp.status || '').toLowerCase());
+      if (isExited && emp.lastWorkingDay) {
+        const lwdStr = emp.lastWorkingDay instanceof Date
+          ? emp.lastWorkingDay.toISOString().split('T')[0]
+          : String(emp.lastWorkingDay).slice(0, 10);
+        if (lwdStr < start) {
+          return false;
+        }
+      }
+      return true;
+    });
 
     // 3. Generate columns metadata for each day in range
     const days = [];
@@ -499,6 +530,36 @@ export const shiftManagementService = {
         const leave = empLeaves.find((l) => dateKey >= l.startDate && dateKey <= l.endDate) || null;
         const att = attendanceByEmpAndDate.get(`${emp.id}_${dateKey}`) || null;
 
+        // If employee has exited/completed, any dates strictly after their last working day
+        // did not have them working, so display as '-' and don't count towards schedule or weekly offs
+        const isExitedEmp = ['exited', 'completed', 'terminated'].includes((emp.status || '').toLowerCase());
+        const empLwd = emp.lastWorkingDay
+          ? (emp.lastWorkingDay instanceof Date ? emp.lastWorkingDay.toISOString().split('T')[0] : String(emp.lastWorkingDay).slice(0, 10))
+          : null;
+        const isAfterExit = isExitedEmp && empLwd && dateKey > empLwd && !att?.checkIn;
+
+        if (isAfterExit) {
+          cells[dateKey] = {
+            dateKey,
+            dayNumber: day.dayNumber,
+            dayName: day.dayName,
+            isWeekend: day.isWeekend,
+            isSunday: day.dayName === 'Sun' || day.isSunday === true,
+            shiftType: 'NA',
+            shiftLabel: 'Exited',
+            shortLabel: '-',
+            displayType: 'NA',
+            cellText: '-',
+            isHalfDay: false,
+            isOverride: false,
+            customAssignment: null,
+            holiday: null,
+            leave: null,
+            attendance: null,
+          };
+          continue;
+        }
+
         // US-based calendar: ONLY Sundays are Weekly Off. Saturdays are normal working shifts.
         const isSunday = day.dayName === 'Sun' || day.isSunday === true;
 
@@ -639,6 +700,7 @@ export const shiftManagementService = {
           lastName: emp.lastName,
           fullName: emp.fullName,
           email: emp.email,
+          status: emp.status,
           avatarUrl: emp.avatarUrl,
           departmentName: emp.departmentName || 'General',
           departmentId: emp.departmentId || emp.dept_id || '',

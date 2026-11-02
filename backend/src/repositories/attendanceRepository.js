@@ -891,6 +891,12 @@ export const attendanceRepository = {
           WHERE sa.employee_id = e.id
             AND sa.assignment_date = $2::date
             AND sa.shift_type IN ('WO', 'HD')
+        )
+        -- Exclude if employee has exited or target date is past their last working day
+        AND NOT EXISTS (
+          SELECT 1 FROM exit_checklists ec
+          WHERE ec.employee_id = e.id
+            AND $2::date > COALESCE(ec.last_working_day, ec.resignation_date)
         );
     `;
 
