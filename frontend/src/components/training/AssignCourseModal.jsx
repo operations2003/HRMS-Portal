@@ -39,6 +39,7 @@ export const AssignCourseModal = ({
   const [notes, setNotes] = useState('');
 
   // Data
+  const [availableCourses, setAvailableCourses] = useState(courses || []);
   const [allEmployees, setAllEmployees] = useState([]);
   const [allDepartments, setAllDepartments] = useState([]);
   const [loadingOptions, setLoadingOptions] = useState(false);
@@ -51,22 +52,48 @@ export const AssignCourseModal = ({
   // Existing enrollments for the selected course to mark already enrolled employees
   const [existingEnrolledEmpIds, setExistingEnrolledEmpIds] = useState(new Set());
 
+  // Sync courses prop
+  useEffect(() => {
+    if (Array.isArray(courses) && courses.length > 0) {
+      setAvailableCourses(courses);
+    }
+  }, [courses]);
+
+  // Self-fetch courses if none provided to ensure course dropdown is always populated
+  useEffect(() => {
+    if (!isOpen) return;
+    if (!course && (!availableCourses || availableCourses.length === 0)) {
+      trainingService
+        .getCourses()
+        .then((res) => {
+          const list = res.courses || res.data || (Array.isArray(res) ? res : []);
+          setAvailableCourses(list);
+          if (list.length > 0 && !selectedCourseId) {
+            setSelectedCourseId(list[0].id);
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to load courses for assign modal:', err);
+        });
+    }
+  }, [isOpen, course, availableCourses, selectedCourseId]);
+
   // Initialize selected course
   useEffect(() => {
     if (course?.id) {
       setSelectedCourseId(course.id);
-    } else if (courses.length > 0 && !selectedCourseId) {
-      setSelectedCourseId(courses[0].id);
+    } else if (availableCourses.length > 0 && !selectedCourseId) {
+      setSelectedCourseId(availableCourses[0].id);
     }
-  }, [course, courses, selectedCourseId]);
+  }, [course, availableCourses, selectedCourseId]);
 
   // Set default enrollment type based on course
   useEffect(() => {
-    const activeCourse = course || courses.find((c) => c.id === selectedCourseId);
+    const activeCourse = course || availableCourses.find((c) => c.id === selectedCourseId);
     if (activeCourse?.is_mandatory) {
       setEnrollmentType('MANDATORY');
     }
-  }, [course, selectedCourseId, courses]);
+  }, [course, selectedCourseId, availableCourses]);
 
   // Reset or initialize preselected employee
   useEffect(() => {
@@ -85,14 +112,42 @@ export const AssignCourseModal = ({
     const fetchMetadata = async () => {
       setLoadingOptions(true);
       try {
-        const [empRes, deptRes] = await Promise.all([
+        const [empRes, deptRes] = await Promise.allSettled([
           employeeService.getAllEmployees({ status: 'Active' }),
           departmentService.getAllDepartments(),
         ]);
         if (isMounted) {
-          const emps = empRes.employees || empRes.data || (Array.isArray(empRes) ? empRes : []);
-          setAllEmployees(emps);
-          setAllDepartments(Array.isArray(deptRes) ? deptRes : []);
+          let emps = [];
+          if (empRes.status === 'fulfilled') {
+            const val = empRes.value;
+            emps = val?.employees || val?.data || (Array.isArray(val) ? val : []);
+            setAllEmployees(emps);
+          } else {
+            console.error('Failed to load employee list for assignment:', empRes.reason);
+          }
+
+          let depts = [];
+          if (deptRes.status === 'fulfilled') {
+            const val = deptRes.value;
+            depts = val?.departments || val?.data || (Array.isArray(val) ? val : []);
+          } else {
+            console.warn('Failed to load department list from API, deriving from employees:', deptRes.reason);
+          }
+
+          // Resilient fallback: derive departments from loaded employees if depts is empty
+          if (depts.length === 0 && emps.length > 0) {
+            const deptMap = new Map();
+            for (const emp of emps) {
+              const dId = emp.deptId || emp.dept_id || emp.department?.id;
+              const dName = emp.departmentName || emp.department?.name || emp.deptName || emp.dept_name;
+              if (dId && dName && !deptMap.has(dId)) {
+                deptMap.set(dId, { id: dId, name: dName, code: emp.departmentCode || emp.deptCode || '' });
+              }
+            }
+            depts = Array.from(deptMap.values());
+          }
+
+          setAllDepartments(depts);
         }
       } catch (err) {
         console.error('Failed to load employee list for assignment:', err);
@@ -133,7 +188,8 @@ export const AssignCourseModal = ({
   // Filtered employees
   const filteredEmployees = useMemo(() => {
     return allEmployees.filter((emp) => {
-      const matchesDept = deptFilter === 'ALL' || emp.deptId === deptFilter || emp.dept_id === deptFilter;
+      const empDept = emp.deptId || emp.dept_id || emp.department?.id;
+      const matchesDept = deptFilter === 'ALL' || empDept === deptFilter;
       const term = searchQuery.toLowerCase().trim();
       const fullName = `${emp.firstName || emp.first_name || ''} ${emp.lastName || emp.last_name || ''}`.toLowerCase();
       const code = (emp.employeeCode || emp.employee_code || '').toLowerCase();
@@ -181,15 +237,15 @@ export const AssignCourseModal = ({
     }
     if (targetMode === 'DEPARTMENT') {
       if (!selectedDeptId) return 0;
-      return allEmployees.filter((e) => e.deptId === selectedDeptId || e.dept_id === selectedDeptId).length;
+      return allEmployees.filter((e) => (e.deptId || e.dept_id || e.department?.id) === selectedDeptId).length;
     }
     return selectedEmpIds.size;
   }, [targetMode, allEmployees, selectedDeptId, selectedEmpIds]);
 
   // Active target course details
   const currentCourse = useMemo(() => {
-    return course || courses.find((c) => c.id === selectedCourseId);
-  }, [course, courses, selectedCourseId]);
+    return course || availableCourses.find((c) => c.id === selectedCourseId);
+  }, [course, availableCourses, selectedCourseId]);
 
   // Form submission
   const handleSubmit = async (e) => {
@@ -301,9 +357,9 @@ export const AssignCourseModal = ({
                 className="w-full text-xs border border-slate-300 rounded-xl p-2.5 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
               >
                 <option value="" disabled>
-                  Select a training course...
+                  {availableCourses.length === 0 ? 'Loading courses...' : 'Select a training course...'}
                 </option>
-                {courses.map((c) => (
+                {availableCourses.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.title} ({c.category}) — {c.is_mandatory ? 'Mandatory' : 'Optional'}
                   </option>
@@ -495,7 +551,7 @@ export const AssignCourseModal = ({
                   -- Select target department --
                 </option>
                 {allDepartments.map((d) => {
-                  const count = allEmployees.filter((e) => e.deptId === d.id || e.dept_id === d.id).length;
+                  const count = allEmployees.filter((e) => (e.deptId || e.dept_id || e.department?.id) === d.id).length;
                   return (
                     <option key={d.id} value={d.id}>
                       {d.name} ({count} active employees)

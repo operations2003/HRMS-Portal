@@ -80,10 +80,11 @@ export const TrainingPage = () => {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      if (activeTab === 'courses') {
-        const res = await trainingService.getCourses();
-        setCourses(res.data || []);
-      } else if (activeTab === 'my-trainings') {
+      // Always ensure courses are loaded so catalogue, assign modal, and certifications are fully populated
+      const coursesRes = await trainingService.getCourses();
+      setCourses(coursesRes.data || []);
+
+      if (activeTab === 'my-trainings') {
         const params = {};
         // If training manager chose "MINE", pass employeeId of current user
         if (isTrainingManager && enrollmentViewMode === 'MINE' && user?.employeeId) {

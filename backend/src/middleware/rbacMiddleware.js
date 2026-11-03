@@ -45,7 +45,14 @@ export const authorize = (requiredPermissions) => {
     if (
       !hasPermission &&
       isLdDepartmentUser(req.user) &&
-      permissions.some((p) => p.startsWith('performance:') || p.startsWith('training:') || p === 'workflow:action')
+      permissions.some(
+        (p) =>
+          p.startsWith('performance:') ||
+          p.startsWith('training:') ||
+          p === 'workflow:action' ||
+          p === 'dept:read' ||
+          p === 'employee:read'
+      )
     ) {
       return next();
     }

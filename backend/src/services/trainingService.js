@@ -307,7 +307,7 @@ export const trainingService = {
       const res = await query(
         `SELECT e.id, e.user_id, e.first_name, e.last_name, e.email 
          FROM employees e 
-         WHERE e.org_id = $1 AND e.status = 'Active';`,
+         WHERE e.org_id = $1 AND LOWER(e.status) = 'active';`,
         [orgId]
       );
       employeesToAssign = res.rows;
@@ -318,7 +318,7 @@ export const trainingService = {
       const res = await query(
         `SELECT e.id, e.user_id, e.first_name, e.last_name, e.email 
          FROM employees e 
-         WHERE e.org_id = $1 AND e.dept_id = ANY($2::varchar[]) AND e.status = 'Active';`,
+         WHERE e.org_id = $1 AND e.dept_id = ANY($2::varchar[]) AND LOWER(e.status) = 'active';`,
         [orgId, deptList]
       );
       employeesToAssign = res.rows;
@@ -326,7 +326,7 @@ export const trainingService = {
       const res = await query(
         `SELECT e.id, e.user_id, e.first_name, e.last_name, e.email 
          FROM employees e 
-         WHERE e.org_id = $1 AND e.id = ANY($2::varchar[]) AND e.status = 'Active';`,
+         WHERE e.org_id = $1 AND e.id = ANY($2::varchar[]) AND LOWER(e.status) = 'active';`,
         [orgId, employeeIds]
       );
       employeesToAssign = res.rows;
@@ -334,7 +334,7 @@ export const trainingService = {
       const res = await query(
         `SELECT e.id, e.user_id, e.first_name, e.last_name, e.email 
          FROM employees e 
-         WHERE e.org_id = $1 AND e.id = $2 AND e.status = 'Active';`,
+         WHERE e.org_id = $1 AND e.id = $2 AND LOWER(e.status) = 'active';`,
         [orgId, employeeId]
       );
       employeesToAssign = res.rows;
