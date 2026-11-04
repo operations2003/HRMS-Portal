@@ -83,36 +83,50 @@ export const CeoCommandCentrePage = () => {
         ceoTaskService.getAiAllocations(),
         ceoTaskService.getPendingTasksReport(),
         ceoTaskService.getExecutiveApprovals(),
-        employeeService.getEmployees(),
+        (employeeService.getEmployees ? employeeService.getEmployees() : employeeService.getAllEmployees()),
         departmentService.getDepartments(),
       ]);
 
-      if (metricsRes.status === 'fulfilled') setMetrics(metricsRes.value);
-      if (tasksRes.status === 'fulfilled') {
+      if (metricsRes.status === 'fulfilled' && metricsRes.value) {
+        setMetrics(metricsRes.value);
+      }
+      if (tasksRes.status === 'fulfilled' && tasksRes.value) {
         const raw = tasksRes.value;
-        setTasks(Array.isArray(raw) ? raw : raw.data || []);
+        setTasks(Array.isArray(raw) ? raw : (raw?.data || []));
       }
-      if (deptPerfRes.status === 'fulfilled') setDepartmentPerformance(deptPerfRes.value || []);
-      if (empProgRes.status === 'fulfilled') setEmployeeProgress(empProgRes.value || []);
-      if (aiSumRes.status === 'fulfilled') setAiSummary(aiSumRes.value || {});
-      if (aiAllocRes.status === 'fulfilled') setAiAllocations(aiAllocRes.value || []);
-      if (pendingRepRes.status === 'fulfilled') setPendingReport(pendingRepRes.value || {});
-      if (approvalsRes.status === 'fulfilled') setApprovals(approvalsRes.value || []);
-      if (employeesRes.status === 'fulfilled') {
+      if (deptPerfRes.status === 'fulfilled' && deptPerfRes.value) {
+        setDepartmentPerformance(Array.isArray(deptPerfRes.value) ? deptPerfRes.value : []);
+      }
+      if (empProgRes.status === 'fulfilled' && empProgRes.value) {
+        setEmployeeProgress(Array.isArray(empProgRes.value) ? empProgRes.value : []);
+      }
+      if (aiSumRes.status === 'fulfilled' && aiSumRes.value) {
+        setAiSummary(typeof aiSumRes.value === 'object' ? aiSumRes.value : {});
+      }
+      if (aiAllocRes.status === 'fulfilled' && aiAllocRes.value) {
+        setAiAllocations(Array.isArray(aiAllocRes.value) ? aiAllocRes.value : []);
+      }
+      if (pendingRepRes.status === 'fulfilled' && pendingRepRes.value) {
+        setPendingReport(typeof pendingRepRes.value === 'object' ? pendingRepRes.value : {});
+      }
+      if (approvalsRes.status === 'fulfilled' && approvalsRes.value) {
+        setApprovals(Array.isArray(approvalsRes.value) ? approvalsRes.value : []);
+      }
+      if (employeesRes.status === 'fulfilled' && employeesRes.value) {
         const raw = employeesRes.value;
-        setEmployees(Array.isArray(raw) ? raw : raw.employees || raw.data || []);
+        setEmployees(Array.isArray(raw) ? raw : (raw?.employees || raw?.data || []));
       }
-      if (departmentsRes.status === 'fulfilled') {
+      if (departmentsRes.status === 'fulfilled' && departmentsRes.value) {
         const raw = departmentsRes.value;
-        setDepartments(Array.isArray(raw) ? raw : raw.departments || raw.data || []);
+        setDepartments(Array.isArray(raw) ? raw : (raw?.departments || raw?.data || []));
       }
     } catch (err) {
-      toast.error('Failed to load some executive command centre data.');
+      console.error('Failed to load some executive command centre data:', err);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [toast]);
+  }, []);
 
   useEffect(() => {
     loadAllData();

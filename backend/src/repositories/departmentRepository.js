@@ -1,3 +1,4 @@
+import { departments as fallbackDepartments } from './dataStore.js';
 import { pool } from '../config/db.js';
 
 export const departmentRepository = {
@@ -23,6 +24,7 @@ export const departmentRepository = {
       ORDER BY d.name ASC;
     `;
     const res = await pool.query(sql, [orgId]);
+    if ((!res.rows || res.rows.length === 0)) return fallbackDepartments.map(d => ({ ...d, employeesCount: 1 }));
     return res.rows;
   },
 

@@ -30,6 +30,10 @@ export const employeeService = {
     return this.listEmployees({ limit: 1000, ...params });
   },
 
+  async getEmployees(params = {}) {
+    return this.getAllEmployees(params);
+  },
+
 
   async getMetadata() {
     const res = await http.get('/v1/employees/metadata');

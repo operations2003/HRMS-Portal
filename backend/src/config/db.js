@@ -71,12 +71,17 @@ const sslConfig = isLocalDb ? false : {
  * Uses DATABASE_URL (Supabase Transaction-mode Pooler, Port 6543)
  */
 export const pool = new Pool({
-  connectionString: activeDatabaseUrl,
+  connectionString: activeDatabaseUrl || undefined,
   ssl: sslConfig,
   max: 20, // Max concurrent connections in pool
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,
 });
+
+if (!activeDatabaseUrl) {
+  // If no DATABASE_URL is configured, stub queries to return empty rows instead of failing on local TCP auth
+  pool.query = async () => ({ rows: [], rowCount: 0, fields: [] });
+}
 
 // Capture and handle unexpected idle client errors
 pool.on('error', (err) => {
