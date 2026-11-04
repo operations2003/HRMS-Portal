@@ -32,6 +32,7 @@ import { FnFSettlementPage } from './pages/exit/FnFSettlementPage.jsx';
 import { TerminationPage } from './pages/exit/TerminationPage.jsx';
 import { AdminSettingsPage } from './pages/admin/AdminSettingsPage.jsx';
 import { RolesPermissionsPage } from './pages/admin/RolesPermissionsPage.jsx';
+import { CeoCommandCentrePage } from './pages/ceo/CeoCommandCentrePage.jsx';
 import { TasksPage } from './pages/tasks/TasksPage.jsx';
 import { TrainingPage } from './pages/training/TrainingPage.jsx';
 import { EngagementPage } from './pages/engagement/EngagementPage.jsx';
@@ -452,6 +453,18 @@ export const App = () => {
                   </PermissionRoute>
                 }
               />
+
+              {/* TaskNera CEO Command Centre (Executive Authority & AI Allocations) */}
+              <Route
+                path="ceo/command-centre"
+                element={
+                  <PermissionRoute roles={['Admin', 'SuperAdmin', 'OrgAdmin', 'CEO']}>
+                    <CeoCommandCentrePage />
+                  </PermissionRoute>
+                }
+              />
+              <Route path="ceo" element={<Navigate to="/ceo/command-centre" replace />} />
+              <Route path="ceo-dashboard" element={<Navigate to="/ceo/command-centre" replace />} />
 
               {/* Tasks & Work Management */}
               <Route

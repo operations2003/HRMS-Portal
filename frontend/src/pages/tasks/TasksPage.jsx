@@ -21,6 +21,9 @@ import {
   ArrowRight,
   ArrowRightLeft,
 } from 'lucide-react';
+import { NavLink } from 'react-router-dom';
+import { ShieldCheck } from 'lucide-react';
+import { EmployeeTaskView } from '../../components/tasks/EmployeeTaskView.jsx';
 import { MyPerformanceSection } from '../../components/tasks/MyPerformanceSection.jsx';
 import { TaskAssignmentsSection } from '../../components/tasks/TaskAssignmentsSection.jsx';
 import { taskService } from '../../services/taskService.js';
@@ -64,7 +67,7 @@ export const TasksPage = () => {
 
   const [tasks, setTasks] = useState([]);
   const [employees, setEmployees] = useState([]);
-  const [activeTab, setActiveTab] = useState('performance'); // 'performance' | 'board' | 'assignments'
+  const [activeTab, setActiveTab] = useState(canAssign ? 'board' : 'my-tasks'); // 'my-tasks' | 'performance' | 'board' | 'assignments'
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState('kanban'); // 'kanban' | 'list'
   const [search, setSearch] = useState('');
@@ -132,6 +135,20 @@ export const TasksPage = () => {
       setEmployees(filterNonCeoEmployees(list));
     }).catch(() => {});
   }, []);
+
+  const myAssignedTasks = useMemo(() => {
+    const currentEmpId = user?.employeeId || user?.id || user?._id;
+    return tasks.filter(
+      (t) =>
+        t.assignee_id === currentEmpId ||
+        t.assigneeId === currentEmpId ||
+        t.assignee?._id === currentEmpId ||
+        t.assignee?.id === currentEmpId ||
+        t.assignedTo === currentEmpId ||
+        t.assignedTo?._id === currentEmpId ||
+        !canAssign
+    );
+  }, [tasks, user, canAssign]);
 
   const uniqueAssigners = useMemo(() => {
     const map = new Map();
@@ -295,8 +312,53 @@ export const TasksPage = () => {
 
   return (
     <div className="space-y-6">
+      {/* Executive Quick Banner for CEO / Admin */}
+      {isAdmin && (
+        <div className="bg-gradient-to-r from-slate-900 via-brand-950 to-indigo-950 text-white rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-md border border-brand-800/40">
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-brand-500/20 text-brand-300 flex items-center justify-center shrink-0 border border-brand-400/30">
+              <ShieldCheck className="w-5 h-5 text-brand-400" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-white">TaskNera CEO Command Centre</h3>
+                <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-brand-500/30 text-brand-200 border border-brand-400/30">
+                  Executive Access
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 mt-0.5">
+                Complete organisational visibility, AI allocation matrix, executive approval centre & audit trails.
+              </p>
+            </div>
+          </div>
+          <NavLink
+            to="/ceo/command-centre"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-white text-slate-900 hover:bg-slate-100 transition-all shadow-sm shrink-0"
+          >
+            Launch Command Centre
+            <ArrowRight className="w-4 h-4 text-brand-600" />
+          </NavLink>
+        </div>
+      )}
+
       {/* Top Tab Navigation Bar */}
       <div className="flex items-center gap-6 sm:gap-8 border-b border-slate-200 dark:border-slate-800 pb-px overflow-x-auto">
+        <button
+          type="button"
+          onClick={() => setActiveTab('my-tasks')}
+          className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === 'my-tasks'
+              ? 'border-brand-500 text-brand-600 dark:text-brand-400'
+              : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+          }`}
+        >
+          <CheckSquare className="w-4 h-4" />
+          My Directives & Tasks
+          <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-brand-50 dark:bg-brand-950/70 text-brand-600 dark:text-brand-400 border border-brand-200 dark:border-brand-800">
+            {myAssignedTasks.length}
+          </span>
+        </button>
+
         <button
           type="button"
           onClick={() => setActiveTab('performance')}
@@ -342,7 +404,13 @@ export const TasksPage = () => {
         )}
       </div>
 
-      {activeTab === 'performance' ? (
+      {activeTab === 'my-tasks' ? (
+        <EmployeeTaskView
+          currentUser={user}
+          tasks={myAssignedTasks}
+          onTaskUpdated={fetchTasks}
+        />
+      ) : activeTab === 'performance' ? (
         <MyPerformanceSection />
       ) : activeTab === 'assignments' && isAdmin ? (
         <TaskAssignmentsSection
