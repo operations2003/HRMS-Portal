@@ -1797,8 +1797,8 @@ export const leaveService = {
     const oldIsSpecial = isSpecialLeaveType(oldLeaveType);
     const oldIsPaid = oldLeaveType && !isUnpaidLeave(oldLeaveType) && Boolean(oldLeaveType.isPaid);
 
-    const newLeaveTypeId = data.leaveTypeId || oldLeaveTypeId;
-    const newLeaveType = await leaveRepository.findLeaveTypeById(newLeaveTypeId, record.orgId);
+    let newLeaveTypeId = data.leaveTypeId || oldLeaveTypeId;
+    let newLeaveType = await leaveRepository.findLeaveTypeById(newLeaveTypeId, record.orgId);
     if (!newLeaveType) {
       const error = new Error('Selected leave type does not exist.');
       error.statusCode = 400;
@@ -1810,6 +1810,34 @@ export const leaveService = {
     const newIsHalfDay = data.isHalfDay !== undefined ? Boolean(data.isHalfDay) : Boolean(record.isHalfDay);
     const newHalfDayPeriod = newIsHalfDay ? (data.halfDayPeriod || record.halfDayPeriod || 'FIRST_HALF') : null;
     const newYear = new Date(newStartDate).getFullYear();
+
+    // Half Day must strictly be routed to and deducted from Casual Leave (CL)
+    if (newIsHalfDay || String(newLeaveType.code || '').toUpperCase() === 'HDL') {
+      const clRes = await pool.query(
+        `SELECT * FROM leave_types 
+         WHERE (org_id = $1 OR org_id = 'org-1') 
+           AND (UPPER(code) = 'CL' OR LOWER(name) = 'casual leave') 
+           AND status = 'Active' 
+         LIMIT 1;`,
+        [record.orgId || 'org-1']
+      );
+      if (clRes.rows.length > 0) {
+        newLeaveType = {
+          id: clRes.rows[0].id,
+          orgId: clRes.rows[0].org_id,
+          name: clRes.rows[0].name,
+          code: clRes.rows[0].code,
+          description: clRes.rows[0].description,
+          daysPerYear: parseFloat(clRes.rows[0].days_per_year) || 0,
+          isPaid: clRes.rows[0].is_paid,
+          requiresApproval: clRes.rows[0].requires_approval,
+          carryForwardDays: parseFloat(clRes.rows[0].carry_forward_days) || 0,
+          status: clRes.rows[0].status,
+          genderEligibility: clRes.rows[0].gender_eligibility,
+        };
+        newLeaveTypeId = newLeaveType.id;
+      }
+    }
 
     const newIsSpecial = isSpecialLeaveType(newLeaveType);
     const newIsPaid = newLeaveType && !isUnpaidLeave(newLeaveType) && Boolean(newLeaveType.isPaid);

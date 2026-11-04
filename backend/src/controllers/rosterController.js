@@ -17,8 +17,8 @@ export const LEAVE_MAPPINGS = {
   'CL': { code: 'CL', name: 'Casual Leave', isHalf: false },
   'PL': { code: 'PL', name: 'Planned Leave', isHalf: false },
   'SL': { code: 'SL', name: 'Sick Leave', isHalf: false },
-  'HD': { code: 'HDL', name: 'Half Day', isHalf: true },
-  'HDL': { code: 'HDL', name: 'Half Day', isHalf: true },
+  'HD': { code: 'CL', name: 'Casual Leave', isHalf: true },
+  'HDL': { code: 'CL', name: 'Casual Leave', isHalf: true },
   'LOP': { code: 'LOP', name: 'Leave without pay (LOP)', isHalf: false },
   'LWP': { code: 'LOP', name: 'Leave without pay (LOP)', isHalf: false },
   'ML': { code: 'ML', name: 'Maternity Leave', isHalf: false },
@@ -32,7 +32,7 @@ export const DEFAULT_LEAVE_QUOTAS = {
   'PL': 15.0,  // Planned Leave
   'CL': 12.0,  // Casual Leave
   'SL': 10.0,  // Sick Leave
-  'HDL': 6.0,  // Half Day
+  // HD / HDL (Half Day) is deducted from Casual Leave (CL)
   'ML': 180.0, // Maternity Leave
   'PTL': 15.0, // Paternity Leave
   'SBL': 30.0, // Sabbatical Leave
