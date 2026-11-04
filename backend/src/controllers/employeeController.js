@@ -182,6 +182,11 @@ export const employeeController = {
   async delete(req, res, next) {
     try {
       const existing = await employeeService.getEmployeeById(req.params.id);
+      if (req.user?.id && existing.userId === req.user.id) {
+        const error = new Error('You cannot delete your own employee record.');
+        error.statusCode = 400;
+        throw error;
+      }
       if (req.user?.orgId && existing.orgId !== req.user.orgId) {
         const isSuperAdmin = (req.user?.roleName || '').toLowerCase().includes('admin') && !req.user.orgId;
         if (!isSuperAdmin) {

@@ -441,10 +441,123 @@ export const employeeService = {
       throw error;
     }
 
-    // Clean up dependent leave balances
-    await pool.query('DELETE FROM leave_balances WHERE employee_id = $1;', [id]);
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
 
-    return await employeeRepository.delete(id);
+      const empId = id;
+      const userId = existing.userId;
+
+      // 1. Attendance, Overtime & Schedule
+      await client.query('DELETE FROM attendance_records WHERE employee_id = $1;', [empId]);
+      await client.query('DELETE FROM overtime_records WHERE employee_id = $1;', [empId]);
+      await client.query('DELETE FROM shift_assignment_audit WHERE employee_id = $1;', [empId]);
+      await client.query('DELETE FROM shift_assignments WHERE employee_id = $1;', [empId]);
+      await client.query('DELETE FROM roster_employee_mappings WHERE matched_employee_id = $1;', [empId]);
+      await client.query('DELETE FROM daily_work_reports WHERE employee_id = $1;', [empId]);
+
+      // 2. Leaves & Balances
+      await client.query('DELETE FROM leave_balances WHERE employee_id = $1;', [empId]);
+      await client.query('DELETE FROM leave_requests WHERE employee_id = $1;', [empId]);
+      await client.query('UPDATE leave_requests SET approver_id = NULL WHERE approver_id = $1;', [empId]);
+
+      // 3. Training & Courses
+      await client.query('DELETE FROM training_certificates WHERE employee_id = $1;', [empId]);
+      await client.query('DELETE FROM training_completions WHERE employee_id = $1;', [empId]);
+      await client.query('DELETE FROM course_enrollments WHERE employee_id = $1;', [empId]);
+
+      // 4. Performance & Tasks
+      await client.query('DELETE FROM published_performance_reports WHERE employee_id = $1;', [empId]);
+      await client.query('UPDATE published_performance_reports SET sender_id = NULL WHERE sender_id = $1;', [empId]);
+      await client.query('DELETE FROM performance_records WHERE employee_id = $1;', [empId]);
+      await client.query('UPDATE performance_records SET reviewer_id = NULL, hr_reviewer_id = NULL WHERE reviewer_id = $1 OR hr_reviewer_id = $1;', [empId]);
+      await client.query('DELETE FROM performance_goals WHERE employee_id = $1;', [empId]);
+      await client.query('DELETE FROM probation_evaluations WHERE employee_id = $1;', [empId]);
+      await client.query('UPDATE probation_evaluations SET manager_id = NULL WHERE manager_id = $1;', [empId]);
+      await client.query('DELETE FROM work_tasks WHERE assignee_id = $1 OR creator_id = $1;', [empId]);
+      await client.query('UPDATE work_tasks SET rated_by = NULL WHERE rated_by = $1;', [empId]);
+
+      // 5. Employee Lifecycle, Requests & Exit
+      await client.query('DELETE FROM approval_workflows WHERE requester_id = $1;', [empId]);
+      await client.query('UPDATE approval_workflows SET manager_id = NULL WHERE manager_id = $1;', [empId]);
+      await client.query('DELETE FROM employee_request_updates WHERE request_id IN (SELECT id FROM employee_requests WHERE employee_id = $1);', [empId]);
+      await client.query('DELETE FROM employee_requests WHERE employee_id = $1;', [empId]);
+      await client.query('DELETE FROM helpdesk_tickets WHERE employee_id = $1;', [empId]);
+      await client.query('DELETE FROM expense_claims WHERE employee_id = $1;', [empId]);
+      await client.query('UPDATE expense_claims SET manager_id = NULL WHERE manager_id = $1;', [empId]);
+      await client.query('DELETE FROM employee_skills WHERE employee_id = $1;', [empId]);
+      await client.query('DELETE FROM employee_recognitions WHERE recipient_id = $1 OR sender_id = $1;', [empId]);
+      await client.query('DELETE FROM exit_checklist_items WHERE checklist_id IN (SELECT id FROM exit_checklists WHERE employee_id = $1);', [empId]);
+      await client.query('DELETE FROM exit_checklists WHERE employee_id = $1;', [empId]);
+      await client.query('DELETE FROM exit_clearance_checklists WHERE employee_id = $1;', [empId]);
+      await client.query('DELETE FROM exit_requests WHERE employee_id = $1;', [empId]);
+      await client.query('DELETE FROM fnf_settlements WHERE employee_id = $1;', [empId]);
+      await client.query('DELETE FROM internship_clearance_tasks WHERE internship_exit_id IN (SELECT id FROM internship_exit_requests WHERE intern_id = $1);', [empId]);
+      await client.query('DELETE FROM internship_exit_requests WHERE intern_id = $1;', [empId]);
+      await client.query('UPDATE internship_exit_requests SET mentor_id = NULL WHERE mentor_id = $1;', [empId]);
+      await client.query('DELETE FROM employee_offboardings WHERE employee_id = $1;', [empId]);
+      await client.query('DELETE FROM access_deprovisioning_audits WHERE employee_id = $1;', [empId]);
+      await client.query('UPDATE access_deprovisioning_audits SET reassigned_manager_id = NULL WHERE reassigned_manager_id = $1;', [empId]);
+      await client.query('DELETE FROM document_vault WHERE owner_id = $1;', [empId]);
+
+      // 6. Clear References from other records
+      await client.query('UPDATE employees SET manager_id = NULL WHERE manager_id = $1;', [empId]);
+      await client.query('UPDATE employees SET hr_id = NULL WHERE hr_id = $1;', [empId]);
+      await client.query('UPDATE new_hires SET employee_id = NULL WHERE employee_id = $1;', [empId]);
+      await client.query('UPDATE new_hires SET manager_id = NULL WHERE manager_id = $1;', [empId]);
+      await client.query('UPDATE onboarding_candidates SET employee_id = NULL WHERE employee_id = $1;', [empId]);
+      await client.query('UPDATE onboarding_candidates SET manager_id = NULL WHERE manager_id = $1;', [empId]);
+      await client.query('UPDATE offers SET reporting_manager_id = NULL WHERE reporting_manager_id = $1;', [empId]);
+
+      // 7. Delete employee record
+      await client.query('DELETE FROM employees WHERE id = $1;', [empId]);
+
+      // 8. Clean up associated portal user (if any)
+      if (userId) {
+        try {
+          await client.query('DELETE FROM notifications WHERE user_id = $1;', [userId]);
+          await client.query('DELETE FROM announcement_read_receipts WHERE user_id = $1;', [userId]);
+          await client.query('DELETE FROM survey_responses WHERE respondent_id = $1;', [userId]);
+          await client.query('DELETE FROM ticket_comments WHERE user_id = $1;', [userId]);
+          await client.query('DELETE FROM user_roles WHERE user_id = $1;', [userId]);
+          await client.query('UPDATE attendance_records SET regularized_by = NULL WHERE regularized_by = $1;', [userId]);
+          await client.query('UPDATE daily_work_reports SET reviewed_by = NULL WHERE reviewed_by = $1;', [userId]);
+          await client.query('UPDATE document_vault SET verified_by = NULL WHERE verified_by = $1;', [userId]);
+          await client.query('UPDATE employee_offboardings SET processed_by = NULL WHERE processed_by = $1;', [userId]);
+          await client.query('UPDATE employee_request_updates SET user_id = NULL WHERE user_id = $1;', [userId]);
+          await client.query('UPDATE employee_requests SET assigned_to = NULL, resolved_by = NULL WHERE assigned_to = $1 OR resolved_by = $1;', [userId]);
+          await client.query('UPDATE exit_checklist_items SET completed_by = NULL WHERE completed_by = $1;', [userId]);
+          await client.query('UPDATE exit_checklists SET completed_by = NULL, created_by = NULL WHERE completed_by = $1 OR created_by = $1;', [userId]);
+          await client.query('UPDATE exit_clearance_checklists SET assigned_to = NULL, cleared_by = NULL WHERE assigned_to = $1 OR cleared_by = $1;', [userId]);
+          await client.query('UPDATE exit_requests SET submitted_by = NULL, reviewed_by = NULL, approved_by = NULL WHERE submitted_by = $1 OR reviewed_by = $1 OR approved_by = $1;', [userId]);
+          await client.query('UPDATE fnf_settlements SET approved_by = NULL WHERE approved_by = $1;', [userId]);
+          await client.query('UPDATE helpdesk_tickets SET assigned_to = NULL, resolved_by = NULL WHERE assigned_to = $1 OR resolved_by = $1;', [userId]);
+          await client.query('UPDATE internship_clearance_tasks SET assigned_to = NULL, cleared_by = NULL WHERE assigned_to = $1 OR cleared_by = $1;', [userId]);
+          await client.query('UPDATE internship_exit_requests SET submitted_by = NULL, mentor_reviewed_by = NULL, hr_reviewed_by = NULL WHERE submitted_by = $1 OR mentor_reviewed_by = $1 OR hr_reviewed_by = $1;', [userId]);
+          await client.query('UPDATE leave_requests SET approver_user_id = NULL WHERE approver_user_id = $1;', [userId]);
+          await client.query('UPDATE onboarding_checklists SET completed_by = NULL WHERE completed_by = $1;', [userId]);
+          await client.query('UPDATE onboarding_documents SET verified_by = NULL WHERE verified_by = $1;', [userId]);
+          await client.query('UPDATE onboarding_it_setup SET updated_by = NULL WHERE updated_by = $1;', [userId]);
+          await client.query('UPDATE performance_records SET reviewer_user_id = NULL, hr_reviewer_user_id = NULL WHERE reviewer_user_id = $1 OR hr_reviewer_user_id = $1;', [userId]);
+          await client.query('UPDATE published_performance_reports SET employee_user_id = NULL, sender_user_id = NULL WHERE employee_user_id = $1 OR sender_user_id = $1;', [userId]);
+          await client.query('UPDATE roster_employee_mappings SET resolved_by = NULL WHERE resolved_by = $1;', [userId]);
+          await client.query('UPDATE shift_assignment_audit SET changed_by = NULL WHERE changed_by = $1;', [userId]);
+          await client.query('UPDATE shift_assignments SET created_by = NULL, updated_by = NULL WHERE created_by = $1 OR updated_by = $1;', [userId]);
+          await client.query('DELETE FROM users WHERE id = $1;', [userId]);
+        } catch (uErr) {
+          // If immutable audit logs reference this user, fallback to deactivating the account
+          await client.query("UPDATE users SET status = 'Inactive', updated_at = NOW() WHERE id = $1;", [userId]);
+        }
+      }
+
+      await client.query('COMMIT');
+      return true;
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
   },
 
   async getMetadata() {
