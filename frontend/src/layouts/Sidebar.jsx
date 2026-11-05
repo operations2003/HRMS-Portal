@@ -42,24 +42,12 @@ export const Sidebar = ({ isOpen, onClose }) => {
 
   // 2-5. Flattened Core Navigation Hubs
   const navGroups = [
-    // 2. People & Attendance (Workforce, Shifts, Documents & Exit Clearances)
+    // 2. People & Attendance (Workforce, Attendance, Shifts, Documents & Clearances)
     {
       id: 'people-attendance',
       title: 'People & Attendance',
       icon: Users,
       items: [
-        {
-          name: 'Employees',
-          path: '/employees',
-          icon: Users,
-          permission: 'employee:read',
-        },
-        {
-          name: 'Departments',
-          path: '/departments',
-          icon: Building2,
-          roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
-        },
         {
           name: 'Attendance',
           path: '/attendance',
@@ -78,6 +66,18 @@ export const Sidebar = ({ isOpen, onClose }) => {
           icon: CalendarCheck,
           roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin', 'Manager', 'TeamLead'],
           permission: 'employee:write',
+        },
+        {
+          name: 'Employees',
+          path: '/employees',
+          icon: Users,
+          permission: 'employee:read',
+        },
+        {
+          name: 'Departments',
+          path: '/departments',
+          icon: Building2,
+          roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
         },
         {
           name: 'Documents',
