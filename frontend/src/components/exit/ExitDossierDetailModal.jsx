@@ -12,6 +12,7 @@ import {
   Layers,
   Award,
   ExternalLink,
+  Edit2,
 } from 'lucide-react';
 import { Modal } from '../common/Modal.jsx';
 import { Button } from '../common/Button.jsx';
@@ -21,31 +22,36 @@ import { ClearanceChecklistTable } from './ClearanceChecklistTable.jsx';
 import { FnFStatementDocument } from './FnFStatementDocument.jsx';
 import { ClearNoticePeriodModal } from './ClearNoticePeriodModal.jsx';
 import { AccessDeprovisionModal } from './AccessDeprovisionModal.jsx';
+import { EditTerminationModal } from './EditTerminationModal.jsx';
 import { exitService } from '../../services/exitService.js';
 
 export const ExitDossierDetailModal = ({
   isOpen,
   onClose,
   exitId,
+  exitRequestId,
   canManage = false,
   onOpenFnF,
   onOpenDeprovision,
   onSuccess,
+  onUpdated,
 }) => {
   const navigate = useNavigate();
+  const effectiveId = exitId || exitRequestId;
   const [dossier, setDossier] = useState(null);
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'clearances' | 'fnf' | 'audit'
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showClearNoticeModal, setShowClearNoticeModal] = useState(false);
   const [showDeprovisionModal, setShowDeprovisionModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
 
   const fetchDossier = async () => {
-    if (!exitId) return;
+    if (!effectiveId) return;
     try {
       setLoading(true);
       setError(null);
-      const data = await exitService.getExitById(exitId);
+      const data = await exitService.getExitById(effectiveId);
       setDossier(data);
     } catch (err) {
       setError(err.message || 'Failed to load exit details.');
@@ -55,11 +61,11 @@ export const ExitDossierDetailModal = ({
   };
 
   useEffect(() => {
-    if (isOpen && exitId) {
+    if (isOpen && effectiveId) {
       fetchDossier();
       setActiveTab('overview');
     }
-  }, [isOpen, exitId]);
+  }, [isOpen, effectiveId]);
 
   if (!isOpen) return null;
 
@@ -212,7 +218,19 @@ export const ExitDossierDetailModal = ({
             {/* Resignation Statement & Manager Evaluation */}
             <div className="bg-white rounded-2xl border border-slate-200/80 p-4 text-xs space-y-3">
               <div>
-                <span className="font-semibold text-slate-700">Reason for Resignation:</span>
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-700">Reason / Grounds for Separation:</span>
+                  {canManage && (
+                    <button
+                      type="button"
+                      onClick={() => setShowEditModal(true)}
+                      className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1 hover:underline"
+                    >
+                      <Edit2 className="w-3 h-3" />
+                      <span>Edit Reason & Grounds</span>
+                    </button>
+                  )}
+                </div>
                 <p className="mt-1 bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-slate-800 italic">
                   "{dossier?.reason || 'No statement submitted.'}"
                 </p>
@@ -371,6 +389,31 @@ export const ExitDossierDetailModal = ({
             onSuccess?.();
           }}
           record={dossier}
+        />
+      )}
+
+      {/* Edit Separation Details Modal */}
+      {showEditModal && dossier && (
+        <EditTerminationModal
+          isOpen={showEditModal}
+          onClose={() => setShowEditModal(false)}
+          onSuccess={() => {
+            fetchDossier();
+            onUpdated?.();
+            onSuccess?.();
+          }}
+          record={{
+            id: effectiveId,
+            employeeName: empName,
+            employeeCode: emp?.empCode || emp?.employeeCode || dossier?.employeeCode,
+            exitType: dossier?.exitType,
+            reason: dossier?.reason,
+            approvedLastWorkingDay: dossier?.approvedLastWorkingDay,
+            requestedLastWorkingDay: dossier?.requestedLastWorkingDay,
+            noticePeriodDays: dossier?.noticePeriodDays,
+            comments: dossier?.comments,
+            hrComments: dossier?.hrComments,
+          }}
         />
       )}
     </Modal>

@@ -106,6 +106,14 @@ export const exitService = {
   },
 
   /**
+   * Update exit / separation details (grounds, reason, last working day)
+   */
+  async updateExitRequest(id, data) {
+    const res = await http.patch(`/v1/exit/requests/${id}`, data);
+    return res.data;
+  },
+
+  /**
    * HR approval & notice period confirmation
    */
   async hrApprove(id, data) {

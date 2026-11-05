@@ -20,6 +20,7 @@ import {
   FileSpreadsheet,
   ArrowRight,
   ClipboardList,
+  Edit2,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
@@ -35,6 +36,7 @@ import { InitiateTerminationModal } from '../../components/exit/InitiateTerminat
 import { ExitDossierDetailModal } from '../../components/exit/ExitDossierDetailModal.jsx';
 import { AccessDeprovisionModal } from '../../components/exit/AccessDeprovisionModal.jsx';
 import { FnFSettlementModal } from '../../components/exit/FnFSettlementModal.jsx';
+import { EditTerminationModal } from '../../components/exit/EditTerminationModal.jsx';
 
 export const TerminationPage = () => {
   const { user, hasRole } = useAuth();
@@ -61,6 +63,7 @@ export const TerminationPage = () => {
 
   // Modals state
   const [isInitiateModalOpen, setIsInitiateModalOpen] = useState(false);
+  const [editingRecord, setEditingRecord] = useState(null);
   const [viewingExitId, setViewingExitId] = useState(null);
   const [deprovisionExit, setDeprovisionExit] = useState(null);
   const [fnfExit, setFnfExit] = useState(null);
@@ -204,8 +207,21 @@ export const TerminationPage = () => {
       label: 'Separation Type & Grounds',
       render: (row) => {
         return (
-          <div className="space-y-1 max-w-xs">
-            <div>{getExitTypeBadge(row.exitType)}</div>
+          <div className="space-y-1.5 max-w-xs group">
+            <div className="flex items-center justify-between gap-2">
+              <div>{getExitTypeBadge(row.exitType)}</div>
+              {isHrOrAdmin && (
+                <button
+                  type="button"
+                  onClick={() => setEditingRecord(row)}
+                  className="opacity-70 group-hover:opacity-100 hover:text-indigo-600 dark:hover:text-indigo-400 p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-all flex items-center gap-1 text-[11px] text-slate-500 font-medium"
+                  title="Edit separation type and grounds"
+                >
+                  <Edit2 className="w-3 h-3" />
+                  <span>Edit</span>
+                </button>
+              )}
+            </div>
             <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2" title={row.reason}>
               {row.reason || 'Company initiated termination.'}
             </p>
@@ -285,6 +301,19 @@ export const TerminationPage = () => {
       render: (row) => {
         return (
           <div className="flex items-center justify-end gap-1.5">
+            {isHrOrAdmin && (
+              <Button
+                size="xs"
+                variant="outline"
+                onClick={() => setEditingRecord(row)}
+                title="Edit Separation Details"
+                className="flex items-center gap-1 text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+                <span>Edit</span>
+              </Button>
+            )}
+
             <Button
               size="xs"
               variant="outline"
@@ -555,8 +584,22 @@ export const TerminationPage = () => {
         <ExitDossierDetailModal
           isOpen={!!viewingExitId}
           onClose={() => setViewingExitId(null)}
+          exitId={viewingExitId}
           exitRequestId={viewingExitId}
+          canManage={isHrOrAdmin}
           onUpdated={() => fetchTerminations()}
+        />
+      )}
+
+      {/* Edit Separation Details Modal */}
+      {editingRecord && (
+        <EditTerminationModal
+          isOpen={!!editingRecord}
+          onClose={() => setEditingRecord(null)}
+          onSuccess={() => {
+            fetchTerminations();
+          }}
+          record={editingRecord}
         />
       )}
 

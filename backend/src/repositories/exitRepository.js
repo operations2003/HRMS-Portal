@@ -398,6 +398,10 @@ export const exitRepository = {
     let idx = 1;
 
     const allowedKeys = {
+      exitType: 'exit_type',
+      reason: 'reason',
+      comments: 'comments',
+      requestedLastWorkingDay: 'requested_last_working_day',
       approvedLastWorkingDay: 'approved_last_working_day',
       noticePeriodDays: 'notice_period_days',
       status: 'status',

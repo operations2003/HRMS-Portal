@@ -159,6 +159,13 @@ router.get(
   exitController.getExitById
 );
 
+router.patch(
+  '/requests/:id',
+  requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']),
+  authorize(['exit:admin']),
+  exitController.updateExitRequest
+);
+
 router.post(
   '/requests/:id/hr-approve',
   requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']),
