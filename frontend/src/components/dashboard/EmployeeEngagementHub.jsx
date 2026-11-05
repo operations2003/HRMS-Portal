@@ -18,6 +18,10 @@ import {
   Plus,
   Trash2,
   Calendar,
+  FileText,
+  AlertCircle,
+  ArrowRight,
+  Bell,
 } from 'lucide-react';
 import { engagementService } from '../../services/engagementService.js';
 import { employeeService } from '../../services/employeeService.js';
@@ -42,7 +46,7 @@ export const EmployeeEngagementHub = () => {
       (user?.email || '').toLowerCase() === 'sheetalbedi@tasknera.com'
     );
 
-  const [activeTab, setActiveTab] = useState('surveys'); // 'surveys' | 'announcements' | 'kudos'
+  const [activeTab, setActiveTab] = useState('announcements'); // 'announcements' | 'surveys' | 'kudos'
   const [announcements, setAnnouncements] = useState([]);
   const [surveys, setSurveys] = useState([]);
   const [recognitions, setRecognitions] = useState([]);
@@ -64,6 +68,17 @@ export const EmployeeEngagementHub = () => {
     isPinned: false,
     expiryDate: '',
   });
+
+  const openNewAnnouncement = (defaultCategory = 'GENERAL') => {
+    setAnnouncementForm({
+      title: '',
+      category: defaultCategory,
+      content: '',
+      isPinned: false,
+      expiryDate: '',
+    });
+    setShowAnnouncementModal(true);
+  };
 
   // Modals - Survey & Pulse Poll
   const [showSurveyModal, setShowSurveyModal] = useState(false);
@@ -349,29 +364,34 @@ export const EmployeeEngagementHub = () => {
 
   return (
     <div className="rounded-3xl border border-slate-200/80 bg-white shadow-sm overflow-hidden flex flex-col">
-      {/* Top Header & Tab Navigation */}
-      <div className="p-6 pb-0 border-b border-slate-100">
+      {/* Top Header & Navigation */}
+      <div className="p-6 pb-0 border-b border-slate-100 bg-gradient-to-b from-slate-50/50 to-white">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5">
           <div className="flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20">
-              <Sparkles className="w-5 h-5" />
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 ring-4 ring-indigo-50">
+              <Megaphone className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-slate-900 tracking-tight">Engagement & Community Hub</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl font-bold text-slate-900 tracking-tight">Company Notice Board & Hub</h2>
+                <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                  Workplace
+                </span>
+              </div>
               <p className="text-sm text-slate-500 mt-0.5">
-                Share your voice in active surveys, stay informed with company notices, and celebrate colleagues
+                Official announcements, team pulses, and peer recognitions
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2.5 flex-wrap">
             {isHrOrAdmin && activeTab === 'announcements' && (
               <Button
                 variant="primary"
                 size="md"
-                icon={Megaphone}
-                onClick={() => setShowAnnouncementModal(true)}
-                className="text-sm font-semibold shadow-sm"
+                icon={Plus}
+                onClick={() => openNewAnnouncement('GENERAL')}
+                className="text-sm font-semibold shadow-sm shadow-indigo-500/20"
               >
                 Post Announcement
               </Button>
@@ -381,9 +401,9 @@ export const EmployeeEngagementHub = () => {
               <Button
                 variant="primary"
                 size="md"
-                icon={Vote}
+                icon={Plus}
                 onClick={() => setShowSurveyModal(true)}
-                className="text-sm font-semibold shadow-sm"
+                className="text-sm font-semibold shadow-sm shadow-indigo-500/20"
               >
                 Create Pulse Poll
               </Button>
@@ -404,8 +424,27 @@ export const EmployeeEngagementHub = () => {
           </div>
         </div>
 
-        {/* Tab Buttons */}
+        {/* Tab Buttons - Reordered: Announcements first */}
         <div className="flex items-center gap-6 overflow-x-auto no-scrollbar">
+          <button
+            onClick={() => setActiveTab('announcements')}
+            className={`pb-3.5 text-sm font-bold border-b-2 flex items-center gap-2 transition whitespace-nowrap ${
+              activeTab === 'announcements'
+                ? 'border-indigo-600 text-indigo-600'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Megaphone className="w-4 h-4" />
+            <span>Announcements & News</span>
+            {unreadAnnouncementsCount > 0 ? (
+              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-indigo-100 text-indigo-700">
+                {unreadAnnouncementsCount} unread
+              </span>
+            ) : announcements.length > 0 ? (
+              <span className="text-xs text-slate-400 font-normal">({announcements.length})</span>
+            ) : null}
+          </button>
+
           <button
             onClick={() => setActiveTab('surveys')}
             className={`pb-3.5 text-sm font-bold border-b-2 flex items-center gap-2 transition whitespace-nowrap ${
@@ -419,23 +458,6 @@ export const EmployeeEngagementHub = () => {
             {pendingSurveysCount > 0 && (
               <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 animate-pulse">
                 {pendingSurveysCount} pending
-              </span>
-            )}
-          </button>
-
-          <button
-            onClick={() => setActiveTab('announcements')}
-            className={`pb-3.5 text-sm font-bold border-b-2 flex items-center gap-2 transition whitespace-nowrap ${
-              activeTab === 'announcements'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <Megaphone className="w-4 h-4" />
-            <span>Announcements & News</span>
-            {unreadAnnouncementsCount > 0 && (
-              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-indigo-100 text-indigo-700">
-                {unreadAnnouncementsCount} unread
               </span>
             )}
           </button>
@@ -463,7 +485,203 @@ export const EmployeeEngagementHub = () => {
           </div>
         ) : (
           <>
-            {/* 1. SURVEYS & POLLS TAB */}
+            {/* 1. ANNOUNCEMENTS TAB */}
+            {activeTab === 'announcements' && (
+              <div className="space-y-4">
+                {announcements.length > 0 ? (
+                  <div className="space-y-3.5">
+                    {announcements.map((item) => {
+                      const categoryConfig = {
+                        URGENT: {
+                          bg: 'bg-rose-50 text-rose-700 border-rose-200',
+                          icon: AlertCircle,
+                          label: 'Urgent Alert',
+                        },
+                        POLICY: {
+                          bg: 'bg-purple-50 text-purple-700 border-purple-200',
+                          icon: FileText,
+                          label: 'Policy Bulletin',
+                        },
+                        EVENT: {
+                          bg: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                          icon: Sparkles,
+                          label: 'Company Event',
+                        },
+                        GENERAL: {
+                          bg: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+                          icon: Megaphone,
+                          label: 'Company Notice',
+                        },
+                      };
+
+                      const cfg = categoryConfig[item.category] || categoryConfig.GENERAL;
+                      const CatIcon = cfg.icon;
+
+                      return (
+                        <div
+                          key={item.id}
+                          className={`p-5 sm:p-6 rounded-2xl border transition-all ${
+                            item.is_pinned
+                              ? 'bg-amber-50/30 border-amber-200/90 shadow-xs'
+                              : 'bg-white border-slate-200/80 hover:border-slate-300 hover:shadow-xs'
+                          }`}
+                        >
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 mb-3">
+                            <div className="flex items-center gap-2.5 flex-wrap">
+                              {item.is_pinned && (
+                                <span className="px-2.5 py-1 rounded-lg bg-amber-100 text-amber-900 text-xs font-bold flex items-center gap-1 border border-amber-200/60 shadow-2xs">
+                                  <Pin className="w-3.5 h-3.5 text-amber-700" /> Pinned
+                                </span>
+                              )}
+                              <span
+                                className={`px-2.5 py-1 rounded-lg text-xs font-bold border flex items-center gap-1.5 ${cfg.bg}`}
+                              >
+                                <CatIcon className="w-3.5 h-3.5" />
+                                {cfg.label}
+                              </span>
+                              <h3 className="text-base font-bold text-slate-900">{item.title}</h3>
+                            </div>
+
+                            <span className="text-xs text-slate-400 font-medium whitespace-nowrap flex items-center gap-1">
+                              <Clock className="w-3.5 h-3.5" />
+                              {new Date(item.publish_date || item.created_at).toLocaleDateString(undefined, {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric',
+                              })}
+                            </span>
+                          </div>
+
+                          <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap mb-4">
+                            {item.content}
+                          </p>
+
+                          <div className="pt-3.5 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                            <div className="flex items-center gap-2">
+                              <div className="w-6 h-6 rounded-full bg-slate-100 border border-slate-200 text-slate-700 flex items-center justify-center font-bold text-[10px]">
+                                {(item.author_first?.[0] || 'A').toUpperCase()}
+                              </div>
+                              <span>
+                                Broadcast by{' '}
+                                <strong className="text-slate-800 font-semibold">
+                                  {item.author_first} {item.author_last}
+                                </strong>
+                              </span>
+                            </div>
+
+                            {!item.is_read ? (
+                              <button
+                                onClick={() => handleMarkAsRead(item.id)}
+                                className="px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-bold rounded-xl text-xs transition flex items-center gap-1.5 border border-indigo-200/50"
+                              >
+                                <Check className="w-3.5 h-3.5" /> Mark as Read
+                              </button>
+                            ) : (
+                              <span className="text-emerald-600 font-bold flex items-center gap-1.5">
+                                <CheckCircle2 className="w-3.5 h-3.5" /> Acknowledged
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="py-10 px-6 text-center rounded-3xl bg-gradient-to-b from-slate-50/70 via-white to-slate-50/40 border border-slate-200/80 shadow-xs flex flex-col items-center justify-center">
+                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500/10 via-purple-500/10 to-indigo-500/5 text-indigo-600 flex items-center justify-center ring-8 ring-indigo-50/60 mb-4 shadow-xs">
+                      <Megaphone className="w-8 h-8" />
+                    </div>
+                    <h4 className="text-lg font-bold text-slate-900 tracking-tight">No Company Announcements Yet</h4>
+                    <p className="text-sm text-slate-500 mt-1 max-w-md mx-auto leading-relaxed">
+                      Broadcast official company news, policy updates, and executive bulletins to keep your entire workforce aligned.
+                    </p>
+
+                    {isHrOrAdmin ? (
+                      <div className="mt-7 w-full max-w-2xl">
+                        <div className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">
+                          Quick-start announcement templates
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-left">
+                          <button
+                            type="button"
+                            onClick={() => openNewAnnouncement('GENERAL')}
+                            className="group p-4 rounded-2xl border border-slate-200/90 bg-white hover:border-indigo-400 hover:shadow-md transition-all flex flex-col justify-between cursor-pointer"
+                          >
+                            <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                              <Megaphone className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <div className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors flex items-center justify-between">
+                                <span>General Update</span>
+                                <ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all" />
+                              </div>
+                              <p className="text-xs text-slate-500 mt-1 leading-normal">
+                                Company news, milestones & team updates
+                              </p>
+                            </div>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => openNewAnnouncement('POLICY')}
+                            className="group p-4 rounded-2xl border border-slate-200/90 bg-white hover:border-purple-400 hover:shadow-md transition-all flex flex-col justify-between cursor-pointer"
+                          >
+                            <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                              <FileText className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <div className="text-sm font-bold text-slate-900 group-hover:text-purple-600 transition-colors flex items-center justify-between">
+                                <span>Policy Bulletin</span>
+                                <ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-purple-600 group-hover:translate-x-0.5 transition-all" />
+                              </div>
+                              <p className="text-xs text-slate-500 mt-1 leading-normal">
+                                HR guidelines, compliance & workplace rules
+                              </p>
+                            </div>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => openNewAnnouncement('EVENT')}
+                            className="group p-4 rounded-2xl border border-slate-200/90 bg-white hover:border-emerald-400 hover:shadow-md transition-all flex flex-col justify-between cursor-pointer"
+                          >
+                            <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                              <Sparkles className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <div className="text-sm font-bold text-slate-900 group-hover:text-emerald-600 transition-colors flex items-center justify-between">
+                                <span>Event & Holiday</span>
+                                <ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-emerald-600 group-hover:translate-x-0.5 transition-all" />
+                              </div>
+                              <p className="text-xs text-slate-500 mt-1 leading-normal">
+                                Offsites, celebrations & holiday schedules
+                              </p>
+                            </div>
+                          </button>
+                        </div>
+
+                        <div className="mt-4 flex items-center justify-center">
+                          <button
+                            type="button"
+                            onClick={() => openNewAnnouncement('GENERAL')}
+                            className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5" /> Or create a custom announcement from scratch
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-5 inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-100 text-slate-600 text-xs font-medium">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                        You're all caught up! New bulletins will appear as soon as leadership posts them.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 2. SURVEYS & POLLS TAB */}
             {activeTab === 'surveys' && (
               <div className="space-y-4">
                 {surveys.length > 0 ? (
@@ -528,10 +746,12 @@ export const EmployeeEngagementHub = () => {
                     })}
                   </div>
                 ) : (
-                  <div className="py-12 text-center rounded-2xl bg-slate-50/60 border border-dashed border-slate-200 flex flex-col items-center justify-center">
-                    <Vote className="w-12 h-12 text-slate-300 mx-auto mb-2.5" />
-                    <h4 className="text-base font-bold text-slate-800">No active pulse surveys</h4>
-                    <p className="text-sm text-slate-500 mt-1 max-w-sm mx-auto">
+                  <div className="py-10 px-6 text-center rounded-3xl bg-gradient-to-b from-slate-50/70 via-white to-slate-50/40 border border-slate-200/80 shadow-xs flex flex-col items-center justify-center">
+                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500/10 via-purple-500/10 to-indigo-500/5 text-indigo-600 flex items-center justify-center ring-8 ring-indigo-50/60 mb-4 shadow-xs">
+                      <Vote className="w-8 h-8" />
+                    </div>
+                    <h4 className="text-lg font-bold text-slate-900 tracking-tight">No Active Pulse Surveys</h4>
+                    <p className="text-sm text-slate-500 mt-1 max-w-sm mx-auto leading-relaxed">
                       You are all caught up! New feedback surveys and team polls will appear here when launched.
                     </p>
                     {isHrOrAdmin && (
@@ -540,103 +760,9 @@ export const EmployeeEngagementHub = () => {
                         variant="primary"
                         icon={Plus}
                         onClick={() => setShowSurveyModal(true)}
-                        className="mt-4 text-sm font-semibold"
+                        className="mt-5 text-sm font-semibold shadow-sm"
                       >
                         Create Pulse Poll
-                      </Button>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* 2. ANNOUNCEMENTS TAB */}
-            {activeTab === 'announcements' && (
-              <div className="space-y-4">
-                {announcements.length > 0 ? (
-                  <div className="space-y-3.5">
-                    {announcements.map((item) => (
-                      <div
-                        key={item.id}
-                        className={`p-5 rounded-2xl border transition-all ${
-                          item.is_pinned
-                            ? 'bg-amber-50/30 border-amber-200 shadow-sm'
-                            : 'bg-white border-slate-200/80 hover:border-slate-300'
-                        }`}
-                      >
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 mb-2.5">
-                          <div className="flex items-center gap-2.5 flex-wrap">
-                            {item.is_pinned && (
-                              <span className="px-2.5 py-1 rounded-md bg-amber-100 text-amber-800 text-xs font-bold flex items-center gap-1">
-                                <Pin className="w-3.5 h-3.5" /> Pinned Notice
-                              </span>
-                            )}
-                            <Badge
-                              variant={
-                                item.category === 'URGENT'
-                                  ? 'danger'
-                                  : item.category === 'POLICY'
-                                  ? 'purple'
-                                  : item.category === 'EVENT'
-                                  ? 'emerald'
-                                  : 'info'
-                              }
-                            >
-                              {item.category || 'NOTICE'}
-                            </Badge>
-                            <h3 className="text-base font-bold text-slate-900">{item.title}</h3>
-                          </div>
-
-                          <span className="text-xs text-slate-500 font-mono whitespace-nowrap">
-                            {new Date(item.publish_date || item.created_at).toLocaleDateString(undefined, {
-                              month: 'short',
-                              day: 'numeric',
-                              year: 'numeric',
-                            })}
-                          </span>
-                        </div>
-
-                        <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap mb-4">
-                          {item.content}
-                        </p>
-
-                        <div className="pt-3.5 border-t border-slate-100 flex items-center justify-between text-sm text-slate-500">
-                          <span>
-                            Broadcast by <strong className="text-slate-800">{item.author_first} {item.author_last}</strong> • {item.read_count || 0} read(s)
-                          </span>
-
-                          {!item.is_read ? (
-                            <button
-                              onClick={() => handleMarkAsRead(item.id)}
-                              className="px-3.5 py-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 font-bold rounded-xl text-sm transition flex items-center gap-1.5"
-                            >
-                              <Check className="w-4 h-4" /> Mark as Read
-                            </button>
-                          ) : (
-                            <span className="text-emerald-600 font-bold flex items-center gap-1.5 text-sm">
-                              <CheckCircle2 className="w-4 h-4" /> Acknowledged
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="py-12 text-center rounded-2xl bg-slate-50/60 border border-dashed border-slate-200 flex flex-col items-center justify-center">
-                    <Megaphone className="w-12 h-12 text-slate-300 mx-auto mb-2.5" />
-                    <h4 className="text-base font-bold text-slate-800">No company announcements</h4>
-                    <p className="text-sm text-slate-500 mt-1 max-w-sm mx-auto">
-                      General announcements, notices, and policy bulletins will be broadcast here.
-                    </p>
-                    {isHrOrAdmin && (
-                      <Button
-                        size="sm"
-                        variant="primary"
-                        icon={Plus}
-                        onClick={() => setShowAnnouncementModal(true)}
-                        className="mt-4 text-sm font-semibold"
-                      >
-                        Broadcast Announcement
                       </Button>
                     )}
                   </div>
@@ -693,11 +819,13 @@ export const EmployeeEngagementHub = () => {
                     })}
                   </div>
                 ) : (
-                  <div className="py-12 text-center rounded-2xl bg-slate-50/60 border border-dashed border-slate-200">
-                    <Heart className="w-12 h-12 text-rose-300 mx-auto mb-2.5" />
-                    <h4 className="text-base font-bold text-slate-800">No Kudos posted yet</h4>
-                    <p className="text-sm text-slate-500 mt-1 max-w-sm mx-auto mb-4">
-                      Be the first to recognize a colleague's great work and dedication!
+                  <div className="py-10 px-6 text-center rounded-3xl bg-gradient-to-b from-slate-50/70 via-white to-slate-50/40 border border-slate-200/80 shadow-xs flex flex-col items-center justify-center">
+                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-rose-500/10 via-pink-500/10 to-rose-500/5 text-rose-500 flex items-center justify-center ring-8 ring-rose-50/60 mb-4 shadow-xs">
+                      <Heart className="w-8 h-8" />
+                    </div>
+                    <h4 className="text-lg font-bold text-slate-900 tracking-tight">No Kudos Shared Yet</h4>
+                    <p className="text-sm text-slate-500 mt-1 max-w-sm mx-auto leading-relaxed mb-5">
+                      Be the first to recognize a colleague's great work, extra effort, or teamwork on the company wall of fame!
                     </p>
                     <Button
                       size="md"
@@ -706,7 +834,7 @@ export const EmployeeEngagementHub = () => {
                         fetchEmployees();
                         setShowKudosModal(true);
                       }}
-                      className="text-sm font-semibold"
+                      className="text-sm font-semibold bg-rose-600 hover:bg-rose-700 text-white shadow-sm shadow-rose-500/20"
                     >
                       Send First Kudos
                     </Button>
@@ -964,12 +1092,12 @@ export const EmployeeEngagementHub = () => {
           <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full p-6 sm:p-7 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3.5 border-b border-slate-100">
               <div className="flex items-center gap-2.5">
-                <div className="p-2.5 rounded-xl bg-indigo-50 text-indigo-600">
+                <div className="p-2.5 rounded-xl bg-indigo-50 text-indigo-600 ring-4 ring-indigo-50/50">
                   <Megaphone className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-slate-800">Broadcast Announcement</h3>
-                  <p className="text-xs text-slate-500">Post news, updates, or policy notices to all employees</p>
+                  <h3 className="text-base font-bold text-slate-800">Post Company Announcement</h3>
+                  <p className="text-xs text-slate-500">Broadcast news, guidelines, or notices to all employees</p>
                 </div>
               </div>
               <button
@@ -986,7 +1114,15 @@ export const EmployeeEngagementHub = () => {
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Q4 Townhall Meeting / Holiday Schedule / Policy Update"
+                  placeholder={
+                    announcementForm.category === 'POLICY'
+                      ? 'e.g. Updated Remote Work & Leave Guidelines'
+                      : announcementForm.category === 'EVENT'
+                      ? 'e.g. Annual Townhall & Team Celebration'
+                      : announcementForm.category === 'URGENT'
+                      ? 'e.g. Scheduled System Maintenance Notice'
+                      : 'e.g. Q4 Company All-Hands & Strategy Update'
+                  }
                   value={announcementForm.title}
                   onChange={(e) => setAnnouncementForm({ ...announcementForm, title: e.target.value })}
                   className="w-full text-sm border border-slate-300 rounded-xl p-3 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
@@ -1002,9 +1138,9 @@ export const EmployeeEngagementHub = () => {
                     className="w-full text-sm border border-slate-300 rounded-xl p-3 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                   >
                     <option value="GENERAL">📢 General Notice</option>
-                    <option value="URGENT">🚨 Urgent Announcement</option>
                     <option value="POLICY">📋 Policy Bulletin</option>
                     <option value="EVENT">🎉 Company Event</option>
+                    <option value="URGENT">🚨 Urgent Announcement</option>
                   </select>
                 </div>
 
@@ -1053,7 +1189,7 @@ export const EmployeeEngagementHub = () => {
                 <Button
                   type="submit"
                   disabled={announcementSubmitting}
-                  icon={Send}
+                  icon={Megaphone}
                   className="text-sm font-semibold shadow-sm"
                 >
                   {announcementSubmitting ? 'Publishing...' : 'Publish Announcement'}
