@@ -263,7 +263,7 @@ export const ManagerDashboardPage = () => {
             </span>
           </div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-            Manager Cockpit & Team Operations
+            Manager Dashboard & Team Operations
           </h1>
           <p className="text-sm text-slate-500">
             Supervise team presence, review direct report evaluations, and execute pending workflow actions.

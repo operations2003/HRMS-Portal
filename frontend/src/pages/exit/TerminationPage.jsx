@@ -144,16 +144,42 @@ export const TerminationPage = () => {
     });
   }, [terminations, searchQuery, typeFilter, statusFilter]);
 
+  const parseReasonAndCategory = (rawReason) => {
+    if (!rawReason) return { categoryLabel: null, cleanReason: '' };
+    const match = rawReason.match(/^\[([A-Z_]+)\]\s*(.*)$/i);
+    if (match) {
+      const code = match[1].toUpperCase();
+      const cleanReason = match[2].trim();
+      const labels = {
+        MISCONDUCT: 'Misconduct',
+        PERFORMANCE: 'Performance',
+        RESTRUCTURING: 'Restructuring',
+        POLICY_VIOLATION: 'Policy Violation',
+        ABSCONDING: 'Absent without Notice',
+        MUTUAL_SEPARATION: 'Mutual Agreement',
+        CONTRACT_EXPIRY: 'Contract Ended',
+        OTHER: 'Other',
+        INVOLUNTARY: 'Company Decision',
+        INVOLUNTARY_TERMINATION: 'Termination',
+      };
+      return {
+        categoryLabel: labels[code] || code.replace(/_/g, ' '),
+        cleanReason: cleanReason || 'No details provided.',
+      };
+    }
+    return { categoryLabel: null, cleanReason: rawReason };
+  };
+
   const getExitTypeBadge = (exitType) => {
     const t = (exitType || '').toUpperCase();
     if (t === 'INVOLUNTARY') {
-      return <Badge variant="danger">Involuntary Separation</Badge>;
+      return <Badge variant="danger">Termination</Badge>;
     }
     if (t === 'MUTUAL') {
       return <Badge variant="purple">Mutual Agreement</Badge>;
     }
     if (t === 'CONTRACT_END') {
-      return <Badge variant="info">Contract End</Badge>;
+      return <Badge variant="info">Contract Ended</Badge>;
     }
     return <Badge variant="neutral">{exitType || 'Terminated'}</Badge>;
   };
@@ -203,27 +229,35 @@ export const TerminationPage = () => {
     },
     {
       key: 'type',
-      header: 'Separation Type & Grounds',
-      label: 'Separation Type & Grounds',
+      header: 'Type & Reason',
+      label: 'Type & Reason',
       render: (row) => {
+        const { categoryLabel, cleanReason } = parseReasonAndCategory(row.reason);
         return (
           <div className="space-y-1.5 max-w-xs group">
             <div className="flex items-center justify-between gap-2">
-              <div>{getExitTypeBadge(row.exitType)}</div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {getExitTypeBadge(row.exitType)}
+                {categoryLabel && (
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700">
+                    {categoryLabel}
+                  </span>
+                )}
+              </div>
               {isHrOrAdmin && (
                 <button
                   type="button"
                   onClick={() => setEditingRecord(row)}
                   className="opacity-70 group-hover:opacity-100 hover:text-indigo-600 dark:hover:text-indigo-400 p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-all flex items-center gap-1 text-[11px] text-slate-500 font-medium"
-                  title="Edit separation type and grounds"
+                  title="Edit exit type and reason"
                 >
                   <Edit2 className="w-3 h-3" />
                   <span>Edit</span>
                 </button>
               )}
             </div>
-            <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2" title={row.reason}>
-              {row.reason || 'Company initiated termination.'}
+            <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2" title={cleanReason}>
+              {cleanReason || 'Company initiated exit.'}
             </p>
           </div>
         );
@@ -379,7 +413,7 @@ export const TerminationPage = () => {
                 Employee Termination
               </h1>
               <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-                Company-directed involuntary separations, notice configuration, clearance tracking, and settlements
+                Company exit records, notice period, clearance tracking, and settlements
               </p>
             </div>
           </div>
@@ -405,14 +439,14 @@ export const TerminationPage = () => {
               className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white shadow-sm shadow-red-500/20"
             >
               <Plus className="w-4 h-4" />
-              <span>Initiate Employee Termination</span>
+              <span>Initiate Employee Exit</span>
             </Button>
           )}
         </div>
       </div>
 
       {error && (
-        <Alert variant="danger" title="Error Loading Termination Records">
+        <Alert variant="danger" title="Error Loading Exit Records">
           {error}
         </Alert>
       )}
@@ -422,9 +456,9 @@ export const TerminationPage = () => {
         {/* Metric 1: Total Terminations */}
         <div className="p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm flex items-center justify-between">
           <div className="space-y-1">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Involuntary</span>
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Exits</span>
             <div className="text-2xl font-bold text-slate-900 dark:text-white">{metrics.total}</div>
-            <div className="text-xs text-slate-500">Company separations recorded</div>
+            <div className="text-xs text-slate-500">Company exit records</div>
           </div>
           <div className="p-3 rounded-xl bg-red-500/10 text-red-600 dark:text-red-400">
             <UserX className="w-6 h-6" />
@@ -446,7 +480,7 @@ export const TerminationPage = () => {
         {/* Metric 3: Notice Period Active */}
         <div className="p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm flex items-center justify-between">
           <div className="space-y-1">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Notice Transition</span>
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Notice Period</span>
             <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{metrics.noticePeriod}</div>
             <div className="text-xs text-slate-500">Active notice / clearance period</div>
           </div>
@@ -490,10 +524,10 @@ export const TerminationPage = () => {
               onChange={(e) => setTypeFilter(e.target.value)}
               className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-white focus:outline-none"
             >
-              <option value="ALL">All Separation Types</option>
-              <option value="INVOLUNTARY">Involuntary</option>
+              <option value="ALL">All Types</option>
+              <option value="INVOLUNTARY">Termination</option>
               <option value="MUTUAL">Mutual Agreement</option>
-              <option value="CONTRACT_END">Contract End</option>
+              <option value="CONTRACT_END">Contract Ended</option>
             </select>
           </div>
 

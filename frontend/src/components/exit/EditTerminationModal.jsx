@@ -8,9 +8,9 @@ import { useToast } from '../../context/ToastContext.jsx';
 import { exitService } from '../../services/exitService.js';
 
 const SEPARATION_TYPES = [
-  { value: 'INVOLUNTARY', label: 'Involuntary Separation' },
+  { value: 'INVOLUNTARY', label: 'Termination' },
   { value: 'MUTUAL', label: 'Mutual Agreement' },
-  { value: 'CONTRACT_END', label: 'Contract End' },
+  { value: 'CONTRACT_END', label: 'Contract Ended' },
   { value: 'VOLUNTARY', label: 'Resignation' },
   { value: 'RETIREMENT', label: 'Retirement' },
 ];
@@ -18,12 +18,12 @@ const SEPARATION_TYPES = [
 const REASON_CATEGORIES = [
   { value: 'MISCONDUCT', label: 'Misconduct / Behavior' },
   { value: 'PERFORMANCE', label: 'Performance' },
-  { value: 'RESTRUCTURING', label: 'Restructuring / Layoff' },
+  { value: 'RESTRUCTURING', label: 'Company Restructuring' },
   { value: 'POLICY_VIOLATION', label: 'Policy Violation' },
-  { value: 'ABSCONDING', label: 'Job Abandonment / Absent' },
+  { value: 'ABSCONDING', label: 'Absent without Notice' },
   { value: 'MUTUAL_SEPARATION', label: 'Mutual Agreement' },
-  { value: 'CONTRACT_EXPIRY', label: 'Contract Expiry' },
-  { value: 'OTHER', label: 'Other Reason' },
+  { value: 'CONTRACT_EXPIRY', label: 'Contract Ended' },
+  { value: 'OTHER', label: 'Other' },
 ];
 
 export const EditTerminationModal = ({ isOpen, onClose, onSuccess, record }) => {
@@ -82,6 +82,7 @@ export const EditTerminationModal = ({ isOpen, onClose, onSuccess, record }) => 
       setError(null);
 
       const payload = {
+        employeeId: record.employeeId || record.employee?.id || record.employee_id,
         exitType,
         terminationCategory: category,
         reason: reasonText.trim(),
@@ -93,12 +94,12 @@ export const EditTerminationModal = ({ isOpen, onClose, onSuccess, record }) => 
       };
 
       const updated = await exitService.updateExitRequest(record.id, payload);
-      toast.success('Separation details updated successfully.');
+      toast.success('Exit details updated successfully.');
       onSuccess?.(updated);
       onClose();
     } catch (err) {
-      console.error('Failed to update separation details:', err);
-      const msg = err.message || err.response?.data?.message || 'Failed to update separation details.';
+      console.error('Failed to update exit details:', err);
+      const msg = err.message || err.response?.data?.message || 'Failed to update exit details.';
       setError(msg);
     } finally {
       setIsSubmitting(false);
@@ -114,8 +115,8 @@ export const EditTerminationModal = ({ isOpen, onClose, onSuccess, record }) => 
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Edit Separation Details"
-      subtitle={`Update separation type, grounds, and dates for ${empName} (${empCode})`}
+      title="Edit Exit Details"
+      subtitle={`Update exit reason and dates for ${empName} (${empCode})`}
       maxWidth="max-w-xl"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -125,10 +126,10 @@ export const EditTerminationModal = ({ isOpen, onClose, onSuccess, record }) => 
           </Alert>
         )}
 
-        {/* Separation Type */}
+        {/* Exit Type */}
         <div>
           <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-            Separation Type <span className="text-red-500">*</span>
+            Exit Type <span className="text-red-500">*</span>
           </label>
           <select
             value={exitType}
@@ -151,7 +152,7 @@ export const EditTerminationModal = ({ isOpen, onClose, onSuccess, record }) => 
         {/* Reason Category / Grounds */}
         <div>
           <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-            Grounds / Category <span className="text-red-500">*</span>
+            Reason Category <span className="text-red-500">*</span>
           </label>
           <select
             value={category}
@@ -169,18 +170,15 @@ export const EditTerminationModal = ({ isOpen, onClose, onSuccess, record }) => 
         {/* Reason / Statement */}
         <div>
           <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-            Reason / Description <span className="text-red-500">*</span>
+            Reason Details <span className="text-red-500">*</span>
           </label>
           <textarea
             rows={3}
             value={reasonText}
             onChange={(e) => setReasonText(e.target.value)}
-            placeholder="Explain the reason for separation..."
+            placeholder="Explain the reason for exit..."
             className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none placeholder:text-slate-400"
           />
-          <p className="mt-1 text-[11px] text-slate-500">
-            Preview: <span className="font-mono text-indigo-600 dark:text-indigo-400">[{category}] {reasonText || '...'}</span>
-          </p>
         </div>
 
         {/* Dates & Notice Period Grid */}

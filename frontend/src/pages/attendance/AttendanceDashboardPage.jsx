@@ -458,7 +458,7 @@ export const AttendanceDashboardPage = () => {
         <div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-50 text-brand-700 text-xs font-semibold border border-brand-200 mb-2">
             <Sparkles className="w-3.5 h-3.5 text-brand-600" />
-            <span>{isCeo ? 'Executive Cockpit • Attendance Oversight' : 'Workforce Management • Attendance'}</span>
+            <span>{isCeo ? 'Executive Overview • Attendance' : 'Workforce Management • Attendance'}</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
             {isCeo ? 'Attendance & Workforce Supervision' : 'Attendance Dashboard'}
