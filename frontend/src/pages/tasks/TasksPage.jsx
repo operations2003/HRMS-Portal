@@ -15,14 +15,12 @@ import {
   Users,
   Tag,
   X,
-  TrendingUp,
   Star,
   RotateCcw,
   ArrowRight,
   ArrowRightLeft,
 } from 'lucide-react';
 import { EmployeeTaskView } from '../../components/tasks/EmployeeTaskView.jsx';
-import { MyPerformanceSection } from '../../components/tasks/MyPerformanceSection.jsx';
 import { TaskAssignmentsSection } from '../../components/tasks/TaskAssignmentsSection.jsx';
 import { taskService } from '../../services/taskService.js';
 import { employeeService } from '../../services/employeeService.js';
@@ -65,7 +63,7 @@ export const TasksPage = () => {
 
   const [tasks, setTasks] = useState([]);
   const [employees, setEmployees] = useState([]);
-  const [activeTab, setActiveTab] = useState(canAssign ? 'board' : 'my-tasks'); // 'my-tasks' | 'performance' | 'board' | 'assignments'
+  const [activeTab, setActiveTab] = useState(canAssign ? 'board' : 'my-tasks'); // 'my-tasks' | 'board' | 'assignments'
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState('kanban'); // 'kanban' | 'list'
   const [search, setSearch] = useState('');
@@ -330,19 +328,6 @@ export const TasksPage = () => {
 
         <button
           type="button"
-          onClick={() => setActiveTab('performance')}
-          className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === 'performance'
-              ? 'border-brand-500 text-brand-600 dark:text-brand-400'
-              : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-          }`}
-        >
-          <TrendingUp className="w-4 h-4" />
-          My Performance
-        </button>
-
-        <button
-          type="button"
           onClick={() => setActiveTab('board')}
           className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
             activeTab === 'board'
@@ -379,8 +364,6 @@ export const TasksPage = () => {
           tasks={myAssignedTasks}
           onTaskUpdated={fetchTasks}
         />
-      ) : activeTab === 'performance' ? (
-        <MyPerformanceSection />
       ) : activeTab === 'assignments' && isAdmin ? (
         <TaskAssignmentsSection
           tasks={tasks}
