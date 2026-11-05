@@ -514,7 +514,7 @@ export const ResignationPage = () => {
               onClick={fetchOrgExits}
               disabled={isLoadingOrg}
             >
-              {isLoadingOrg ? 'Refreshing...' : 'Refresh Queue'}
+              {isLoadingOrg ? 'Refreshing...' : 'Refresh'}
             </Button>
           )}
 
@@ -526,7 +526,7 @@ export const ResignationPage = () => {
               onClick={fetchTeamExits}
               disabled={isLoadingTeam}
             >
-              {isLoadingTeam ? 'Refreshing...' : 'Refresh Team'}
+              {isLoadingTeam ? 'Refreshing...' : 'Refresh'}
             </Button>
           )}
 
@@ -575,7 +575,7 @@ export const ResignationPage = () => {
             }`}
           >
             <Users className="w-3.5 h-3.5" />
-            Team Reviews ({teamExits.length})
+            Team Resignations ({teamExits.length})
           </button>
         )}
 
@@ -589,7 +589,7 @@ export const ResignationPage = () => {
             }`}
           >
             <Building2 className="w-3.5 h-3.5" />
-            Clearances Queue ({orgExits.length})
+            Clearances ({orgExits.length})
           </button>
         )}
 
@@ -877,7 +877,7 @@ export const ResignationPage = () => {
         </div>
       )}
 
-      {/* TAB 3: Organization Resignations Queue (HR & Admin) */}
+      {/* TAB 3: Organization Clearances (HR & Admin) */}
       {activeTab === 'org' && isHrOrAdmin && (
         <div className="space-y-4">
           {orgError && <Alert variant="danger">{orgError}</Alert>}
