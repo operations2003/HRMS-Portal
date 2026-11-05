@@ -27,9 +27,7 @@ import {
   Clock,
   BookOpen,
   ChevronDown,
-  ShieldCheck,
 } from 'lucide-react';
-import { isCeoOrAdmin } from '../utils/roleUtils.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { TaskNeraLogo } from '../components/common/TaskNeraLogo.jsx';
 
@@ -44,13 +42,6 @@ export const Sidebar = ({ isOpen, onClose }) => {
       path: '/dashboard',
       icon: LayoutDashboard,
       permission: 'dashboard:read',
-    },
-    {
-      name: 'CEO Command Centre',
-      path: '/ceo/command-centre',
-      icon: ShieldCheck,
-      badge: 'Executive',
-      isExecutive: true,
     },
   ];
 
@@ -295,9 +286,6 @@ export const Sidebar = ({ isOpen, onClose }) => {
 
   // Helper to check user permissions & roles for a nav item
   const isItemPermitted = (item) => {
-    if (item.isExecutive) {
-      return isCeoOrAdmin(user);
-    }
     if (item.excludeRoles) {
       const userRoleStr = (user?.roleName || user?.role?.name || user?.role || '').toLowerCase().trim();
       const excluded = item.excludeRoles.map((r) => r.toLowerCase().trim());
@@ -409,12 +397,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
                   }
                 >
                   <Icon className="w-4.5 h-4.5 shrink-0" />
-                  <span className="flex-1 truncate">{item.name}</span>
-                  {item.badge && (
-                    <span className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-brand-50 text-brand-700 border border-brand-200">
-                      {item.badge}
-                    </span>
-                  )}
+                  <span>{item.name}</span>
                 </NavLink>
               );
             })}
