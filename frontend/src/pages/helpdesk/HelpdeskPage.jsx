@@ -274,20 +274,46 @@ export const HelpdeskPage = () => {
     {
       header: 'Status',
       key: 'status',
-      accessor: (row) => getTicketStatusBadge(row.status),
+      accessor: (row) => {
+        const isSelfRaised =
+          (row.requester?.userId && row.requester.userId === user?.id) ||
+          (row.employeeId && user?.employeeId && row.employeeId === user.employeeId);
+        return (
+          <div className="space-y-1">
+            {getTicketStatusBadge(row.status)}
+            {isSelfRaised && ['OPEN', 'IN_PROGRESS'].includes(row.status) && (
+              <span className="block text-[10px] text-amber-600 dark:text-amber-400 font-semibold">
+                Requires Higher Review
+              </span>
+            )}
+          </div>
+        );
+      },
     },
     ...(activeTab === 'all'
       ? [
           {
             header: 'Assigned To',
             key: 'assignedTo',
-            accessor: (row) => (
-              <span className="text-xs text-slate-600 dark:text-slate-300">
-                {row.assignee?.fullName || row.assignedTeam || (
-                  <span className="text-slate-400 italic">Unassigned</span>
-                )}
-              </span>
-            ),
+            accessor: (row) => {
+              const isSelfRaised =
+                (row.requester?.userId && row.requester.userId === user?.id) ||
+                (row.employeeId && user?.employeeId && row.employeeId === user.employeeId);
+              return (
+                <div>
+                  <span className="text-xs text-slate-600 dark:text-slate-300">
+                    {row.assignee?.fullName || row.assignedTeam || (
+                      <span className="text-slate-400 italic">Unassigned</span>
+                    )}
+                  </span>
+                  {isSelfRaised && (
+                    <span className="block text-[10px] text-indigo-600 dark:text-indigo-400 font-medium">
+                      Escalated in Hierarchy
+                    </span>
+                  )}
+                </div>
+              );
+            },
           },
         ]
       : []),

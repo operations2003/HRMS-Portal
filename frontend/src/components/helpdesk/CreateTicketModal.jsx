@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { LifeBuoy, Send, AlertCircle, X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { LifeBuoy, Send, AlertCircle, X, ShieldAlert } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { helpdeskService } from '../../services/helpdeskService.js';
 import { Modal } from '../common/Modal.jsx';
@@ -31,18 +32,30 @@ const ASSIGN_TO_OPTIONS = [
 ];
 
 export const CreateTicketModal = ({ isOpen, onClose, onTicketCreated }) => {
+  const { user, hasRole } = useAuth();
   const toast = useToast();
+
+  const normRole = (user?.roleName || '').toLowerCase();
+  const isHr = hasRole(['HR', 'HRManager']) || normRole.includes('hr');
+
   const [category, setCategory] = useState('HR');
-  const [assignedToRole, setAssignedToRole] = useState('HR');
+  const [assignedToRole, setAssignedToRole] = useState(() => (isHr ? 'MANAGER' : 'HR'));
   const [subject, setSubject] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState('MEDIUM');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
+  // Sync default assignee if isHr changes
+  useEffect(() => {
+    if (isHr) {
+      setAssignedToRole('MANAGER');
+    }
+  }, [isHr]);
+
   const resetForm = () => {
     setCategory('HR');
-    setAssignedToRole('HR');
+    setAssignedToRole(isHr ? 'MANAGER' : 'HR');
     setSubject('');
     setDescription('');
     setPriority('MEDIUM');
@@ -56,7 +69,7 @@ export const CreateTicketModal = ({ isOpen, onClose, onTicketCreated }) => {
     } else if (newCat === 'LEAVE_ATTENDANCE') {
       setAssignedToRole('MANAGER');
     } else {
-      setAssignedToRole('HR');
+      setAssignedToRole(isHr ? 'MANAGER' : 'HR');
     }
   };
 
@@ -115,15 +128,34 @@ export const CreateTicketModal = ({ isOpen, onClose, onTicketCreated }) => {
     }
   };
 
+  const assignOptions = isHr
+    ? [
+        { value: 'MANAGER', label: 'Reporting Manager (Hierarchy Escalation)' },
+        { value: 'ADMIN', label: 'Admin / Executive Leadership' },
+      ]
+    : ASSIGN_TO_OPTIONS;
+
   return (
     <Modal
       isOpen={isOpen}
       onClose={handleClose}
       title="Open Support Ticket"
-      subtitle="Submit an issue or inquiry to your Manager, HR, or IT Admin."
+      subtitle={isHr ? 'Submit an issue to your Reporting Manager or Admin for hierarchy review.' : 'Submit an issue or inquiry to your Manager, HR, or IT Admin.'}
       maxWidth="max-w-xl"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
+        {isHr && (
+          <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200/90 dark:border-amber-800/60 rounded-xl text-xs text-amber-900 dark:text-amber-200 flex items-start gap-2.5">
+            <ShieldAlert className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold">Hierarchy Escalation Policy</p>
+              <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-0.5 leading-relaxed">
+                As an HR team member, tickets you submit are automatically routed to your Reporting Manager or Executive Administration to maintain segregation of duties and prevent self-resolution.
+              </p>
+            </div>
+          </div>
+        )}
+
         {error && (
           <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-400 text-xs flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0" />
@@ -144,7 +176,7 @@ export const CreateTicketModal = ({ isOpen, onClose, onTicketCreated }) => {
             label="Assign To"
             value={assignedToRole}
             onChange={(e) => setAssignedToRole(e.target.value)}
-            options={ASSIGN_TO_OPTIONS}
+            options={assignOptions}
             required
           />
 

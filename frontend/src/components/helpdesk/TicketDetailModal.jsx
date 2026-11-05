@@ -12,6 +12,7 @@ import {
   UserCheck,
   Tag,
   ShieldCheck,
+  ShieldAlert,
   Ban,
   MessageSquare,
   Lock,
@@ -118,10 +119,19 @@ export const TicketDetailModal = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  const isRequester = Boolean(
+    ticket && (
+      (ticket.requester?.userId && ticket.requester.userId === user?.id) ||
+      (ticket.employeeId && user?.employeeId && ticket.employeeId === user.employeeId) ||
+      (user?.email && ticket.requester?.email && ticket.requester.email.toLowerCase() === user.email.toLowerCase())
+    )
+  );
+
   const isAssignee =
     (ticket?.assignedTo && ticket.assignedTo === user?.id) ||
     (ticket?.assignee && ticket.assignee.id === user?.id);
-  const canTakeAction = canManage || isAssignee;
+  // Hierarchy Rule: Requester cannot self-resolve or self-assign their own ticket
+  const canTakeAction = (canManage || isAssignee) && !isRequester;
 
   // New Comment State
   const [newComment, setNewComment] = useState('');
@@ -345,7 +355,7 @@ export const TicketDetailModal = ({
                 )}
 
                 {/* HR/Admin Close button */}
-                {canManage && ticket.status === 'RESOLVED' && (
+                {canManage && !isRequester && ticket.status === 'RESOLVED' && (
                   <Button
                     variant="secondary"
                     size="xs"
@@ -423,6 +433,28 @@ export const TicketDetailModal = ({
               </div>
             )}
           </div>
+
+          {/* Hierarchy Segregation of Duties Notice for Requester (HR / Staff) */}
+          {isRequester && ['OPEN', 'IN_PROGRESS'].includes(ticket.status) && (
+            <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200/90 dark:border-amber-800/60 rounded-2xl p-4 flex items-start gap-3 shadow-xs">
+              <ShieldAlert className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <div className="text-xs space-y-1">
+                <p className="font-bold text-amber-900 dark:text-amber-200 flex items-center gap-2">
+                  <span>Hierarchy Segregation of Duties</span>
+                  <span className="px-2 py-0.2 rounded-full text-[10px] bg-amber-200/80 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200 font-mono">
+                    Self-Resolution Prohibited
+                  </span>
+                </p>
+                <p className="text-amber-700 dark:text-amber-300 leading-relaxed">
+                  As the ticket requester, organizational hierarchy policy prevents self-resolution. This ticket has been escalated in the hierarchy to{' '}
+                  <span className="font-bold text-amber-950 dark:text-amber-100">
+                    {ticket.assignee?.fullName || ticket.assignedTeam || 'your Reporting Manager / Executive Administration'}
+                  </span>{' '}
+                  for independent review and resolution.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Management / Assigned Resolution Controls Card */}
           {canTakeAction && (

@@ -50,6 +50,29 @@ export const helpdeskService = {
     return this.isSupportStaff(user);
   },
 
+  /**
+   * Helper: Check if a user is the requester of a given ticket
+   * Enforces Anti-Self-Resolution and Hierarchy Segregation of Duties
+   */
+  async checkIsRequester(user, ticket) {
+    if (!user || !ticket) return false;
+    if (ticket.requester?.userId && ticket.requester.userId === user.id) {
+      return true;
+    }
+    if (user.employeeId && ticket.employeeId === user.employeeId) {
+      return true;
+    }
+    try {
+      const emp = await this.resolveEmployee(user);
+      if (emp?.id && ticket.employeeId === emp.id) {
+        return true;
+      }
+    } catch {
+      // User might not have employee profile
+    }
+    return false;
+  },
+
   // ==========================================
   // 1. TICKET RETRIEVAL
   // ==========================================
@@ -94,28 +117,46 @@ export const helpdeskService = {
   /**
    * Helper: Resolve assigned user ID based on specified role or user ID
    * Supports: 'MANAGER' (reporting manager), 'HR' (HR department), 'ADMIN' (IT/System admin)
+   * Enforces hierarchy-based escalation if the requester is an HR team member
    */
-  async resolveAssignee(orgId, requesterEmployee, targetRoleOrUserId, category = '') {
+  async resolveAssignee(orgId, requesterEmployee, targetRoleOrUserId, category = '', requesterUserId = null) {
     let target = (targetRoleOrUserId || '').toString().trim();
+
+    // Check if requester is in HR department or HR role
+    const empDept = (requesterEmployee?.departmentName || requesterEmployee?.dept_name || requesterEmployee?.deptName || '').toLowerCase();
+    const empDesig = (requesterEmployee?.designationTitle || requesterEmployee?.designation || '').toLowerCase();
+    const isHrRequester = empDept.includes('hr') || empDept.includes('human') || empDesig.includes('hr');
+
     if (!target) {
       if (category === 'IT_SUPPORT') target = 'ADMIN';
-      else if (category === 'LEAVE_ATTENDANCE' && requesterEmployee?.managerId) target = 'MANAGER';
-      else target = 'HR';
+      else if (isHrRequester) {
+        // Hierarchy escalation: if HR is raising the ticket, route to Reporting Manager or Admin
+        target = requesterEmployee?.managerId ? 'MANAGER' : 'ADMIN';
+      } else if (category === 'LEAVE_ATTENDANCE' && requesterEmployee?.managerId) {
+        target = 'MANAGER';
+      } else {
+        target = 'HR';
+      }
     }
 
     let upperTarget = target.toUpperCase();
 
-    // 1. Assign to Reporting Manager
+    // If requester is HR and target is HR, automatically escalate up the hierarchy
+    if (upperTarget === 'HR' && isHrRequester) {
+      upperTarget = requesterEmployee?.managerId ? 'MANAGER' : 'ADMIN';
+    }
+
+    // 1. Assign to Reporting Manager (Hierarchy Level 1)
     if (upperTarget === 'MANAGER') {
-      if (requesterEmployee?.managerId) {
+      if (requesterEmployee?.managerId && requesterEmployee.managerId !== requesterEmployee.id) {
         try {
           const mgrEmp = await employeeRepository.findById(requesterEmployee.managerId, orgId);
-          if (mgrEmp?.userId) {
+          if (mgrEmp?.userId && mgrEmp.userId !== requesterUserId) {
             return { assigneeUserId: mgrEmp.userId, assignedTeam: 'MANAGEMENT' };
           }
           if (mgrEmp?.email) {
             const mgrUser = await userRepository.findByEmail(mgrEmp.email);
-            if (mgrUser?.id) {
+            if (mgrUser?.id && mgrUser.id !== requesterUserId) {
               return { assigneeUserId: mgrUser.id, assignedTeam: 'MANAGEMENT' };
             }
           }
@@ -123,21 +164,21 @@ export const helpdeskService = {
           console.warn('[Helpdesk] Could not resolve manager employee:', e.message);
         }
       }
-      // If employee has no manager assigned, fallback to HR
-      upperTarget = 'HR';
+      // If employee has no separate manager assigned, escalate to Admin / Executive Leadership
+      upperTarget = isHrRequester ? 'ADMIN' : 'HR';
     }
 
-    // 2. Assign to HR
+    // 2. Assign to HR (Must NOT be the requester themselves)
     if (upperTarget === 'HR') {
-      if (requesterEmployee?.hrId) {
+      if (requesterEmployee?.hrId && requesterEmployee.hrId !== requesterEmployee.id) {
         try {
           const hrEmp = await employeeRepository.findById(requesterEmployee.hrId, orgId);
-          if (hrEmp?.userId) {
+          if (hrEmp?.userId && hrEmp.userId !== requesterUserId) {
             return { assigneeUserId: hrEmp.userId, assignedTeam: 'HR' };
           }
           if (hrEmp?.email) {
             const hrUser = await userRepository.findByEmail(hrEmp.email);
-            if (hrUser?.id) {
+            if (hrUser?.id && hrUser.id !== requesterUserId) {
               return { assigneeUserId: hrUser.id, assignedTeam: 'HR' };
             }
           }
@@ -146,26 +187,27 @@ export const helpdeskService = {
         }
       }
 
-      // Find an active HR user in the organization
+      // Find an active HR user in the organization who is NOT the requester
       try {
         const allUsers = await userRepository.findAll();
         const hrUser = allUsers.find(
           (u) =>
             (u.orgId === orgId || u.orgId === 'org-1') &&
             (u.roleName?.toLowerCase().includes('hr') || u.roleId?.toLowerCase().includes('hr')) &&
+            u.id !== requesterUserId &&
             u.status === 'Active'
         );
         if (hrUser?.id) {
           return { assigneeUserId: hrUser.id, assignedTeam: 'HR' };
         }
       } catch (e) {
-        console.warn('[Helpdesk] Could not find HR user:', e.message);
+        console.warn('[Helpdesk] Could not find alternate HR user:', e.message);
       }
-      // Fallback to Admin
+      // Fallback up the hierarchy to Admin
       upperTarget = 'ADMIN';
     }
 
-    // 3. Assign to Admin / IT Support
+    // 3. Assign to Admin / Executive Leadership (Hierarchy Level 2/3)
     if (upperTarget === 'ADMIN' || upperTarget === 'IT_SUPPORT') {
       try {
         const allUsers = await userRepository.findAll();
@@ -173,22 +215,25 @@ export const helpdeskService = {
           (u) =>
             (u.orgId === orgId || u.orgId === 'org-1') &&
             (u.roleName?.toLowerCase().includes('admin') || u.roleId?.toLowerCase().includes('admin')) &&
+            u.id !== requesterUserId &&
             u.status === 'Active'
         );
         if (adminUser?.id) {
-          return { assigneeUserId: adminUser.id, assignedTeam: 'IT_SUPPORT' };
+          return { assigneeUserId: adminUser.id, assignedTeam: 'EXECUTIVE_LEADERSHIP' };
         }
       } catch (e) {
         console.warn('[Helpdesk] Could not find Admin user:', e.message);
       }
-      return { assigneeUserId: 'user-superadmin-shubham', assignedTeam: 'IT_SUPPORT' };
+      return { assigneeUserId: 'user-superadmin-shubham', assignedTeam: 'EXECUTIVE_LEADERSHIP' };
     }
 
-    // 4. Specific User ID provided
+    // 4. Specific User ID provided (Must NOT be the requester)
     try {
       const userRecord = await userRepository.findById(target);
       if (userRecord && (userRecord.orgId === orgId || userRecord.orgId === 'org-1')) {
-        return { assigneeUserId: userRecord.id, assignedTeam: 'SUPPORT' };
+        if (userRecord.id !== requesterUserId) {
+          return { assigneeUserId: userRecord.id, assignedTeam: 'SUPPORT' };
+        }
       }
     } catch (e) {
       console.warn('[Helpdesk] Could not find user by ID:', e.message);
@@ -257,13 +302,14 @@ export const helpdeskService = {
       employeeId = requesterEmp.id;
     }
 
-    // Resolve assignee (Manager, HR, or Admin)
+    // Resolve assignee (Manager, HR, or Admin) with hierarchy escalation
     const targetAssignee = data.assignedToRole || data.assigneeRole || data.assignTo || data.assignedTo;
     const { assigneeUserId, assignedTeam } = await this.resolveAssignee(
       orgId,
       requesterEmp,
       targetAssignee,
-      data.category
+      data.category,
+      user.id
     );
 
     const ticket = await helpdeskRepository.createTicket({
@@ -442,6 +488,10 @@ export const helpdeskService = {
     }
 
     if (data.assignedTo) {
+      const isRequester = await this.checkIsRequester(user, ticket);
+      if (isRequester && data.assignedTo === user.id) {
+        throw createError('Hierarchy rule: You cannot assign a ticket you raised to yourself for resolution.', 400);
+      }
       const assigneeUser = await userRepository.findById(data.assignedTo);
       if (!assigneeUser || (assigneeUser.orgId !== orgId && assigneeUser.orgId !== 'org-1')) {
         throw createError('Invalid assignee: User does not exist in this organization.', 400);
@@ -505,6 +555,15 @@ export const helpdeskService = {
       throw createError('Invalid ticket status. Must be one of: OPEN, IN_PROGRESS, RESOLVED, CLOSED, CANCELLED.', 400);
     }
 
+    // Hierarchy rule: Requester cannot mark their own ticket as RESOLVED or CLOSED
+    const isRequester = await this.checkIsRequester(user, ticket);
+    if (isRequester && ['RESOLVED', 'CLOSED'].includes(upperStatus)) {
+      throw createError(
+        'Self-resolution prohibited: In accordance with organizational hierarchy, you cannot resolve or close your own ticket. It must be reviewed and resolved by your reporting manager or administrator.',
+        403
+      );
+    }
+
     if (upperStatus === 'RESOLVED') {
       throw createError('Please use the resolve ticket endpoint with resolution notes.', 400);
     }
@@ -555,6 +614,15 @@ export const helpdeskService = {
       throw createError('Access denied: You are not authorized to resolve this ticket.', 403);
     }
 
+    // Hierarchy rule: Requester cannot resolve their own ticket
+    const isRequester = await this.checkIsRequester(user, ticket);
+    if (isRequester) {
+      throw createError(
+        'Self-resolution prohibited: In accordance with organizational hierarchy, you cannot resolve a ticket you raised. It must be reviewed and resolved by your reporting manager, department head, or administrator.',
+        403
+      );
+    }
+
     if (['CLOSED', 'CANCELLED'].includes(ticket.status)) {
       throw createError(`Cannot resolve a ${ticket.status} ticket.`, 400);
     }
@@ -597,6 +665,15 @@ export const helpdeskService = {
     const isStaff = this.isSupportStaff(user);
     if (!isStaff) {
       throw createError('Access denied: You are not authorized to close this ticket.', 403);
+    }
+
+    // Hierarchy rule: Requester cannot close their own ticket
+    const isRequester = await this.checkIsRequester(user, ticket);
+    if (isRequester) {
+      throw createError(
+        'Self-resolution prohibited: In accordance with organizational hierarchy, you cannot close your own ticket.',
+        403
+      );
     }
 
     if (ticket.status === 'CLOSED') {
