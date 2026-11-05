@@ -291,7 +291,7 @@ export const CompanyHolidayManagement = () => {
               type="text"
               value={formName}
               onChange={(e) => setFormName(e.target.value)}
-              placeholder="e.g. Diwali Festival, Corporate Off..."
+              placeholder="e.g. Company Anniversary, Team Off Day..."
               required
               className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-brand-500 transition-all"
             />
@@ -307,9 +307,8 @@ export const CompanyHolidayManagement = () => {
               onChange={(e) => setFormType(e.target.value)}
               className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-brand-500 transition-all"
             >
-              <option value="COMPANY">Company Holiday</option>
-              <option value="NATIONAL">National / Public</option>
-              <option value="OPTIONAL">Optional Off</option>
+              <option value="COMPANY">Full Day Off</option>
+              <option value="OPTIONAL">Optional / Half Day</option>
             </select>
           </div>
 
@@ -409,10 +408,10 @@ export const CompanyHolidayManagement = () => {
           <div className="py-16 text-center">
             <Calendar className="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
             <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-              No declared holidays found for {selectedYear}
+              No company holidays declared for {selectedYear}
             </p>
             <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-              Use the form above to select a date and declare an official company holiday. It will instantly reflect across everyone's roster.
+              Holidays are declared by the CEO as needed. Use the form above to select a date and declare an official company holiday — it will instantly reflect across everyone's roster as <span className="font-bold text-rose-600">HL</span>.
             </p>
           </div>
         ) : (
@@ -457,13 +456,19 @@ export const CompanyHolidayManagement = () => {
                           variant={
                             holiday.holidayType === 'COMPANY'
                               ? 'brand'
-                              : holiday.holidayType === 'NATIONAL'
-                              ? 'rose'
-                              : 'neutral'
+                              : holiday.holidayType === 'OPTIONAL'
+                              ? 'neutral'
+                              : 'rose'
                           }
                           size="xs"
                         >
-                          {holiday.holidayType}
+                          {holiday.holidayType === 'COMPANY'
+                            ? 'Full Day Off'
+                            : holiday.holidayType === 'OPTIONAL'
+                            ? 'Optional Off'
+                            : holiday.holidayType === 'NATIONAL'
+                            ? 'National'
+                            : holiday.holidayType}
                         </Badge>
                       </td>
                       <td className="py-3.5 px-4 text-center whitespace-nowrap">

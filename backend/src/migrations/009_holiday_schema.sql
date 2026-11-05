@@ -61,15 +61,8 @@ WHERE
   OR (r.name = 'Employee' AND p.code IN ('holiday:read'))
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
--- 5. Seed Safe Baseline Test Holidays for Default Organization (org-1)
-INSERT INTO holidays (id, org_id, name, holiday_date, holiday_type, is_optional, description, status, created_at, updated_at)
-VALUES
-  ('hol-2026-01', 'org-1', 'New Year''s Day', '2026-01-01', 'NATIONAL', FALSE, 'Global celebration of the Gregorian new year', 'Active', NOW(), NOW()),
-  ('hol-2026-02', 'org-1', 'Republic Day', '2026-01-26', 'NATIONAL', FALSE, 'Commemoration of the Constitution enactment', 'Active', NOW(), NOW()),
-  ('hol-2026-03', 'org-1', 'International Workers'' Day', '2026-05-01', 'COMPANY', FALSE, 'Public celebration of the international labor movement', 'Active', NOW(), NOW()),
-  ('hol-2026-04', 'org-1', 'Independence Day', '2026-08-15', 'NATIONAL', FALSE, 'National Independence celebration', 'Active', NOW(), NOW()),
-  ('hol-2026-05', 'org-1', 'Gandhi Jayanti', '2026-10-02', 'NATIONAL', FALSE, 'National commemoration and non-violence day', 'Active', NOW(), NOW()),
-  ('hol-2026-06', 'org-1', 'Christmas Day', '2026-12-25', 'NATIONAL', FALSE, 'Annual religious and cultural holiday', 'Active', NOW(), NOW()),
-  ('hol-2026-07', 'org-1', 'Annual Founder''s Day', '2026-11-15', 'OPTIONAL', TRUE, 'Optional company-wide floating cultural observance', 'Active', NOW(), NOW())
-ON CONFLICT (org_id, holiday_date) DO NOTHING;
+-- 5. No baseline holidays seeded.
+--    Per policy: Holidays are declared exclusively by the CEO (Sheetal Bedi) through the
+--    Company Holiday Management section in the HRMS Portal. No Indian calendar holidays
+--    or any pre-seeded defaults are inserted. The CEO declares holidays as needed.
 
