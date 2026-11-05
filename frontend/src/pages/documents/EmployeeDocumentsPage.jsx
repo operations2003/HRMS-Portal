@@ -40,8 +40,8 @@ export const EmployeeDocumentsPage = () => {
       hasPermission('employee:read') ||
       hasRole(['Employee', 'Manager']));
 
-  // Tab: 'all-employees' | 'my'
-  const [activeTab, setActiveTab] = useState(canManageDocuments ? 'all-employees' : 'my');
+  // Tab: 'my' | 'organization' (shows 'my' personal documents first by default)
+  const [activeTab, setActiveTab] = useState('my');
 
   // Documents state
   const [myDocuments, setMyDocuments] = useState([]);
@@ -259,34 +259,10 @@ export const EmployeeDocumentsPage = () => {
         </div>
       </div>
 
-      {/* Role-Based Navigation Tabs (for HR / Admins) */}
+      {/* Role-Based Navigation Tabs (Shows 'My Personal Documents' first, then 'Organization Documents') */}
       {canManageDocuments && (
         <div className="flex items-center">
           <div className="bg-slate-200/70 p-1.5 rounded-2xl flex items-center gap-1.5 shadow-inner">
-            <button
-              onClick={() => {
-                setActiveTab('all-employees');
-                setSelectedEmployeeId(null);
-              }}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer ${
-                activeTab === 'all-employees'
-                  ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-900/5'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-              }`}
-            >
-              <Users className="w-4 h-4 text-brand-600" />
-              <span>All Employee Documents</span>
-              <span
-                className={`text-xs px-2 py-0.5 rounded-full font-bold ${
-                  activeTab === 'all-employees'
-                    ? 'bg-brand-50 text-brand-700 ring-1 ring-brand-200/50'
-                    : 'bg-slate-300/60 text-slate-700'
-                }`}
-              >
-                {employees.length}
-              </span>
-            </button>
-
             <button
               onClick={() => setActiveTab('my')}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer ${
@@ -305,6 +281,30 @@ export const EmployeeDocumentsPage = () => {
                 }`}
               >
                 {myDocuments.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveTab('organization');
+                setSelectedEmployeeId(null);
+              }}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer ${
+                activeTab === 'organization' || activeTab === 'all-employees'
+                  ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-900/5'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+              }`}
+            >
+              <Users className="w-4 h-4 text-brand-600" />
+              <span>Organization Documents</span>
+              <span
+                className={`text-xs px-2 py-0.5 rounded-full font-bold ${
+                  activeTab === 'organization' || activeTab === 'all-employees'
+                    ? 'bg-brand-50 text-brand-700 ring-1 ring-brand-200/50'
+                    : 'bg-slate-300/60 text-slate-700'
+                }`}
+              >
+                {employees.length}
               </span>
             </button>
           </div>
@@ -538,10 +538,10 @@ export const EmployeeDocumentsPage = () => {
               <div>
                 <h3 className="text-base font-bold text-slate-900 font-display flex items-center gap-2">
                   <Users className="w-5 h-5 text-brand-600" />
-                  All Employee Documents
+                  Organization Documents
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Select an employee to view, approve, and manage their uploaded documents.
+                  Select an employee to view, approve, and manage their uploaded organizational documents.
                 </p>
               </div>
 

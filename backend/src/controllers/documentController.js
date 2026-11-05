@@ -220,7 +220,13 @@ export const documentController = {
   async getMyDocuments(req, res, next) {
     try {
       const orgId = req.user.orgId || 'org-1';
-      const employee = await employeeRepository.findByUserId(req.user.id, orgId);
+      let employee = await employeeRepository.findByUserId(req.user.id, orgId);
+      if (!employee && req.user.email) {
+        employee = await employeeRepository.findByEmail(req.user.email, orgId);
+      }
+      if (!employee && req.user.email) {
+        employee = await employeeRepository.findByEmail(req.user.email);
+      }
       if (!employee) {
         return sendSuccess(res, 'No employee record associated with this account.', []);
       }
