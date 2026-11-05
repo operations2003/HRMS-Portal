@@ -128,12 +128,6 @@ export const Sidebar = ({ isOpen, onClose }) => {
           icon: GraduationCap,
           permission: ['training:read', 'employee:read'],
         },
-        {
-          name: 'Probation Confirmation',
-          path: '/probation',
-          icon: Clock,
-          roles: ['Manager', 'HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
-        },
       ],
     },
 
