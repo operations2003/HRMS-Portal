@@ -7,7 +7,6 @@ import {
   FileText,
   ShieldCheck,
   AlertCircle,
-  HelpCircle,
   RefreshCw,
   TrendingUp,
   ArrowUpRight,
@@ -654,15 +653,6 @@ export const PayrollPage = () => {
             }}
           >
             Refresh
-          </Button>
-
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={HelpCircle}
-            onClick={() => navigate('/helpdesk?tab=requests')}
-          >
-            Request Payroll Clarification
           </Button>
         </div>
       </div>
