@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   LogOut,
   Clock,
@@ -13,6 +13,7 @@ import {
   Calendar,
   Eye,
   UserCheck,
+  UserX,
   ShieldCheck,
   HelpCircle,
   Briefcase,
@@ -41,9 +42,12 @@ import { HRExitApprovalModal } from '../../components/exit/HRExitApprovalModal.j
 import { ClearanceChecklistTable } from '../../components/exit/ClearanceChecklistTable.jsx';
 import { FnFSettlementModal } from '../../components/exit/FnFSettlementModal.jsx';
 import { ExitDossierDetailModal } from '../../components/exit/ExitDossierDetailModal.jsx';
+import { FnFSettlementPage } from './FnFSettlementPage.jsx';
+import { TerminationPage } from './TerminationPage.jsx';
 
 export const ResignationPage = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user, hasRole } = useAuth();
   const toast = useToast();
 
@@ -62,14 +66,28 @@ export const ResignationPage = () => {
     hasRole('SuperAdmin') ||
     hasRole('OrgAdmin');
 
-  // Active Tab: 'my' | 'team' | 'org' - HR/Admin defaults to 'org', Manager to 'team', Employee to 'my'
-  const [activeTab, setActiveTab] = useState(() => (isHrOrAdmin ? 'org' : isManager ? 'team' : 'my'));
+  const urlTab = searchParams.get('tab');
+
+  // Active Tab: 'my' | 'team' | 'org' | 'fnf' | 'termination'
+  const [activeTab, setActiveTab] = useState(() => {
+    if (urlTab) return urlTab;
+    return isHrOrAdmin ? 'org' : isManager ? 'team' : 'my';
+  });
 
   useEffect(() => {
-    if (isHrOrAdmin && activeTab === 'my') {
-      setActiveTab('org');
+    if (urlTab && urlTab !== activeTab) {
+      setActiveTab(urlTab);
     }
-  }, [isHrOrAdmin]);
+  }, [urlTab]);
+
+  const handleTabChange = (tabKey) => {
+    setActiveTab(tabKey);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('tab', tabKey);
+      return next;
+    });
+  };
 
   // 1. My Exit State
   const [myExit, setMyExit] = useState(null);
@@ -442,9 +460,9 @@ export const ResignationPage = () => {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Resignation & Career Transition</h1>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Exit Management</h1>
           <p className="text-xs text-slate-500 mt-1">
-            Formal resignation submission, notice period milestones, manager review routing, and exit protocols
+            Resignations, clearances, Full & Final (FnF) settlements, and employee separations
           </p>
         </div>
 
@@ -479,7 +497,7 @@ export const ResignationPage = () => {
             </Button>
           )}
 
-          {activeTab !== 'my' && !hasActiveExit && (
+          {activeTab !== 'my' && activeTab !== 'fnf' && activeTab !== 'termination' && !hasActiveExit && (
             <Button
               variant="ghost"
               size="sm"
@@ -494,49 +512,74 @@ export const ResignationPage = () => {
         </div>
       </div>
 
-      {/* Role-based Tabs */}
-      {(isManager || isHrOrAdmin) && (
-        <div className="flex border-b border-slate-200">
+      {/* Navigation Tabs */}
+      <div className="flex flex-wrap border-b border-slate-200 gap-1">
+        <button
+          onClick={() => handleTabChange('my')}
+          className={`px-4 py-2.5 text-xs font-semibold border-b-2 transition-all flex items-center gap-1.5 ${
+            activeTab === 'my'
+              ? 'border-brand-600 text-brand-700 font-bold'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          <LogOut className="w-3.5 h-3.5" />
+          My Resignation
+        </button>
+
+        {isManager && (
           <button
-            onClick={() => setActiveTab('my')}
-            className={`px-4 py-2.5 text-xs font-semibold border-b-2 transition-all ${
-              activeTab === 'my'
-                ? 'border-brand-600 text-brand-700'
+            onClick={() => handleTabChange('team')}
+            className={`px-4 py-2.5 text-xs font-semibold border-b-2 transition-all flex items-center gap-1.5 ${
+              activeTab === 'team'
+                ? 'border-brand-600 text-brand-700 font-bold'
                 : 'border-transparent text-slate-500 hover:text-slate-700'
             }`}
           >
-            My Resignation Status
+            <Users className="w-3.5 h-3.5" />
+            Team Reviews ({teamExits.length})
           </button>
+        )}
 
-          {isManager && (
-            <button
-              onClick={() => setActiveTab('team')}
-              className={`px-4 py-2.5 text-xs font-semibold border-b-2 transition-all flex items-center gap-1.5 ${
-                activeTab === 'team'
-                  ? 'border-brand-600 text-brand-700'
-                  : 'border-transparent text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              <Users className="w-3.5 h-3.5" />
-              Team Resignations ({teamExits.length})
-            </button>
-          )}
+        {isHrOrAdmin && (
+          <button
+            onClick={() => handleTabChange('org')}
+            className={`px-4 py-2.5 text-xs font-semibold border-b-2 transition-all flex items-center gap-1.5 ${
+              activeTab === 'org'
+                ? 'border-brand-600 text-brand-700 font-bold'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <Building2 className="w-3.5 h-3.5" />
+            Clearances Queue ({orgExits.length})
+          </button>
+        )}
 
-          {isHrOrAdmin && (
-            <button
-              onClick={() => setActiveTab('org')}
-              className={`px-4 py-2.5 text-xs font-semibold border-b-2 transition-all flex items-center gap-1.5 ${
-                activeTab === 'org'
-                  ? 'border-brand-600 text-brand-700'
-                  : 'border-transparent text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              <Building2 className="w-3.5 h-3.5" />
-              Organization Resignations Queue ({orgExits.length})
-            </button>
-          )}
-        </div>
-      )}
+        <button
+          onClick={() => handleTabChange('fnf')}
+          className={`px-4 py-2.5 text-xs font-semibold border-b-2 transition-all flex items-center gap-1.5 ${
+            activeTab === 'fnf'
+              ? 'border-brand-600 text-brand-700 font-bold'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          <Wallet className="w-3.5 h-3.5" />
+          Full & Final (FnF)
+        </button>
+
+        {isHrOrAdmin && (
+          <button
+            onClick={() => handleTabChange('termination')}
+            className={`px-4 py-2.5 text-xs font-semibold border-b-2 transition-all flex items-center gap-1.5 ${
+              activeTab === 'termination'
+                ? 'border-brand-600 text-brand-700 font-bold'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <UserX className="w-3.5 h-3.5" />
+            Terminations
+          </button>
+        )}
+      </div>
 
       {/* TAB 1: My Resignation & Exit Information */}
       {activeTab === 'my' && (
@@ -807,6 +850,20 @@ export const ResignationPage = () => {
             emptyTitle="No Organization Resignations"
             emptyDescription="There are currently no active resignation requests across the organization."
           />
+        </div>
+      )}
+
+      {/* TAB 4: Full & Final (FnF) Settlements */}
+      {activeTab === 'fnf' && (
+        <div className="pt-2">
+          <FnFSettlementPage />
+        </div>
+      )}
+
+      {/* TAB 5: Terminations (HR & Admin) */}
+      {activeTab === 'termination' && isHrOrAdmin && (
+        <div className="pt-2">
+          <TerminationPage />
         </div>
       )}
 

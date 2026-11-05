@@ -390,28 +390,17 @@ export const App = () => {
 
               <Route
                 path="fnf"
-                element={
-                  <PermissionRoute permission={['exit:read', 'employee:read']}>
-                    <FnFSettlementPage />
-                  </PermissionRoute>
-                }
+                element={<Navigate to="/resignation?tab=fnf" replace />}
               />
 
               <Route
                 path="fnf-settlement"
-                element={<Navigate to="/fnf" replace />}
+                element={<Navigate to="/resignation?tab=fnf" replace />}
               />
 
               <Route
                 path="termination"
-                element={
-                  <PermissionRoute
-                    roles={['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']}
-                    permission={['exit:admin', 'employee:read']}
-                  >
-                    <TerminationPage />
-                  </PermissionRoute>
-                }
+                element={<Navigate to="/resignation?tab=termination" replace />}
               />
 
               {/* Exit Notification Redirects */}
