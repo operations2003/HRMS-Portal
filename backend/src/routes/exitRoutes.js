@@ -269,22 +269,19 @@ router.post(
 // =========================================================================
 router.get(
   '/requests/:id/fnf',
-  authorize(['fnf:manage', 'exit:read']),
+  requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin', 'Manager']),
   exitController.getFnf
 );
 
 router.post(
   '/requests/:id/fnf',
-  requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']),
-  authorize(['fnf:manage']),
-  validate(validateFnfSettlement),
+  requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin', 'Manager']),
   exitController.calculateFnf
 );
 
 router.post(
   '/requests/:id/fnf/approve',
-  requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']),
-  authorize(['fnf:manage']),
+  requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin', 'Manager']),
   exitController.approveFnf
 );
 
@@ -296,19 +293,23 @@ router.post(
 );
 
 // =========================================================================
-// 8. Exit Final Completion & Unified Deprovisioning
+// 8. Exit Final Completion, Unified Deprovisioning & Settle FnF + Revoke Credentials
 // =========================================================================
 router.post(
+  ['/requests/:id/settle-fnf-and-revoke', '/requests/:id/quick-fnf-revoke'],
+  requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin', 'Manager']),
+  exitController.settleFnfAndRevokeCredentials
+);
+
+router.post(
   '/requests/:id/complete',
-  requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']),
-  authorize(['exit:admin']),
+  requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin', 'Manager']),
   exitController.completeExit
 );
 
 router.post(
   '/requests/:id/deprovision',
-  requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']),
-  authorize(['deprovision:manage', 'exit:admin']),
+  requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin', 'Manager']),
   exitController.deprovisionAccess
 );
 

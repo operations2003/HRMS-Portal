@@ -1441,6 +1441,110 @@ export const exitService = {
   },
 
   // =========================================================================
+  // 10b. Unified Check FnF & Revoke Credentials (Single-Action Simple Resignation Flow)
+  // =========================================================================
+
+  async settleFnfAndRevokeCredentials(currentUser, exitRequestId, payload = {}) {
+    const exit = await exitRepository.findById(exitRequestId);
+    if (!exit) {
+      const err = new Error('Exit request not found.');
+      err.statusCode = 404;
+      throw err;
+    }
+    if (exit.orgId !== currentUser.orgId) {
+      const err = new Error('Access denied.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    // Self-action restriction
+    const actorEmp = await this.resolveEmployee(currentUser);
+    if (actorEmp && actorEmp.id === exit.employeeId) {
+      const err = new Error('Self-approval restriction: You cannot process your own resignation.');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    // 1. Calculate and save FnF settlement (or use existing)
+    let fnf = await exitRepository.findFnfByRequestId(exitRequestId);
+    if (!fnf || payload.recalculate || payload.payableDays !== undefined || payload.netSettlementAmount !== undefined) {
+      fnf = await this.calculateFnf(currentUser, exitRequestId, {
+        payableDays: payload.payableDays,
+        bonusGratuity: payload.bonusGratuity,
+        otherAllowances: payload.otherAllowances,
+        reimbursements: payload.reimbursements,
+        noticePeriodRecovery: payload.noticePeriodRecovery,
+        assetRecoveryDeduction: payload.assetRecoveryDeduction,
+        taxDeduction: payload.taxDeduction,
+        otherDeductions: payload.otherDeductions,
+        notes: payload.notes || 'Full and final settlement computed during one-click resignation completion.',
+      });
+    }
+
+    // Mark FnF as approved & settled
+    await exitRepository.updateFnfStatus(exitRequestId, {
+      approvalStatus: 'APPROVED',
+      paymentStatus: payload.paymentStatus || 'APPROVED',
+      approvedBy: currentUser.id,
+      notes: payload.notes || 'FnF settlement confirmed and approved during credential revocation.',
+    });
+
+    // 2. Permanently revoke credentials & deprovision system access
+    const accessResult = await this.removeAccess(currentUser, exitRequestId, {
+      reassignManagerId: payload.reassignManagerId || null,
+      comments: payload.comments || `Credentials permanently revoked upon resignation completion by ${currentUser.email || 'HR'}.`,
+    });
+
+    // 3. Mark exit request as COMPLETED
+    const updatedExit = await exitRepository.update(exitRequestId, {
+      status: 'COMPLETED',
+      currentStage: 'COMPLETED',
+    });
+
+    // 4. Mark offboarding as COMPLETED
+    await exitRepository.upsertOffboarding({
+      orgId: currentUser.orgId,
+      exitRequestId,
+      employeeId: exit.employeeId,
+      lastWorkingDay: exit.approvedLastWorkingDay || exit.requestedLastWorkingDay || new Date().toISOString().split('T')[0],
+      offboardingStatus: 'COMPLETED',
+      clearanceStatus: 'CLEARED',
+      accessRemovalStatus: 'DEPROVISIONED',
+      assetStatus: 'RETURNED',
+      hrCompletionStatus: 'COMPLETED',
+      completedDate: new Date().toISOString().split('T')[0],
+      completedAt: new Date().toISOString(),
+      processedBy: currentUser.id,
+      notes: payload.notes || 'Resignation completed, FnF settled, and credentials permanently revoked.',
+    });
+
+    // 5. Finalize approval workflow
+    const wf = await workflowRepository.findByEntity('EXIT_REQUEST', exitRequestId);
+    if (wf) {
+      await workflowRepository.recordAction(wf.id, {
+        stage: wf.currentStage,
+        actorUserId: currentUser.id,
+        actorRole: currentUser.roleName || 'HR',
+        action: 'APPROVE',
+        fromStatus: wf.currentStatus,
+        toStatus: 'COMPLETED',
+        nextStage: 'COMPLETED',
+        comments: payload.notes || 'Resignation completed, FnF settled, and credentials deleted.',
+      });
+    }
+
+    const finalFnf = await exitRepository.findFnfByRequestId(exitRequestId);
+
+    return {
+      message: 'FnF settlement approved and user credentials permanently deleted. Employee can no longer log in.',
+      exit: updatedExit,
+      fnf: finalFnf,
+      employeeStatus: 'Exited',
+      accountStatus: 'Inactive',
+    };
+  },
+
+  // =========================================================================
   // 11. Administrative Exit & Offboarding Analytics
   // =========================================================================
 

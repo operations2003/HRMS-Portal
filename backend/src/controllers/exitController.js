@@ -216,7 +216,15 @@ export const exitController = {
   async getFnf(req, res, next) {
     try {
       const exit = await exitService.getExitById(req.user, req.params.id);
-      return sendSuccess(res, 'FnF settlement details retrieved.', exit.fnf);
+      let fnf = exit.fnf;
+      if (!fnf) {
+        try {
+          fnf = await exitService.calculateFnf(req.user, req.params.id, {});
+        } catch {
+          fnf = null;
+        }
+      }
+      return sendSuccess(res, 'FnF settlement details retrieved.', fnf);
     } catch (err) {
       if (err.statusCode) return sendError(res, err.message, err.statusCode);
       next(err);
@@ -282,6 +290,19 @@ export const exitController = {
     try {
       const result = await exitService.deprovisionAccess(req.user, req.params.id, req.body);
       return sendSuccess(res, 'Access deprovisioned and exit process completed.', result);
+    } catch (err) {
+      if (err.statusCode) return sendError(res, err.message, err.statusCode);
+      next(err);
+    }
+  },
+
+  /**
+   * POST /api/v1/exit/requests/:id/settle-fnf-and-revoke
+   */
+  async settleFnfAndRevokeCredentials(req, res, next) {
+    try {
+      const result = await exitService.settleFnfAndRevokeCredentials(req.user, req.params.id, req.body);
+      return sendSuccess(res, result.message, result);
     } catch (err) {
       if (err.statusCode) return sendError(res, err.message, err.statusCode);
       next(err);

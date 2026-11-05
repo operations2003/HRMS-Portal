@@ -61,19 +61,12 @@ export const authService = {
       throw error;
     }
 
-    // Security invariant: Prevent deprovisioned or exited employees from logging in unless they have exit formalities to view
+    // Security invariant: Prevent deprovisioned or exited employees from logging in
     const emp = await employeeRepository.findByUserId(user.id, user.orgId);
     const normRole = (user.roleName || '').toLowerCase();
     if (normRole !== 'superadmin' && normRole !== 'admin') {
-      const hasExitFormalities = emp && Boolean(
-        await pool.query(
-          "SELECT id FROM exit_checklists WHERE employee_id = $1 UNION SELECT id FROM exit_requests WHERE employee_id = $1 LIMIT 1",
-          [emp.id]
-        ).then((r) => r.rows.length > 0).catch(() => false)
-      );
-
-      if (emp && (emp.status === 'Terminated' || emp.status === 'Inactive') && !hasExitFormalities) {
-        const error = new Error('Access denied: Your employee account has been deprovisioned.');
+      if (emp && (emp.status === 'Exited' || emp.status === 'Terminated' || emp.status === 'Inactive')) {
+        const error = new Error('Access denied: Your employment has ended and system credentials have been revoked.');
         error.statusCode = 403;
         throw error;
       }

@@ -13,6 +13,7 @@ import {
   Award,
   ExternalLink,
   Edit2,
+  KeyRound,
 } from 'lucide-react';
 import { Modal } from '../common/Modal.jsx';
 import { Button } from '../common/Button.jsx';
@@ -23,6 +24,7 @@ import { FnFStatementDocument } from './FnFStatementDocument.jsx';
 import { ClearNoticePeriodModal } from './ClearNoticePeriodModal.jsx';
 import { AccessDeprovisionModal } from './AccessDeprovisionModal.jsx';
 import { EditTerminationModal } from './EditTerminationModal.jsx';
+import { CheckFnFAndRevokeModal } from './CheckFnFAndRevokeModal.jsx';
 import { exitService } from '../../services/exitService.js';
 
 export const ExitDossierDetailModal = ({
@@ -45,6 +47,7 @@ export const ExitDossierDetailModal = ({
   const [showClearNoticeModal, setShowClearNoticeModal] = useState(false);
   const [showDeprovisionModal, setShowDeprovisionModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showCheckFnfModal, setShowCheckFnfModal] = useState(false);
 
   const fetchDossier = async () => {
     if (!effectiveId) return;
@@ -275,6 +278,17 @@ export const ExitDossierDetailModal = ({
                     Clear Notice Period
                   </Button>
                 )}
+                {dossier?.status !== 'COMPLETED' && (
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    icon={KeyRound}
+                    className="bg-rose-600 hover:bg-rose-700 text-white font-bold"
+                    onClick={() => setShowCheckFnfModal(true)}
+                  >
+                    Check FnF & Revoke Credentials
+                  </Button>
+                )}
                 <Button
                   variant="secondary"
                   size="sm"
@@ -284,17 +298,8 @@ export const ExitDossierDetailModal = ({
                     onOpenFnF?.(dossier);
                   }}
                 >
-                  Manage FnF Settlement
+                  FnF Statement
                 </Button>
-                {dossier?.status !== 'COMPLETED' && (
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    onClick={() => setShowDeprovisionModal(true)}
-                  >
-                    Revoke Access & Deprovision
-                  </Button>
-                )}
               </div>
             )}
           </div>
@@ -413,6 +418,31 @@ export const ExitDossierDetailModal = ({
             noticePeriodDays: dossier?.noticePeriodDays,
             comments: dossier?.comments,
             hrComments: dossier?.hrComments,
+          }}
+        />
+      )}
+
+      {showCheckFnfModal && (
+        <CheckFnFAndRevokeModal
+          isOpen={showCheckFnfModal}
+          onClose={() => setShowCheckFnfModal(false)}
+          onSuccess={() => {
+            fetchDossier();
+            onUpdated?.();
+            onSuccess?.();
+            onClose();
+          }}
+          record={{
+            id: effectiveId,
+            exitRequestId: effectiveId,
+            employeeId: dossier?.employeeId,
+            employee: emp,
+            employeeName: empName,
+            employeeCode: emp?.empCode || emp?.employeeCode || dossier?.employeeCode,
+            department: dossier?.department || emp?.department?.name,
+            approvedLastWorkingDay: dossier?.approvedLastWorkingDay,
+            requestedLastWorkingDay: dossier?.requestedLastWorkingDay,
+            avatarUrl: emp?.avatarUrl || emp?.avatar_url,
           }}
         />
       )}

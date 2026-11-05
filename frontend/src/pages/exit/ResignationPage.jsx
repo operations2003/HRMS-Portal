@@ -22,6 +22,7 @@ import {
   ExternalLink,
   Laptop,
   CreditCard,
+  KeyRound,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
@@ -42,6 +43,7 @@ import { HRExitApprovalModal } from '../../components/exit/HRExitApprovalModal.j
 import { ClearanceChecklistTable } from '../../components/exit/ClearanceChecklistTable.jsx';
 import { FnFSettlementModal } from '../../components/exit/FnFSettlementModal.jsx';
 import { ExitDossierDetailModal } from '../../components/exit/ExitDossierDetailModal.jsx';
+import { CheckFnFAndRevokeModal } from '../../components/exit/CheckFnFAndRevokeModal.jsx';
 import { FnFSettlementPage } from './FnFSettlementPage.jsx';
 import { TerminationPage } from './TerminationPage.jsx';
 
@@ -111,6 +113,7 @@ export const ResignationPage = () => {
   const [hrActingRecord, setHrActingRecord] = useState(null);
   const [isFnfModalOpen, setIsFnfModalOpen] = useState(false);
   const [inspectingDossierId, setInspectingDossierId] = useState(null);
+  const [checkFnfRecord, setCheckFnfRecord] = useState(null);
 
   const fetchMyExit = async () => {
     try {
@@ -283,6 +286,8 @@ export const ResignationPage = () => {
           );
         }
 
+        const isCompleted = row.status === 'COMPLETED';
+
         return (
           <div className="flex items-center gap-1.5 justify-end">
             <Button
@@ -293,6 +298,23 @@ export const ResignationPage = () => {
             >
               {row.status === 'SUBMITTED' ? 'Manager Review' : 'View Evaluation'}
             </Button>
+
+            {!isCompleted ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={KeyRound}
+                className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 border-rose-200"
+                onClick={() => setCheckFnfRecord(row)}
+                title="Check Full & Final settlement and revoke login credentials"
+              >
+                Check FnF & Revoke
+              </Button>
+            ) : (
+              <Badge variant="neutral" size="xs">
+                Credentials Revoked
+              </Badge>
+            )}
           </div>
         );
       },
@@ -436,7 +458,7 @@ export const ResignationPage = () => {
                   </Button>
                 )}
 
-                {['NOTICE_PERIOD', 'EXIT_PROCESSING'].includes(row.status) && (
+                {['NOTICE_PERIOD', 'EXIT_PROCESSING', 'APPROVED'].includes(row.status) && (
                   <Button
                     variant="secondary"
                     size="sm"
@@ -446,6 +468,23 @@ export const ResignationPage = () => {
                   >
                     Clearances
                   </Button>
+                )}
+
+                {row.status !== 'COMPLETED' ? (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    icon={KeyRound}
+                    className="bg-rose-600 hover:bg-rose-700 text-white font-semibold"
+                    onClick={() => setCheckFnfRecord(row)}
+                    title="Check Full & Final settlement and revoke login credentials"
+                  >
+                    Check FnF & Revoke
+                  </Button>
+                ) : (
+                  <Badge variant="neutral" size="xs">
+                    Credentials Revoked
+                  </Badge>
                 )}
               </>
             )}
@@ -937,6 +976,19 @@ export const ResignationPage = () => {
           onOpenFnF={(record) => {
             setInspectingDossierId(null);
             // Can be managed from offboarding
+          }}
+        />
+      )}
+
+      {checkFnfRecord && (
+        <CheckFnFAndRevokeModal
+          isOpen={Boolean(checkFnfRecord)}
+          onClose={() => setCheckFnfRecord(null)}
+          record={checkFnfRecord}
+          onSuccess={() => {
+            fetchOrgExits();
+            if (isManager) fetchTeamExits();
+            fetchMyExit();
           }}
         />
       )}

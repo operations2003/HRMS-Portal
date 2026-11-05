@@ -240,6 +240,22 @@ export const exitService = {
   },
 
   /**
+   * Settle FnF and permanently revoke user credentials in one simple step
+   */
+  async settleFnfAndRevokeCredentials(id, data = {}) {
+    try {
+      const res = await http.post(`/v1/exit/requests/${id}/settle-fnf-and-revoke`, data);
+      return res.data;
+    } catch (err) {
+      if (err.status === 404 || err.message?.includes('404')) {
+        const res2 = await http.post(`/v1/exit/requests/${id}/deprovision`, data);
+        return res2.data;
+      }
+      throw err;
+    }
+  },
+
+  /**
    * Finalize and complete entire exit process
    */
   async completeExit(id, data = {}) {
