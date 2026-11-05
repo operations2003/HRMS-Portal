@@ -50,8 +50,8 @@ export const PayrollPage = () => {
   const isHr = ['hr', 'hrmanager'].some((r) => normRole.includes(r));
   const canAccessOrgPayroll = isCeoOrAdmin || isHr;
 
-  // Tabs: 'org' (Organization Payroll) vs 'structure' (Detailed Salary Structure)
-  const [activeTab, setActiveTab] = useState(canAccessOrgPayroll ? 'org' : 'structure');
+  // Tabs: 'structure' (My Salary / Detailed Structure) vs 'org' (Organization Salary)
+  const [activeTab, setActiveTab] = useState('structure');
 
   // Personal/Selected employee payroll data
   const [data, setData] = useState(null);
@@ -662,6 +662,28 @@ export const PayrollPage = () => {
         <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-2">
           <button
             type="button"
+            onClick={() => setActiveTab('structure')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              activeTab === 'structure'
+                ? 'bg-brand-600 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
+            }`}
+          >
+            <Wallet className="w-4 h-4" />
+            <span>
+              {selectedEmpId && selectedEmpId !== user?.employeeId
+                ? 'Salary Structure'
+                : 'My Salary'}
+            </span>
+            {selectedEmpId && selectedEmpId !== user?.employeeId && (
+              <span className="px-1.5 py-0.2 rounded text-[10px] bg-amber-100 text-amber-800 font-semibold">
+                Viewing Staff
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
             onClick={() => setActiveTab('org')}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
               activeTab === 'org'
@@ -670,30 +692,12 @@ export const PayrollPage = () => {
             }`}
           >
             <Users className="w-4 h-4" />
-            <span>Organization Payroll</span>
+            <span>Organization Salary</span>
             {orgPayroll?.employees && (
               <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
                 activeTab === 'org' ? 'bg-brand-700 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200'
               }`}>
                 {orgPayroll.employees.length}
-              </span>
-            )}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('structure')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-              activeTab === 'structure'
-                ? 'bg-brand-600 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
-            }`}
-          >
-            <Layers className="w-4 h-4" />
-            <span>Detailed Salary Structure</span>
-            {selectedEmpId && selectedEmpId !== user?.employeeId && (
-              <span className="px-1.5 py-0.2 rounded text-[10px] bg-amber-100 text-amber-800 font-semibold">
-                Viewing Staff
               </span>
             )}
           </button>
@@ -737,125 +741,7 @@ export const PayrollPage = () => {
         />
       )}
 
-      {/* TAB 1: Organization Payroll (Admin/CEO & HR Only) */}
-      {canAccessOrgPayroll && activeTab === 'org' && (
-        <div className="space-y-6">
-          {/* Org Executive Summary Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="p-5 bg-gradient-to-br from-brand-600 to-indigo-700 text-white rounded-2xl shadow-sm space-y-1">
-              <div className="flex items-center justify-between text-brand-100 text-xs font-semibold uppercase tracking-wider">
-                <span>Total Annual CTC</span>
-                <TrendingUp className="w-4 h-4 text-brand-200" />
-              </div>
-              <div className="text-2xl lg:text-3xl font-black font-mono">
-                ₹{orgPayroll?.summary?.totalAnnualCtc?.toLocaleString('en-IN') || 0}
-              </div>
-              <div className="text-xs text-brand-100">
-                Monthly Payroll: ₹{orgPayroll?.summary?.totalMonthlyGross?.toLocaleString('en-IN') || 0}
-              </div>
-            </div>
-
-            <div className="p-5 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-xs space-y-1">
-              <div className="flex items-center justify-between text-slate-500 text-xs font-semibold uppercase tracking-wider">
-                <span>Total In-Hand Disbursed</span>
-                <ArrowUpRight className="w-4 h-4 text-emerald-600" />
-              </div>
-              <div className="text-2xl lg:text-3xl font-black font-mono text-emerald-600 dark:text-emerald-400">
-                ₹{orgPayroll?.summary?.totalMonthlyInHand?.toLocaleString('en-IN') || 0}
-              </div>
-              <div className="text-xs text-slate-400">
-                Net employee take-home monthly
-              </div>
-            </div>
-
-            <div className="p-5 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-xs space-y-1">
-              <div className="flex items-center justify-between text-slate-500 text-xs font-semibold uppercase tracking-wider">
-                <span>Monthly Deductions</span>
-                <span className="text-xs font-bold text-rose-500">EPF & Taxes</span>
-              </div>
-              <div className="text-2xl lg:text-3xl font-black font-mono text-rose-600 dark:text-rose-400">
-                ₹{orgPayroll?.summary?.totalMonthlyDeductions?.toLocaleString('en-IN') || 0}
-              </div>
-              <div className="text-xs text-slate-400">
-                Total statutory & tax withholdings
-              </div>
-            </div>
-
-            <div className="p-5 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-xs space-y-1">
-              <div className="flex items-center justify-between text-slate-500 text-xs font-semibold uppercase tracking-wider">
-                <span>Salaried Workforce</span>
-                <Users className="w-4 h-4 text-brand-600" />
-              </div>
-              <div className="text-2xl lg:text-3xl font-black font-mono text-slate-900 dark:text-white">
-                {orgPayroll?.summary?.totalEmployees || 0}
-              </div>
-              <div className="text-xs text-slate-400">
-                Avg In-Hand: ₹{orgPayroll?.summary?.avgMonthlyInHand?.toLocaleString('en-IN') || 0} / mo
-              </div>
-            </div>
-          </div>
-
-          {/* Table Toolbar: Search & Dept Filter */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div className="relative w-full sm:w-80">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search staff, code, or role..."
-                className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500/20"
-              />
-            </div>
-
-            <div className="flex items-center gap-3 w-full sm:w-auto">
-              <select
-                value={selectedDept}
-                onChange={(e) => setSelectedDept(e.target.value)}
-                aria-label="Filter by department"
-                className="text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 px-3 py-2 text-slate-700 dark:text-slate-300 focus:outline-none"
-              >
-                <option value="">All Departments</option>
-                {departments.map((dept) => (
-                  <option key={dept} value={dept}>
-                    {dept}
-                  </option>
-                ))}
-              </select>
-
-              {isCeoOrAdmin && (
-                <Button
-                  size="sm"
-                  variant="primary"
-                  icon={Send}
-                  onClick={() => setDisburseAllModalOpen(true)}
-                  className="shrink-0"
-                  title="Disburse salaries to all active employees"
-                >
-                  Disburse Payroll
-                </Button>
-              )}
-
-              <span className="text-xs font-medium text-slate-500 shrink-0">
-                Showing {filteredEmployees.length} of {orgPayroll?.employees?.length || 0}
-              </span>
-            </div>
-          </div>
-
-          {/* Org Payroll DataTable */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden">
-            <DataTable
-              columns={orgColumns}
-              data={filteredEmployees}
-              loading={orgLoading}
-              emptyTitle="No employee compensation records found"
-              emptyDescription="No employees matching the current search criteria."
-            />
-          </div>
-        </div>
-      )}
-
-      {/* TAB 2: Detailed Salary Structure (Accessible to all for own salary, or Admin/HR for selected employee) */}
+      {/* TAB 1: My Salary / Detailed Salary Structure (Accessible to all for own salary, or Admin/HR for selected employee) */}
       {(activeTab === 'structure' || !canAccessOrgPayroll) && (
         <div className="space-y-6">
           {/* Employee Selector for Admin / CEO and HR */}
@@ -955,7 +841,7 @@ export const PayrollPage = () => {
                     icon={Users}
                     onClick={() => setActiveTab('org')}
                   >
-                    View Organization Payroll
+                    View Organization Salary
                   </Button>
                 </div>
               </div>
@@ -1249,6 +1135,124 @@ export const PayrollPage = () => {
       )}
     </div>
   )}
+
+      {/* TAB 2: Organization Salary (Admin/CEO & HR Only) */}
+      {canAccessOrgPayroll && activeTab === 'org' && (
+        <div className="space-y-6">
+          {/* Org Executive Summary Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="p-5 bg-gradient-to-br from-brand-600 to-indigo-700 text-white rounded-2xl shadow-sm space-y-1">
+              <div className="flex items-center justify-between text-brand-100 text-xs font-semibold uppercase tracking-wider">
+                <span>Total Annual CTC</span>
+                <TrendingUp className="w-4 h-4 text-brand-200" />
+              </div>
+              <div className="text-2xl lg:text-3xl font-black font-mono">
+                ₹{orgPayroll?.summary?.totalAnnualCtc?.toLocaleString('en-IN') || 0}
+              </div>
+              <div className="text-xs text-brand-100">
+                Monthly Payroll: ₹{orgPayroll?.summary?.totalMonthlyGross?.toLocaleString('en-IN') || 0}
+              </div>
+            </div>
+
+            <div className="p-5 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-xs space-y-1">
+              <div className="flex items-center justify-between text-slate-500 text-xs font-semibold uppercase tracking-wider">
+                <span>Total In-Hand Disbursed</span>
+                <ArrowUpRight className="w-4 h-4 text-emerald-600" />
+              </div>
+              <div className="text-2xl lg:text-3xl font-black font-mono text-emerald-600 dark:text-emerald-400">
+                ₹{orgPayroll?.summary?.totalMonthlyInHand?.toLocaleString('en-IN') || 0}
+              </div>
+              <div className="text-xs text-slate-400">
+                Net employee take-home monthly
+              </div>
+            </div>
+
+            <div className="p-5 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-xs space-y-1">
+              <div className="flex items-center justify-between text-slate-500 text-xs font-semibold uppercase tracking-wider">
+                <span>Monthly Deductions</span>
+                <span className="text-xs font-bold text-rose-500">EPF & Taxes</span>
+              </div>
+              <div className="text-2xl lg:text-3xl font-black font-mono text-rose-600 dark:text-rose-400">
+                ₹{orgPayroll?.summary?.totalMonthlyDeductions?.toLocaleString('en-IN') || 0}
+              </div>
+              <div className="text-xs text-slate-400">
+                Total statutory & tax withholdings
+              </div>
+            </div>
+
+            <div className="p-5 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-xs space-y-1">
+              <div className="flex items-center justify-between text-slate-500 text-xs font-semibold uppercase tracking-wider">
+                <span>Salaried Workforce</span>
+                <Users className="w-4 h-4 text-brand-600" />
+              </div>
+              <div className="text-2xl lg:text-3xl font-black font-mono text-slate-900 dark:text-white">
+                {orgPayroll?.summary?.totalEmployees || 0}
+              </div>
+              <div className="text-xs text-slate-400">
+                Avg In-Hand: ₹{orgPayroll?.summary?.avgMonthlyInHand?.toLocaleString('en-IN') || 0} / mo
+              </div>
+            </div>
+          </div>
+
+          {/* Table Toolbar: Search & Dept Filter */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="relative w-full sm:w-80">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search staff, code, or role..."
+                className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+              />
+            </div>
+
+            <div className="flex items-center gap-3 w-full sm:w-auto">
+              <select
+                value={selectedDept}
+                onChange={(e) => setSelectedDept(e.target.value)}
+                aria-label="Filter by department"
+                className="text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 px-3 py-2 text-slate-700 dark:text-slate-300 focus:outline-none"
+              >
+                <option value="">All Departments</option>
+                {departments.map((dept) => (
+                  <option key={dept} value={dept}>
+                    {dept}
+                  </option>
+                ))}
+              </select>
+
+              {isCeoOrAdmin && (
+                <Button
+                  size="sm"
+                  variant="primary"
+                  icon={Send}
+                  onClick={() => setDisburseAllModalOpen(true)}
+                  className="shrink-0"
+                  title="Disburse salaries to all active employees"
+                >
+                  Disburse Payroll
+                </Button>
+              )}
+
+              <span className="text-xs font-medium text-slate-500 shrink-0">
+                Showing {filteredEmployees.length} of {orgPayroll?.employees?.length || 0}
+              </span>
+            </div>
+          </div>
+
+          {/* Org Payroll DataTable */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden">
+            <DataTable
+              columns={orgColumns}
+              data={filteredEmployees}
+              loading={orgLoading}
+              emptyTitle="No employee compensation records found"
+              emptyDescription="No employees matching the current search criteria."
+            />
+          </div>
+        </div>
+      )}
 
       {/* Decide / Edit Salary Modal (Admin/CEO & HR) */}
       <Modal
