@@ -90,7 +90,7 @@ router.use('/v1/payroll', payrollRoutes);
 router.use('/v1/policies', policyRoutes);
 router.use('/v1/roster', rosterRoutes);
 router.use('/v1/shifts', shiftRoutes);
-router.use('/v1/holidays', holidayRoutes);
+router.use(['/v1/holidays', '/holidays'], holidayRoutes);
 
 // AppSumo Licensing v2 Integration
 router.use('/v1/appsumo', appsumoRoutes);

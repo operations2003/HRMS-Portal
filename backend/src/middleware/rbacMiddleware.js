@@ -27,7 +27,8 @@ export const authorize = (requiredPermissions) => {
       normRole === 'admin' ||
       normRole === 'orgadmin' ||
       normRole === 'ceo' ||
-      userEmail === 'sheetalbedi@tasknera.com'
+      userEmail === 'sheetalbedi@tasknera.com' ||
+      userEmail === 'ceo@tasknera.com'
     ) {
       return next();
     }
@@ -87,7 +88,8 @@ export const requireRoles = (allowedRoles) => {
       normUserRole === 'admin' ||
       normUserRole === 'orgadmin' ||
       normUserRole === 'ceo' ||
-      userEmail === 'sheetalbedi@tasknera.com'
+      userEmail === 'sheetalbedi@tasknera.com' ||
+      userEmail === 'ceo@tasknera.com'
     ) {
       return next();
     }

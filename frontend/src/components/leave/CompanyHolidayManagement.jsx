@@ -41,12 +41,14 @@ export const CompanyHolidayManagement = () => {
   // Delete confirmation state
   const [holidayToDelete, setHolidayToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState(null);
 
   // Fetch holidays
   const fetchHolidays = useCallback(async (isSilent = false) => {
     try {
       if (!isSilent) setLoading(true);
       else setIsRefreshing(true);
+      setErrorMessage(null);
 
       const params = {};
       if (selectedYear) params.year = selectedYear;
@@ -54,12 +56,16 @@ export const CompanyHolidayManagement = () => {
       const data = await holidayService.getHolidays(params);
       setHolidays(Array.isArray(data) ? data : []);
     } catch (err) {
-      toast.error(err.message || 'Failed to load company holidays.');
+      const msg = err.message || 'Failed to load company holidays.';
+      setErrorMessage(msg);
+      if (isSilent) {
+        toast.error(msg);
+      }
     } finally {
       setLoading(false);
       setIsRefreshing(false);
     }
-  }, [selectedYear, toast]);
+  }, [selectedYear]);
 
   useEffect(() => {
     fetchHolidays();
@@ -172,6 +178,30 @@ export const CompanyHolidayManagement = () => {
 
   return (
     <div className="space-y-6">
+      {/* Backend / Network Sync Warning Banner */}
+      {errorMessage && (
+        <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl p-4 flex items-start justify-between gap-3 text-amber-900 dark:text-amber-200 shadow-xs">
+          <div className="flex items-start gap-2.5">
+            <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold">{errorMessage}</p>
+              <p className="text-xs text-amber-700/90 dark:text-amber-300/90 mt-0.5">
+                If the application server was recently updated, please restart your backend server (<code className="bg-amber-100 dark:bg-amber-900/60 px-1.5 py-0.5 rounded text-[11px] font-mono">npm run dev</code>) to register new holiday routes.
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => fetchHolidays(false)}
+            icon={RefreshCw}
+            className="shrink-0 text-xs"
+          >
+            Retry
+          </Button>
+        </div>
+      )}
+
       {/* Overview & Stats Banner */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-xs">

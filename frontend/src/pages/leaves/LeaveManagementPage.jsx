@@ -53,7 +53,14 @@ export const LeaveManagementPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const normRole = (user?.roleName || '').toLowerCase();
-  const isAdminOrCeo = ['admin', 'superadmin', 'orgadmin'].some(r => normRole.includes(r)) || user?.email === 'sheetalbedi@tasknera.com';
+  const userEmail = (user?.email || '').toLowerCase();
+  const isCeo =
+    normRole === 'ceo' ||
+    userEmail === 'sheetalbedi@tasknera.com' ||
+    userEmail === 'ceo@tasknera.com' ||
+    (user?.designation?.code || user?.designationCode || '').toUpperCase() === 'CEO' ||
+    (user?.designation?.title || user?.designationTitle || '').toLowerCase().includes('chief executive');
+  const isAdminOrCeo = ['admin', 'superadmin', 'orgadmin'].some((r) => normRole.includes(r)) || isCeo;
   const isHrOrAdmin = hasRole(['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin']) || isAdminOrCeo;
 
   const canApply = hasPermission('leave:write') && !isAdminOrCeo;

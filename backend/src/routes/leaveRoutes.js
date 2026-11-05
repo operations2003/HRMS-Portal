@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { leaveController } from '../controllers/leaveController.js';
+import holidayRoutes from './holidayRoutes.js';
 import { authenticate } from '../middleware/authMiddleware.js';
 import { authorize, requireRoles } from '../middleware/rbacMiddleware.js';
 import { validate } from '../middleware/validateMiddleware.js';
@@ -13,6 +14,9 @@ const router = Router();
 
 // All leave endpoints require valid JWT authentication
 router.use(authenticate);
+
+// Holidays alias module (/api/v1/leaves/holidays)
+router.use('/holidays', holidayRoutes);
 
 // 1. Leave metadata & balances
 router.get('/types', authorize('leave:read'), leaveController.getLeaveTypes);

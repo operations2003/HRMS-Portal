@@ -73,16 +73,19 @@ export const ToastProvider = ({ children }) => {
     [addToast]
   );
 
-  const toast = {
-    success: showSuccess,
-    error: showError,
-    warning: showWarning,
-    info: showInfo,
-    showSuccess,
-    showError,
-    showWarning,
-    showInfo,
-  };
+  const toast = useMemo(
+    () => ({
+      success: showSuccess,
+      error: showError,
+      warning: showWarning,
+      info: showInfo,
+      showSuccess,
+      showError,
+      showWarning,
+      showInfo,
+    }),
+    [showSuccess, showError, showWarning, showInfo]
+  );
 
   const icons = {
     success: CheckCircle2,
@@ -110,12 +113,15 @@ export const ToastProvider = ({ children }) => {
     },
   };
 
-  const contextValue = {
-    ...toast,
-    toast,
-    addToast,
-    removeToast,
-  };
+  const contextValue = useMemo(
+    () => ({
+      ...toast,
+      toast,
+      addToast,
+      removeToast,
+    }),
+    [toast, addToast, removeToast]
+  );
 
   return (
     <ToastContext.Provider value={contextValue}>

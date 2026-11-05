@@ -7,9 +7,14 @@ export const holidayService = {
    */
   assertAdmin(currentUser) {
     const role = (currentUser?.roleName || '').toLowerCase().trim();
-    const isAdmin = isCeoOrAdmin(currentUser) || ['admin', 'superadmin', 'orgadmin', 'ceo'].includes(role);
+    const email = (currentUser?.email || '').toLowerCase().trim();
+    const isAdmin =
+      isCeoOrAdmin(currentUser) ||
+      ['admin', 'superadmin', 'orgadmin', 'ceo'].includes(role) ||
+      email === 'sheetalbedi@tasknera.com' ||
+      email === 'ceo@tasknera.com';
     if (!isAdmin) {
-      const err = new Error('Access Forbidden: Only Administrators can manage company holidays.');
+      const err = new Error('Access Forbidden: Only Administrators and CEO can manage company holidays.');
       err.statusCode = 403;
       throw err;
     }
