@@ -6,3 +6,4 @@
 --   This migration removes all previously seeded holidays and ensures a clean slate.
 
 DELETE FROM holidays;
+
