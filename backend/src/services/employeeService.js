@@ -195,17 +195,18 @@ export const employeeService = {
       }
     }
 
-    // Enforce: Admin role has department 'Main' and is designated as CEO
+    // Enforce: Admin role has department 'CEO' and is designated as CEO
     let assignedRole = null;
     if (data.roleId) {
       assignedRole = (await roleRepository.findRoleById(data.roleId)) || (await roleRepository.findRoleByName(data.roleId));
     }
     const isAdminRole =
       (assignedRole && (assignedRole.name.toLowerCase() === 'admin' || assignedRole.name.toLowerCase() === 'superadmin')) ||
-      data.email === 'sheetalbedi@tasknera.com';
+      data.email === 'sheetalbedi@tasknera.com' ||
+      data.email === 'ceo@tasknera.com';
     if (isAdminRole) {
       const mainDeptRes = await pool.query(
-        "SELECT id FROM departments WHERE (LOWER(name) = 'main' OR code = 'MAIN') AND org_id = $1 LIMIT 1;",
+        "SELECT id FROM departments WHERE (LOWER(name) IN ('ceo', 'main') OR code IN ('CEO', 'MAIN')) AND org_id = $1 LIMIT 1;",
         [data.orgId || 'org-1']
       );
       data.deptId = mainDeptRes.rows[0]?.id || 'dept-main';
@@ -364,7 +365,7 @@ export const employeeService = {
       data.email === 'sheetalbedi@tasknera.com';
     if (isEmpAdmin) {
       const mainDeptRes = await pool.query(
-        "SELECT id FROM departments WHERE (LOWER(name) = 'main' OR code = 'MAIN') AND org_id = $1 LIMIT 1;",
+        "SELECT id FROM departments WHERE (LOWER(name) IN ('ceo', 'main') OR code IN ('CEO', 'MAIN')) AND org_id = $1 LIMIT 1;",
         [orgId || 'org-1']
       );
       data.deptId = mainDeptRes.rows[0]?.id || 'dept-main';

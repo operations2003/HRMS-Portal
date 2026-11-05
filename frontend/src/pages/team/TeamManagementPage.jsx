@@ -442,9 +442,10 @@ export const TeamManagementPage = () => {
         const desig = isAdminOrCeo
           ? 'CEO'
           : (typeof row.designation === 'object' ? (row.designation?.title || row.designation?.name) : row.designation) || row.designationTitle || row.jobTitle || 'Staff';
+        const rawDept = (typeof row.department === 'object' ? row.department?.name : row.department) || row.departmentName;
         const dept = isAdminOrCeo
-          ? 'Main'
-          : (typeof row.department === 'object' ? row.department?.name : row.department) || row.departmentName || 'Department';
+          ? 'CEO'
+          : (rawDept === 'Main' ? 'CEO' : (rawDept || 'Department'));
         return (
           <div>
             <p className="text-xs font-medium text-slate-800">{desig}</p>

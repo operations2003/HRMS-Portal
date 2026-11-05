@@ -660,7 +660,7 @@ export const ProfilePage = () => {
               </span>
               <span className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300 font-medium">
                 <Building2 className="w-3.5 h-3.5 text-slate-400" />
-                {isAdmin ? 'Main' : ((typeof profile?.department === 'object' ? (profile.department?.name || profile.department?.title) : profile?.department) || 'General')}
+                {isAdmin ? 'CEO' : (((typeof profile?.department === 'object' ? (profile.department?.name || profile.department?.title) : profile?.department) === 'Main' ? 'CEO' : (typeof profile?.department === 'object' ? (profile.department?.name || profile.department?.title) : profile?.department)) || 'General')}
               </span>
               <span className="flex items-center gap-1.5">
                 <Users className="w-3.5 h-3.5 text-slate-400" />

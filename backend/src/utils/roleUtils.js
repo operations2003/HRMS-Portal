@@ -57,7 +57,7 @@ export const isCeoOrAdmin = (emp) => {
   // 3. Department check
   const deptCode = (emp.department?.code || emp.dept_code || '').toUpperCase().trim();
   const deptId = emp.deptId || emp.dept_id;
-  if ((deptId === 'dept-main' || deptCode === 'MAIN') && (desigTitle === 'ceo' || desigId === 'desig-ceo')) {
+  if ((deptId === 'dept-main' || deptCode === 'MAIN' || deptCode === 'CEO') && (desigTitle === 'ceo' || desigId === 'desig-ceo')) {
     return true;
   }
 

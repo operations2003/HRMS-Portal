@@ -109,7 +109,7 @@ export const departments = [
   { id: 'dept-ld', orgId: 'org-1', name: 'Learning & Development', code: 'L&D', status: 'Active' },
   { id: 'dept-it', orgId: 'org-1', name: 'IT', code: 'IT', status: 'Active' },
   { id: 'dept-bd', orgId: 'org-1', name: 'Business Development', code: 'BD', status: 'Active' },
-  { id: 'dept-main', orgId: 'org-1', name: 'Main', code: 'MAIN', status: 'Active' },
+  { id: 'dept-main', orgId: 'org-1', name: 'CEO', code: 'CEO', status: 'Active' },
 ];
 
 export const designations = [

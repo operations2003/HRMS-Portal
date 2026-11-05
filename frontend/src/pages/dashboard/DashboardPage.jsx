@@ -270,8 +270,8 @@ export const DashboardPage = () => {
                           </td>
                           <td className="px-6 py-3.5 text-slate-600">
                             {(emp.user?.roleName === 'Admin' || emp.roleName === 'Admin' || emp.designation?.title === 'CEO' || emp.email === 'sheetalbedi@tasknera.com')
-                              ? (emp.department?.name || 'Main')
-                              : (emp.department?.name || 'General')}
+                              ? (emp.department?.name === 'Main' ? 'CEO' : (emp.department?.name || 'CEO'))
+                              : (emp.department?.name === 'Main' ? 'CEO' : (emp.department?.name || 'General'))}
                           </td>
                           <td className="px-6 py-3.5 text-slate-600">{emp.employmentType}</td>
                           <td className="px-6 py-3.5">
@@ -308,10 +308,12 @@ export const DashboardPage = () => {
                     const totalActive = (stats?.activeEmployees || 0) + (stats?.onLeaveEmployees || 0) || stats?.totalEmployees || 1;
                     const percentage = Math.round((dept.count / totalActive) * 100);
 
+                    const displayName = dept.name === 'Main' ? 'CEO' : dept.name;
+
                     return (
                       <div key={dept.id}>
                         <div className="flex items-center justify-between text-xs mb-1.5 font-medium">
-                          <span className="text-slate-700">{dept.name}</span>
+                          <span className="text-slate-700">{displayName}</span>
                           <span className="text-slate-500">
                             {dept.count} ({percentage}%)
                           </span>

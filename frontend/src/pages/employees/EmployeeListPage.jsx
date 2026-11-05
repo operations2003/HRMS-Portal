@@ -1167,17 +1167,18 @@ export const EmployeeListPage = () => {
       header: 'Department',
       accessor: (row) =>
         (row.user?.roleName === 'Admin' || row.roleName === 'Admin' || row.designation?.title === 'CEO' || row.email === 'sheetalbedi@tasknera.com')
-          ? (row.department?.name || 'Main')
-          : (row.department?.name || 'Unassigned'),
+          ? (row.department?.name === 'Main' ? 'CEO' : (row.department?.name || 'CEO'))
+          : (row.department?.name === 'Main' ? 'CEO' : (row.department?.name || 'Unassigned')),
       render: (row) => {
         const isAdminOrCeo =
           row.user?.roleName === 'Admin' ||
           row.roleName === 'Admin' ||
           row.designation?.title === 'CEO' ||
           row.email === 'sheetalbedi@tasknera.com';
+        const rawDept = row.department?.name === 'Main' ? 'CEO' : row.department?.name;
         const deptTitle = isAdminOrCeo
-          ? (row.department?.name && row.department?.name !== 'Unassigned' ? row.department.name : 'Main')
-          : (row.department?.name || 'Unassigned');
+          ? (rawDept && rawDept !== 'Unassigned' ? rawDept : 'CEO')
+          : (rawDept || 'Unassigned');
         const desigTitle = isAdminOrCeo
           ? (row.designation?.title || 'CEO')
           : (row.designation?.title || 'Staff');
@@ -3036,8 +3037,8 @@ export const EmployeeListPage = () => {
                 </div>
                 <div className="font-medium text-slate-800">
                   {(viewingEmployee.user?.roleName === 'Admin' || viewingEmployee.roleName === 'Admin' || viewingEmployee.email === 'sheetalbedi@tasknera.com')
-                    ? (viewingEmployee.department?.name || 'Main')
-                    : (viewingEmployee.department?.name || 'General')}
+                    ? (viewingEmployee.department?.name === 'Main' ? 'CEO' : (viewingEmployee.department?.name || 'CEO'))
+                    : (viewingEmployee.department?.name === 'Main' ? 'CEO' : (viewingEmployee.department?.name || 'General'))}
                 </div>
               </div>
 
