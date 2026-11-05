@@ -92,12 +92,6 @@ export const Sidebar = ({ isOpen, onClose }) => {
           roles: ['Manager', 'HR', 'HRManager'],
           excludeRoles: ['Admin', 'SuperAdmin', 'OrgAdmin'],
         },
-        {
-          name: 'Exit Management',
-          path: '/resignation',
-          icon: LogOut,
-          permission: ['exit:read', 'exit:write', 'employee:read'],
-        },
       ],
     },
 
@@ -143,7 +137,22 @@ export const Sidebar = ({ isOpen, onClose }) => {
       ],
     },
 
-    // 5. Company & Administration
+    // 5. Exit Management (Single direct 1-click access)
+    {
+      id: 'exit-management',
+      title: 'Exit Management',
+      icon: LogOut,
+      items: [
+        {
+          name: 'Exit Management',
+          path: '/resignation',
+          icon: LogOut,
+          permission: ['exit:read', 'exit:write', 'employee:read'],
+        },
+      ],
+    },
+
+    // 6. Company & Administration
     {
       id: 'company-admin',
       title: 'Company & Admin',
