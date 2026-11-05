@@ -109,8 +109,21 @@ export const exitService = {
    * Update exit / separation details (grounds, reason, last working day)
    */
   async updateExitRequest(id, data) {
-    const res = await http.patch(`/v1/exit/requests/${id}`, data);
-    return res.data;
+    try {
+      const res = await http.patch(`/v1/exit/requests/${id}`, data);
+      return res.data;
+    } catch (err) {
+      if (err.response?.status === 404 || err.message?.includes('404')) {
+        try {
+          const res2 = await http.put(`/v1/exit/requests/${id}`, data);
+          return res2.data;
+        } catch (e2) {
+          const res3 = await http.post(`/v1/exit/requests/${id}/update`, data);
+          return res3.data;
+        }
+      }
+      throw err;
+    }
   },
 
   /**
