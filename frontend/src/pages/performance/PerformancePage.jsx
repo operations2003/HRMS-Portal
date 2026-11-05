@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Award,
   Star,
@@ -18,6 +19,7 @@ import {
   Users,
   Edit,
   Trash2,
+  FileText,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
@@ -639,6 +641,15 @@ export const PerformancePage = () => {
             Appraisal Cycles & Org Records
           </button>
         )}
+
+        <Link
+          to="/reports"
+          className="pb-3 text-slate-500 hover:text-brand-600 transition-colors flex items-center gap-1.5 ml-auto text-xs font-semibold cursor-pointer"
+          title="Open official department evaluation reports & executive PDF dossiers"
+        >
+          <FileText className="w-3.5 h-3.5 text-brand-600" />
+          <span>Evaluation Reports &amp; Dossiers &rarr;</span>
+        </Link>
       </div>
 
       {/* Tab 1: My Appraisals */}

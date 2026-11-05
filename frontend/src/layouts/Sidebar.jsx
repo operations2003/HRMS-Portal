@@ -9,7 +9,6 @@ import {
   Sparkles,
   CalendarCheck,
   CalendarDays,
-  FileText,
   FolderLock,
   LifeBuoy,
   ClipboardList,
@@ -17,7 +16,6 @@ import {
   LogOut,
   UserX,
   Sliders,
-  KeyRound,
   Wallet,
   CheckSquare,
   GraduationCap,
@@ -114,7 +112,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
       icon: Award,
       items: [
         {
-          name: 'Appraisals & Reviews',
+          name: 'Appraisals & Reports',
           path: '/performance',
           icon: Award,
           permission: ['performance:read', 'employee:read'],
@@ -124,12 +122,6 @@ export const Sidebar = ({ isOpen, onClose }) => {
           path: '/tasks',
           icon: CheckSquare,
           permission: ['task:read', 'employee:read'],
-        },
-        {
-          name: 'Performance Reports',
-          path: '/reports',
-          icon: FileText,
-          permission: ['employee:read'],
         },
         {
           name: 'Learning & Development',
@@ -174,12 +166,6 @@ export const Sidebar = ({ isOpen, onClose }) => {
       icon: BookOpen,
       items: [
         {
-          name: 'Company Documents',
-          path: '/company-documents',
-          icon: FolderLock,
-          permission: ['employee:read'],
-        },
-        {
           name: 'Company Policies',
           path: '/policies',
           icon: BookOpen,
@@ -207,14 +193,8 @@ export const Sidebar = ({ isOpen, onClose }) => {
       icon: LogOut,
       items: [
         {
-          name: 'Resignation',
+          name: 'Resignations & Clearances',
           path: '/resignation',
-          icon: LogOut,
-          permission: ['exit:read', 'exit:write', 'employee:read'],
-        },
-        {
-          name: 'Exit Checklist & Clearances',
-          path: '/exit-checklist',
           icon: ClipboardList,
           permission: ['exit:read', 'exit:write', 'employee:read'],
         },
@@ -242,16 +222,10 @@ export const Sidebar = ({ isOpen, onClose }) => {
           permission: 'org:read',
         },
         {
-          name: 'User Accounts',
+          name: 'Users & Roles',
           path: '/users',
           icon: UserCheck,
           permission: 'user:write',
-        },
-        {
-          name: 'Roles & RBAC',
-          path: '/roles',
-          icon: KeyRound,
-          roles: ['Admin', 'SuperAdmin', 'OrgAdmin'],
         },
         {
           name: 'Admin Settings',
@@ -283,7 +257,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
       if (group.excludeRoles) {
         const userRoleStr = (user?.roleName || user?.role?.name || user?.role || '').toLowerCase().trim();
         const excluded = group.excludeRoles.map((r) => r.toLowerCase().trim());
-        if (excluded.includes(userRoleStr) || excluded.some((r) => userRoleStr.includes(r))) return null;
+        if (excluded.includes(userRoleStr)) return null;
       }
       if (group.roles && !hasRole(group.roles)) return null;
       const permittedItems = group.items.filter(isItemPermitted);

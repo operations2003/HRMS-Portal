@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { userService } from '../../services/userService.js';
 import { orgService } from '../../services/orgService.js';
 import {
@@ -9,6 +10,7 @@ import {
   Building2,
   Search,
   Key,
+  KeyRound,
   ShieldCheck,
   Eye,
   CheckCircle2,
@@ -293,11 +295,18 @@ export const UserListPage = () => {
           </p>
         </div>
 
-        <Can permission="user:write">
-          <Button variant="primary" icon={Plus} onClick={handleOpenCreate}>
-            Add User Account
-          </Button>
-        </Can>
+        <div className="flex items-center gap-2.5">
+          <Link to="/roles">
+            <Button variant="outline" icon={KeyRound}>
+              Roles & Permissions
+            </Button>
+          </Link>
+          <Can permission="user:write">
+            <Button variant="primary" icon={Plus} onClick={handleOpenCreate}>
+              Add User Account
+            </Button>
+          </Can>
+        </div>
       </div>
 
       {/* Filter Bar */}
