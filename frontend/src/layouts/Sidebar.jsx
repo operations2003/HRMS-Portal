@@ -74,12 +74,6 @@ export const Sidebar = ({ isOpen, onClose }) => {
           permission: 'employee:read',
         },
         {
-          name: 'Departments',
-          path: '/departments',
-          icon: Building2,
-          roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
-        },
-        {
           name: 'Documents',
           path: '/documents',
           icon: FolderLock,
@@ -158,6 +152,12 @@ export const Sidebar = ({ isOpen, onClose }) => {
       title: 'Company & Admin',
       icon: Sliders,
       items: [
+        {
+          name: 'Departments',
+          path: '/departments',
+          icon: Building2,
+          roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
+        },
         {
           name: 'Company Policies',
           path: '/policies',
