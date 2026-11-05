@@ -445,13 +445,31 @@ export const shiftManagementService = {
       [empIds, start, end]
     );
 
-    // 7. Note: Company works on US-based calendars where leave is ONLY on Sundays.
-    // Indian public holidays are not considered.
-    const holidayRes = { rows: [] };
+    // 7. Company declared holidays: query active holidays for the date range
+    const holidayRes = await pool.query(
+      `SELECT id, name, TO_CHAR(holiday_date, 'YYYY-MM-DD') AS "holidayDate", holiday_type AS "holidayType", is_optional AS "isOptional", description
+       FROM holidays
+       WHERE org_id = $1
+         AND status = 'Active'
+         AND holiday_date >= $2::date
+         AND holiday_date <= $3::date
+       ORDER BY holiday_date ASC;`,
+      [currentUser.orgId || 'org-1', start, end]
+    );
     const holidaysByDate = {};
+    for (const h of holidayRes.rows) {
+      holidaysByDate[h.holidayDate] = {
+        id: h.id,
+        name: h.name,
+        holidayDate: h.holidayDate,
+        type: h.holidayType,
+        isOptional: h.isOptional,
+        description: h.description,
+      };
+    }
 
     days.forEach((day) => {
-      day.holiday = null;
+      day.holiday = holidaysByDate[day.dateKey] || null;
     });
 
     const customShiftsByEmpAndDate = new Map();
@@ -620,9 +638,8 @@ export const shiftManagementService = {
 
         if (isSunday || isWeeklyOff) {
           weeklyOffDaysCount++;
-        } else if (shiftType === 'HL' || shiftType === 'HOLIDAY') {
-          // HL roster code counts as Holiday (similar to database holidays)
-          // Don't count it as leave or half day
+        } else if (holiday || shiftType === 'HL' || shiftType === 'HOLIDAY') {
+          // Holiday: does not count towards scheduled working days
         } else if (isHalfDay) {
           halfDaysCount++;
           scheduledDaysCount += 0.5;
@@ -651,7 +668,10 @@ export const shiftManagementService = {
           cellText = 'WO';
         } else if (holiday) {
           displayType = 'HOLIDAY';
-          cellText = 'Holiday';
+          cellText = 'HL';
+          shiftType = 'HL';
+          shiftLabel = holiday.name || 'Company Holiday';
+          shortLabel = 'HL';
         } else if (shiftType === 'HL' || shiftType === 'HOLIDAY') {
           // HL = Holiday roster code (distinct from Half Day)
           displayType = 'HOLIDAY';

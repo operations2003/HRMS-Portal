@@ -23,6 +23,7 @@ import {
   Edit3,
   Trash2,
   Search,
+  Sun,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
@@ -32,6 +33,7 @@ import { ApplyLeaveModal } from '../../components/leave/ApplyLeaveModal.jsx';
 import { EditLeaveModal } from '../../components/leave/EditLeaveModal.jsx';
 import { LeaveBalanceCards } from '../../components/leave/LeaveBalanceCards.jsx';
 import { EmployeeLeaveBalancesViewer } from '../../components/leave/EmployeeLeaveBalancesViewer.jsx';
+import { CompanyHolidayManagement } from '../../components/leave/CompanyHolidayManagement.jsx';
 import { ApproveLeaveModal } from '../../components/leave/ApproveLeaveModal.jsx';
 import { RejectLeaveModal } from '../../components/leave/RejectLeaveModal.jsx';
 import { Avatar } from '../../components/common/Avatar.jsx';
@@ -60,10 +62,12 @@ export const LeaveManagementPage = () => {
   const canManageTypes = hasRole(['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin']);
   const canEditOrDelete = isHrOrAdmin || canViewTeam;
 
-  // Active Tab: 'my' | 'team' | 'balances' (synced with ?tab= query param)
+  // Active Tab: 'my' | 'team' | 'balances' | 'holidays' (synced with ?tab= query param)
   const tabParam = searchParams.get('tab');
   const [activeTab, setActiveTab] = useState(
-    tabParam === 'balances' && isHrOrAdmin
+    tabParam === 'holidays' && isAdminOrCeo
+      ? 'holidays'
+      : tabParam === 'balances' && isHrOrAdmin
       ? 'balances'
       : isAdminOrCeo
       ? 'team'
@@ -775,14 +779,18 @@ export const LeaveManagementPage = () => {
             <span>Time Off & Leave Management</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
-            {isAdminOrCeo
+            {activeTab === 'holidays'
+              ? 'Company Holiday Management'
+              : isAdminOrCeo
               ? 'Organization Leave Management & Approvals'
               : activeTab === 'team'
               ? 'Manager Leave Approvals'
               : 'Leave Applications'}
           </h1>
           <p className="mt-1 text-sm text-slate-500 leading-relaxed">
-            {isAdminOrCeo
+            {activeTab === 'holidays'
+              ? 'Declare official company holidays and off days. Declared holidays automatically reflect across all employee monthly rosters as HL.'
+              : isAdminOrCeo
               ? 'Executive oversight and approval authority for all organizational employee leave requests.'
               : activeTab === 'team'
               ? 'Review, approve, or reject authorized pending leave requests from your reporting team.'
@@ -917,10 +925,27 @@ export const LeaveManagementPage = () => {
               <span>Employee Leave Balances</span>
             </button>
           )}
+
+          {isAdminOrCeo && (
+            <button
+              type="button"
+              onClick={() => handleTabChange('holidays')}
+              className={`pb-4 px-1 border-b-2 font-semibold text-sm transition-colors flex items-center gap-2 cursor-pointer ${
+                activeTab === 'holidays'
+                  ? 'border-brand-500 text-brand-600 font-bold'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              <Sun className="w-4 h-4 text-rose-500" />
+              <span>Holidays</span>
+            </button>
+          )}
         </nav>
       </div>
 
-      {activeTab === 'balances' && isHrOrAdmin ? (
+      {activeTab === 'holidays' && isAdminOrCeo ? (
+        <CompanyHolidayManagement />
+      ) : activeTab === 'balances' && isHrOrAdmin ? (
         <EmployeeLeaveBalancesViewer
           onAssignLeave={(empId) => {
             setAssignEmployeeId(empId);
