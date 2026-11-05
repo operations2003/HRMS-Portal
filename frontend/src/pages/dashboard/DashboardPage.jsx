@@ -7,7 +7,6 @@ import {
   Users,
   UserCheck,
   Briefcase,
-  Plus,
   ArrowRight,
   Sparkles,
   AlertTriangle,
@@ -19,7 +18,6 @@ import { Badge } from '../../components/common/Badge.jsx';
 import { Button } from '../../components/common/Button.jsx';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
 import { EmptyState } from '../../components/common/EmptyState.jsx';
-import { Can } from '../../components/rbac/Can.jsx';
 import { ManagerDashboardView } from './ManagerDashboardView.jsx';
 import { EmployeeEngagementHub } from '../../components/dashboard/EmployeeEngagementHub.jsx';
 
@@ -160,20 +158,6 @@ export const DashboardPage = () => {
               People. Processes. Performance. Manage your workforce with enterprise-grade precision and real-time visibility.
             </p>
           </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <Can permission="employee:write">
-              <Button
-                variant="primary"
-                size="md"
-                icon={Plus}
-                onClick={() => navigate('/employees?action=new')}
-                className="shadow-lg shadow-brand-500/30"
-              >
-                Add Employee
-              </Button>
-            </Can>
-          </div>
         </div>
 
         {/* Ambient brand glow in corner */}
@@ -277,8 +261,8 @@ export const DashboardPage = () => {
                       icon={Inbox}
                       title="No employee records"
                       description="Staff registrations will appear in this feed."
-                      actionLabel="Add Employee"
-                      onAction={() => navigate('/employees?action=new')}
+                      actionLabel="View Directory"
+                      onAction={() => navigate('/employees')}
                     />
                   </div>
                 )}
