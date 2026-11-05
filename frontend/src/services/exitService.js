@@ -109,17 +109,26 @@ export const exitService = {
    * Update exit / separation details (grounds, reason, last working day)
    */
   async updateExitRequest(id, data) {
+    const isNotFound = (e) =>
+      e?.status === 404 ||
+      e?.response?.status === 404 ||
+      e?.message?.toLowerCase().includes('not found') ||
+      e?.message?.includes('404');
+
     try {
       const res = await http.patch(`/v1/exit/requests/${id}`, data);
       return res.data;
     } catch (err) {
-      if (err.response?.status === 404 || err.message?.includes('404')) {
+      if (isNotFound(err)) {
         try {
           const res2 = await http.put(`/v1/exit/requests/${id}`, data);
           return res2.data;
         } catch (e2) {
-          const res3 = await http.post(`/v1/exit/requests/${id}/update`, data);
-          return res3.data;
+          if (isNotFound(e2)) {
+            const res3 = await http.post(`/v1/exit/requests/${id}/update`, data);
+            return res3.data;
+          }
+          throw e2;
         }
       }
       throw err;

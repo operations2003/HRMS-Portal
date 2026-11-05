@@ -98,12 +98,8 @@ export const EditTerminationModal = ({ isOpen, onClose, onSuccess, record }) => 
       onClose();
     } catch (err) {
       console.error('Failed to update separation details:', err);
-      const msg = err.response?.data?.message || err.message || '';
-      if (msg.includes('not found') || err.response?.status === 404) {
-        setError('The backend server needs to be restarted to load the update route. Please restart your backend server.');
-      } else {
-        setError(msg || 'Failed to update separation details.');
-      }
+      const msg = err.message || err.response?.data?.message || 'Failed to update separation details.';
+      setError(msg);
     } finally {
       setIsSubmitting(false);
     }

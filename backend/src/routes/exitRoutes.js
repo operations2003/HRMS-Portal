@@ -160,21 +160,21 @@ router.get(
 );
 
 router.patch(
-  '/requests/:id',
+  ['/requests/:id', '/:id', '/request/:id'],
   requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']),
   authorize(['exit:admin', 'exit:write']),
   exitController.updateExitRequest
 );
 
 router.put(
-  '/requests/:id',
+  ['/requests/:id', '/:id', '/request/:id'],
   requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']),
   authorize(['exit:admin', 'exit:write']),
   exitController.updateExitRequest
 );
 
 router.post(
-  '/requests/:id/update',
+  ['/requests/:id', '/requests/:id/update', '/:id/update', '/:id'],
   requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']),
   authorize(['exit:admin', 'exit:write']),
   exitController.updateExitRequest
