@@ -289,11 +289,11 @@ export const TerminationPage = () => {
               size="xs"
               variant="outline"
               onClick={() => setViewingExitId(row.id)}
-              title="View Complete Separation Dossier"
+              title="View Exit Details"
               className="flex items-center gap-1"
             >
               <Eye className="w-3.5 h-3.5" />
-              <span>Dossier</span>
+              <span>Details</span>
             </Button>
 
             <Button

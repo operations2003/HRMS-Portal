@@ -480,7 +480,7 @@ export const HROperationsPage = () => {
             icon={Eye}
             onClick={() => setSelectedEmployeeId(row.id)}
           >
-            360° Dossier
+            Profile Details
           </Button>
           <Button
             size="sm"

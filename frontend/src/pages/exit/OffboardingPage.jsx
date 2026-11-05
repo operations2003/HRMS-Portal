@@ -481,7 +481,7 @@ export const OffboardingPage = ({ embedded = false }) => {
                 : 'border-transparent text-slate-500 hover:text-slate-700'
             }`}
           >
-            My Offboarding Dossier
+            My Offboarding Status
           </button>
         </div>
       )}
@@ -563,7 +563,7 @@ export const OffboardingPage = ({ embedded = false }) => {
             pagination={pagination}
             onPageChange={(p) => fetchExits(p)}
             emptyTitle="No Offboarding Records Found"
-            emptyDescription="No separation dossiers match the current authorized scope and filter criteria."
+            emptyDescription="No exit records match the current filter criteria."
           />
         </div>
       )}
@@ -631,7 +631,7 @@ export const OffboardingPage = ({ embedded = false }) => {
                     icon={Eye}
                     onClick={() => setViewingExitId(myExit.id)}
                   >
-                    Open Comprehensive Dossier
+                    View Details
                   </Button>
                 </div>
 

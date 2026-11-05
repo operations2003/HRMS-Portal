@@ -120,7 +120,7 @@ export const ResignationPage = () => {
       setMyExit(data);
     } catch (err) {
       if (err.status !== 404) {
-        setMyError(err.message || 'Failed to load resignation dossier.');
+        setMyError(err.message || 'Failed to load resignation details.');
       } else {
         setMyExit(null);
       }
@@ -442,7 +442,7 @@ export const ResignationPage = () => {
                     size="sm"
                     icon={ShieldCheck}
                     onClick={() => setInspectingDossierId(row.id)}
-                    title="Manage Clearances & Dossier"
+                    title="Manage Clearances & Details"
                   >
                     Clearances
                   </Button>
@@ -586,7 +586,7 @@ export const ResignationPage = () => {
         <div className="space-y-6">
           {isLoadingMy ? (
             <div className="bg-white rounded-2xl border border-slate-200/80 p-8 shadow-sm">
-              <LoadingSpinner message="Checking resignation and exit dossier status..." />
+              <LoadingSpinner message="Checking resignation and exit status..." />
             </div>
           ) : myError ? (
             <Alert variant="danger">{myError}</Alert>
@@ -645,7 +645,7 @@ export const ResignationPage = () => {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
                   <div>
                     <span className="text-[11px] font-mono font-semibold text-slate-400 uppercase tracking-wider">
-                      Dossier Reference: {myExit.id}
+                      Reference ID: {myExit.id}
                     </span>
                     <h3 className="text-lg font-bold text-slate-900 mt-0.5">Resignation Details</h3>
                   </div>

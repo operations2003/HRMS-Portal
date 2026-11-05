@@ -98,7 +98,7 @@ export const FnFSettlementModal = ({
         isOpen={isOpen}
         onClose={onClose}
         title={`Full & Final Settlement — ${empName}`}
-        subtitle={`Dossier Ref: ${exitRequestId}`}
+        subtitle={`Reference ID: ${exitRequestId}`}
         maxWidth="max-w-5xl"
       >
         <div className="space-y-4">

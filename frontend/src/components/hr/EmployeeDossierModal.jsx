@@ -64,13 +64,13 @@ export const EmployeeDossierModal = ({ isOpen, onClose, employeeId }) => {
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Employee 360° Operational Dossier"
-      subtitle={`Comprehensive workforce record &bull; ${fullName}`}
+      title="Employee Profile Details"
+      subtitle={`Employee record &bull; ${fullName}`}
       maxWidth="max-w-3xl"
     >
       {isLoading ? (
         <div className="py-12 text-center text-sm text-slate-500">
-          Loading employee operational dossier...
+          Loading employee details...
         </div>
       ) : error ? (
         <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm">

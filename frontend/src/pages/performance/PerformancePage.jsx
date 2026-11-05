@@ -645,10 +645,10 @@ export const PerformancePage = () => {
         <Link
           to="/reports"
           className="pb-3 text-slate-500 hover:text-brand-600 transition-colors flex items-center gap-1.5 ml-auto text-xs font-semibold cursor-pointer"
-          title="Open official department evaluation reports & executive PDF dossiers"
+          title="Open official department evaluation reports"
         >
           <FileText className="w-3.5 h-3.5 text-brand-600" />
-          <span>Evaluation Reports &amp; Dossiers &rarr;</span>
+          <span>Evaluation Reports &rarr;</span>
         </Link>
       </div>
 

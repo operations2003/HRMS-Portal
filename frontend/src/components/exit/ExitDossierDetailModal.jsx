@@ -48,7 +48,7 @@ export const ExitDossierDetailModal = ({
       const data = await exitService.getExitById(exitId);
       setDossier(data);
     } catch (err) {
-      setError(err.message || 'Failed to load exit dossier details.');
+      setError(err.message || 'Failed to load exit details.');
     } finally {
       setLoading(false);
     }
@@ -71,7 +71,7 @@ export const ExitDossierDetailModal = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={`Exit Dossier — ${empName}`}
+      title={`Exit Details — ${empName}`}
       subtitle={`Employee Code: ${emp?.empCode || emp?.employeeCode || dossier?.employeeCode || 'N/A'} | Status: ${dossier?.status || 'Active'}`}
       maxWidth="max-w-4xl"
     >

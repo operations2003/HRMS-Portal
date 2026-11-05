@@ -56,7 +56,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
           permission: 'employee:read',
         },
         {
-          name: 'Shifts & Roster',
+          name: 'Shifts',
           path: '/shifts',
           icon: CalendarCheck,
           roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin', 'Manager', 'TeamLead'],
@@ -69,7 +69,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
           permission: 'attendance:read',
         },
         {
-          name: 'Leaves & Approvals',
+          name: 'Leaves',
           path: '/leaves',
           icon: CalendarDays,
           permission: 'leave:read',
@@ -81,20 +81,20 @@ export const Sidebar = ({ isOpen, onClose }) => {
           permission: ['document:read', 'employee:read'],
         },
         {
-          name: 'Team Management',
+          name: 'Team',
           path: '/team',
           icon: UserCheck,
           roles: ['Manager', 'HR', 'HRManager'],
           excludeRoles: ['Admin', 'SuperAdmin', 'OrgAdmin'],
         },
         {
-          name: 'Company Policies',
+          name: 'Policies',
           path: '/policies',
           icon: BookOpen,
           permission: ['employee:read'],
         },
         {
-          name: 'Help Desk & Requests',
+          name: 'Help Desk',
           path: '/helpdesk',
           icon: LifeBuoy,
           permission: ['helpdesk:read', 'request:read', 'employee:read'],
@@ -102,26 +102,26 @@ export const Sidebar = ({ isOpen, onClose }) => {
       ],
     },
 
-    // 3. Performance & Goals
+    // 3. Performance
     {
       id: 'performance-goals',
-      title: 'Performance & Goals',
+      title: 'Performance',
       icon: Award,
       items: [
         {
-          name: 'Appraisals & Reviews',
+          name: 'Reviews',
           path: '/performance',
           icon: Award,
           permission: ['performance:read', 'employee:read'],
         },
         {
-          name: 'Tasks & Goals',
+          name: 'Tasks',
           path: '/tasks',
           icon: CheckSquare,
           permission: ['task:read', 'employee:read'],
         },
         {
-          name: 'Learning & Training',
+          name: 'Training',
           path: '/training',
           icon: GraduationCap,
           permission: ['training:read', 'employee:read'],
@@ -129,14 +129,14 @@ export const Sidebar = ({ isOpen, onClose }) => {
       ],
     },
 
-    // 4. Payroll & Finance (Single direct 1-click access)
+    // 4. Payroll (Single direct 1-click access)
     {
       id: 'payroll-finance',
-      title: 'Payroll & Finance',
+      title: 'Payroll',
       icon: Wallet,
       items: [
         {
-          name: (user?.roleName || '').toLowerCase().includes('admin') ? 'Payroll Management' : 'Payroll & Slips',
+          name: 'Payroll',
           path: '/payroll',
           icon: Wallet,
           permission: ['employee:read'],
@@ -144,14 +144,14 @@ export const Sidebar = ({ isOpen, onClose }) => {
       ],
     },
 
-    // 5. Exit Management (Single direct 1-click access)
+    // 5. Exit (Single direct 1-click access)
     {
       id: 'exit-management',
-      title: 'Exit Management',
+      title: 'Exit',
       icon: LogOut,
       items: [
         {
-          name: 'Exit Management',
+          name: 'Exit',
           path: '/resignation',
           icon: LogOut,
           permission: ['exit:read', 'exit:write', 'employee:read'],
@@ -173,7 +173,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
           roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
         },
         {
-          name: 'System Administration',
+          name: 'Admin Settings',
           path: '/admin-settings',
           icon: Sliders,
           roles: ['Admin', 'SuperAdmin', 'OrgAdmin'],

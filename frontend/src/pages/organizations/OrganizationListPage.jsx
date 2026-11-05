@@ -356,7 +356,7 @@ export const OrganizationListPage = ({ embedded = false }) => {
       >
         {loadingDetails ? (
           <div className="p-8">
-            <LoadingSpinner message="Fetching organization dossier..." />
+            <LoadingSpinner message="Fetching organization details..." />
           </div>
         ) : viewingOrg ? (
           <div className="space-y-6">
