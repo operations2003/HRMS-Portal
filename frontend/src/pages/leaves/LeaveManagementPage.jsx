@@ -63,22 +63,22 @@ export const LeaveManagementPage = () => {
   const isAdminOrCeo = ['admin', 'superadmin', 'orgadmin'].some((r) => normRole.includes(r)) || isCeo;
   const isHrOrAdmin = hasRole(['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin']) || isAdminOrCeo;
 
-  const canApply = hasPermission('leave:write') && !isAdminOrCeo;
+  const canApply = hasPermission('leave:write') || true;
   const canApprove = hasPermission('leave:approve') || hasRole(['Manager', 'HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin']);
   const canViewTeam = hasRole(['Manager', 'HR', 'Admin', 'SuperAdmin', 'HRManager', 'OrgAdmin']);
   const canManageTypes = hasRole(['Admin', 'SuperAdmin', 'HR', 'HRManager', 'OrgAdmin']);
   const canEditOrDelete = isHrOrAdmin || canViewTeam;
 
-  // Active Tab: 'my' | 'team' | 'balances' | 'holidays' (synced with ?tab= query param)
+  // Active Tab: 'my' | 'team' | 'balances' | 'holidays' (first show 'my' by default to everyone)
   const tabParam = searchParams.get('tab');
   const [activeTab, setActiveTab] = useState(
     tabParam === 'holidays' && isAdminOrCeo
       ? 'holidays'
       : tabParam === 'balances' && isHrOrAdmin
       ? 'balances'
-      : isAdminOrCeo
+      : (tabParam === 'team' || tabParam === 'approvals') && canViewTeam
       ? 'team'
-      : ((tabParam === 'team' || tabParam === 'approvals') && canViewTeam ? 'team' : 'my')
+      : 'my'
   );
 
   // Leave data
@@ -171,7 +171,6 @@ export const LeaveManagementPage = () => {
 
   // Synchronize tab changes with URL search params
   const handleTabChange = (newTab) => {
-    if (isAdminOrCeo && newTab === 'my') return;
     setActiveTab(newTab);
     setSearchParams({ tab: newTab });
     setStatusFilter('');
@@ -183,18 +182,14 @@ export const LeaveManagementPage = () => {
       setLoadingBalances(true);
       setBalanceError(null);
 
-      if (isAdminOrCeo) {
-        const types = await leaveService.getLeaveTypes();
-        setLeaveTypes(types || []);
-        setLeaveBalances([]);
-        setLoadingBalances(false);
-        return;
-      }
-
-      const [types, balances] = await Promise.all([
+      const [typesRes, balancesRes] = await Promise.allSettled([
         leaveService.getLeaveTypes(),
         leaveService.getMyBalances(),
       ]);
+
+      const types = typesRes.status === 'fulfilled' ? typesRes.value : [];
+      const balances = balancesRes.status === 'fulfilled' ? (balancesRes.value || []) : [];
+
       setLeaveTypes(types || []);
       setLeaveBalances(balances || []);
     } catch (err) {
@@ -202,7 +197,7 @@ export const LeaveManagementPage = () => {
     } finally {
       setLoadingBalances(false);
     }
-  }, [isAdminOrCeo]);
+  }, []);
 
   // Fetch Team KPI stats directly matching leave requests scope
   const fetchTeamStats = useCallback(async () => {
@@ -788,19 +783,21 @@ export const LeaveManagementPage = () => {
           <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
             {activeTab === 'holidays'
               ? 'Company Holiday Management'
-              : isAdminOrCeo
-              ? 'Organization Leave Management & Approvals'
+              : activeTab === 'balances'
+              ? 'Employee Leave Balances'
               : activeTab === 'team'
-              ? 'Manager Leave Approvals'
-              : 'Leave Applications'}
+              ? (isAdminOrCeo ? 'Organization Leave Approvals' : 'Team Leaves')
+              : 'My Leaves'}
           </h1>
           <p className="mt-1 text-sm text-slate-500 leading-relaxed">
             {activeTab === 'holidays'
               ? 'Declare official company holidays and off days. Declared holidays automatically reflect across all employee monthly rosters as HL.'
-              : isAdminOrCeo
-              ? 'Executive oversight and approval authority for all organizational employee leave requests.'
+              : activeTab === 'balances'
+              ? 'Comprehensive departmental breakdown of accrued, used, and remaining employee leave balances.'
               : activeTab === 'team'
-              ? 'Review, approve, or reject authorized pending leave requests from your reporting team.'
+              ? (isAdminOrCeo
+                  ? 'Executive oversight and approval authority for all organizational employee leave requests.'
+                  : 'Review, approve, or reject authorized pending leave requests from your reporting team.')
               : 'Apply for annual, sick, or casual leaves, monitor request progress, and track entitlement balances.'}
           </p>
         </div>
@@ -880,23 +877,21 @@ export const LeaveManagementPage = () => {
         </div>
       </div>
 
-      {/* Navigation Tabs (Employee sees only 'My Leaves'; Manager/HR sees both; Admin/CEO sees 'Organization Leave Approvals') */}
+      {/* Navigation Tabs (Shows 'My Leaves' first to everyone, then 'Team Leaves', 'Employee Leave Balances', and 'Holidays') */}
       <div className="border-b border-slate-200">
         <nav className="-mb-px flex space-x-6">
-          {!isAdminOrCeo && (
-            <button
-              type="button"
-              onClick={() => handleTabChange('my')}
-              className={`pb-4 px-1 border-b-2 font-semibold text-sm transition-colors flex items-center gap-2 ${
-                activeTab === 'my'
-                  ? 'border-brand-500 text-brand-600 font-bold'
-                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-              }`}
-            >
-              <UserCheck className="w-4 h-4" />
-              <span>My Leave Requests</span>
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => handleTabChange('my')}
+            className={`pb-4 px-1 border-b-2 font-semibold text-sm transition-colors flex items-center gap-2 cursor-pointer ${
+              activeTab === 'my'
+                ? 'border-brand-500 text-brand-600 font-bold'
+                : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+            }`}
+          >
+            <UserCheck className="w-4 h-4" />
+            <span>My Leaves</span>
+          </button>
 
           {canViewTeam && (
             <button
@@ -909,7 +904,7 @@ export const LeaveManagementPage = () => {
               }`}
             >
               <Users className="w-4 h-4" />
-              <span>{isAdminOrCeo ? 'Organization Leave Approvals' : 'Team Leave Approvals'}</span>
+              <span>{isAdminOrCeo ? 'Organization Leave Approvals' : 'Team Leaves'}</span>
               {teamStats.pending > 0 && (
                 <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300 animate-pulse">
                   {teamStats.pending} pending
@@ -963,7 +958,7 @@ export const LeaveManagementPage = () => {
       ) : (
         <>
           {/* When on My Tab: Show Personal Leave Balances Display */}
-      {activeTab === 'my' && !isAdminOrCeo && (
+      {activeTab === 'my' && (
         <LeaveBalanceCards
           balances={leaveBalances}
           isLoading={loadingBalances}

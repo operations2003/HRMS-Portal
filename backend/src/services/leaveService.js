@@ -576,12 +576,11 @@ export const leaveService = {
       allRoles.some((r) => ['admin', 'superadmin', 'orgadmin'].some((adm) => r.includes(adm))) ||
       (user.email || '').toLowerCase() === 'sheetalbedi@tasknera.com';
 
-    if (isAdminOrCeo) {
-      return [];
-    }
-
     const emp = await resolveRequesterEmployee(user);
     if (!emp) {
+      if (isAdminOrCeo) {
+        return [];
+      }
       const error = new Error('No employee profile found for your user account.');
       error.statusCode = 404;
       throw error;
@@ -1089,15 +1088,14 @@ export const leaveService = {
       allRoles.some((r) => ['admin', 'superadmin', 'orgadmin'].some((adm) => r.includes(adm))) ||
       (user.email || '').toLowerCase() === 'sheetalbedi@tasknera.com';
 
-    if (isAdminOrCeo) {
-      return {
-        records: [],
-        pagination: { total: 0, page: 1, limit: 15, totalPages: 0 },
-      };
-    }
-
     const emp = await resolveRequesterEmployee(user);
     if (!emp) {
+      if (isAdminOrCeo) {
+        return {
+          records: [],
+          pagination: { total: 0, page: 1, limit: 15, totalPages: 0 },
+        };
+      }
       const error = new Error('No employee profile found for your user account.');
       error.statusCode = 404;
       throw error;
