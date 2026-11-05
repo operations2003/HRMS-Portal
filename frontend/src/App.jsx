@@ -11,8 +11,6 @@ import { OrganizationListPage } from './pages/organizations/OrganizationListPage
 import { EmployeeListPage } from './pages/employees/EmployeeListPage.jsx';
 import { UserListPage } from './pages/users/UserListPage.jsx';
 import { DepartmentsPage } from './pages/departments/DepartmentsPage.jsx';
-import { OnboardingDashboardPage } from './pages/onboarding/OnboardingDashboardPage.jsx';
-import { OnboardingDetailPage } from './pages/onboarding/OnboardingDetailPage.jsx';
 import { EmployeeDocumentsPage } from './pages/documents/EmployeeDocumentsPage.jsx';
 import { HelpdeskPage } from './pages/helpdesk/HelpdeskPage.jsx';
 import { EmployeeRequestsPage } from './pages/requests/EmployeeRequestsPage.jsx';
@@ -214,6 +212,15 @@ export const App = () => {
               />
 
               <Route
+                path="company-documents"
+                element={
+                  <PermissionRoute permission="employee:read">
+                    <PoliciesPage />
+                  </PermissionRoute>
+                }
+              />
+
+              <Route
                 path="profile"
                 element={
                   <PermissionRoute permission="employee:read">
@@ -280,23 +287,9 @@ export const App = () => {
                 }
               />
 
-              <Route
-                path="onboarding"
-                element={
-                  <PermissionRoute permission="onboarding:read">
-                    <OnboardingDashboardPage />
-                  </PermissionRoute>
-                }
-              />
-
-              <Route
-                path="onboarding/:id"
-                element={
-                  <PermissionRoute permission="onboarding:read">
-                    <OnboardingDetailPage />
-                  </PermissionRoute>
-                }
-              />
+              {/* Legacy Onboarding Redirect to Employees Directory */}
+              <Route path="onboarding" element={<Navigate to="/employees" replace />} />
+              <Route path="onboarding/:id" element={<Navigate to="/employees" replace />} />
 
               <Route
                 path="departments"

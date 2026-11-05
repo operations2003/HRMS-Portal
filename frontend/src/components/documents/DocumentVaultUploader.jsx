@@ -24,7 +24,6 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext.jsx';
-import { onboardingService } from '../../services/onboardingService.js';
 import { documentService } from '../../services/documentService.js';
 import { Badge } from '../common/Badge.jsx';
 import { Button } from '../common/Button.jsx';
@@ -252,8 +251,6 @@ export const DocumentVaultUploader = ({
 
       if (onUpload) {
         await onUpload(formData);
-      } else if (candidateId) {
-        await onboardingService.uploadDocument(candidateId, formData);
       } else {
         await documentService.uploadMyDocument(formData);
       }
@@ -279,11 +276,6 @@ export const DocumentVaultUploader = ({
       setVerifyingDocId(docId);
       if (onVerify) {
         await onVerify(docId, status, reason);
-      } else if (candidateId) {
-        await onboardingService.verifyDocument(docId, {
-          verificationStatus: status,
-          rejectionReason: reason,
-        });
       } else {
         await documentService.verifyDocument(docId, {
           verificationStatus: status,

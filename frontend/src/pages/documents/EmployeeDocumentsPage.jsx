@@ -17,7 +17,7 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { documentService } from '../../services/documentService.js';
 import { employeeService } from '../../services/employeeService.js';
-import { DocumentVaultUploader } from '../../components/onboarding/DocumentVaultUploader.jsx';
+import { DocumentVaultUploader } from '../../components/documents/DocumentVaultUploader.jsx';
 import { Button } from '../../components/common/Button.jsx';
 import { Alert } from '../../components/common/Alert.jsx';
 import { Badge } from '../../components/common/Badge.jsx';

@@ -1138,9 +1138,9 @@ export const HROperationsPage = () => {
                   </p>
                 </div>
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                  <span className="text-[11px] uppercase font-semibold text-slate-500">Active Onboardings</span>
+                  <span className="text-[11px] uppercase font-semibold text-slate-500">Active Probations</span>
                   <p className="text-xl font-bold text-brand-700 mt-1">
-                    {overview.actionItems?.activeOnboardings ?? 0}
+                    {overview.actionItems?.pendingProbations ?? overview.workforce?.probationEmployees ?? 0}
                   </p>
                 </div>
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">

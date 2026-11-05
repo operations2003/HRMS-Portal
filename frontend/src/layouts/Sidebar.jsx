@@ -5,7 +5,6 @@ import {
   Building2,
   Users,
   UserCheck,
-  Briefcase,
   X,
   Sparkles,
   CalendarCheck,
@@ -16,7 +15,6 @@ import {
   ClipboardList,
   Award,
   LogOut,
-  UserMinus,
   UserX,
   Sliders,
   KeyRound,
@@ -35,7 +33,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
   const { user, hasPermission, hasRole } = useAuth();
   const location = useLocation();
 
-  // Top-level direct shortcuts
+  // 1. Dashboard - Top-level direct shortcut
   const directItems = [
     {
       name: 'Dashboard',
@@ -45,8 +43,43 @@ export const Sidebar = ({ isOpen, onClose }) => {
     },
   ];
 
-  // Collapsible dropdown navigation groups
+  // 2-8. Consolidated Navigation Groups
   const navGroups = [
+    // 2. People Management
+    {
+      id: 'people-management',
+      title: 'People Management',
+      icon: Users,
+      items: [
+        {
+          name: 'Employees Directory',
+          path: '/employees',
+          icon: Users,
+          permission: 'employee:read',
+        },
+        {
+          name: 'Departments',
+          path: '/departments',
+          icon: Building2,
+          roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
+        },
+        {
+          name: 'Employee Documents',
+          path: '/documents',
+          icon: FolderLock,
+          permission: ['document:read', 'employee:read'],
+        },
+        {
+          name: 'Team Management',
+          path: '/team',
+          icon: UserCheck,
+          roles: ['Manager', 'HR', 'HRManager'],
+          excludeRoles: ['Admin', 'SuperAdmin', 'OrgAdmin'],
+        },
+      ],
+    },
+
+    // 3. Attendance & Leave
     {
       id: 'attendance-leave',
       title: 'Attendance & Leave',
@@ -65,16 +98,19 @@ export const Sidebar = ({ isOpen, onClose }) => {
           permission: 'leave:read',
         },
         {
-          name: 'Monthly Roster & Schedule',
-          path: '/roster/import',
+          name: 'Roster & Shift Management',
+          path: '/shifts',
           icon: CalendarCheck,
+          roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin', 'Manager', 'TeamLead'],
           permission: 'employee:write',
         },
       ],
     },
+
+    // 4. Performance & Development
     {
-      id: 'performance-growth',
-      title: 'Performance & Growth',
+      id: 'performance-development',
+      title: 'Performance & Development',
       icon: Award,
       items: [
         {
@@ -84,16 +120,16 @@ export const Sidebar = ({ isOpen, onClose }) => {
           permission: ['performance:read', 'employee:read'],
         },
         {
-          name: 'Performance Reports',
-          path: '/reports',
-          icon: FileText,
-          permission: ['employee:read'],
-        },
-        {
           name: 'Tasks & Goals',
           path: '/tasks',
           icon: CheckSquare,
           permission: ['task:read', 'employee:read'],
+        },
+        {
+          name: 'Performance Reports',
+          path: '/reports',
+          icon: FileText,
+          permission: ['employee:read'],
         },
         {
           name: 'Learning & Development',
@@ -109,60 +145,8 @@ export const Sidebar = ({ isOpen, onClose }) => {
         },
       ],
     },
-    {
-      id: 'team-management',
-      title: 'Team',
-      icon: Users,
-      roles: ['Manager', 'HRManager'],
-      excludeRoles: ['Admin', 'SuperAdmin', 'OrgAdmin'],
-      items: [
-        {
-          name: 'Team Management',
-          path: '/team',
-          icon: Users,
-          roles: ['Manager', 'HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
-        },
-        {
-          name: 'Manager Cockpit',
-          path: '/manager',
-          icon: Briefcase,
-          roles: ['Manager', 'HR', 'HRManager'],
-          excludeRoles: ['Admin', 'SuperAdmin', 'OrgAdmin'],
-        },
-        {
-          name: 'Team Appraisals',
-          path: '/performance',
-          icon: Award,
-          roles: ['Manager', 'HR', 'HRManager'],
-          excludeRoles: ['Admin', 'SuperAdmin', 'OrgAdmin'],
-        },
-      ],
-    },
-    {
-      id: 'people',
-      title: 'People',
-      icon: Building2,
-      items: [
-        {
-          name: 'Employees Directory',
-          path: '/employees',
-          icon: Users,
-          permission: 'employee:read',
-        },
-        {
-          name: 'Departments',
-          path: '/departments',
-          icon: Building2,
-          roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
-        },
-        {
-          name: 'Onboarding',
-          path: '/onboarding',
-          icon: UserCheck,
-          roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
-        },
-      ],
-    },
+
+    // 5. Payroll & Finance
     {
       id: 'payroll-finance',
       title: 'Payroll & Finance',
@@ -182,28 +166,30 @@ export const Sidebar = ({ isOpen, onClose }) => {
         },
       ],
     },
+
+    // 6. Company Resources
     {
-      id: 'company',
-      title: 'Company',
+      id: 'company-resources',
+      title: 'Company Resources',
       icon: BookOpen,
       items: [
         {
-          name: 'Documents',
-          path: '/documents',
+          name: 'Company Documents',
+          path: '/company-documents',
           icon: FolderLock,
-          permission: ['document:read', 'employee:read'],
-        },
-        {
-          name: 'Help Desk & Requests',
-          path: '/helpdesk',
-          icon: LifeBuoy,
-          permission: ['helpdesk:read', 'request:read', 'employee:read'],
+          permission: ['employee:read'],
         },
         {
           name: 'Company Policies',
           path: '/policies',
           icon: BookOpen,
           permission: ['employee:read'],
+        },
+        {
+          name: 'Help Desk & Requests',
+          path: '/helpdesk',
+          icon: LifeBuoy,
+          permission: ['helpdesk:read', 'request:read', 'employee:read'],
         },
         {
           name: 'Engagement & Surveys',
@@ -213,6 +199,8 @@ export const Sidebar = ({ isOpen, onClose }) => {
         },
       ],
     },
+
+    // 7. Exit Management
     {
       id: 'exit-management',
       title: 'Exit Management',
@@ -235,12 +223,15 @@ export const Sidebar = ({ isOpen, onClose }) => {
           path: '/termination',
           icon: UserX,
           roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
+          permission: ['exit:admin', 'employee:read'],
         },
       ],
     },
+
+    // 8. System Administration
     {
       id: 'system-admin',
-      title: 'System Admin',
+      title: 'System Administration',
       icon: Sliders,
       roles: ['Admin', 'SuperAdmin', 'OrgAdmin'],
       items: [
@@ -263,21 +254,9 @@ export const Sidebar = ({ isOpen, onClose }) => {
           roles: ['Admin', 'SuperAdmin', 'OrgAdmin'],
         },
         {
-          name: 'Performance Reviews',
-          path: '/performance',
-          icon: Award,
-          roles: ['Admin', 'SuperAdmin', 'OrgAdmin'],
-        },
-        {
           name: 'Admin Settings',
           path: '/admin-settings',
           icon: Sliders,
-          roles: ['Admin', 'SuperAdmin', 'OrgAdmin'],
-        },
-        {
-          name: 'Shift Management',
-          path: '/shifts',
-          icon: CalendarCheck,
           roles: ['Admin', 'SuperAdmin', 'OrgAdmin'],
         },
       ],
@@ -304,7 +283,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
       if (group.excludeRoles) {
         const userRoleStr = (user?.roleName || user?.role?.name || user?.role || '').toLowerCase().trim();
         const excluded = group.excludeRoles.map((r) => r.toLowerCase().trim());
-        if (excluded.includes(userRoleStr)) return null;
+        if (excluded.includes(userRoleStr) || excluded.some((r) => userRoleStr.includes(r))) return null;
       }
       if (group.roles && !hasRole(group.roles)) return null;
       const permittedItems = group.items.filter(isItemPermitted);
@@ -378,9 +357,9 @@ export const Sidebar = ({ isOpen, onClose }) => {
         </div>
 
         {/* Navigation list */}
-        <nav className="flex-1 px-3 py-4 space-y-1.5 overflow-y-auto">
-          {/* Direct Quick Shortcuts */}
-          <div className="space-y-1">
+        <nav className="flex-1 px-3 py-3 space-y-1 overflow-y-auto">
+          {/* Direct Quick Shortcuts (Dashboard) */}
+          <div className="space-y-0.5">
             {visibleDirectItems.map((item) => {
               const Icon = item.icon;
               return (
@@ -389,15 +368,15 @@ export const Sidebar = ({ isOpen, onClose }) => {
                   to={item.path}
                   onClick={() => onClose && onClose()}
                   className={({ isActive }) =>
-                    `flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
+                    `flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold tracking-wide transition-all duration-150 ${
                       isActive
-                        ? 'bg-gradient-to-r from-brand-500/10 via-brand-500/5 to-transparent text-brand-700 font-bold border-l-[3.5px] border-brand-600 shadow-xs translate-x-0.5'
+                        ? 'bg-gradient-to-r from-brand-500/10 via-brand-500/5 to-transparent text-brand-700 font-bold border-l-[3px] border-brand-600 shadow-2xs translate-x-0.5'
                         : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                     }`
                   }
                 >
-                  <Icon className="w-4.5 h-4.5 shrink-0" />
-                  <span>{item.name}</span>
+                  <Icon className="w-4 h-4 shrink-0 text-brand-600" />
+                  <span className="truncate">{item.name}</span>
                 </NavLink>
               );
             })}
@@ -449,7 +428,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
 
                 {/* Sub-item Links with Smooth Accordion */}
                 {isExpanded && (
-                  <div className="pl-4 pr-1 py-1 space-y-0.5 border-l-2 border-slate-100 ml-4.5 transition-all">
+                  <div className="pl-3.5 pr-1 py-0.5 space-y-0.5 border-l-2 border-slate-100 ml-4 transition-all">
                     {group.items.map((subItem) => {
                       const SubIcon = subItem.icon;
                       return (
@@ -460,7 +439,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
                           className={({ isActive }) =>
                             `flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 ${
                               isActive
-                                ? 'bg-brand-50 text-brand-700 font-bold border-l-2 border-brand-600 shadow-xs'
+                                ? 'bg-brand-50 text-brand-700 font-bold border-l-2 border-brand-600 shadow-2xs'
                                 : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
                             }`
                           }

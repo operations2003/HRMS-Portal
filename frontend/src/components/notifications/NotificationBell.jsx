@@ -197,7 +197,7 @@ export const resolveNotificationRoute = (notif, userRole = '') => {
     return '/documents';
   }
 
-  // 12. Onboarding & New Hires
+  // 12. New Hires & Directory
   if (
     ent === 'ONBOARDING' ||
     ent === 'NEW_HIRE' ||
@@ -205,7 +205,7 @@ export const resolveNotificationRoute = (notif, userRole = '') => {
     combined.includes('onboarding') ||
     combined.includes('new hire')
   ) {
-    return entId ? `/onboarding/${entId}` : '/onboarding';
+    return '/employees';
   }
 
   // 13. Exit, Resignation & Clearances
@@ -379,14 +379,6 @@ export const getNotificationIcon = (
     return {
       icon: FileText,
       color: 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40',
-      route,
-    };
-  }
-
-  if (route.startsWith('/onboarding')) {
-    return {
-      icon: UserPlus,
-      color: 'text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-950/40',
       route,
     };
   }
