@@ -240,7 +240,7 @@ export const DashboardPage = () => {
                   icon={ArrowRight}
                   onClick={() => navigate('/employees')}
                 >
-                  View Directory
+                  View Details
                 </Button>
               </div>
 
