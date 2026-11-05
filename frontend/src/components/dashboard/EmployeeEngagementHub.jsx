@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Megaphone,
-  Vote,
   Heart,
   Pin,
   CheckCircle2,
@@ -46,17 +45,11 @@ export const EmployeeEngagementHub = () => {
       (user?.email || '').toLowerCase() === 'sheetalbedi@tasknera.com'
     );
 
-  const [activeTab, setActiveTab] = useState('announcements'); // 'announcements' | 'surveys' | 'kudos'
+  const [activeTab, setActiveTab] = useState('announcements'); // 'announcements' | 'kudos'
   const [announcements, setAnnouncements] = useState([]);
-  const [surveys, setSurveys] = useState([]);
   const [recognitions, setRecognitions] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
-
-  // Modals
-  const [activeSurveyModal, setActiveSurveyModal] = useState(null);
-  const [surveyAnswers, setSurveyAnswers] = useState({});
-  const [submittingSurvey, setSubmittingSurvey] = useState(false);
 
   // Modals - Announcement
   const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
@@ -80,18 +73,6 @@ export const EmployeeEngagementHub = () => {
     setShowAnnouncementModal(true);
   };
 
-  // Modals - Survey & Pulse Poll
-  const [showSurveyModal, setShowSurveyModal] = useState(false);
-  const [surveySubmitting, setSurveySubmitting] = useState(false);
-  const [surveyType, setSurveyType] = useState('poll'); // 'poll' | 'rating' | 'feedback'
-  const [surveyForm, setSurveyForm] = useState({
-    title: '',
-    description: '',
-    isAnonymous: true,
-    endDate: '',
-    options: ['', ''],
-  });
-
   const [showKudosModal, setShowKudosModal] = useState(false);
   const [kudosSubmitting, setKudosSubmitting] = useState(false);
   const [kudosForm, setKudosForm] = useState({
@@ -103,17 +84,10 @@ export const EmployeeEngagementHub = () => {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [surveysRes, announceRes, kudosRes] = await Promise.allSettled([
-        engagementService.getSurveys(),
+      const [announceRes, kudosRes] = await Promise.allSettled([
         engagementService.getAnnouncements(),
         engagementService.getRecognitions(),
       ]);
-
-      if (surveysRes.status === 'fulfilled') {
-        const res = surveysRes.value;
-        const list = Array.isArray(res?.data) ? res.data : Array.isArray(res?.items) ? res.items : Array.isArray(res) ? res : [];
-        setSurveys(list);
-      }
 
       if (announceRes.status === 'fulfilled') {
         const res = announceRes.value;
@@ -162,36 +136,6 @@ export const EmployeeEngagementHub = () => {
       toast.success('Notice marked as read.');
     } catch (err) {
       toast.error('Failed to update read status.');
-    }
-  };
-
-  const handleOpenSurvey = (survey) => {
-    setActiveSurveyModal(survey);
-    setSurveyAnswers({});
-  };
-
-  const handleSubmitSurvey = async (e) => {
-    e.preventDefault();
-    if (!activeSurveyModal) return;
-
-    setSubmittingSurvey(true);
-    try {
-      await engagementService.submitSurveyResponse(activeSurveyModal.id, surveyAnswers);
-      toast.success('Thank you! Your response has been recorded.');
-      
-      // Update local surveys state
-      setSurveys((prev) =>
-        prev.map((s) =>
-          s.id === activeSurveyModal.id
-            ? { ...s, has_responded: true, total_responses: (Number(s.total_responses) || 0) + 1 }
-            : s
-        )
-      );
-      setActiveSurveyModal(null);
-    } catch (err) {
-      toast.error(err.message || 'Failed to submit survey response.');
-    } finally {
-      setSubmittingSurvey(false);
     }
   };
 
@@ -260,106 +204,6 @@ export const EmployeeEngagementHub = () => {
     }
   };
 
-  const handleAddOption = () => {
-    if (surveyForm.options.length >= 6) {
-      toast.error('Maximum 6 poll options allowed.');
-      return;
-    }
-    setSurveyForm((prev) => ({ ...prev, options: [...prev.options, ''] }));
-  };
-
-  const handleRemoveOption = (index) => {
-    if (surveyForm.options.length <= 2) {
-      toast.error('Pulse poll requires at least 2 options.');
-      return;
-    }
-    setSurveyForm((prev) => ({
-      ...prev,
-      options: prev.options.filter((_, idx) => idx !== index),
-    }));
-  };
-
-  const handleOptionChange = (index, value) => {
-    setSurveyForm((prev) => {
-      const next = [...prev.options];
-      next[index] = value;
-      return { ...prev, options: next };
-    });
-  };
-
-  const handleCreateSurvey = async (e) => {
-    e.preventDefault();
-    if (!surveyForm.title.trim()) {
-      toast.error('Please enter a survey/poll question or title.');
-      return;
-    }
-
-    let questions = [];
-    if (surveyType === 'poll') {
-      const validOptions = surveyForm.options.map((o) => o.trim()).filter(Boolean);
-      if (validOptions.length < 2) {
-        toast.error('Pulse poll requires at least 2 options.');
-        return;
-      }
-      questions = [
-        {
-          id: 'q_poll_1',
-          type: 'choice',
-          question: surveyForm.title.trim(),
-          text: surveyForm.title.trim(),
-          options: validOptions,
-        },
-      ];
-    } else if (surveyType === 'rating') {
-      questions = [
-        {
-          id: 'q_rating_1',
-          type: 'rating',
-          question: surveyForm.title.trim(),
-          text: surveyForm.title.trim(),
-        },
-      ];
-    } else {
-      questions = [
-        {
-          id: 'q_feedback_1',
-          type: 'text',
-          question: surveyForm.title.trim(),
-          text: surveyForm.title.trim(),
-        },
-      ];
-    }
-
-    setSurveySubmitting(true);
-    try {
-      await engagementService.createSurvey({
-        title: surveyForm.title.trim(),
-        description: surveyForm.description.trim(),
-        questions,
-        isAnonymous: surveyForm.isAnonymous,
-        endDate: surveyForm.endDate || null,
-        targetType: 'ALL',
-      });
-      toast.success('Survey & Pulse Poll created successfully!');
-      setShowSurveyModal(false);
-      setSurveyForm({
-        title: '',
-        description: '',
-        isAnonymous: true,
-        endDate: '',
-        options: ['', ''],
-      });
-      const freshRes = await engagementService.getSurveys();
-      const list = Array.isArray(freshRes?.data) ? freshRes.data : Array.isArray(freshRes?.items) ? freshRes.items : Array.isArray(freshRes) ? freshRes : [];
-      setSurveys(list);
-    } catch (err) {
-      toast.error(err.message || 'Failed to create survey.');
-    } finally {
-      setSurveySubmitting(false);
-    }
-  };
-
-  const pendingSurveysCount = surveys.filter((s) => !s.has_responded).length;
   const unreadAnnouncementsCount = announcements.filter((a) => !a.is_read).length;
 
   return (
@@ -379,7 +223,7 @@ export const EmployeeEngagementHub = () => {
                 </span>
               </div>
               <p className="text-sm text-slate-500 mt-0.5">
-                Official announcements, team pulses, and peer recognitions
+                Official company announcements, notices, and peer recognitions
               </p>
             </div>
           </div>
@@ -394,18 +238,6 @@ export const EmployeeEngagementHub = () => {
                 className="text-sm font-semibold shadow-sm shadow-indigo-500/20"
               >
                 Post Announcement
-              </Button>
-            )}
-
-            {isHrOrAdmin && activeTab === 'surveys' && (
-              <Button
-                variant="primary"
-                size="md"
-                icon={Plus}
-                onClick={() => setShowSurveyModal(true)}
-                className="text-sm font-semibold shadow-sm shadow-indigo-500/20"
-              >
-                Create Pulse Poll
               </Button>
             )}
 
@@ -424,7 +256,7 @@ export const EmployeeEngagementHub = () => {
           </div>
         </div>
 
-        {/* Tab Buttons - Reordered: Announcements first */}
+        {/* Tab Buttons */}
         <div className="flex items-center gap-6 overflow-x-auto no-scrollbar">
           <button
             onClick={() => setActiveTab('announcements')}
@@ -443,23 +275,6 @@ export const EmployeeEngagementHub = () => {
             ) : announcements.length > 0 ? (
               <span className="text-xs text-slate-400 font-normal">({announcements.length})</span>
             ) : null}
-          </button>
-
-          <button
-            onClick={() => setActiveTab('surveys')}
-            className={`pb-3.5 text-sm font-bold border-b-2 flex items-center gap-2 transition whitespace-nowrap ${
-              activeTab === 'surveys'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <Vote className="w-4 h-4" />
-            <span>Surveys & Pulse Polls</span>
-            {pendingSurveysCount > 0 && (
-              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 animate-pulse">
-                {pendingSurveysCount} pending
-              </span>
-            )}
           </button>
 
           <button
@@ -681,96 +496,7 @@ export const EmployeeEngagementHub = () => {
               </div>
             )}
 
-            {/* 2. SURVEYS & POLLS TAB */}
-            {activeTab === 'surveys' && (
-              <div className="space-y-4">
-                {surveys.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    {surveys.map((survey) => {
-                      const questions = Array.isArray(survey.questions)
-                        ? survey.questions
-                        : typeof survey.questions === 'string'
-                        ? JSON.parse(survey.questions || '[]')
-                        : [];
-
-                      return (
-                        <div
-                          key={survey.id}
-                          className={`rounded-2xl border p-5 transition-all flex flex-col justify-between ${
-                            survey.has_responded
-                              ? 'bg-slate-50/70 border-slate-200'
-                              : 'bg-white border-indigo-200 shadow-sm hover:border-indigo-300 hover:shadow-md'
-                          }`}
-                        >
-                          <div className="space-y-3">
-                            <div className="flex items-center justify-between gap-2">
-                              <Badge variant={survey.has_responded ? 'success' : 'brand'}>
-                                {survey.has_responded ? '✓ Response Submitted' : 'Active Pulse'}
-                              </Badge>
-                              <span className="text-xs text-slate-500 font-semibold">
-                                {survey.total_responses || 0} response(s)
-                              </span>
-                            </div>
-
-                            <h3 className="text-base font-bold text-slate-900 leading-snug">
-                              {survey.title}
-                            </h3>
-
-                            <p className="text-sm text-slate-600 leading-relaxed line-clamp-3">
-                              {survey.description || 'Quick pulse survey for company feedback and workplace experience.'}
-                            </p>
-                          </div>
-
-                          <div className="mt-5 pt-3.5 border-t border-slate-100 flex items-center justify-between text-sm">
-                            <span className="text-xs text-slate-500 flex items-center gap-1 font-medium">
-                              {survey.is_anonymous ? '🔒 100% Anonymous' : 'Named survey'} • {questions.length || 1} question(s)
-                            </span>
-
-                            {survey.has_responded ? (
-                              <span className="text-emerald-600 font-bold text-sm flex items-center gap-1.5">
-                                <CheckCircle2 className="w-4 h-4" /> Completed
-                              </span>
-                            ) : (
-                              <Button
-                                size="sm"
-                                variant="primary"
-                                onClick={() => handleOpenSurvey(survey)}
-                                className="shadow-sm shadow-indigo-500/20 text-sm font-semibold px-4"
-                              >
-                                Take Survey
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="py-10 px-6 text-center rounded-3xl bg-gradient-to-b from-slate-50/70 via-white to-slate-50/40 border border-slate-200/80 shadow-xs flex flex-col items-center justify-center">
-                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500/10 via-purple-500/10 to-indigo-500/5 text-indigo-600 flex items-center justify-center ring-8 ring-indigo-50/60 mb-4 shadow-xs">
-                      <Vote className="w-8 h-8" />
-                    </div>
-                    <h4 className="text-lg font-bold text-slate-900 tracking-tight">No Active Pulse Surveys</h4>
-                    <p className="text-sm text-slate-500 mt-1 max-w-sm mx-auto leading-relaxed">
-                      You are all caught up! New feedback surveys and team polls will appear here when launched.
-                    </p>
-                    {isHrOrAdmin && (
-                      <Button
-                        size="sm"
-                        variant="primary"
-                        icon={Plus}
-                        onClick={() => setShowSurveyModal(true)}
-                        className="mt-5 text-sm font-semibold shadow-sm"
-                      >
-                        Create Pulse Poll
-                      </Button>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* 3. KUDOS WALL TAB */}
+            {/* 2. KUDOS WALL TAB */}
             {activeTab === 'kudos' && (
               <div className="space-y-4">
                 {recognitions.length > 0 ? (
@@ -845,161 +571,6 @@ export const EmployeeEngagementHub = () => {
           </>
         )}
       </div>
-
-      {/* MODAL 1: TAKE SURVEY / ANSWER POLL */}
-      {activeSurveyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full p-6 sm:p-7 space-y-5 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-start justify-between pb-3.5 border-b border-slate-100">
-              <div>
-                <div className="flex items-center gap-2 mb-1.5">
-                  <Badge variant="brand">Active Pulse Survey</Badge>
-                  {activeSurveyModal.is_anonymous && (
-                    <span className="text-xs font-semibold text-emerald-600 flex items-center gap-1">
-                      🔒 100% Anonymous
-                    </span>
-                  )}
-                </div>
-                <h3 className="text-lg font-bold text-slate-900 leading-snug">{activeSurveyModal.title}</h3>
-                <p className="text-sm text-slate-500 mt-1">{activeSurveyModal.description}</p>
-              </div>
-              <button
-                onClick={() => setActiveSurveyModal(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmitSurvey} className="space-y-5">
-              {(() => {
-                const questions = Array.isArray(activeSurveyModal.questions)
-                  ? activeSurveyModal.questions
-                  : typeof activeSurveyModal.questions === 'string'
-                  ? JSON.parse(activeSurveyModal.questions || '[]')
-                  : [];
-
-                if (questions.length === 0) {
-                  // Default satisfaction question if no specific questions defined
-                  return (
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-bold text-slate-800 mb-2.5">
-                          1. Overall, how satisfied are you with our workplace culture and support?
-                        </label>
-                        <div className="grid grid-cols-5 gap-2">
-                          {[1, 2, 3, 4, 5].map((val) => (
-                            <button
-                              type="button"
-                              key={val}
-                              onClick={() => setSurveyAnswers({ ...surveyAnswers, rating: val })}
-                              className={`py-3.5 rounded-xl border text-sm font-bold transition flex flex-col items-center gap-1.5 ${
-                                surveyAnswers.rating === val
-                                  ? 'bg-indigo-600 border-indigo-600 text-white shadow-md'
-                                  : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300'
-                              }`}
-                            >
-                              <Star className={`w-4 h-4 ${surveyAnswers.rating === val ? 'fill-white' : ''}`} />
-                              <span>{val} {val === 1 ? 'Poor' : val === 5 ? 'Great' : ''}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-bold text-slate-800 mb-1.5">
-                          2. Any comments or suggestions for leadership? (Optional)
-                        </label>
-                        <textarea
-                          rows="3"
-                          placeholder="Your open thoughts..."
-                          value={surveyAnswers.comments || ''}
-                          onChange={(e) => setSurveyAnswers({ ...surveyAnswers, comments: e.target.value })}
-                          className="w-full text-sm border border-slate-300 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                        />
-                      </div>
-                    </div>
-                  );
-                }
-
-                return questions.map((q, idx) => {
-                  const qId = q.id || `q_${idx}`;
-                  const isRating = q.type === 'rating';
-                  const options = Array.isArray(q.options) ? q.options : [];
-
-                  return (
-                    <div key={qId} className="space-y-2.5 p-4 rounded-2xl bg-slate-50/70 border border-slate-100">
-                      <label className="block text-sm font-bold text-slate-800">
-                        {idx + 1}. {q.text || q.question || 'Survey Question'}
-                      </label>
-
-                      {options.length > 0 ? (
-                        <div className="space-y-2 pt-1">
-                          {options.map((opt, oIdx) => (
-                            <label
-                              key={oIdx}
-                              className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition text-sm ${
-                                surveyAnswers[qId] === opt
-                                  ? 'bg-indigo-50 border-indigo-500 text-indigo-900 font-semibold shadow-xs'
-                                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                              }`}
-                            >
-                              <input
-                                type="radio"
-                                name={`q_${qId}`}
-                                value={opt}
-                                checked={surveyAnswers[qId] === opt}
-                                onChange={() => setSurveyAnswers({ ...surveyAnswers, [qId]: opt })}
-                                className="text-indigo-600 focus:ring-indigo-500 w-4 h-4"
-                              />
-                              <span>{opt}</span>
-                            </label>
-                          ))}
-                        </div>
-                      ) : isRating ? (
-                        <div className="grid grid-cols-5 gap-2 pt-1.5">
-                          {[1, 2, 3, 4, 5].map((val) => (
-                            <button
-                              type="button"
-                              key={val}
-                              onClick={() => setSurveyAnswers({ ...surveyAnswers, [qId]: val })}
-                              className={`py-3 rounded-xl border text-sm font-bold transition flex flex-col items-center gap-1 ${
-                                surveyAnswers[qId] === val
-                                  ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
-                                  : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
-                              }`}
-                            >
-                              <Star className={`w-4 h-4 ${surveyAnswers[qId] === val ? 'fill-white' : ''}`} />
-                              <span>{val}</span>
-                            </button>
-                          ))}
-                        </div>
-                      ) : (
-                        <textarea
-                          rows="2"
-                          placeholder="Your answer..."
-                          value={surveyAnswers[qId] || ''}
-                          onChange={(e) => setSurveyAnswers({ ...surveyAnswers, [qId]: e.target.value })}
-                          className="w-full text-sm bg-white border border-slate-300 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                        />
-                      )}
-                    </div>
-                  );
-                });
-              })()}
-
-              <div className="flex items-center justify-end gap-2.5 pt-3.5 border-t border-slate-100">
-                <Button variant="neutral" type="button" onClick={() => setActiveSurveyModal(null)}>
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={submittingSurvey} icon={Send} className="text-sm font-semibold">
-                  {submittingSurvey ? 'Submitting...' : 'Submit Feedback'}
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* MODAL 2: GIVE KUDOS */}
       {showKudosModal && (
@@ -1193,180 +764,6 @@ export const EmployeeEngagementHub = () => {
                   className="text-sm font-semibold shadow-sm"
                 >
                   {announcementSubmitting ? 'Publishing...' : 'Publish Announcement'}
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL 4: CREATE SURVEY & PULSE POLL (HR/Admin) */}
-      {showSurveyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full p-6 sm:p-7 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3.5 border-b border-slate-100">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2.5 rounded-xl bg-indigo-50 text-indigo-600">
-                  <Vote className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-slate-800">Create Survey & Pulse Poll</h3>
-                  <p className="text-xs text-slate-500">Collect employee feedback or launch a quick team poll</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowSurveyModal(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateSurvey} className="space-y-4">
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1.5">Poll Question / Survey Title *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Which team outing do you prefer this quarter?"
-                  value={surveyForm.title}
-                  onChange={(e) => setSurveyForm({ ...surveyForm, title: e.target.value })}
-                  className="w-full text-sm border border-slate-300 rounded-xl p-3 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1.5">Description (Optional)</label>
-                <textarea
-                  rows="2"
-                  placeholder="Brief context or instructions for respondents..."
-                  value={surveyForm.description}
-                  onChange={(e) => setSurveyForm({ ...surveyForm, description: e.target.value })}
-                  className="w-full text-sm border border-slate-300 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1.5">Feedback Format</label>
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setSurveyType('poll')}
-                    className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition flex flex-col items-center gap-1 ${
-                      surveyType === 'poll'
-                        ? 'bg-indigo-50 border-indigo-600 text-indigo-700 shadow-2xs'
-                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                    }`}
-                  >
-                    <Vote className="w-4 h-4" />
-                    <span>Multiple Choice</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSurveyType('rating')}
-                    className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition flex flex-col items-center gap-1 ${
-                      surveyType === 'rating'
-                        ? 'bg-indigo-50 border-indigo-600 text-indigo-700 shadow-2xs'
-                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                    }`}
-                  >
-                    <Star className="w-4 h-4" />
-                    <span>1-5 Star Rating</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSurveyType('feedback')}
-                    className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition flex flex-col items-center gap-1 ${
-                      surveyType === 'feedback'
-                        ? 'bg-indigo-50 border-indigo-600 text-indigo-700 shadow-2xs'
-                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                    }`}
-                  >
-                    <Send className="w-4 h-4" />
-                    <span>Open Feedback</span>
-                  </button>
-                </div>
-              </div>
-
-              {surveyType === 'poll' && (
-                <div className="space-y-2.5 p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                      Poll Options (Min 2, Max 6)
-                    </label>
-                    {surveyForm.options.length < 6 && (
-                      <button
-                        type="button"
-                        onClick={handleAddOption}
-                        className="text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 cursor-pointer"
-                      >
-                        <Plus className="w-3.5 h-3.5" /> Add Option
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    {surveyForm.options.map((opt, idx) => (
-                      <div key={idx} className="flex items-center gap-2">
-                        <span className="w-6 text-xs font-bold text-slate-400 text-center">{idx + 1}.</span>
-                        <input
-                          type="text"
-                          required
-                          placeholder={`Option ${idx + 1}...`}
-                          value={opt}
-                          onChange={(e) => handleOptionChange(idx, e.target.value)}
-                          className="flex-1 text-sm border border-slate-300 rounded-xl p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                        />
-                        {surveyForm.options.length > 2 && (
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveOption(idx)}
-                            className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-1.5">End Date (Optional)</label>
-                  <input
-                    type="date"
-                    value={surveyForm.endDate}
-                    onChange={(e) => setSurveyForm({ ...surveyForm, endDate: e.target.value })}
-                    className="w-full text-sm border border-slate-300 rounded-xl p-3 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                  />
-                </div>
-
-                <div className="flex items-center sm:pt-6">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={surveyForm.isAnonymous}
-                      onChange={(e) => setSurveyForm({ ...surveyForm, isAnonymous: e.target.checked })}
-                      className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4"
-                    />
-                    <span className="text-xs font-bold text-slate-700">🔒 100% Anonymous Responses</span>
-                  </label>
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-100">
-                <Button variant="neutral" type="button" onClick={() => setShowSurveyModal(false)}>
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={surveySubmitting}
-                  icon={Vote}
-                  className="text-sm font-semibold shadow-sm"
-                >
-                  {surveySubmitting ? 'Creating...' : 'Launch Poll / Survey'}
                 </Button>
               </div>
             </form>
