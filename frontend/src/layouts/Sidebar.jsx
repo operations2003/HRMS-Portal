@@ -195,7 +195,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
       ],
     },
 
-    // 8. System Administration
+    // 8. System Administration (Unified Console for Organizations, Users, Roles & Settings)
     {
       id: 'system-admin',
       title: 'System Administration',
@@ -203,19 +203,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
       roles: ['Admin', 'SuperAdmin', 'OrgAdmin'],
       items: [
         {
-          name: 'Organizations',
-          path: '/organizations',
-          icon: Building2,
-          permission: 'org:read',
-        },
-        {
-          name: 'Users & Roles',
-          path: '/users',
-          icon: UserCheck,
-          permission: 'user:write',
-        },
-        {
-          name: 'Admin Settings',
+          name: 'System Administration',
           path: '/admin-settings',
           icon: Sliders,
           roles: ['Admin', 'SuperAdmin', 'OrgAdmin'],
@@ -351,13 +339,46 @@ export const Sidebar = ({ isOpen, onClose }) => {
             Workspace Modules
           </div>
 
-          {/* Collapsible Dropdown Groups */}
+          {/* Collapsible Dropdown Groups & Direct Modules */}
           {visibleGroups.map((group) => {
             const GroupIcon = group.icon;
             const isExpanded = !!openGroups[group.id];
             const isGroupActive = group.items.some(
               (item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`)
             );
+
+            // If a section only has 1 consolidated module, render it directly as a clean single button without an accordion dropdown
+            if (group.items.length === 1) {
+              const singleItem = group.items[0];
+              const isSingleActive =
+                location.pathname === singleItem.path ||
+                location.pathname.startsWith(`${singleItem.path}/`) ||
+                location.pathname === '/organizations' ||
+                location.pathname === '/users' ||
+                location.pathname === '/roles';
+              return (
+                <div key={group.id} className="space-y-0.5">
+                  <NavLink
+                    to={singleItem.path}
+                    onClick={() => onClose && onClose()}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold tracking-wide transition-all duration-150 select-none ${
+                      isSingleActive
+                        ? 'text-brand-700 bg-brand-50/70 border-l-[3px] border-brand-600 shadow-2xs font-bold'
+                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <GroupIcon
+                        className={`w-4 h-4 shrink-0 transition-colors ${
+                          isSingleActive ? 'text-brand-600' : 'text-slate-400'
+                        }`}
+                      />
+                      <span className="truncate">{group.title}</span>
+                    </div>
+                  </NavLink>
+                </div>
+              );
+            }
 
             return (
               <div key={group.id} className="space-y-0.5">

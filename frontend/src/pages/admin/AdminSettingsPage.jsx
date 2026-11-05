@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Sliders,
   Users,
@@ -25,6 +26,7 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { adminService } from '../../services/adminService.js';
 import { orgService } from '../../services/orgService.js';
+import { OrganizationListPage } from '../organizations/OrganizationListPage.jsx';
 import { Button } from '../../components/common/Button.jsx';
 import { Badge } from '../../components/common/Badge.jsx';
 import { DataTable } from '../../components/common/DataTable.jsx';
@@ -46,9 +48,22 @@ export const AdminSettingsPage = () => {
   const toast = useToast();
 
   const isAdmin = hasRole(['Admin', 'SuperAdmin', 'OrgAdmin']);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlTab = searchParams.get('tab');
 
-  // Active section tab: 'configs' | 'users' | 'roles' | 'overview' | 'audits'
-  const [activeTab, setActiveTab] = useState('configs');
+  // Active section tab: 'orgs' | 'users' | 'roles' | 'configs' | 'overview' | 'audits'
+  const [activeTab, setActiveTab] = useState(() => urlTab || 'configs');
+
+  useEffect(() => {
+    if (urlTab) {
+      setActiveTab(urlTab);
+    }
+  }, [urlTab]);
+
+  const handleTabChange = (tabId) => {
+    setActiveTab(tabId);
+    setSearchParams({ tab: tabId });
+  };
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
 
@@ -310,9 +325,10 @@ export const AdminSettingsPage = () => {
       {/* Tab Navigation */}
       <div className="flex items-center gap-2 border-b border-slate-200 overflow-x-auto pb-px">
         {[
-          { id: 'configs', label: 'Configurations & Policies', icon: Sliders },
+          { id: 'orgs', label: 'Organizations', icon: Building2, badge: orgsList.length },
           { id: 'users', label: 'User Administration', icon: Users, badge: usersList.length },
           { id: 'roles', label: 'Roles & Permissions', icon: KeyRound, badge: rolesList.length },
+          { id: 'configs', label: 'Configurations & Policies', icon: Sliders },
           { id: 'overview', label: 'Platform Health', icon: Activity },
           { id: 'audits', label: 'Audit Trail', icon: FileText },
         ].map((tab) => {
@@ -321,8 +337,8 @@ export const AdminSettingsPage = () => {
           return (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-xl transition-colors shrink-0 ${
+              onClick={() => handleTabChange(tab.id)}
+              className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-xl transition-colors shrink-0 cursor-pointer ${
                 isActive
                   ? 'border-b-2 border-[#BF6649] text-[#BF6649] bg-orange-50/50'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
@@ -341,6 +357,15 @@ export const AdminSettingsPage = () => {
           );
         })}
       </div>
+
+      {/* ========================================================================= */}
+      {/* TAB 0: ORGANIZATIONS MANAGEMENT */}
+      {/* ========================================================================= */}
+      {activeTab === 'orgs' && (
+        <div className="space-y-4">
+          <OrganizationListPage embedded />
+        </div>
+      )}
 
       {/* ========================================================================= */}
       {/* TAB 1: ADMINISTRATIVE CONFIGURATIONS & POLICIES */}

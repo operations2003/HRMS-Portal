@@ -27,7 +27,7 @@ import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
 import { Can } from '../../components/rbac/Can.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 
-export const OrganizationListPage = () => {
+export const OrganizationListPage = ({ embedded = false }) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const toast = useToast();
 
@@ -285,27 +285,29 @@ export const OrganizationListPage = () => {
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-            <Building2 className="w-6 h-6 text-brand-500" />
-            Organizations
-          </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Manage corporate entities, enterprise subsidiaries, and organizational hierarchy.
-          </p>
-        </div>
+      {!embedded && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
+              <Building2 className="w-6 h-6 text-brand-500" />
+              Organizations
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Manage corporate entities, enterprise subsidiaries, and organizational hierarchy.
+            </p>
+          </div>
 
-        <Can permission="org:write">
-          <Button variant="primary" icon={Plus} onClick={handleOpenCreate}>
-            Add Organization
-          </Button>
-        </Can>
-      </div>
+          <Can permission="org:write">
+            <Button variant="primary" icon={Plus} onClick={handleOpenCreate}>
+              Add Organization
+            </Button>
+          </Can>
+        </div>
+      )}
 
       {/* Filter Bar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col sm:flex-row gap-3">
-        <div className="flex-1">
+      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="flex-1 w-full sm:w-auto">
           <Input
             placeholder="Search by name, code, or email..."
             value={search}
@@ -325,6 +327,13 @@ export const OrganizationListPage = () => {
             ]}
           />
         </div>
+        {embedded && (
+          <Can permission="org:write">
+            <Button variant="primary" icon={Plus} onClick={handleOpenCreate} className="shrink-0">
+              Add Organization
+            </Button>
+          </Can>
+        )}
       </div>
 
       {/* Reusable Data Table */}
