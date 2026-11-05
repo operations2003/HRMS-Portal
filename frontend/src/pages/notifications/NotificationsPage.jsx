@@ -320,7 +320,6 @@ export const NotificationsPage = () => {
               if (url.startsWith('/attendance')) return 'View Attendance';
               if (url.startsWith('/leaves')) return 'View Leaves';
               if (url.startsWith('/approvals')) return 'View Approvals';
-              if (url.startsWith('/reports')) return 'View Reports';
               if (url.startsWith('/performance')) return 'View Performance';
               if (url.startsWith('/payroll')) return 'View Payroll';
               if (url.startsWith('/policies')) return 'View Policies';

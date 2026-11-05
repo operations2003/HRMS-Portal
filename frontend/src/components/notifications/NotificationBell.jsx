@@ -152,7 +152,7 @@ export const resolveNotificationRoute = (notif, userRole = '') => {
     combined.includes('appraisal')
   ) {
     if (ent === 'PERFORMANCE_REPORT' || combined.includes('appraisal report') || combined.includes('performance report')) {
-      return '/reports';
+      return '/performance';
     }
     return entId ? `/performance/${entId}` : '/performance';
   }
