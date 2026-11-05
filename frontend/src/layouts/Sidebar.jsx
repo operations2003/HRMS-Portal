@@ -143,12 +143,6 @@ export const Sidebar = ({ isOpen, onClose }) => {
           icon: Wallet,
           permission: ['employee:read'],
         },
-        {
-          name: 'Full & Final Settlement',
-          path: '/fnf',
-          icon: Wallet,
-          permission: ['exit:read', 'employee:read'],
-        },
       ],
     },
 
@@ -184,6 +178,12 @@ export const Sidebar = ({ isOpen, onClose }) => {
           path: '/resignation',
           icon: ClipboardList,
           permission: ['exit:read', 'exit:write', 'employee:read'],
+        },
+        {
+          name: 'Full & Final Settlement',
+          path: '/fnf',
+          icon: Wallet,
+          permission: ['exit:read', 'employee:read'],
         },
         {
           name: 'Employee Termination',
