@@ -1733,4 +1733,65 @@ export const exitService = {
 
     return this.getExitById(currentUser, exitRequest.id);
   },
+
+  async updateExitRequest(currentUser, id, data) {
+    if (!this.isHrOrAdmin(currentUser)) {
+      const err = new Error('Access denied: Only HR and Admin can update exit details.');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    const exit = await exitRepository.findById(id);
+    if (!exit) {
+      const err = new Error(`Exit record '${id}' not found.`);
+      err.statusCode = 404;
+      throw err;
+    }
+
+    if (exit.orgId !== currentUser.orgId) {
+      const err = new Error('Access denied: Record belongs to another organization.');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    const updatePayload = {};
+
+    if (data.exitType) {
+      updatePayload.exitType = data.exitType.toUpperCase();
+    }
+
+    if (data.reason !== undefined) {
+      let cleanReason = (data.reason || '').trim();
+      cleanReason = cleanReason.replace(/^\[[A-Z_]+\]\s*/i, '');
+      const reasonCategory = data.terminationCategory ? `[${data.terminationCategory}] ` : '';
+      updatePayload.reason = `${reasonCategory}${cleanReason}`.trim();
+    }
+
+    if (data.comments !== undefined) {
+      updatePayload.comments = data.comments;
+    }
+
+    if (data.hrComments !== undefined) {
+      updatePayload.hrComments = data.hrComments;
+    }
+
+    if (data.noticePeriodDays !== undefined && data.noticePeriodDays !== null && data.noticePeriodDays !== '') {
+      updatePayload.noticePeriodDays = parseInt(data.noticePeriodDays, 10);
+    }
+
+    if (data.effectiveDate || data.approvedLastWorkingDay || data.lastWorkingDay) {
+      const lwd = data.effectiveDate || data.approvedLastWorkingDay || data.lastWorkingDay;
+      updatePayload.approvedLastWorkingDay = lwd;
+      updatePayload.requestedLastWorkingDay = lwd;
+      try {
+        await exitRepository.updateOffboarding(id, { lastWorkingDay: lwd });
+      } catch (err) {
+        // Offboarding record may not exist yet
+      }
+    }
+
+    await exitRepository.update(id, updatePayload);
+    logger.info('EXIT_SERVICE', `Exit request ${id} updated by user ${currentUser.id}`);
+    return this.getExitById(currentUser, id);
+  },
 };

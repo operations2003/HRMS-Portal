@@ -313,4 +313,17 @@ export const exitController = {
       next(err);
     }
   },
+
+  /**
+   * PATCH /api/v1/exit/requests/:id
+   */
+  async updateExitRequest(req, res, next) {
+    try {
+      const updated = await exitService.updateExitRequest(req.user, req.params.id, req.body);
+      return sendSuccess(res, 'Exit details updated successfully.', updated, 200);
+    } catch (err) {
+      if (err.statusCode) return sendError(res, err.message, err.statusCode);
+      next(err);
+    }
+  },
 };
