@@ -42,10 +42,10 @@ export const Sidebar = ({ isOpen, onClose }) => {
 
   // 2-8. Consolidated Navigation Groups
   const navGroups = [
-    // 2. People Management
+    // 2. People & Attendance (Merged People Management + Attendance & Leave)
     {
-      id: 'people-management',
-      title: 'People Management',
+      id: 'people-attendance',
+      title: 'People & Attendance',
       icon: Users,
       items: [
         {
@@ -60,28 +60,6 @@ export const Sidebar = ({ isOpen, onClose }) => {
           icon: Building2,
           roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
         },
-        {
-          name: 'Employee Documents',
-          path: '/documents',
-          icon: FolderLock,
-          permission: ['document:read', 'employee:read'],
-        },
-        {
-          name: 'Team Management',
-          path: '/team',
-          icon: UserCheck,
-          roles: ['Manager', 'HR', 'HRManager'],
-          excludeRoles: ['Admin', 'SuperAdmin', 'OrgAdmin'],
-        },
-      ],
-    },
-
-    // 3. Attendance & Leave
-    {
-      id: 'attendance-leave',
-      title: 'Attendance & Leave',
-      icon: CalendarCheck,
-      items: [
         {
           name: 'Attendance',
           path: '/attendance',
@@ -100,6 +78,19 @@ export const Sidebar = ({ isOpen, onClose }) => {
           icon: CalendarCheck,
           roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin', 'Manager', 'TeamLead'],
           permission: 'employee:write',
+        },
+        {
+          name: 'Employee Documents',
+          path: '/documents',
+          icon: FolderLock,
+          permission: ['document:read', 'employee:read'],
+        },
+        {
+          name: 'Team Management',
+          path: '/team',
+          icon: UserCheck,
+          roles: ['Manager', 'HR', 'HRManager'],
+          excludeRoles: ['Admin', 'SuperAdmin', 'OrgAdmin'],
         },
       ],
     },
