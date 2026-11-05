@@ -862,7 +862,7 @@ export const ResignationPage = () => {
         </div>
       )}
 
-      {/* TAB 2: Team Resignations (Manager Review Cockpit) */}
+      {/* TAB 2: Team Resignations (Manager Review) */}
       {activeTab === 'team' && isManager && (
         <div className="space-y-4">
           {teamError && <Alert variant="danger">{teamError}</Alert>}

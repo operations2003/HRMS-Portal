@@ -25,14 +25,14 @@ import { employeeService } from '../../services/employeeService.js';
 import { exitService } from '../../services/exitService.js';
 
 const TERMINATION_CATEGORIES = [
-  { value: 'PERFORMANCE', label: 'Performance / Probation Unsatisfactory' },
-  { value: 'MISCONDUCT', label: 'Gross Misconduct / Behavioral Violation' },
-  { value: 'RESTRUCTURING', label: 'Company Restructuring / Role Redundancy' },
-  { value: 'POLICY_VIOLATION', label: 'Policy, Safety or Compliance Breach' },
-  { value: 'ABSCONDING', label: 'Prolonged Unauthorized Absence (Absconding)' },
-  { value: 'MUTUAL_SEPARATION', label: 'Mutual Separation Agreement' },
-  { value: 'CONTRACT_EXPIRY', label: 'Contract Expiry / Project End' },
-  { value: 'OTHER', label: 'Other Justified Administrative Cause' },
+  { value: 'PERFORMANCE', label: 'Performance / Probation' },
+  { value: 'MISCONDUCT', label: 'Misconduct / Behavior' },
+  { value: 'RESTRUCTURING', label: 'Company Restructuring' },
+  { value: 'POLICY_VIOLATION', label: 'Policy Violation' },
+  { value: 'ABSCONDING', label: 'Absent without Notice' },
+  { value: 'MUTUAL_SEPARATION', label: 'Mutual Agreement' },
+  { value: 'CONTRACT_EXPIRY', label: 'Contract Ended' },
+  { value: 'OTHER', label: 'Other Reason' },
 ];
 
 export const InitiateTerminationModal = ({ isOpen, onClose, onSuccess, preselectedEmployee = null }) => {
@@ -187,7 +187,7 @@ export const InitiateTerminationModal = ({ isOpen, onClose, onSuccess, preselect
       isOpen={isOpen}
       onClose={onClose}
       title="Initiate Employee Termination"
-      subtitle="Company-authorized involuntary separation, severance setup, and offboarding"
+      subtitle="Company exit process, notice period, and offboarding"
       maxWidth="max-w-3xl"
     >
       <form onSubmit={handleSubmit} className="space-y-6">

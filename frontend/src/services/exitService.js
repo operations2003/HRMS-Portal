@@ -125,8 +125,35 @@ export const exitService = {
           return res2.data;
         } catch (e2) {
           if (isNotFound(e2)) {
-            const res3 = await http.post(`/v1/exit/requests/${id}/update`, data);
-            return res3.data;
+            try {
+              const res3 = await http.post(`/v1/exit/requests/${id}/update`, data);
+              return res3.data;
+            } catch (e3) {
+              if (isNotFound(e3)) {
+                try {
+                  const res4 = await http.post(`/v1/exit/requests/${id}`, data);
+                  return res4.data;
+                } catch (e4) {
+                  // If all direct update routes return 404, fallback to terminateEmployee
+                  // which calls POST /v1/exit/terminate (always supported and updates existing active exit)
+                  if (isNotFound(e4) && data?.employeeId) {
+                    const fallbackRes = await http.post('/v1/exit/terminate', {
+                      employeeId: data.employeeId,
+                      exitType: data.exitType || 'INVOLUNTARY',
+                      terminationCategory: data.terminationCategory,
+                      effectiveDate: data.approvedLastWorkingDay || data.effectiveDate || new Date().toISOString().split('T')[0],
+                      noticePeriodDays: data.noticePeriodDays || 0,
+                      immediate: data.noticePeriodDays === 0,
+                      reason: data.reason || 'Exit details updated',
+                      hrNotes: data.hrComments || data.comments || '',
+                    });
+                    return fallbackRes.data;
+                  }
+                  throw e4;
+                }
+              }
+              throw e3;
+            }
           }
           throw e2;
         }

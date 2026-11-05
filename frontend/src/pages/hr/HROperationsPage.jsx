@@ -931,12 +931,12 @@ export const HROperationsPage = () => {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-              HR Operations & Analytics Cockpit
+              HR Operations & Analytics
             </h1>
             <Badge variant="brand" size="sm">Phase 6 Authorized</Badge>
           </div>
           <p className="text-sm text-slate-500 mt-1">
-            Unified cockpit for enterprise workforce administration, real-time analytics intelligence, and operational governance.
+            Unified dashboard for enterprise workforce administration, real-time analytics intelligence, and operational governance.
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -953,7 +953,7 @@ export const HROperationsPage = () => {
               if (activeTab === 'approvals') loadApprovalsQueue();
             }}
           >
-            Refresh Cockpit
+            Refresh
           </Button>
           <Button
             variant="primary"

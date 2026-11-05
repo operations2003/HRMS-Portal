@@ -76,7 +76,7 @@ router.use('/v1/performance', performanceRoutes);
 router.use('/v1/performance-reports', publishedReportRoutes);
 router.use('/v1/workflows', workflowRoutes);
 router.use('/v1/hr/operations', hrOperationsRoutes);
-router.use('/v1/exit', exitRoutes);
+router.use(['/v1/exit', '/exit'], exitRoutes);
 router.use('/v1/admin', adminRoutes);
 
 // IT Mapping v2.1 Modules

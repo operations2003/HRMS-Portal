@@ -42,7 +42,7 @@ export const EmployeeDossierModal = ({ isOpen, onClose, employeeId }) => {
       const data = await hrOperationsService.getEmployeeProfile(employeeId);
       setDossier(data);
     } catch (err) {
-      setError(err.message || 'Failed to load employee dossier.');
+      setError(err.message || 'Failed to load employee details.');
     } finally {
       setIsLoading(false);
     }

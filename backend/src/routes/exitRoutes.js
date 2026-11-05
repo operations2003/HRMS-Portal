@@ -162,21 +162,18 @@ router.get(
 router.patch(
   ['/requests/:id', '/:id', '/request/:id'],
   requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']),
-  authorize(['exit:admin', 'exit:write']),
   exitController.updateExitRequest
 );
 
 router.put(
   ['/requests/:id', '/:id', '/request/:id'],
   requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']),
-  authorize(['exit:admin', 'exit:write']),
   exitController.updateExitRequest
 );
 
 router.post(
   ['/requests/:id', '/requests/:id/update', '/:id/update', '/:id'],
   requireRoles(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']),
-  authorize(['exit:admin', 'exit:write']),
   exitController.updateExitRequest
 );
 

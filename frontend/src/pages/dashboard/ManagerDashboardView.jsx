@@ -227,27 +227,12 @@ export const ManagerDashboardView = () => {
               Welcome back, {user?.firstName || 'Manager'}!
             </h1>
             <p className="mt-1 text-sm text-slate-300 max-w-xl leading-relaxed">
-              Track team attendance, review operational requests, and guide department goals from your central management cockpit.
+              Track team attendance, review operational requests, and manage your team from one place.
             </p>
           </div>
 
           {/* Quick Action Navigation Buttons */}
           <div className="flex flex-wrap items-center gap-3">
-            <Button
-              variant="primary"
-              size="md"
-              icon={Briefcase}
-              onClick={() => navigate('/manager')}
-              className="bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/30 border-0"
-            >
-              Open Manager Cockpit
-              {totalPendingAction > 0 && (
-                <span className="ml-1.5 px-2 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[11px] font-bold">
-                  {totalPendingAction}
-                </span>
-              )}
-            </Button>
-
             <Button
               variant="secondary"
               size="md"
@@ -649,24 +634,6 @@ export const ManagerDashboardView = () => {
             </h3>
 
             <div className="grid grid-cols-1 gap-2.5">
-              <div
-                onClick={() => navigate('/manager')}
-                className="p-3 rounded-xl border border-indigo-200/80 bg-indigo-50/60 dark:bg-indigo-950/30 dark:border-indigo-900/60 hover:border-indigo-400 cursor-pointer transition-all flex items-center justify-between group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-indigo-600 text-white">
-                    <Briefcase className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 transition-colors">
-                      Manager Cockpit
-                    </h4>
-                    <p className="text-[11px] text-slate-500">Full operational supervisory command center</p>
-                  </div>
-                </div>
-                <ArrowRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
-              </div>
-
               <div
                 onClick={() => navigate('/team')}
                 className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 cursor-pointer transition-all flex items-center justify-between group"
