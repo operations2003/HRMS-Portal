@@ -77,26 +77,6 @@ export const DashboardPage = () => {
 
   const adminStatCards = [
     {
-      title: 'Total Organizations',
-      value: stats?.totalOrganizations || 0,
-      subtext: `${stats?.activeOrganizations || 0} active organizations`,
-      icon: Building2,
-      color: 'text-brand-600',
-      bgLight: 'bg-brand-50',
-      border: 'border-brand-200/70',
-      action: () => navigate('/organizations'),
-    },
-    {
-      title: 'Active Employees',
-      value: stats?.activeEmployees || 0,
-      subtext: `${stats?.onLeaveEmployees || 0} on leave`,
-      icon: Users,
-      color: 'text-emerald-600',
-      bgLight: 'bg-emerald-50',
-      border: 'border-emerald-200/70',
-      action: () => navigate('/employees?status=Active'),
-    },
-    {
       title: 'Early Warning (EWS)',
       value: stats?.ewsCount ?? 0,
       subtext: 'Flagged for conversion / retention review',
@@ -115,16 +95,6 @@ export const DashboardPage = () => {
       bgLight: 'bg-purple-50',
       border: 'border-purple-200/70',
       action: () => navigate('/departments'),
-    },
-    {
-      title: 'System Users',
-      value: stats?.totalUsers || 0,
-      subtext: 'RBAC identity profiles',
-      icon: UserCheck,
-      color: 'text-slate-600',
-      bgLight: 'bg-slate-100',
-      border: 'border-slate-200/70',
-      action: () => navigate('/users'),
     },
   ];
 
@@ -224,7 +194,7 @@ export const DashboardPage = () => {
       </div>
 
       {/* KPI Cards Grid */}
-      <div className={`grid grid-cols-1 sm:grid-cols-2 ${isEmployee ? 'lg:grid-cols-4' : 'lg:grid-cols-5'} gap-5`}>
+      <div className={`grid grid-cols-1 sm:grid-cols-2 ${isEmployee ? 'lg:grid-cols-4' : 'lg:grid-cols-2'} gap-5`}>
         {statCards.map((card, i) => {
           const Icon = card.icon;
           return (
