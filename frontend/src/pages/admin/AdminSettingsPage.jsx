@@ -4,14 +4,12 @@ import {
   Sliders,
   Users,
   KeyRound,
-  Activity,
   FileText,
   ShieldCheck,
   ShieldAlert,
   RefreshCw,
   Plus,
   Edit2,
-  Server,
   Database,
   CheckCircle2,
   Lock,
@@ -33,7 +31,6 @@ import { DataTable } from '../../components/common/DataTable.jsx';
 import { Alert } from '../../components/common/Alert.jsx';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
 import { Avatar } from '../../components/common/Avatar.jsx';
-import { SystemOverviewCards } from '../../components/admin/SystemOverviewCards.jsx';
 import { ConfigEditorModal } from '../../components/admin/ConfigEditorModal.jsx';
 import { AuditLogsTable } from '../../components/admin/AuditLogsTable.jsx';
 import { UserStatusModal } from '../../components/admin/UserStatusModal.jsx';
@@ -51,7 +48,7 @@ export const AdminSettingsPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const urlTab = searchParams.get('tab');
 
-  // Active section tab: 'orgs' | 'users' | 'roles' | 'configs' | 'overview' | 'audits'
+  // Active section tab: 'orgs' | 'users' | 'roles' | 'configs' | 'audits'
   const [activeTab, setActiveTab] = useState(() => urlTab || 'configs');
 
   useEffect(() => {
@@ -93,11 +90,7 @@ export const AdminSettingsPage = () => {
   const [editingRole, setEditingRole] = useState(null);
   const [isCreateRoleOpen, setIsCreateRoleOpen] = useState(false);
 
-  // 4. System Overview State
-  const [overview, setOverview] = useState({});
-  const [isLoadingOverview, setIsLoadingOverview] = useState(false);
-
-  // 5. Audit Logs State
+  // 4. Audit Logs State
   const [auditLogs, setAuditLogs] = useState([]);
   const [isLoadingAudits, setIsLoadingAudits] = useState(false);
 
@@ -153,19 +146,6 @@ export const AdminSettingsPage = () => {
     }
   }, [toast]);
 
-  // Fetch Overview
-  const fetchOverview = useCallback(async () => {
-    try {
-      setIsLoadingOverview(true);
-      const data = await adminService.getSystemOverview();
-      setOverview(data || {});
-    } catch (err) {
-      console.error('Failed to load system overview:', err);
-    } finally {
-      setIsLoadingOverview(false);
-    }
-  }, []);
-
   // Fetch Audit Logs
   const fetchAudits = useCallback(async () => {
     try {
@@ -185,16 +165,14 @@ export const AdminSettingsPage = () => {
     if (activeTab === 'configs') fetchConfigs();
     if (activeTab === 'users') fetchUsersAndRoles();
     if (activeTab === 'roles') fetchRoles();
-    if (activeTab === 'overview') fetchOverview();
     if (activeTab === 'audits') fetchAudits();
-  }, [activeTab, isAdmin, fetchConfigs, fetchUsersAndRoles, fetchRoles, fetchOverview, fetchAudits]);
+  }, [activeTab, isAdmin, fetchConfigs, fetchUsersAndRoles, fetchRoles, fetchAudits]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
     if (activeTab === 'configs') await fetchConfigs();
     if (activeTab === 'users') await fetchUsersAndRoles();
     if (activeTab === 'roles') await fetchRoles();
-    if (activeTab === 'overview') await fetchOverview();
     if (activeTab === 'audits') await fetchAudits();
     setRefreshing(false);
     toast.success('Admin data refreshed.');
@@ -329,7 +307,6 @@ export const AdminSettingsPage = () => {
           { id: 'users', label: 'User Administration', icon: Users, badge: usersList.length },
           { id: 'roles', label: 'Roles & Permissions', icon: KeyRound, badge: rolesList.length },
           { id: 'configs', label: 'Configurations & Policies', icon: Sliders },
-          { id: 'overview', label: 'Platform Health', icon: Activity },
           { id: 'audits', label: 'Audit Trail', icon: FileText },
         ].map((tab) => {
           const Icon = tab.icon;
@@ -668,26 +645,6 @@ export const AdminSettingsPage = () => {
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* TAB 4: PLATFORM HEALTH & TELEMETRY */}
-      {/* ========================================================================= */}
-      {activeTab === 'overview' && (
-        <div className="space-y-6">
-          <SystemOverviewCards overview={overview} isLoading={isLoadingOverview} />
-
-          <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-sm space-y-3">
-            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <Server className="w-4 h-4 text-emerald-600" />
-              Runtime Architecture & Security Overview
-            </h3>
-            <p className="text-xs text-slate-600 leading-relaxed">
-              TaskNera runs on a micro-architected Node.js enterprise backend backed by PostgreSQL multi-tenant storage.
-              All administrative calls are authenticated with signed JWTs and authorized by strict database-driven RBAC.
-              All schema mutations and credential assignments are logged to the immutable audit trail.
-            </p>
-          </div>
-        </div>
-      )}
 
       {/* ========================================================================= */}
       {/* TAB 5: IMMUTABLE AUDIT TRAIL */}
