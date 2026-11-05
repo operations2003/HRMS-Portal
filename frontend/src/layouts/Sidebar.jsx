@@ -16,6 +16,7 @@ import {
   LogOut,
   UserX,
   Sliders,
+  Settings as SettingsIcon,
   Wallet,
   CheckSquare,
   GraduationCap,
@@ -86,6 +87,18 @@ export const Sidebar = ({ isOpen, onClose }) => {
           roles: ['Manager', 'HR', 'HRManager'],
           excludeRoles: ['Admin', 'SuperAdmin', 'OrgAdmin'],
         },
+        {
+          name: 'Company Policies',
+          path: '/policies',
+          icon: BookOpen,
+          permission: ['employee:read'],
+        },
+        {
+          name: 'Help Desk & Requests',
+          path: '/helpdesk',
+          icon: LifeBuoy,
+          permission: ['helpdesk:read', 'request:read', 'employee:read'],
+        },
       ],
     },
 
@@ -146,29 +159,18 @@ export const Sidebar = ({ isOpen, onClose }) => {
       ],
     },
 
-    // 6. Company & Administration
+    // 6. Settings
     {
-      id: 'company-admin',
-      title: 'Company & Admin',
-      icon: Sliders,
+      id: 'settings',
+      title: 'Settings',
+      icon: SettingsIcon,
+      roles: ['Admin', 'SuperAdmin', 'OrgAdmin', 'HR', 'HRManager'],
       items: [
         {
           name: 'Departments',
           path: '/departments',
           icon: Building2,
           roles: ['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin'],
-        },
-        {
-          name: 'Company Policies',
-          path: '/policies',
-          icon: BookOpen,
-          permission: ['employee:read'],
-        },
-        {
-          name: 'Help Desk & Requests',
-          path: '/helpdesk',
-          icon: LifeBuoy,
-          permission: ['helpdesk:read', 'request:read', 'employee:read'],
         },
         {
           name: 'System Administration',
@@ -333,7 +335,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
                           isSingleActive ? 'text-brand-600' : 'text-slate-400'
                         }`}
                       />
-                      <span className="truncate">{group.title}</span>
+                      <span className="truncate">{singleItem.name === 'Departments' ? 'Departments' : group.title}</span>
                     </div>
                   </NavLink>
                 </div>
