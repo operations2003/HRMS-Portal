@@ -1268,52 +1268,6 @@ export const EmployeeListPage = () => {
       ),
     },
     {
-      header: 'Reporting & HR',
-      key: 'hierarchy',
-      render: (row) => (
-        <div className="space-y-1 text-xs">
-          <div className="flex items-center gap-1.5 text-slate-700">
-            <UserCheck className="w-3.5 h-3.5 text-brand-600 shrink-0" />
-            <span className="font-medium truncate max-w-[130px]" title={row.manager?.fullName || 'No Manager'}>
-              {row.manager?.fullName ? row.manager.fullName : <span className="text-slate-400 italic">No Manager</span>}
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5 text-slate-700">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-            <span className="font-medium truncate max-w-[130px]" title={row.hr?.fullName || 'No HR'}>
-              {row.hr?.fullName ? row.hr.fullName : <span className="text-slate-400 italic">No HR</span>}
-            </span>
-          </div>
-        </div>
-      ),
-    },
-    {
-      header: 'Compensation',
-      key: 'compensation',
-      render: (row) => {
-        if (canViewSalary(row)) {
-          const sal = Number(row.salary);
-          return (
-            <div className="text-xs">
-              <span className="font-semibold text-slate-800">
-                {sal > 0 ? `₹${sal.toLocaleString('en-IN')}` : 'Not set'}
-              </span>
-              {sal > 0 && <span className="text-[10px] text-slate-400 block">/ yr</span>}
-            </div>
-          );
-        }
-        return (
-          <span
-            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-600 border border-slate-200"
-            title="Confidential: Executive and HR access only"
-          >
-            <Lock className="w-3 h-3 text-slate-400" />
-            Confidential
-          </span>
-        );
-      },
-    },
-    {
       header: 'Actions',
       key: 'actions',
       className: 'text-right w-16',
@@ -3631,15 +3585,33 @@ export const EmployeeListPage = () => {
               top: `${actionMenuState.position.top}px`,
               right: `${actionMenuState.position.right}px`,
             }}
-            className="z-50 w-56 rounded-2xl bg-white shadow-2xl border border-slate-200/90 py-1.5 animate-in fade-in zoom-in-95 duration-100 text-left overflow-hidden focus:outline-none"
+            className="z-50 w-64 rounded-2xl bg-white shadow-2xl border border-slate-200/90 py-1.5 animate-in fade-in zoom-in-95 duration-100 text-left overflow-hidden focus:outline-none"
           >
-            <div className="px-3 py-2 border-b border-slate-100 bg-slate-50/70">
-              <p className="text-xs font-bold text-slate-800 truncate">
-                {actionMenuState.employee.firstName} {actionMenuState.employee.lastName}
-              </p>
-              <p className="text-[11px] text-slate-500 truncate">
-                {actionMenuState.employee.employeeCode || '—'} • {actionMenuState.employee.designation?.title || actionMenuState.employee.employmentType || 'Staff'}
-              </p>
+            <div className="px-3.5 py-2.5 border-b border-slate-100 bg-slate-50/80 space-y-1.5">
+              <div>
+                <p className="text-xs font-bold text-slate-800 truncate">
+                  {actionMenuState.employee.firstName} {actionMenuState.employee.lastName}
+                </p>
+                <p className="text-[11px] text-slate-500 truncate">
+                  {actionMenuState.employee.employeeCode || '—'} • {actionMenuState.employee.designation?.title || actionMenuState.employee.employmentType || 'Staff'}
+                </p>
+              </div>
+              <div className="pt-1.5 border-t border-slate-200/60 text-[11px] space-y-1">
+                <div className="flex items-center gap-1.5 text-slate-700">
+                  <UserCheck className="w-3.5 h-3.5 text-brand-600 shrink-0" />
+                  <span className="text-slate-500 font-medium">Manager:</span>
+                  <span className="font-semibold text-slate-800 truncate max-w-[150px]" title={actionMenuState.employee.manager?.fullName || 'No Manager'}>
+                    {actionMenuState.employee.manager?.fullName || <span className="text-slate-400 italic font-normal">No Manager</span>}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 text-slate-700">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span className="text-slate-500 font-medium">HR:</span>
+                  <span className="font-semibold text-slate-800 truncate max-w-[150px]" title={actionMenuState.employee.hr?.fullName || 'No HR'}>
+                    {actionMenuState.employee.hr?.fullName || <span className="text-slate-400 italic font-normal">No HR</span>}
+                  </span>
+                </div>
+              </div>
             </div>
 
             <div className="py-1">
@@ -3673,7 +3645,7 @@ export const EmployeeListPage = () => {
                 </button>
               )}
 
-              {/* Hierarchy */}
+              {/* Reporting & HR */}
               {hasPermission('employee:write') && (
                 <button
                   type="button"
@@ -3685,7 +3657,7 @@ export const EmployeeListPage = () => {
                   className="w-full text-left px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-brand-600 flex items-center gap-2.5 transition-colors"
                 >
                   <UserCheck className="w-4 h-4 text-slate-400" />
-                  <span>Hierarchy</span>
+                  <span>Reporting & HR</span>
                 </button>
               )}
 
