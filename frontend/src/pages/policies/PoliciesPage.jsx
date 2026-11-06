@@ -309,14 +309,6 @@ export const PoliciesPage = () => {
                     </a>
                   )}
 
-                  <Button
-                    size="xs"
-                    variant="outline"
-                    onClick={() => setViewingPolicy(p)}
-                  >
-                    Read
-                  </Button>
-
                   {canManagePolicies && (
                     <>
                       <button
