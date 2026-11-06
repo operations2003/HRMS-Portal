@@ -73,7 +73,7 @@ export const ResignationPage = () => {
   // Active Tab: 'my' | 'team' | 'org' | 'fnf' | 'termination'
   const [activeTab, setActiveTab] = useState(() => {
     if (urlTab) return urlTab;
-    return isHrOrAdmin ? 'org' : isManager ? 'team' : 'my';
+    return 'my';
   });
 
   useEffect(() => {
