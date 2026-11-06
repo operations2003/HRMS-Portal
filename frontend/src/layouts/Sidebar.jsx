@@ -6,7 +6,6 @@ import {
   Users,
   UserCheck,
   X,
-  Sparkles,
   CalendarCheck,
   CalendarDays,
   FolderLock,
@@ -399,17 +398,6 @@ export const Sidebar = ({ isOpen, onClose }) => {
             );
           })}
         </nav>
-
-        {/* Footer branding */}
-        <div className="p-3 mx-3 mb-3 rounded-xl bg-slate-50/80 border border-slate-200/60 shadow-2xs shrink-0">
-          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
-            <Sparkles className="w-3.5 h-3.5 text-brand-600 shrink-0" />
-            <span className="truncate">TaskNera Enterprise</span>
-          </div>
-          <p className="text-[10px] text-slate-400 mt-0.5">
-            People. Processes. Performance.
-          </p>
-        </div>
       </aside>
     </>
   );
