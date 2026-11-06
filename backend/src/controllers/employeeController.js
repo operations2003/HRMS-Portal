@@ -356,6 +356,12 @@ export const employeeController = {
         }
       }
 
+      if (phone !== undefined && phone !== null && phone.trim() !== '') {
+        if (!/^\d{10}$/.test(phone.trim())) {
+          return sendError(res, 'Phone number must be strictly 10 digits.', 400);
+        }
+      }
+
       const pEmail = personalEmail !== undefined ? (personalEmail ? personalEmail.trim().toLowerCase() : '') : null;
       const fName = firstName !== undefined ? (firstName ? firstName.trim() : null) : null;
       const lName = lastName !== undefined ? (lastName ? lastName.trim() : null) : null;

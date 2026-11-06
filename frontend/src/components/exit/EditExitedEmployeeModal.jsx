@@ -146,6 +146,11 @@ export const EditExitedEmployeeModal = ({
   // Handle Input Changes
   const handleChange = (e) => {
     const { name, value } = e.target;
+    if (name === 'phone') {
+      const numericVal = value.replace(/\D/g, '').slice(0, 10);
+      setFormData((prev) => ({ ...prev, [name]: numericVal }));
+      return;
+    }
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -208,6 +213,11 @@ export const EditExitedEmployeeModal = ({
 
     if (!formData.email.trim()) {
       setError('Work / Login email is required.');
+      return;
+    }
+
+    if (formData.phone && formData.phone.trim() && !/^\d{10}$/.test(formData.phone.trim())) {
+      setError('Phone number must be strictly 10 digits.');
       return;
     }
 
@@ -443,10 +453,14 @@ export const EditExitedEmployeeModal = ({
             <Input
               label="Phone Number"
               name="phone"
+              type="tel"
+              inputMode="numeric"
+              maxLength={10}
               value={formData.phone}
               onChange={handleChange}
               icon={Phone}
-              placeholder="+91 98765 43210"
+              placeholder="10-digit mobile number"
+              helperText="Strictly 10 digits only"
             />
             <Input
               label="Emergency Contact"

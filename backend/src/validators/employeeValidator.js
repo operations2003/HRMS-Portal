@@ -49,6 +49,12 @@ export const validateCreateEmployee = (body) => {
     }
   }
 
+  if (body.phone !== undefined && body.phone !== null && body.phone !== '') {
+    if (typeof body.phone !== 'string' || !/^\d{10}$/.test(body.phone.trim())) {
+      errors.push('Phone number must be strictly 10 digits.');
+    }
+  }
+
   if (body.password !== undefined && body.password !== null && body.password !== '') {
     if (typeof body.password !== 'string' || body.password.length < 6) {
       errors.push('Password must be at least 6 characters long.');
@@ -87,6 +93,12 @@ export const validateUpdateEmployee = (body) => {
   if (body.salary !== undefined && body.salary !== null && body.salary !== '') {
     if (isNaN(Number(body.salary)) || Number(body.salary) < 0) {
       errors.push('Salary must be a positive number.');
+    }
+  }
+
+  if (body.phone !== undefined && body.phone !== null && body.phone !== '') {
+    if (typeof body.phone !== 'string' || !/^\d{10}$/.test(body.phone.trim())) {
+      errors.push('Phone number must be strictly 10 digits.');
     }
   }
 

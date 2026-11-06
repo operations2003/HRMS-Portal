@@ -835,6 +835,10 @@ export const EmployeeListPage = () => {
     }
     if (!formData.orgId) errs.orgId = 'Organization selection is required.';
 
+    if (formData.phone && !/^\d{10}$/.test(formData.phone.trim())) {
+      errs.phone = 'Phone number must be strictly 10 digits.';
+    }
+
     // Password validation: required when registering new employee, optional on edit
     if (!editingEmployee) {
       if (!formData.password) {
@@ -1608,9 +1612,26 @@ export const EmployeeListPage = () => {
             />
             <Input
               label="Phone Number"
+              type="tel"
+              inputMode="numeric"
+              maxLength={10}
               value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-              placeholder="+1 (555) 000-0000"
+              onChange={(e) => {
+                const numeric = e.target.value.replace(/\D/g, '').slice(0, 10);
+                setFormData({ ...formData, phone: numeric });
+                if (numeric && numeric.length !== 10) {
+                  setFormErrors((prev) => ({ ...prev, phone: 'Phone number must be strictly 10 digits.' }));
+                } else {
+                  setFormErrors((prev) => {
+                    const copy = { ...prev };
+                    delete copy.phone;
+                    return copy;
+                  });
+                }
+              }}
+              placeholder="Enter 10-digit phone number"
+              error={formErrors.phone}
+              helperText={formErrors.phone || 'Strictly 10 digits only'}
             />
           </div>
 
