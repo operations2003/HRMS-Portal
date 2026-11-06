@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Target, Award, AlertCircle, Plus, Trash2, Send, Save, Star, UserCheck, Users } from 'lucide-react';
+import { Target, Award, AlertCircle, Plus, Trash2, Send, Save, Star, UserCheck, Users, Sparkles } from 'lucide-react';
 import { Modal } from '../common/Modal.jsx';
 import { Button } from '../common/Button.jsx';
 import { Alert } from '../common/Alert.jsx';
@@ -9,6 +9,7 @@ import { employeeService } from '../../services/employeeService.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { filterNonCeoEmployees, isLdDepartmentUser } from '../../utils/roleUtils.js';
+import { KPI_DESIGNATION_FRAMEWORKS, matchFrameworkForDesignation } from '../../constants/kpiFrameworks.js';
 
 export const CreateAppraisalModal = ({ isOpen, onClose, onSuccess }) => {
   const toast = useToast();
@@ -117,6 +118,20 @@ export const CreateAppraisalModal = ({ isOpen, onClose, onSuccess }) => {
 
   const addGoalRow = () => {
     setGoals([...goals, { title: '', description: '', target_date: '', weightage: 0 }]);
+  };
+
+  const handleLoadDesignationKpis = () => {
+    const selectedEmp = employees.find((e) => e.id === formData.employeeId);
+    const desig = selectedEmp?.designation?.name || selectedEmp?.designationTitle || selectedEmp?.role || '';
+    const fw = matchFrameworkForDesignation(desig);
+    const populated = fw.kpis.map((k) => ({
+      title: k.name,
+      description: `Target: ${k.monthlyTarget}`,
+      target_date: '',
+      weightage: k.weight,
+    }));
+    setGoals(populated);
+    toast.success(`Loaded ${fw.title} KPI Framework (${populated.length} targets)`);
   };
 
   const removeGoalRow = (index) => {
@@ -374,14 +389,25 @@ export const CreateAppraisalModal = ({ isOpen, onClose, onSuccess }) => {
               <Target className="w-3.5 h-3.5 text-brand-600" />
               Key Deliverables & Objectives for Next Period
             </label>
-            <button
-              type="button"
-              onClick={addGoalRow}
-              className="text-xs font-semibold text-brand-600 hover:text-brand-700 flex items-center gap-1"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Add Objective
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleLoadDesignationKpis}
+                className="text-xs font-semibold text-brand-600 hover:text-brand-700 flex items-center gap-1 bg-brand-50 hover:bg-brand-100 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+                title="Auto-populate goals with official TaskNera designation framework KPIs"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                Load Role KPIs
+              </button>
+              <button
+                type="button"
+                onClick={addGoalRow}
+                className="text-xs font-semibold text-slate-600 hover:text-slate-900 flex items-center gap-1"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add Objective
+              </button>
+            </div>
           </div>
 
           <div className="space-y-2.5">

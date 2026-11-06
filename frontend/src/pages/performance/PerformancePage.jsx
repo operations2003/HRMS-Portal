@@ -18,6 +18,9 @@ import {
   Users,
   Edit,
   Trash2,
+  Briefcase,
+  Calculator,
+  Sparkles,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
@@ -32,6 +35,15 @@ import { EditAppraisalModal } from '../../components/performance/EditAppraisalMo
 import { ManagerReviewModal } from '../../components/performance/ManagerReviewModal.jsx';
 import { CreatePeriodModal } from '../../components/performance/CreatePeriodModal.jsx';
 import { AppraisalDetailModal } from '../../components/performance/AppraisalDetailModal.jsx';
+import { KpiScoringModal } from '../../components/performance/KpiScoringModal.jsx';
+import { KpiScorecardDetailModal } from '../../components/performance/KpiScorecardDetailModal.jsx';
+import { KpiFrameworkDirectoryModal } from '../../components/performance/KpiFrameworkDirectoryModal.jsx';
+import {
+  KPI_DESIGNATION_FRAMEWORKS,
+  RATING_SCALE,
+  getPerformanceRatingFromScore,
+  matchFrameworkForDesignation,
+} from '../../constants/kpiFrameworks.js';
 import { isCeoOrAdmin, isLdDepartmentUser } from '../../utils/roleUtils.js';
 
 export const PerformancePage = () => {
@@ -54,6 +66,9 @@ export const PerformancePage = () => {
   const canReviewTeam = isAdmin || isHR || isManager;
   const hasOwnReview = !isAdmin;
 
+  // Primary Section Switcher: 'appraisals' | 'performance_reviews'
+  const [primarySection, setPrimarySection] = useState('appraisals');
+
   // Active Tab: 'my' | 'team' | 'cycles'
   const [activeTab, setActiveTab] = useState(() => (isAdmin ? 'team' : 'my'));
   const [myRecords, setMyRecords] = useState([]);
@@ -65,6 +80,15 @@ export const PerformancePage = () => {
   const [teamStatusFilter, setTeamStatusFilter] = useState('ALL');
   const [orgStatusFilter, setOrgStatusFilter] = useState('ALL');
   const [orgSearch, setOrgSearch] = useState('');
+
+  // Performance Reviews (KPI Scoring) State & Filters
+  const [kpiSearch, setKpiSearch] = useState('');
+  const [kpiRatingFilter, setKpiRatingFilter] = useState('ALL');
+  const [kpiDesignationFilter, setKpiDesignationFilter] = useState('ALL');
+  const [isKpiScoringOpen, setIsKpiScoringOpen] = useState(false);
+  const [isFrameworkDirectoryOpen, setIsFrameworkDirectoryOpen] = useState(false);
+  const [scorecardRecord, setScorecardRecord] = useState(null);
+  const [candidateToScore, setCandidateToScore] = useState(null);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -94,12 +118,30 @@ export const PerformancePage = () => {
 
   useEffect(() => {
     loadData();
-  }, [activeTab]);
+  }, [activeTab, primarySection]);
 
   const loadData = async () => {
     try {
       setIsRefreshing(true);
-      if (activeTab === 'my') {
+      if (primarySection === 'performance_reviews') {
+        const [tRes, oRes, mRes] = await Promise.allSettled([
+          performanceService.getTeamPerformance(),
+          isHrOrAdmin ? performanceService.getOrganizationRecords() : Promise.resolve([]),
+          performanceService.getMyPerformance(),
+        ]);
+        if (tRes.status === 'fulfilled') {
+          const t = tRes.value;
+          setTeamRecords(t.items || t.data || (Array.isArray(t) ? t : []));
+        }
+        if (oRes.status === 'fulfilled') {
+          const o = oRes.value;
+          setOrgRecords(o.items || o.data || (Array.isArray(o) ? o : []));
+        }
+        if (mRes.status === 'fulfilled') {
+          const m = mRes.value;
+          setMyRecords(m.items || m.data || (Array.isArray(m) ? m : []));
+        }
+      } else if (activeTab === 'my') {
         const res = await performanceService.getMyPerformance();
         setMyRecords(res.items || res.data || (Array.isArray(res) ? res : []));
       } else if (activeTab === 'team') {
@@ -551,9 +593,198 @@ export const PerformancePage = () => {
     },
   ];
 
+  // =========================================================================
+  // Performance Reviews (KPI Scoring) Computations & Table Columns
+  // =========================================================================
+  const allPerformanceReviews = useMemo(() => {
+    const list = isHrOrAdmin ? orgRecords : canReviewTeam ? teamRecords : myRecords;
+    return Array.isArray(list) ? list : [];
+  }, [isHrOrAdmin, canReviewTeam, orgRecords, teamRecords, myRecords]);
+
+  const filteredKpiReviews = useMemo(() => {
+    return allPerformanceReviews.filter((rec) => {
+      const empName = (rec.employee?.fullName || rec.employeeName || '').toLowerCase();
+      const period = (rec.reviewPeriod || '').toLowerCase();
+      const desig = (rec.employee?.designation?.name || rec.employee?.designationTitle || rec.employee?.role || '').toLowerCase();
+      const q = kpiSearch.toLowerCase().trim();
+
+      if (q && !empName.includes(q) && !period.includes(q) && !desig.includes(q)) {
+        return false;
+      }
+
+      if (kpiRatingFilter !== 'ALL') {
+        const rating = Math.round(Number(rec.rating || 0));
+        if (String(rating) !== String(kpiRatingFilter)) return false;
+      }
+
+      if (kpiDesignationFilter !== 'ALL') {
+        const matchedFw = matchFrameworkForDesignation(desig);
+        if (matchedFw.id !== kpiDesignationFilter) return false;
+      }
+
+      return true;
+    });
+  }, [allPerformanceReviews, kpiSearch, kpiRatingFilter, kpiDesignationFilter]);
+
+  const kpiColumns = [
+    {
+      header: 'Candidate / Employee',
+      render: (row) => {
+        const empName = row.employee?.fullName || row.employeeName || 'Staff Member';
+        const desig = row.employee?.designation?.name || row.employee?.designationTitle || row.employee?.role || 'Designation';
+        return (
+          <div className="flex items-center gap-2.5">
+            <Avatar
+              src={row.employee?.avatarUrl || row.avatarUrl}
+              name={empName}
+              size="sm"
+              className="ring-1 ring-slate-200"
+            />
+            <div>
+              <p className="font-bold text-slate-900 dark:text-white text-xs">{empName}</p>
+              <p className="text-[11px] text-slate-500">
+                {desig} &bull; {row.employee?.department?.name || 'Department'}
+              </p>
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      header: 'Evaluation Period',
+      render: (row) => (
+        <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
+          {row.reviewPeriod || 'Monthly KPI'}
+        </span>
+      ),
+    },
+    {
+      header: 'Total KPI Score',
+      render: (row) => {
+        const rawScore = Number(row.score ?? row.rating * 20 ?? 0);
+        const score = rawScore > 5 ? rawScore : Math.round(row.rating * 20);
+        return (
+          <div className="space-y-1 min-w-[110px]">
+            <div className="flex items-center justify-between text-xs font-mono font-bold">
+              <span className="text-brand-600">{score}%</span>
+              <span className="text-slate-400 text-[10px]">/ 100</span>
+            </div>
+            <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full ${
+                  score >= 90
+                    ? 'bg-emerald-500'
+                    : score >= 80
+                    ? 'bg-sky-500'
+                    : score >= 70
+                    ? 'bg-brand-500'
+                    : score >= 50
+                    ? 'bg-amber-500'
+                    : 'bg-rose-500'
+                }`}
+                style={{ width: `${Math.min(100, Math.max(5, score))}%` }}
+              />
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      header: 'Common Rating & Level',
+      render: (row) => {
+        const rawScore = Number(row.score ?? row.rating * 20 ?? 0);
+        const score = rawScore > 5 ? rawScore : Math.round(row.rating * 20);
+        const rating = Number(row.rating ?? 4);
+        const ratingInfo = getPerformanceRatingFromScore(score);
+        return (
+          <div className="flex items-center gap-2">
+            <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${ratingInfo.bgColor}`}>
+              {rating.toFixed(1)} &bull; {ratingInfo.level}
+            </span>
+          </div>
+        );
+      },
+    },
+    {
+      header: 'Reviewer / Manager',
+      render: (row) => (
+        <span className="text-xs text-slate-600 dark:text-slate-400">
+          {row.reviewer?.fullName || row.reviewerName || 'Reviewer'}
+        </span>
+      ),
+    },
+    {
+      header: 'Actions',
+      className: 'text-right',
+      render: (row) => (
+        <div className="flex items-center justify-end gap-1.5">
+          <Button
+            size="xs"
+            variant="outline"
+            icon={Eye}
+            onClick={() => setScorecardRecord(row)}
+          >
+            Scorecard
+          </Button>
+          {canGiveAppraisal && (
+            <Button
+              size="xs"
+              variant="primary"
+              icon={Star}
+              onClick={() => {
+                setCandidateToScore(row.employee || null);
+                setIsKpiScoringOpen(true);
+              }}
+              title="Evaluate / Re-score candidate KPIs"
+            >
+              Score KPIs
+            </Button>
+          )}
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-6 pb-12">
-      {/* Header */}
+      {/* Primary Section Switcher: Appraisals vs Performance Reviews (KPI Scoring) */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
+        <button
+          type="button"
+          onClick={() => setPrimarySection('appraisals')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+            primarySection === 'appraisals'
+              ? 'bg-brand-600 text-white shadow-md shadow-brand-600/20'
+              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+          }`}
+        >
+          <Award className="w-4 h-4" />
+          <span>Appraisals</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setPrimarySection('performance_reviews')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+            primarySection === 'performance_reviews'
+              ? 'bg-brand-600 text-white shadow-md shadow-brand-600/20'
+              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+          }`}
+        >
+          <Target className="w-4 h-4" />
+          <span>Performance Reviews</span>
+          <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-brand-100 dark:bg-brand-950/80 text-brand-800 dark:text-brand-200 font-mono">
+            KPI Scoring
+          </span>
+        </button>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* SECTION 1: APPRAISALS & EVALUATION CYCLES */}
+      {/* ========================================================================= */}
+      {primarySection === 'appraisals' && (
+        <div className="space-y-6">
+          {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
@@ -870,6 +1101,282 @@ export const PerformancePage = () => {
           </div>
         </div>
       )}
+    </div>
+  )}
+
+      {/* ========================================================================= */}
+      {/* SECTION 2: PERFORMANCE REVIEWS & KPI SCORING */}
+      {/* ========================================================================= */}
+      {primarySection === 'performance_reviews' && (
+        <div className="space-y-6">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2.5">
+                <Target className="w-6 h-6 text-brand-600" />
+                Performance Reviews &amp; KPI Scoring
+              </h1>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                Evaluate candidates against TaskNera's 5 designation frameworks using weighted scoring and the 1–5 Common Rating System.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                icon={Briefcase}
+                onClick={() => setIsFrameworkDirectoryOpen(true)}
+              >
+                View KPI Framework
+              </Button>
+              <Button
+                variant="secondary"
+                icon={RefreshCw}
+                isLoading={isRefreshing}
+                onClick={loadData}
+              >
+                Refresh
+              </Button>
+              {canGiveAppraisal && (
+                <Button
+                  variant="primary"
+                  icon={Star}
+                  onClick={() => {
+                    setCandidateToScore(null);
+                    setIsKpiScoringOpen(true);
+                  }}
+                >
+                  Score Candidate Performance
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Metric Overview Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  Total Reviews
+                </span>
+                <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600 flex items-center justify-center">
+                  <Award className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="mt-2 text-2xl font-black text-slate-900 dark:text-white font-mono">
+                {allPerformanceReviews.length}
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">Evaluated staff records</p>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-brand-600 uppercase tracking-wider">
+                  Avg Overall Score
+                </span>
+                <div className="w-8 h-8 rounded-lg bg-orange-50 dark:bg-orange-950/40 text-[#BF6649] flex items-center justify-center">
+                  <TrendingUp className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="mt-2 text-2xl font-black text-slate-900 dark:text-white font-mono">
+                {allPerformanceReviews.length > 0
+                  ? Math.round(
+                      allPerformanceReviews.reduce((acc, r) => {
+                        const raw = Number(r.score ?? r.rating * 20 ?? 0);
+                        return acc + (raw > 5 ? raw : raw * 20);
+                      }, 0) / allPerformanceReviews.length
+                    )
+                  : 85}
+                %
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">Weighted KPI aggregate</p>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">
+                  Top Performers
+                </span>
+                <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 flex items-center justify-center">
+                  <Star className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="mt-2 text-2xl font-black text-emerald-600 font-mono">
+                {
+                  allPerformanceReviews.filter((r) => {
+                    const raw = Number(r.score ?? r.rating * 20 ?? 0);
+                    const s = raw > 5 ? raw : raw * 20;
+                    return s >= 80;
+                  }).length
+                }
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">Score &ge; 80% (Outstanding/Exceeds)</p>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-amber-600 uppercase tracking-wider">
+                  Action Required
+                </span>
+                <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 flex items-center justify-center">
+                  <Target className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="mt-2 text-2xl font-black text-amber-600 font-mono">
+                {
+                  allPerformanceReviews.filter((r) => {
+                    const raw = Number(r.score ?? r.rating * 20 ?? 0);
+                    const s = raw > 5 ? raw : raw * 20;
+                    return s < 70;
+                  }).length
+                }
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">Score &lt; 70% (Coaching / PIP)</p>
+            </div>
+          </div>
+
+          {/* Designation KPI Framework Quick Select Shelf */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div>
+                <h3 className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Briefcase className="w-4 h-4 text-brand-600" />
+                  TaskNera Designation KPI Frameworks
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Select a role below to review targets or score candidate performance:
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsFrameworkDirectoryOpen(true)}
+                className="text-xs text-brand-600 font-semibold hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <span>View Full Framework Details &amp; Rubrics</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+              {KPI_DESIGNATION_FRAMEWORKS.map((fw) => (
+                <div
+                  key={fw.id}
+                  className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/40 hover:border-brand-500/50 hover:bg-white dark:hover:bg-slate-800 transition-all flex flex-col justify-between gap-3 shadow-xs"
+                >
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-brand-600 dark:text-brand-400 block font-mono">
+                      {fw.category}
+                    </span>
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-white leading-snug">
+                      {fw.title}
+                    </h4>
+                    <p className="text-[11px] text-slate-500 line-clamp-2 pt-1">
+                      {fw.primaryObjective}
+                    </p>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-200/60 dark:border-slate-700/60 space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px] text-slate-500 font-mono">
+                      <span>{fw.kpis.length} KPIs</span>
+                      <span className="font-bold text-slate-800 dark:text-slate-200">100% Weight</span>
+                    </div>
+                    {canGiveAppraisal && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCandidateToScore(null);
+                          setIsKpiScoringOpen(true);
+                        }}
+                        className="w-full text-center py-1 px-2 rounded-lg text-[11px] font-bold bg-brand-50 hover:bg-brand-100 text-brand-700 dark:bg-brand-950/60 dark:text-brand-300 transition-colors cursor-pointer"
+                      >
+                        Score Candidate &rarr;
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Common Performance Rating Reference Bar */}
+          <div className="p-3.5 bg-gradient-to-r from-emerald-50 via-sky-50 to-amber-50 dark:from-slate-800 dark:to-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2 font-bold text-slate-800 dark:text-slate-200">
+              <Calculator className="w-4 h-4 text-brand-600" />
+              <span>Common Rating System (Weighted Score = Achievement % × Weight ÷ 100):</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {RATING_SCALE.map((s) => (
+                <span
+                  key={s.rating}
+                  className={`px-2 py-0.5 rounded-full text-[11px] font-bold border ${s.bgColor}`}
+                >
+                  {s.rating}.0 ({s.rating === 1 ? '<50%' : `${s.minScore}–${Math.floor(s.maxScore)}%`} {s.level})
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Evaluated Candidates Performance Table */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden space-y-4 p-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-extrabold text-slate-900 dark:text-white">
+                  Evaluated Candidate Scorecards ({filteredKpiReviews.length})
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Comprehensive performance evaluations with individual KPI breakdowns and weighted ratings.
+                </p>
+              </div>
+
+              {/* Filters toolbar */}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={kpiSearch}
+                    onChange={(e) => setKpiSearch(e.target.value)}
+                    placeholder="Search candidate or cycle..."
+                    className="pl-8 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
+                  />
+                </div>
+
+                <select
+                  value={kpiRatingFilter}
+                  onChange={(e) => setKpiRatingFilter(e.target.value)}
+                  className="text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 py-1.5 px-2.5 text-slate-700 dark:text-slate-300"
+                >
+                  <option value="ALL">All Rating Levels</option>
+                  <option value="5">5.0 - Outstanding (90–100%)</option>
+                  <option value="4">4.0 - Exceeds Expectations (80–89%)</option>
+                  <option value="3">3.0 - Meets Expectations (70–79%)</option>
+                  <option value="2">2.0 - Needs Improvement (50–69%)</option>
+                  <option value="1">1.0 - Unsatisfactory (&lt;50%)</option>
+                </select>
+
+                <select
+                  value={kpiDesignationFilter}
+                  onChange={(e) => setKpiDesignationFilter(e.target.value)}
+                  className="text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 py-1.5 px-2.5 text-slate-700 dark:text-slate-300"
+                >
+                  <option value="ALL">All Frameworks</option>
+                  {KPI_DESIGNATION_FRAMEWORKS.map((fw) => (
+                    <option key={fw.id} value={fw.id}>
+                      {fw.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <DataTable
+              columns={kpiColumns}
+              data={filteredKpiReviews}
+              isLoading={isLoading}
+              emptyMessage="No performance review scorecards found matching your filters."
+            />
+          </div>
+        </div>
+      )}
 
       {/* Modals */}
       <CreateAppraisalModal
@@ -942,6 +1449,31 @@ export const PerformancePage = () => {
         cancelText="Cancel"
         variant="danger"
         isLoading={isActing}
+      />
+
+      {/* Designation KPI Scoring & Scorecard Modals */}
+      <KpiScoringModal
+        isOpen={isKpiScoringOpen}
+        onClose={() => {
+          setIsKpiScoringOpen(false);
+          setCandidateToScore(null);
+        }}
+        onSuccess={loadData}
+        initialCandidate={candidateToScore}
+      />
+
+      <KpiScorecardDetailModal
+        isOpen={Boolean(scorecardRecord)}
+        onClose={() => setScorecardRecord(null)}
+        record={scorecardRecord}
+      />
+
+      <KpiFrameworkDirectoryModal
+        isOpen={isFrameworkDirectoryOpen}
+        onClose={() => setIsFrameworkDirectoryOpen(false)}
+        onEvaluateDesignation={(fwId) => {
+          setIsKpiScoringOpen(true);
+        }}
       />
     </div>
   );
