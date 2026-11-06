@@ -40,6 +40,7 @@ import {
   ExternalLink,
   Upload,
   Camera,
+  MoreVertical,
 } from 'lucide-react';
 import { DataTable } from '../../components/common/DataTable.jsx';
 import { Button } from '../../components/common/Button.jsx';
@@ -191,6 +192,40 @@ export const EmployeeListPage = () => {
   const isCurrentUserHR = currentUserRoleStr === 'hr' || currentUserRoleStr === 'hrmanager';
   const isCurrentUserAdmin = ['admin', 'superadmin', 'orgadmin'].includes(currentUserRoleStr);
   const isHRSelfShiftDisabled = isCurrentUserHR && !isCurrentUserAdmin && isEditingSelf;
+
+  // Three-dots Row Action Menu State
+  const [actionMenuState, setActionMenuState] = useState(null);
+
+  useEffect(() => {
+    const handleScrollOrResize = () => {
+      if (actionMenuState) setActionMenuState(null);
+    };
+    window.addEventListener('scroll', handleScrollOrResize, true);
+    window.addEventListener('resize', handleScrollOrResize);
+    return () => {
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+      window.removeEventListener('resize', handleScrollOrResize);
+    };
+  }, [actionMenuState]);
+
+  const handleOpenActionMenu = (emp, e) => {
+    e.stopPropagation();
+    if (actionMenuState && actionMenuState.employee?.id === emp.id) {
+      setActionMenuState(null);
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const dropdownHeight = 310;
+    const opensUpward = rect.bottom + dropdownHeight > window.innerHeight;
+
+    setActionMenuState({
+      employee: emp,
+      position: {
+        top: opensUpward ? Math.max(12, rect.top - dropdownHeight) : rect.bottom + 6,
+        right: Math.max(16, window.innerWidth - rect.right),
+      },
+    });
+  };
 
   // Quick EWS Modal State
   const [ewsTarget, setEwsTarget] = useState(null);
@@ -1290,90 +1325,23 @@ export const EmployeeListPage = () => {
     {
       header: 'Actions',
       key: 'actions',
-      className: 'text-right',
-      cellClassName: 'text-right',
+      className: 'text-right w-16',
+      cellClassName: 'text-right w-16',
       render: (row) => (
-        <div className="flex items-center justify-end gap-1.5">
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={Eye}
-            onClick={() => handleOpenView(row)}
-            className="text-slate-600 hover:text-brand-600"
-            title="View Details"
+        <div className="flex items-center justify-end">
+          <button
+            type="button"
+            onClick={(e) => handleOpenActionMenu(row, e)}
+            className={`p-1.5 rounded-lg border transition-all duration-150 focus:outline-none ${
+              actionMenuState?.employee?.id === row.id
+                ? 'bg-brand-50 border-brand-300 text-brand-600 shadow-sm ring-2 ring-brand-500/20'
+                : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 shadow-xs'
+            }`}
+            title="Actions"
+            aria-label="Actions"
           >
-            View
-          </Button>
-          {isHrOrAdmin && isInternEmployee(row) && !isInternshipEnded(row) && (
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={GraduationCap}
-              onClick={() => setEndInternshipTarget(row)}
-              className="text-amber-600 hover:text-amber-700 hover:bg-amber-50 font-medium"
-              title="End of Internship"
-            >
-              End Internship
-            </Button>
-          )}
-          {isHrOrAdmin && (
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={AlertTriangle}
-              onClick={() => handleOpenEwsModal(row)}
-              className={row.isEws ? "text-amber-800 bg-amber-100 hover:bg-amber-200 font-semibold border border-amber-300" : "text-slate-500 hover:text-amber-700 hover:bg-amber-50"}
-              title={row.isEws ? `EWS Active: ${row.ewsReason || 'Under Review'}` : "Put on Early Warning System (EWS)"}
-            >
-              {row.isEws ? 'EWS Active' : 'EWS'}
-            </Button>
-          )}
-          {isCurrentUserAdmin && (
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={Upload}
-              onClick={() => handleOpenUploadPhoto(row)}
-              className="text-slate-500 hover:text-blue-600 hover:bg-blue-50"
-              title={`Upload profile picture for ${row.firstName} ${row.lastName}`}
-            >
-              Photo
-            </Button>
-          )}
-          <Can permission="employee:write">
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={UserCheck}
-              onClick={() => setReassigningEmployee(row)}
-              className="text-slate-600 hover:text-brand-600"
-              title="Assign / Reassign Reporting Manager & HR Partner"
-            >
-              Hierarchy
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={Edit2}
-              onClick={() => handleOpenEdit(row)}
-              className="text-slate-600 hover:text-brand-600"
-              title="Edit Profile"
-            >
-              Edit
-            </Button>
-          </Can>
-          <Can permission="employee:delete">
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={Trash2}
-              onClick={() => setDeleteTarget(row)}
-              className="text-slate-400 hover:text-rose-600 hover:bg-rose-50"
-              title="Deactivate/Delete"
-            >
-              Delete
-            </Button>
-          </Can>
+            <MoreVertical className="w-4 h-4" />
+          </button>
         </div>
       ),
     },
@@ -3658,6 +3626,156 @@ export const EmployeeListPage = () => {
           </div>
         </div>
       </Modal>
+
+      {/* Three-dots Row Actions Floating Dropdown */}
+      {actionMenuState && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setActionMenuState(null)}
+          />
+          <div
+            style={{
+              position: 'fixed',
+              top: `${actionMenuState.position.top}px`,
+              right: `${actionMenuState.position.right}px`,
+            }}
+            className="z-50 w-56 rounded-2xl bg-white shadow-2xl border border-slate-200/90 py-1.5 animate-in fade-in zoom-in-95 duration-100 text-left overflow-hidden focus:outline-none"
+          >
+            <div className="px-3 py-2 border-b border-slate-100 bg-slate-50/70">
+              <p className="text-xs font-bold text-slate-800 truncate">
+                {actionMenuState.employee.firstName} {actionMenuState.employee.lastName}
+              </p>
+              <p className="text-[11px] text-slate-500 truncate">
+                {actionMenuState.employee.employeeCode || '—'} • {actionMenuState.employee.designation?.title || actionMenuState.employee.employmentType || 'Staff'}
+              </p>
+            </div>
+
+            <div className="py-1">
+              {/* View Details */}
+              <button
+                type="button"
+                onClick={() => {
+                  const emp = actionMenuState.employee;
+                  setActionMenuState(null);
+                  handleOpenView(emp);
+                }}
+                className="w-full text-left px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-brand-600 flex items-center gap-2.5 transition-colors"
+              >
+                <Eye className="w-4 h-4 text-slate-400" />
+                <span>View Details</span>
+              </button>
+
+              {/* Edit Profile */}
+              {hasPermission('employee:write') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const emp = actionMenuState.employee;
+                    setActionMenuState(null);
+                    handleOpenEdit(emp);
+                  }}
+                  className="w-full text-left px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-brand-600 flex items-center gap-2.5 transition-colors"
+                >
+                  <Edit2 className="w-4 h-4 text-slate-400" />
+                  <span>Edit Profile</span>
+                </button>
+              )}
+
+              {/* Hierarchy */}
+              {hasPermission('employee:write') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const emp = actionMenuState.employee;
+                    setActionMenuState(null);
+                    setReassigningEmployee(emp);
+                  }}
+                  className="w-full text-left px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-brand-600 flex items-center gap-2.5 transition-colors"
+                >
+                  <UserCheck className="w-4 h-4 text-slate-400" />
+                  <span>Hierarchy</span>
+                </button>
+              )}
+
+              {/* Early Warning System (EWS) */}
+              {isHrOrAdmin && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const emp = actionMenuState.employee;
+                    setActionMenuState(null);
+                    handleOpenEwsModal(emp);
+                  }}
+                  className="w-full text-left px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-amber-50 hover:text-amber-800 flex items-center justify-between transition-colors"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <AlertTriangle className={`w-4 h-4 ${actionMenuState.employee.isEws ? 'text-amber-600' : 'text-slate-400'}`} />
+                    <span>{actionMenuState.employee.isEws ? 'EWS Active' : 'EWS'}</span>
+                  </div>
+                  {actionMenuState.employee.isEws && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200">
+                      Flagged
+                    </span>
+                  )}
+                </button>
+              )}
+
+              {/* Upload Photo */}
+              {isCurrentUserAdmin && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const emp = actionMenuState.employee;
+                    setActionMenuState(null);
+                    handleOpenUploadPhoto(emp);
+                  }}
+                  className="w-full text-left px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2.5 transition-colors"
+                >
+                  <Upload className="w-4 h-4 text-slate-400" />
+                  <span>Photo</span>
+                </button>
+              )}
+
+              {/* End Internship */}
+              {isHrOrAdmin &&
+                isInternEmployee(actionMenuState.employee) &&
+                !isInternshipEnded(actionMenuState.employee) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const emp = actionMenuState.employee;
+                      setActionMenuState(null);
+                      setEndInternshipTarget(emp);
+                    }}
+                    className="w-full text-left px-3.5 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-50 flex items-center gap-2.5 transition-colors"
+                  >
+                    <GraduationCap className="w-4 h-4 text-amber-600" />
+                    <span>End Internship</span>
+                  </button>
+                )}
+
+              {/* Delete */}
+              {hasPermission('employee:delete') && (
+                <div className="pt-1 mt-1 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const emp = actionMenuState.employee;
+                      setActionMenuState(null);
+                      setDeleteTarget(emp);
+                    }}
+                    className="w-full text-left px-3.5 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 flex items-center gap-2.5 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4 text-rose-500" />
+                    <span>Delete</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };
