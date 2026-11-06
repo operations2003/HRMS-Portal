@@ -679,9 +679,21 @@ export const confirmImport = async (req, res, next) => {
         );
       }
 
+      // Retrieve employee date of joining to skip scheduling before joining date
+      const empDateRes = await client.query(
+        `SELECT TO_CHAR(date_of_joining, 'YYYY-MM-DD') AS "dateOfJoining" FROM employees WHERE id = $1`,
+        [employeeId]
+      );
+      const empJoiningDate = empDateRes.rows[0]?.dateOfJoining;
+
       for (const day of rosterEmp.dailyAssignments) {
         // Skip blank / unspecified cells - do NOT remove or alter existing assignments
         if (day.shiftType === 'BLANK') {
+          continue;
+        }
+
+        // Skip dates prior to employee joining date
+        if (empJoiningDate && day.date < empJoiningDate) {
           continue;
         }
 

@@ -138,6 +138,7 @@ export const shiftManagementService = {
           TRIM(CONCAT(e.first_name, ' ', e.last_name)) AS "fullName",
           e.email,
           e.status,
+          TO_CHAR(e.date_of_joining, 'YYYY-MM-DD') AS "dateOfJoining",
           COALESCE(
             (SELECT ec.last_working_day FROM exit_checklists ec WHERE ec.employee_id = e.id ORDER BY ec.created_at DESC LIMIT 1),
             (SELECT ec.resignation_date FROM exit_checklists ec WHERE ec.employee_id = e.id ORDER BY ec.created_at DESC LIMIT 1),
@@ -190,6 +191,8 @@ export const shiftManagementService = {
         e.last_name AS "lastName",
         TRIM(CONCAT(e.first_name, ' ', e.last_name)) AS "fullName",
         e.email,
+        e.status,
+        TO_CHAR(e.date_of_joining, 'YYYY-MM-DD') AS "dateOfJoining",
         e.shift_timing AS "defaultShiftTiming",
         COALESCE(e.avatar_url, u.avatar_url) AS "avatarUrl",
         d.name AS "departmentName",
@@ -320,8 +323,9 @@ export const shiftManagementService = {
       }
     }
 
-    // Only show employees who worked during this period:
-    // Exited/Completed employees whose last working day was prior to this period (lwd < start) are excluded.
+    // Only show employees who were active/employed during this period:
+    // 1. Exited/Completed employees whose last working day was prior to this period (lwd < start) are excluded.
+    // 2. Employees whose joining date is after this period (dateOfJoining > end) are excluded for month-wise view.
     eligibleEmployees = eligibleEmployees.filter((emp) => {
       const isExited = ['exited', 'completed', 'terminated'].includes((emp.status || '').toLowerCase());
       if (isExited && emp.lastWorkingDay) {
@@ -332,6 +336,16 @@ export const shiftManagementService = {
           return false;
         }
       }
+
+      if (emp.dateOfJoining) {
+        const dojStr = emp.dateOfJoining instanceof Date
+          ? emp.dateOfJoining.toISOString().split('T')[0]
+          : String(emp.dateOfJoining).slice(0, 10);
+        if (dojStr > end) {
+          return false;
+        }
+      }
+
       return true;
     });
 
@@ -556,7 +570,14 @@ export const shiftManagementService = {
           : null;
         const isAfterExit = isExitedEmp && empLwd && dateKey > empLwd && !att?.checkIn;
 
-        if (isAfterExit) {
+        // If employee joined during this month, any dates strictly before their joining date
+        // must not have shifts scheduled. Display as '-' and don't count towards scheduled days or weekly offs.
+        const empJoiningDate = emp.dateOfJoining
+          ? (emp.dateOfJoining instanceof Date ? emp.dateOfJoining.toISOString().split('T')[0] : String(emp.dateOfJoining).slice(0, 10))
+          : null;
+        const isBeforeJoining = empJoiningDate && dateKey < empJoiningDate && !att?.checkIn;
+
+        if (isAfterExit || isBeforeJoining) {
           cells[dateKey] = {
             dateKey,
             dayNumber: day.dayNumber,
@@ -564,7 +585,7 @@ export const shiftManagementService = {
             isWeekend: day.isWeekend,
             isSunday: day.dayName === 'Sun' || day.isSunday === true,
             shiftType: 'NA',
-            shiftLabel: 'Exited',
+            shiftLabel: isBeforeJoining ? 'Not Joined Yet' : 'Exited',
             shortLabel: '-',
             displayType: 'NA',
             cellText: '-',
@@ -721,6 +742,8 @@ export const shiftManagementService = {
           fullName: emp.fullName,
           email: emp.email,
           status: emp.status,
+          dateOfJoining: emp.dateOfJoining,
+          lastWorkingDay: emp.lastWorkingDay,
           avatarUrl: emp.avatarUrl,
           departmentName: emp.departmentName || 'General',
           departmentId: emp.departmentId || emp.dept_id || '',
@@ -822,9 +845,30 @@ export const shiftManagementService = {
     try {
       await client.query('BEGIN');
 
+      // Check employee's date of joining to prevent scheduling shifts before joining date
+      const empDateRes = await client.query(
+        `SELECT TO_CHAR(date_of_joining, 'YYYY-MM-DD') AS "dateOfJoining", first_name, last_name FROM employees WHERE id = $1`,
+        [employeeId]
+      );
+      const empJoiningDate = empDateRes.rows[0]?.dateOfJoining;
+      if (empJoiningDate) {
+        const validDates = dates.filter((d) => (typeof d === 'string' ? d.slice(0, 10) : '') >= empJoiningDate);
+        if (validDates.length === 0) {
+          const empName = empDateRes.rows[0]?.first_name || 'Employee';
+          const err = new Error(`Cannot schedule shift: ${empName} joined on ${empJoiningDate}. Shifts must start on or after the joining date.`);
+          err.statusCode = 400;
+          throw err;
+        }
+      }
+
       for (const rawDate of dates) {
         const dStr = typeof rawDate === 'string' ? rawDate.slice(0, 10) : '';
         if (!/^\d{4}-\d{2}-\d{2}$/.test(dStr)) {
+          continue;
+        }
+
+        // Shifts must strictly start on or after the employee's date of joining
+        if (empJoiningDate && dStr < empJoiningDate) {
           continue;
         }
 

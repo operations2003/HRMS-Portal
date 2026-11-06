@@ -928,6 +928,11 @@ export const DateWiseShiftPage = () => {
 
   // Open Matrix Cell Modal (Excel-like Interactive Editor)
   const handleOpenMatrixCell = async (employee, dateKey, cell) => {
+    if (employee.dateOfJoining && dateKey < employee.dateOfJoining) {
+      toast.warning(`${employee.fullName || employee.firstName} joined on ${employee.dateOfJoining}. Shifts cannot be scheduled prior to joining date.`);
+      return;
+    }
+
     setSelectedMatrixCellDetails({ employee, dateKey, cell });
     setMatrixModalTab('SHIFT');
 
@@ -1437,13 +1442,13 @@ export const DateWiseShiftPage = () => {
                     {/* Day Cells 1..N */}
                     {scheduleData?.days?.map((day) => {
                       const cell = row.cells?.[day.dateKey];
+                      const isNA = cell?.shortLabel === 'NA' || cell?.displayType === 'NA' || cell?.shiftType === 'NA' || cell?.cellText === '-';
                       const isSun = day.dayName === 'Sun' || cell?.isSunday;
-                      const isWO = cell?.shiftType === 'WO' || cell?.displayType === 'WO' || isSun;
-                      const isHoliday = cell?.holiday || cell?.shiftType === 'HL' || cell?.shiftType === 'HOLIDAY' || cell?.displayType === 'HOLIDAY';
-                      const isHalfDay = Boolean(!isHoliday && (cell?.isHalfDay || cell?.displayType === 'HALF_DAY'));
-                      const isLeave = Boolean(!isHoliday && (cell?.leave || cell?.displayType === 'LEAVE') && !isHalfDay);
-                      const isOverride = Boolean(cell?.isOverride || cell?.displayType === 'OVERRIDE');
-                      const isNA = cell?.shortLabel === 'NA' || cell?.displayType === 'NA';
+                      const isWO = !isNA && (cell?.shiftType === 'WO' || cell?.displayType === 'WO' || isSun);
+                      const isHoliday = !isNA && (cell?.holiday || cell?.shiftType === 'HL' || cell?.shiftType === 'HOLIDAY' || cell?.displayType === 'HOLIDAY');
+                      const isHalfDay = Boolean(!isNA && !isHoliday && (cell?.isHalfDay || cell?.displayType === 'HALF_DAY'));
+                      const isLeave = Boolean(!isNA && !isHoliday && (cell?.leave || cell?.displayType === 'LEAVE') && !isHalfDay);
+                      const isOverride = Boolean(!isNA && (cell?.isOverride || cell?.displayType === 'OVERRIDE'));
                       const text = cell?.cellText || cell?.shortLabel || (isWO ? 'WO' : '-');
                       const att = cell?.attendance;
 
@@ -1479,7 +1484,11 @@ export const DateWiseShiftPage = () => {
                           title={(canEditShifts ? 'Click to edit shift or apply leave\n' : 'Click to view day details\n') + row.employee.fullName + ' | ' + day.dateKey + '\nShift: ' + (cell?.shiftLabel || (isWO ? 'Weekly Off (WO)' : text)) + (isOverride ? ' (Override)' : '')}
                         >
                           <div className="flex flex-col items-center justify-center min-h-[30px] leading-tight overflow-hidden w-full">
-                            {isHolidayBadge ? (
+                            {isNA ? (
+                              <span className="text-[11px] font-medium text-slate-300 dark:text-slate-600" title={cell?.shiftLabel || 'Not Scheduled'}>
+                                -
+                              </span>
+                            ) : isHolidayBadge ? (
                               <span className="inline-block px-1.5 py-0.5 rounded text-[11px] font-bold bg-rose-100 text-rose-900 border border-rose-300 shadow-2xs leading-none">
                                 HL
                               </span>
@@ -1490,10 +1499,6 @@ export const DateWiseShiftPage = () => {
                             ) : isWO ? (
                               <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
                                 WO
-                              </span>
-                            ) : isNA ? (
-                              <span className="text-[11px] font-medium text-slate-300 dark:text-slate-600">
-                                NA
                               </span>
                             ) : isOverride ? (
                               <div
