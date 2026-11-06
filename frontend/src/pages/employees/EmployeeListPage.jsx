@@ -1194,15 +1194,6 @@ export const EmployeeListPage = () => {
       ),
     },
     {
-      header: 'Organization',
-      accessor: (row) => row.organization?.name || '—',
-      render: (row) => (
-        <span className="text-xs text-slate-700 font-medium">
-          {row.organization?.name || '—'}
-        </span>
-      ),
-    },
-    {
       header: 'Department',
       accessor: (row) =>
         (row.user?.roleName === 'Admin' || row.roleName === 'Admin' || row.designation?.title === 'CEO' || row.email === 'sheetalbedi@tasknera.com')
