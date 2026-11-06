@@ -529,25 +529,6 @@ export const ResignationPage = () => {
               {isLoadingTeam ? 'Refreshing...' : 'Refresh'}
             </Button>
           )}
-
-          {activeTab === 'my' && !hasActiveExit && (
-            <Button variant="danger" icon={LogOut} onClick={() => setIsSubmitModalOpen(true)}>
-              Submit Resignation
-            </Button>
-          )}
-
-          {activeTab !== 'my' && activeTab !== 'fnf' && activeTab !== 'termination' && !hasActiveExit && (
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={LogOut}
-              className="text-slate-500 hover:text-rose-600"
-              onClick={() => setIsSubmitModalOpen(true)}
-              title="Submit your own personal resignation"
-            >
-              Submit My Resignation
-            </Button>
-          )}
         </div>
       </div>
 
@@ -844,17 +825,9 @@ export const ResignationPage = () => {
                 </p>
               </div>
 
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-left text-xs text-slate-600 space-y-1.5">
-                <p className="font-semibold text-slate-800">Considering a career transition?</p>
-                <p>
-                  Submitting a formal resignation will prompt for your proposed last working day, calculate the
-                  statutory notice period, and initiate handover workflows with your manager and HR.
-                </p>
-              </div>
-
               <div className="pt-2">
                 <Button variant="danger" icon={LogOut} onClick={() => setIsSubmitModalOpen(true)}>
-                  Initiate Formal Resignation
+                  Submit Resignation
                 </Button>
               </div>
             </div>
