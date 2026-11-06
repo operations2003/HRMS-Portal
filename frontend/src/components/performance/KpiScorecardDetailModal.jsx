@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Award,
   Star,
@@ -10,6 +10,7 @@ import {
   TrendingUp,
   FileText,
   X,
+  Loader2,
 } from 'lucide-react';
 import { Modal } from '../common/Modal.jsx';
 import { Button } from '../common/Button.jsx';
@@ -19,24 +20,56 @@ import {
   RATING_SCALE,
   getPerformanceRatingFromScore,
 } from '../../constants/kpiFrameworks.js';
+import { performanceService } from '../../services/performanceService.js';
 
 export const KpiScorecardDetailModal = ({ isOpen, onClose, record }) => {
-  if (!record) return null;
+  const [detailedRecord, setDetailedRecord] = useState(record || null);
+  const [loadingDetails, setLoadingDetails] = useState(false);
 
-  const score = Number(record.score ?? record.rating * 20 ?? 0);
-  const rating = Number(record.rating ?? 4);
+  useEffect(() => {
+    setDetailedRecord(record || null);
+    if (isOpen && record?.id && (!record.goals || record.goals.length === 0)) {
+      setLoadingDetails(true);
+      performanceService
+        .getRecordById(record.id)
+        .then((data) => {
+          if (data) {
+            setDetailedRecord(data.record || data.data || data);
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to load detailed scorecard record:', err);
+        })
+        .finally(() => {
+          setLoadingDetails(false);
+        });
+    }
+  }, [isOpen, record]);
+
+  if (!record && !detailedRecord) return null;
+
+  const currentRec = detailedRecord || record;
+  const score = Number(currentRec.score ?? currentRec.rating * 20 ?? 0);
+  const rating = Number(currentRec.rating ?? 4);
   const ratingInfo = getPerformanceRatingFromScore(score > 5 ? score : rating * 20);
 
-  const goals = Array.isArray(record.goals) ? record.goals : [];
-  const empName = record.employee?.fullName || record.employeeName || 'Staff Member';
-  const reviewerName = record.reviewer?.fullName || record.reviewerName || 'Reviewer';
+  const goals = Array.isArray(currentRec.goals) ? currentRec.goals : [];
+  const empName = currentRec.employee?.fullName || currentRec.employeeName || 'Staff Member';
+  const reviewerName = currentRec.reviewer?.fullName || (typeof currentRec.reviewer === 'string' ? currentRec.reviewer : null) || currentRec.reviewerName || 'Reviewer';
+
+  const desig = typeof currentRec.employee?.designation === 'string'
+    ? currentRec.employee.designation
+    : (currentRec.employee?.designation?.name || currentRec.employee?.designationTitle || currentRec.employee?.role || 'Designation');
+  const dept = typeof currentRec.employee?.department === 'string'
+    ? currentRec.employee.department
+    : (currentRec.employee?.department?.name || 'Department');
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
       title="Candidate Performance Scorecard"
-      subtitle={`Detailed KPI Breakdown & Evaluation for ${empName} (${record.reviewPeriod || 'Period'})`}
+      subtitle={`Detailed KPI Breakdown & Evaluation for ${empName} (${currentRec.reviewPeriod || 'Period'})`}
       maxWidth="max-w-3xl"
     >
       <div className="space-y-6">
@@ -44,7 +77,7 @@ export const KpiScorecardDetailModal = ({ isOpen, onClose, record }) => {
         <div className="p-4 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/90 dark:border-slate-700 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Avatar
-              src={record.employee?.avatarUrl || record.avatarUrl}
+              src={currentRec.employee?.avatarUrl || currentRec.avatarUrl}
               name={empName}
               size="md"
               className="ring-2 ring-brand-500/20"
@@ -52,7 +85,7 @@ export const KpiScorecardDetailModal = ({ isOpen, onClose, record }) => {
             <div>
               <h3 className="text-sm font-bold text-slate-900 dark:text-white">{empName}</h3>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                {record.employee?.designation?.name || record.employee?.designationTitle || record.employee?.role || 'Designation'} &bull; {record.employee?.department?.name || 'Department'}
+                {desig} &bull; {dept}
               </p>
             </div>
           </div>
@@ -64,7 +97,7 @@ export const KpiScorecardDetailModal = ({ isOpen, onClose, record }) => {
             </div>
             <div>
               <span className="text-[10px] uppercase font-bold text-slate-400 block">Review Cycle</span>
-              <span className="font-semibold text-slate-800 dark:text-slate-200">{record.reviewPeriod}</span>
+              <span className="font-semibold text-slate-800 dark:text-slate-200">{currentRec.reviewPeriod}</span>
             </div>
           </div>
         </div>
@@ -114,7 +147,12 @@ export const KpiScorecardDetailModal = ({ isOpen, onClose, record }) => {
         </div>
 
         {/* Goals & KPI Scoring Items */}
-        {goals.length > 0 && (
+        {loadingDetails ? (
+          <div className="p-8 text-center text-slate-400 text-xs flex items-center justify-center gap-2">
+            <Loader2 className="w-4 h-4 animate-spin text-brand-500" />
+            <span>Loading KPI breakdown...</span>
+          </div>
+        ) : goals.length > 0 ? (
           <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden bg-white dark:bg-slate-900 shadow-xs">
             <div className="p-3 bg-slate-100/70 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
               <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-2">
@@ -127,63 +165,67 @@ export const KpiScorecardDetailModal = ({ isOpen, onClose, record }) => {
             </div>
 
             <div className="divide-y divide-slate-100 dark:divide-slate-800">
-              {goals.map((g, idx) => (
-                <div key={g.id || idx} className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                  <div className="space-y-0.5 max-w-md">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-slate-900 dark:text-white">
-                        {idx + 1}. {g.title}
-                      </span>
-                      {g.weightage && (
-                        <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-slate-100 dark:bg-slate-800 text-slate-600">
-                          {g.weightage}% Weight
+              {goals.map((g, idx) => {
+                const target = g.metricTarget || g.metric_target;
+                const achieved = g.metricAchieved || g.metric_achieved;
+                return (
+                  <div key={g.id || idx} className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                    <div className="space-y-0.5 max-w-md">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-900 dark:text-white">
+                          {idx + 1}. {g.title}
                         </span>
+                        {g.weightage && (
+                          <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-slate-100 dark:bg-slate-800 text-slate-600">
+                            {g.weightage}% Weight
+                          </span>
+                        )}
+                      </div>
+                      {target && (
+                        <p className="text-[11px] text-slate-500">
+                          <strong>Target:</strong> {target}
+                        </p>
                       )}
                     </div>
-                    {g.metric_target && (
-                      <p className="text-[11px] text-slate-500">
-                        <strong>Target:</strong> {g.metric_target}
-                      </p>
-                    )}
-                  </div>
 
-                  <div className="flex items-center gap-4 shrink-0 text-right">
-                    {g.metric_achieved && (
+                    <div className="flex items-center gap-4 shrink-0 text-right">
+                      {achieved && (
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-slate-400 block">Achievement</span>
+                          <span className="font-mono font-bold text-brand-600">
+                            {achieved}
+                          </span>
+                        </div>
+                      )}
                       <div>
-                        <span className="text-[10px] uppercase font-bold text-slate-400 block">Achievement</span>
-                        <span className="font-mono font-bold text-brand-600">
-                          {g.metric_achieved}
-                        </span>
+                        <span className="text-[10px] uppercase font-bold text-slate-400 block">Status</span>
+                        <Badge variant={g.status === 'ACHIEVED' ? 'success' : 'neutral'} size="sm">
+                          {g.status}
+                        </Badge>
                       </div>
-                    )}
-                    <div>
-                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Status</span>
-                      <Badge variant={g.status === 'ACHIEVED' ? 'success' : 'neutral'} size="sm">
-                        {g.status}
-                      </Badge>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
-        )}
+        ) : null}
 
         {/* Feedback / Reviewer Comments */}
-        {(record.feedback || record.reviewerComments) && (
+        {(currentRec.feedback || currentRec.reviewerComments) && (
           <div className="p-4 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/90 dark:border-slate-700 space-y-1.5">
             <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
               <FileText className="w-3.5 h-3.5 text-brand-600" />
               Evaluation Feedback &amp; Reviewer Notes
             </h4>
             <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-line">
-              {record.feedback || record.reviewerComments}
+              {currentRec.feedback || currentRec.reviewerComments}
             </p>
           </div>
         )}
 
         <div className="flex justify-end pt-2">
-          <Button variant="secondary" onClick={onClose}>
+          <Button variant="outline" size="sm" onClick={onClose}>
             Close Scorecard
           </Button>
         </div>
@@ -191,4 +233,3 @@ export const KpiScorecardDetailModal = ({ isOpen, onClose, record }) => {
     </Modal>
   );
 };
-

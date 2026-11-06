@@ -44,13 +44,19 @@ export const performanceService = {
     return res.data;
   },
 
-  async createRecord(data) {
-    const res = await http.post('/v1/performance/records', data);
+  async createRecord(data, goals = []) {
+    const payload = Array.isArray(goals) && goals.length > 0 && !data.goals
+      ? { ...data, goals }
+      : data;
+    const res = await http.post('/v1/performance/records', payload);
     return res.data;
   },
 
-  async updateRecord(id, data) {
-    const res = await http.put(`/v1/performance/records/${id}`, data);
+  async updateRecord(id, data, goals = []) {
+    const payload = Array.isArray(goals) && goals.length > 0 && !data.goals
+      ? { ...data, goals }
+      : data;
+    const res = await http.put(`/v1/performance/records/${id}`, payload);
     return res.data;
   },
 

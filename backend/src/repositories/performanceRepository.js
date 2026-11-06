@@ -32,7 +32,9 @@ const mapGoalRow = (row) => {
     title: row.title,
     description: row.description || '',
     metricTarget: row.metric_target || '',
+    metric_target: row.metric_target || '',
     metricAchieved: row.metric_achieved || '',
+    metric_achieved: row.metric_achieved || '',
     weightage: parseFloat(row.weightage) || 0,
     rating: row.rating !== null && row.rating !== undefined ? parseFloat(row.rating) : null,
     status: row.status,
@@ -218,8 +220,8 @@ export const performanceRepository = {
             data.employeeId,
             goal.title,
             goal.description || '',
-            goal.metricTarget || '',
-            goal.metricAchieved || '',
+            goal.metricTarget || goal.metric_target || '',
+            goal.metricAchieved || goal.metric_achieved || '',
             goal.weightage || 0.0,
             goal.rating || null,
             goal.status || 'IN_PROGRESS',
@@ -302,6 +304,21 @@ export const performanceRepository = {
       ORDER BY pr.created_at DESC;
     `;
     const { rows } = await pool.query(query, values);
+    if (rows.length > 0) {
+      const recordIds = rows.map((r) => r.id);
+      const { rows: goalRows } = await pool.query(
+        `SELECT * FROM performance_goals WHERE performance_record_id = ANY($1) ORDER BY created_at ASC;`,
+        [recordIds]
+      );
+      const goalsMap = {};
+      for (const g of goalRows) {
+        if (!goalsMap[g.performance_record_id]) goalsMap[g.performance_record_id] = [];
+        goalsMap[g.performance_record_id].push(g);
+      }
+      for (const r of rows) {
+        r.goals = goalsMap[r.id] || [];
+      }
+    }
     return rows.map(mapRecordRow);
   },
 
@@ -322,6 +339,21 @@ export const performanceRepository = {
       ORDER BY pr.created_at DESC;
     `;
     const { rows } = await pool.query(query, [orgId, managerEmployeeId]);
+    if (rows.length > 0) {
+      const recordIds = rows.map((r) => r.id);
+      const { rows: goalRows } = await pool.query(
+        `SELECT * FROM performance_goals WHERE performance_record_id = ANY($1) ORDER BY created_at ASC;`,
+        [recordIds]
+      );
+      const goalsMap = {};
+      for (const g of goalRows) {
+        if (!goalsMap[g.performance_record_id]) goalsMap[g.performance_record_id] = [];
+        goalsMap[g.performance_record_id].push(g);
+      }
+      for (const r of rows) {
+        r.goals = goalsMap[r.id] || [];
+      }
+    }
     return rows.map(mapRecordRow);
   },
 

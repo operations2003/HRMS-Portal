@@ -32,15 +32,21 @@ import { employeeService } from '../../services/employeeService.js';
 import { performanceService } from '../../services/performanceService.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
-import { filterNonCeoEmployees } from '../../utils/roleUtils.js';
+import { filterNonCeoEmployees, isCeoOrAdmin } from '../../utils/roleUtils.js';
 
-export const KpiScoringModal = ({ isOpen, onClose, onSuccess, initialCandidate = null }) => {
+export const KpiScoringModal = ({
+  isOpen,
+  onClose,
+  onSuccess,
+  initialCandidate = null,
+  existingRecord = null,
+}) => {
   const { user, hasRole } = useAuth();
   const toast = useToast();
 
   const userRoleStr = (user?.roleName || user?.role?.name || user?.role || '').toLowerCase().trim();
-  const isAdmin = ['admin', 'superadmin', 'orgadmin'].some((r) => userRoleStr.includes(r));
-  const isHR = !isAdmin && ['hr', 'hrmanager'].some((r) => userRoleStr.includes(r));
+  const isAdmin = isCeoOrAdmin(user) || ['admin', 'superadmin', 'orgadmin', 'ceo'].some((r) => userRoleStr.includes(r));
+  const isHR = !isAdmin && ['hr', 'hrmanager', 'ld hr', 'l&d hr'].some((r) => userRoleStr.includes(r));
   const isManagerOnly = !isAdmin && !isHR && (['manager', 'lead', 'supervisor'].some((r) => userRoleStr.includes(r)) || hasRole('Manager'));
 
   // Employees & Periods list
@@ -51,9 +57,12 @@ export const KpiScoringModal = ({ isOpen, onClose, onSuccess, initialCandidate =
   const [error, setError] = useState(null);
 
   // Form selections
-  const [selectedEmpId, setSelectedEmpId] = useState(initialCandidate?.id || '');
-  const [selectedPeriodId, setSelectedPeriodId] = useState('');
+  const [selectedEmpId, setSelectedEmpId] = useState(
+    existingRecord?.employeeId || existingRecord?.employee?.id || initialCandidate?.id || ''
+  );
+  const [selectedPeriodId, setSelectedPeriodId] = useState(existingRecord?.periodId || '');
   const [reviewPeriodName, setReviewPeriodName] = useState(() => {
+    if (existingRecord?.reviewPeriod) return existingRecord.reviewPeriod;
     const d = new Date();
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return `${months[d.getMonth()]} ${d.getFullYear()} Evaluation`;
@@ -108,9 +117,9 @@ export const KpiScoringModal = ({ isOpen, onClose, onSuccess, initialCandidate =
           const reportees = nonAdmin.filter((e) => {
             const mgrId = e.managerId || e.manager?.id || e.reportingManagerId;
             const userEmpId = user.employeeId || user.id;
-            return mgrId === userEmpId || mgrId === user.employeeId;
+            return mgrId === userEmpId || (user.employeeId && mgrId === user.employeeId) || (user.id && mgrId === user.id);
           });
-          setEmployees(reportees);
+          setEmployees(reportees.length > 0 ? reportees : nonAdmin);
         } else {
           setEmployees(nonAdmin);
         }
@@ -231,13 +240,20 @@ export const KpiScoringModal = ({ isOpen, onClose, onSuccess, initialCandidate =
         feedback: structuredFeedback,
         reviewerComments: structuredFeedback,
         selfComments: '',
+        goals: goalsPayload,
       };
 
-      await performanceService.createRecord(payload, goalsPayload);
-
-      toast.success(
-        `Performance review recorded for ${selectedEmployee?.fullName || 'Candidate'}: Score ${totalScore}% (${ratingResult.level})`
-      );
+      if (existingRecord?.id) {
+        await performanceService.updateRecord(existingRecord.id, payload, goalsPayload);
+        toast.success(
+          `Performance review updated for ${selectedEmployee?.fullName || 'Candidate'}: Score ${totalScore}% (${ratingResult.level})`
+        );
+      } else {
+        await performanceService.createRecord(payload, goalsPayload);
+        toast.success(
+          `Performance review recorded for ${selectedEmployee?.fullName || 'Candidate'}: Score ${totalScore}% (${ratingResult.level})`
+        );
+      }
 
       if (onSuccess) onSuccess();
       onClose();

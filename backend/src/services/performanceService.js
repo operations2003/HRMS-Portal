@@ -13,7 +13,12 @@ export const performanceService = {
   isHrOrAdmin(currentUser) {
     const role = (currentUser.roleName || '').toLowerCase();
     const hasManage = Array.isArray(currentUser.permissions) && currentUser.permissions.includes('performance:manage');
-    return ['admin', 'superadmin', 'orgadmin', 'hr', 'hrmanager', 'ld hr', 'l&d hr'].includes(role) || hasManage || isLdDepartmentUser(currentUser);
+    return (
+      ['admin', 'superadmin', 'orgadmin', 'hr', 'hrmanager', 'ld hr', 'l&d hr', 'ceo'].includes(role) ||
+      hasManage ||
+      isCeoOrAdmin(currentUser) ||
+      isLdDepartmentUser(currentUser)
+    );
   },
 
   /**
@@ -21,7 +26,7 @@ export const performanceService = {
    */
   isAdmin(currentUser) {
     const role = (currentUser.roleName || '').toLowerCase();
-    return ['admin', 'superadmin', 'orgadmin'].includes(role);
+    return ['admin', 'superadmin', 'orgadmin', 'ceo'].includes(role) || isCeoOrAdmin(currentUser);
   },
 
   /**
@@ -85,7 +90,7 @@ export const performanceService = {
   async createRecord(currentUser, data, goals = []) {
     const isHrAdmin = this.isHrOrAdmin(currentUser);
     const role = (currentUser.roleName || '').toLowerCase();
-    const isManager = role === 'manager';
+    const isManager = role === 'manager' || role.includes('manager') || role.includes('lead') || role.includes('supervisor');
     const emp = await this.resolveEmployee(currentUser);
 
     // Policy: Employees cannot submit self-appraisals.
@@ -152,9 +157,30 @@ export const performanceService = {
       }
     }
 
-    // Duplicate submission prevention
+    const rating = data.rating !== undefined && data.rating !== null
+      ? Number(data.rating)
+      : (data.selfRating !== undefined ? Number(data.selfRating) : 4.0);
+
+    const score = data.score !== undefined && data.score !== null
+      ? Number(data.score)
+      : (rating > 5 ? rating : rating * 20);
+
+    const reviewerComments = data.reviewerComments || data.feedback || data.selfComments || '';
+
+    // Duplicate submission prevention or update existing
     const existing = await performanceRepository.findRecordByEmployeeAndPeriod(data.employeeId, data.reviewPeriod);
     if (existing) {
+      if (isHrAdmin || (emp && existing.reviewerId === emp.id) || existing.reviewerUserId === currentUser.id) {
+        return this.updateRecord(currentUser, existing.id, {
+          rating,
+          score,
+          feedback: reviewerComments,
+          reviewerComments,
+          goals,
+          status: data.status || (isHrAdmin ? 'APPROVED' : existing.status),
+          approvalState: isHrAdmin ? 'APPROVED' : existing.approvalState,
+        });
+      }
       const err = new Error(`Duplicate submission error: A performance appraisal record already exists for employee '${data.employeeId}' in period '${data.reviewPeriod}'.`);
       err.statusCode = 409;
       throw err;
@@ -165,11 +191,6 @@ export const performanceService = {
 
     const reviewerId = emp ? emp.id : (data.reviewerId || targetEmp.managerId || null);
     const reviewerUserId = currentUser.id;
-    const rating = data.rating !== undefined && data.rating !== null
-      ? Number(data.rating)
-      : (data.selfRating !== undefined ? Number(data.selfRating) : 4.0);
-
-    const reviewerComments = data.reviewerComments || data.feedback || data.selfComments || '';
 
     const record = await performanceRepository.createRecord(
       {
@@ -184,7 +205,7 @@ export const performanceService = {
         status: data.status || (isHrAdmin ? 'APPROVED' : 'SUBMITTED'),
         approvalState: isHrAdmin ? 'APPROVED' : 'PENDING',
         rating,
-        score: rating,
+        score,
         feedback: reviewerComments,
         selfComments: data.selfComments || '',
         reviewerComments,

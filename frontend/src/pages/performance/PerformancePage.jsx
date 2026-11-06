@@ -52,13 +52,13 @@ export const PerformancePage = () => {
   const toast = useToast();
 
   const userRoleStr = (user?.roleName || user?.role?.name || user?.role || '').toLowerCase().trim();
-  const isAdmin = isCeoOrAdmin(user) || ['admin', 'superadmin', 'orgadmin'].some((r) => userRoleStr.includes(r));
+  const isAdmin = isCeoOrAdmin(user) || ['admin', 'superadmin', 'orgadmin', 'ceo'].some((r) => userRoleStr.includes(r));
   const isLnd = isLdDepartmentUser(user);
   const isHR = !isAdmin && (['hr', 'hrmanager', 'ld hr', 'l&d hr'].some((r) => userRoleStr.includes(r)) || isLnd);
   const isManager = !isAdmin && !isHR && (['manager', 'lead', 'supervisor'].some((r) => userRoleStr.includes(r)) || hasRole('Manager'));
   const isEmployeeOnly = !isAdmin && !isHR && !isManager;
 
-  // Admin can give/review other employees, but Admin does NOT have their own performance review
+  // Admin / CEO can give/review other employees, but Admin/CEO does NOT have their own performance review
   // HR can give/review other employees AND has their own review
   // Manager can give/review direct reportees AND has their own review
   // Employee only has their own review and cannot give/review others
@@ -90,6 +90,7 @@ export const PerformancePage = () => {
   const [isFrameworkDirectoryOpen, setIsFrameworkDirectoryOpen] = useState(false);
   const [scorecardRecord, setScorecardRecord] = useState(null);
   const [candidateToScore, setCandidateToScore] = useState(null);
+  const [recordToScore, setRecordToScore] = useState(null);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -598,8 +599,13 @@ export const PerformancePage = () => {
   // Performance Reviews (KPI Scoring) Computations & Table Columns
   // =========================================================================
   const allPerformanceReviews = useMemo(() => {
-    const list = isHrOrAdmin ? orgRecords : canReviewTeam ? teamRecords : myRecords;
-    return Array.isArray(list) ? list : [];
+    if (isHrOrAdmin) {
+      return orgRecords.length > 0 ? orgRecords : teamRecords;
+    }
+    if (canReviewTeam) {
+      return teamRecords;
+    }
+    return myRecords;
   }, [isHrOrAdmin, canReviewTeam, orgRecords, teamRecords, myRecords]);
 
   const filteredKpiReviews = useMemo(() => {
@@ -632,7 +638,12 @@ export const PerformancePage = () => {
       header: 'Candidate / Employee',
       render: (row) => {
         const empName = row.employee?.fullName || row.employeeName || 'Staff Member';
-        const desig = row.employee?.designation?.name || row.employee?.designationTitle || row.employee?.role || 'Designation';
+        const desig = typeof row.employee?.designation === 'string'
+          ? row.employee.designation
+          : (row.employee?.designation?.name || row.employee?.designationTitle || row.employee?.role || 'Designation');
+        const dept = typeof row.employee?.department === 'string'
+          ? row.employee.department
+          : (row.employee?.department?.name || 'Department');
         return (
           <div className="flex items-center gap-2.5">
             <Avatar
@@ -644,7 +655,7 @@ export const PerformancePage = () => {
             <div>
               <p className="font-bold text-slate-900 dark:text-white text-xs">{empName}</p>
               <p className="text-[11px] text-slate-500">
-                {desig} &bull; {row.employee?.department?.name || 'Department'}
+                {desig} &bull; {dept}
               </p>
             </div>
           </div>
@@ -708,11 +719,14 @@ export const PerformancePage = () => {
     },
     {
       header: 'Reviewer / Manager',
-      render: (row) => (
-        <span className="text-xs text-slate-600 dark:text-slate-400">
-          {row.reviewer?.fullName || row.reviewerName || 'Reviewer'}
-        </span>
-      ),
+      render: (row) => {
+        const revName = row.reviewer?.fullName || (typeof row.reviewer === 'string' ? row.reviewer : null) || row.reviewerName || 'Reviewer';
+        return (
+          <span className="text-xs text-slate-600 dark:text-slate-400">
+            {revName}
+          </span>
+        );
+      },
     },
     {
       header: 'Actions',
@@ -733,7 +747,8 @@ export const PerformancePage = () => {
               variant="primary"
               icon={Star}
               onClick={() => {
-                setCandidateToScore(row.employee || null);
+                setCandidateToScore(row.employee || (row.employeeId ? { id: row.employeeId, fullName: row.employeeName } : null));
+                setRecordToScore(row);
                 setIsKpiScoringOpen(true);
               }}
               title="Evaluate / Re-score candidate KPIs"
@@ -1143,6 +1158,7 @@ export const PerformancePage = () => {
                   icon={Star}
                   onClick={() => {
                     setCandidateToScore(null);
+                    setRecordToScore(null);
                     setIsKpiScoringOpen(true);
                   }}
                 >
@@ -1458,9 +1474,11 @@ export const PerformancePage = () => {
         onClose={() => {
           setIsKpiScoringOpen(false);
           setCandidateToScore(null);
+          setRecordToScore(null);
         }}
         onSuccess={loadData}
         initialCandidate={candidateToScore}
+        existingRecord={recordToScore}
       />
 
       <KpiScorecardDetailModal
