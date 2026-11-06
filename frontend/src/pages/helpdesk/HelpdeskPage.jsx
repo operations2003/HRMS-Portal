@@ -17,12 +17,10 @@ import {
   Building2,
   FileQuestion,
   HelpCircle,
-  ClipboardList,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { helpdeskService } from '../../services/helpdeskService.js';
-import { EmployeeRequestsPage } from '../requests/EmployeeRequestsPage.jsx';
 import { Button } from '../../components/common/Button.jsx';
 import { Alert } from '../../components/common/Alert.jsx';
 import { Badge } from '../../components/common/Badge.jsx';
@@ -57,7 +55,7 @@ const STATUS_FILTER_OPTIONS = [
 
 export const HelpdeskPage = () => {
   const navigate = useNavigate();
-  const { id, ticketId, requestId } = useParams();
+  const { id, ticketId } = useParams();
   const { user, hasPermission, hasRole, isAuthenticated } = useAuth();
   const toast = useToast();
 
@@ -73,16 +71,8 @@ export const HelpdeskPage = () => {
 
   const [searchParams, setSearchParams] = useSearchParams();
   const routeTicketId = ticketId || id;
-  const routeRequestId = requestId;
   const queryTicketId = searchParams.get('ticket') || searchParams.get('ticketId') || searchParams.get('id');
-  const queryRequestId = searchParams.get('requestId') || searchParams.get('request');
   const targetTicketId = routeTicketId || queryTicketId;
-  const targetRequestId = routeRequestId || queryRequestId;
-
-  const urlTab = searchParams.get('tab');
-  const [mainSection, setMainSection] = useState(
-    targetRequestId || urlTab === 'requests' || urlTab === 'service' ? 'requests' : 'tickets'
-  );
 
   // Tab: 'my' | 'all' (only for HR/Admin)
   const [activeTab, setActiveTab] = useState(canManageHelpdesk ? 'all' : 'my');
@@ -108,23 +98,8 @@ export const HelpdeskPage = () => {
     if (targetTicketId) {
       setSelectedTicketId(targetTicketId);
       setIsDetailModalOpen(true);
-      setMainSection('tickets');
-    } else if (targetRequestId) {
-      setMainSection('requests');
-    } else {
-      const tab = searchParams.get('tab');
-      if (tab === 'requests' || tab === 'service') {
-        setMainSection('requests');
-      } else if (tab === 'tickets') {
-        setMainSection('tickets');
-      }
     }
-  }, [targetTicketId, targetRequestId, searchParams]);
-
-  const handleSectionSwitch = (sec) => {
-    setMainSection(sec);
-    setSearchParams({ tab: sec });
-  };
+  }, [targetTicketId]);
 
   const handleCloseDetailModal = () => {
     setIsDetailModalOpen(false);
@@ -354,40 +329,7 @@ export const HelpdeskPage = () => {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
-      {/* Primary Section Switcher: Support Tickets vs Service Requests */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
-        <button
-          type="button"
-          onClick={() => handleSectionSwitch('tickets')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
-            mainSection === 'tickets'
-              ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20'
-              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
-          }`}
-        >
-          <LifeBuoy className="w-4 h-4" />
-          <span>Support Tickets</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handleSectionSwitch('requests')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
-            mainSection === 'requests'
-              ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20'
-              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
-          }`}
-        >
-          <ClipboardList className="w-4 h-4" />
-          <span>Service Requests (Bank / UAN / Docs)</span>
-        </button>
-      </div>
-
-      {mainSection === 'requests' ? (
-        <EmployeeRequestsPage isEmbedded initialRequestId={targetRequestId} />
-      ) : (
-        <>
-          {/* Page Header */}
+      {/* Page Header */}
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-brand-500/10 text-brand-600 dark:text-brand-400 flex items-center justify-center shrink-0">
@@ -601,8 +543,6 @@ export const HelpdeskPage = () => {
         ticketId={selectedTicketId}
         onTicketUpdated={() => fetchTickets(true)}
       />
-    </>
-  )}
     </div>
   );
 };

@@ -256,14 +256,18 @@ export const App = () => {
 
               <Route
                 path="requests"
-                element={<Navigate to="/helpdesk?tab=requests" replace />}
+                element={
+                  <PermissionRoute permission={['request:read', 'employee:read']}>
+                    <EmployeeRequestsPage />
+                  </PermissionRoute>
+                }
               />
 
               <Route
                 path="requests/:requestId"
                 element={
-                  <PermissionRoute permission={['helpdesk:read', 'request:read', 'employee:read']}>
-                    <HelpdeskPage />
+                  <PermissionRoute permission={['request:read', 'employee:read']}>
+                    <EmployeeRequestsPage />
                   </PermissionRoute>
                 }
               />
