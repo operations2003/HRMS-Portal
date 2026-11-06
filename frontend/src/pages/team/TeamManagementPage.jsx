@@ -1,22 +1,14 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Users,
-  Clock,
-  CalendarDays,
-  Award,
   Search,
   RefreshCw,
   Eye,
-  CheckCircle2,
-  XCircle,
-  RotateCcw,
   UserCheck,
   ShieldCheck,
   Filter,
   ShieldAlert,
-  Calendar,
-  AlertCircle,
-  Timer,
   ChevronRight,
   TrendingUp,
   FileText,
@@ -24,13 +16,10 @@ import {
   Check,
   X,
   FileCheck,
-  Coffee,
-  Umbrella,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { teamService } from '../../services/teamService.js';
-import { managerService } from '../../services/managerService.js';
 import { departmentService } from '../../services/departmentService.js';
 import { documentService } from '../../services/documentService.js';
 import { getDocumentLabel } from '../../constants/documentTypes.js';
@@ -42,64 +31,37 @@ import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
 import { EmptyState } from '../../components/common/EmptyState.jsx';
 import { TeamMemberDetailModal } from '../../components/team/TeamMemberDetailModal.jsx';
 import { AssignManagerModal } from '../../components/team/AssignManagerModal.jsx';
-import { ApprovalActionModal } from '../../components/approvals/ApprovalActionModal.jsx';
-import {
-  formatHoursToClock,
-  formatTimeWithTimezone,
-  getLiveBreakMinutes,
-  formatLiveBreakDuration,
-} from '../../utils/timeUtils.js';
-import { filterNonCeoEmployees } from '../../utils/roleUtils.js';
-import { AttendanceDetailModal } from '../../components/attendance/AttendanceDetailModal.jsx';
-import { EditAttendanceTimingModal } from '../../components/attendance/EditAttendanceTimingModal.jsx';
-import { ConvertAbsenceToLeaveModal } from '../../components/attendance/ConvertAbsenceToLeaveModal.jsx';
-import { attendanceService } from '../../services/attendanceService.js';
 import { Avatar } from '../../components/common/Avatar.jsx';
 
 export const TeamManagementPage = () => {
   const { user, hasRole } = useAuth();
   const toast = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const isAuthorized = hasRole(['Manager', 'HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']);
   const isHrOrAdmin = hasRole(['HR', 'HRManager', 'Admin', 'SuperAdmin', 'OrgAdmin']);
 
-  const [activeTab, setActiveTab] = useState('members'); // 'members' | 'attendance' | 'leaves'
+  const initialTab = searchParams.get('tab') === 'documents' ? 'documents' : 'members';
+  const [activeTab, setActiveTab] = useState(initialTab); // 'members' | 'documents'
   const [members, setMembers] = useState([]);
-  const [attendance, setAttendance] = useState([]);
-  const [attendanceSummary, setAttendanceSummary] = useState({});
-  const [leaves, setLeaves] = useState([]);
   const [departments, setDepartments] = useState([]);
 
   // Pagination states
   const [memberPage, setMemberPage] = useState(1);
-  const [attendancePage, setAttendancePage] = useState(1);
-  const [leavePage, setLeavePage] = useState(1);
   const pageSize = 10;
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDept, setSelectedDept] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [attendanceStatusFilter, setAttendanceStatusFilter] = useState('');
 
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState(null);
 
-  const isSelectedDateSunday = React.useMemo(() => {
-    if (!selectedDate) return false;
-    const [y, m, d] = selectedDate.split('-').map(Number);
-    return new Date(y, m - 1, d).getDay() === 0;
-  }, [selectedDate]);
-
   // Modals state
   const [selectedMember, setSelectedMember] = useState(null);
   const [assigningMember, setAssigningMember] = useState(null);
-  const [approvalAction, setApprovalAction] = useState({ isOpen: false, item: null, type: 'APPROVE' });
-  const [selectedAttendanceDetail, setSelectedAttendanceDetail] = useState(null);
-  const [selectedEditTimingRecord, setSelectedEditTimingRecord] = useState(null);
-  const [selectedConvertRecord, setSelectedConvertRecord] = useState(null);
 
   // Team Documents State
   const [teamDocuments, setTeamDocuments] = useState([]);
@@ -112,43 +74,6 @@ export const TeamManagementPage = () => {
   const [rejectReason, setRejectReason] = useState('');
   const [isVerifyingDoc, setIsVerifyingDoc] = useState(false);
   const [previewDocModal, setPreviewDocModal] = useState(null);
-
-  const [, setLiveTick] = useState(0);
-
-  // Live seconds ticker when any member in attendance is currently on break
-  useEffect(() => {
-    if (activeTab !== 'attendance') return;
-    const hasAnyOnBreak = (attendance || []).some((r) => Boolean(r.attendance?.isOnBreak || r.isOnBreak));
-    if (!hasAnyOnBreak) return;
-
-    const interval = setInterval(() => {
-      setLiveTick((t) => t + 1);
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [activeTab, attendance]);
-
-  useEffect(() => {
-    if (!isAuthorized) return;
-
-    const handleAttendanceUpdate = () => {
-      if (activeTab === 'attendance') {
-        loadTabData();
-      }
-    };
-    window.addEventListener('hrms:attendance:updated', handleAttendanceUpdate);
-
-    const pollInterval = setInterval(() => {
-      if (activeTab === 'attendance') {
-        loadTabData();
-      }
-    }, 25000);
-
-    return () => {
-      window.removeEventListener('hrms:attendance:updated', handleAttendanceUpdate);
-      clearInterval(pollInterval);
-    };
-  }, [isAuthorized, activeTab, selectedDate, attendanceStatusFilter]);
 
   useEffect(() => {
     if (isAuthorized) {
@@ -165,10 +90,8 @@ export const TeamManagementPage = () => {
     }
   }, [
     activeTab,
-    selectedDate,
     selectedDept,
     selectedStatus,
-    attendanceStatusFilter,
     docSearchQuery,
     docStatusFilter,
     docCategoryFilter,
@@ -210,29 +133,6 @@ export const TeamManagementPage = () => {
           (m) => !['exited', 'terminated', 'inactive'].includes((m.status || '').toLowerCase())
         );
         setMembers(activeMembers);
-      } else if (activeTab === 'attendance') {
-        const [attRes, sumRes] = await Promise.allSettled([
-          teamService.getTeamAttendance({
-            date: selectedDate,
-            status: attendanceStatusFilter || undefined,
-          }),
-          teamService.getTeamAttendanceSummary({
-            startDate: selectedDate,
-            endDate: selectedDate,
-          }),
-        ]);
-
-        if (attRes.status === 'fulfilled') {
-          const a = attRes.value;
-          const raw = a.items || a.data || (Array.isArray(a) ? a : []);
-          setAttendance(filterNonCeoEmployees(raw));
-        }
-        if (sumRes.status === 'fulfilled') {
-          setAttendanceSummary(sumRes.value || {});
-        }
-      } else if (activeTab === 'leaves') {
-        const res = await managerService.getTeamLeaves();
-        setLeaves(res.items || res.data || (Array.isArray(res) ? res : []));
       } else if (activeTab === 'documents') {
         const docs = await teamService.getTeamDocuments({
           search: docSearchQuery || undefined,
@@ -252,108 +152,6 @@ export const TeamManagementPage = () => {
     }
   };
 
-  const handleViewPunch = async (row) => {
-    if (row.attendance?.id) {
-      try {
-        const fullRec = await attendanceService.getAttendanceById(row.attendance.id);
-        if (fullRec) {
-          setSelectedAttendanceDetail(fullRec);
-          return;
-        }
-      } catch (err) {
-        console.warn('Could not fetch full attendance record from server, falling back:', err);
-      }
-    }
-
-    const hrs = row.attendance?.totalHours ?? row.totalHours ?? 0;
-    const ot = row.attendance?.overtimeHours ?? row.overtimeHours ?? 0;
-    setSelectedAttendanceDetail({
-      id: row.attendance?.id || row.id,
-      attendanceDate: row.attendance?.attendanceDate || selectedDate,
-      checkIn: row.attendance?.punchIn || row.punchIn || row.checkIn,
-      checkOut: row.attendance?.punchOut || row.punchOut || row.checkOut,
-      totalHours: hrs,
-      status: (row.attendance?.status || row.status || 'ABSENT').toUpperCase(),
-      overtimeHours: ot,
-      employee: {
-        firstName: row.firstName || row.fullName?.split(' ')[0] || '',
-        lastName: row.lastName || row.fullName?.split(' ').slice(1).join(' ') || '',
-        employeeCode: row.employeeCode || row.employee_code || row.id?.slice(0, 8) || '',
-        departmentName: (typeof row.department === 'object' ? row.department?.name : row.department) || '',
-        designationTitle: (typeof row.designation === 'object' ? row.designation?.name : row.designation) || '',
-      },
-    });
-  };
-
-  const handleEditTiming = async (row) => {
-    const attId = row.attendance?.id || row.id;
-    if (attId) {
-      try {
-        const fullRec = await attendanceService.getAttendanceById(attId);
-        if (fullRec) {
-          setSelectedEditTimingRecord(fullRec);
-          return;
-        }
-      } catch (err) {
-        console.warn('Could not fetch full record for timing edit, falling back:', err);
-      }
-    }
-    const hrs = row.attendance?.totalHours ?? row.totalHours ?? 0;
-    const ot = row.attendance?.overtimeHours ?? row.overtimeHours ?? 0;
-    setSelectedEditTimingRecord({
-      id: row.attendance?.id || row.id,
-      attendanceDate: row.attendance?.attendanceDate || selectedDate,
-      checkIn: row.attendance?.punchIn || row.punchIn || row.checkIn,
-      checkOut: row.attendance?.punchOut || row.punchOut || row.checkOut,
-      totalHours: hrs,
-      status: (row.attendance?.status || row.status || 'ABSENT').toUpperCase(),
-      overtimeHours: ot,
-      employee: {
-        firstName: row.firstName || row.fullName?.split(' ')[0] || '',
-        lastName: row.lastName || row.fullName?.split(' ').slice(1).join(' ') || '',
-        employeeCode: row.employeeCode || row.employee_code || row.id?.slice(0, 8) || '',
-        departmentName: (typeof row.department === 'object' ? row.department?.name : row.department) || '',
-        designationTitle: (typeof row.designation === 'object' ? row.designation?.name : row.designation) || '',
-        shiftTiming: row.shiftTiming || '11:00 AM - 07:00 PM',
-      },
-    });
-  };
-
-  const handleOpenConvertAbsence = async (row) => {
-    try {
-      let recordId = row.attendance?.id;
-      const targetDate = selectedDate || new Date().toISOString().split('T')[0];
-      if (!recordId) {
-        await attendanceService.syncDailyAbsences({ date: targetDate });
-        const res = await attendanceService.getOrgAttendance({
-          date: targetDate,
-          search: row.employeeCode || row.employee_code || row.fullName || row.firstName,
-        });
-        const match = res.records?.find((r) => r.employeeId === (row.employeeId || row.id));
-        if (match) recordId = match.id;
-      }
-
-      if (recordId) {
-        setSelectedConvertRecord({
-          id: recordId,
-          attendanceDate: targetDate,
-          employee: {
-            id: row.employeeId || row.id,
-            fullName: row.fullName || `${row.firstName || ''} ${row.lastName || ''}`.trim(),
-            employeeCode: row.employeeCode || row.employee_code,
-            roleName: row.roleName || row.role || 'Employee',
-            departmentName: (typeof row.department === 'object' ? row.department?.name : row.department) || '',
-            avatarUrl: row.avatarUrl,
-          },
-        });
-      } else {
-        toast.error('Unable to locate an attendance record for this employee on this date.');
-      }
-    } catch (err) {
-      toast.error(err.message || 'Failed to prepare absence record.');
-    }
-  };
-
   // Role Gate: Regular employees cannot see manager team controls
   if (!isAuthorized) {
     return (
@@ -363,7 +161,7 @@ export const TeamManagementPage = () => {
         </div>
         <h2 className="text-xl font-bold text-slate-900 mb-2">Team Management Access Restricted</h2>
         <p className="text-sm text-slate-500 max-w-md mb-6 leading-relaxed">
-          You do not possess supervisory permissions to manage team members or access supervisor attendance logs.
+          You do not possess supervisory permissions to manage team members.
         </p>
         <Button variant="primary" onClick={() => window.history.back()}>
           Return to Previous Page
@@ -374,8 +172,6 @@ export const TeamManagementPage = () => {
 
   // Filter members on frontend search with defensive array guards
   const safeMembers = Array.isArray(members) ? members : [];
-  const safeAttendance = Array.isArray(attendance) ? attendance : [];
-  const safeLeaves = Array.isArray(leaves) ? leaves : [];
 
   const filteredMembers = safeMembers.filter((m) => {
     const q = searchQuery.toLowerCase();
@@ -391,20 +187,6 @@ export const TeamManagementPage = () => {
     page: memberPage,
     totalPages: Math.ceil(filteredMembers.length / pageSize) || 1,
     total: filteredMembers.length,
-  };
-
-  const paginatedAttendance = safeAttendance.slice((attendancePage - 1) * pageSize, attendancePage * pageSize);
-  const attendancePagination = {
-    page: attendancePage,
-    totalPages: Math.ceil(safeAttendance.length / pageSize) || 1,
-    total: safeAttendance.length,
-  };
-
-  const paginatedLeaves = safeLeaves.slice((leavePage - 1) * pageSize, leavePage * pageSize);
-  const leavePagination = {
-    page: leavePage,
-    totalPages: Math.ceil(safeLeaves.length / pageSize) || 1,
-    total: safeLeaves.length,
   };
 
   const memberColumns = [
@@ -547,198 +329,6 @@ export const TeamManagementPage = () => {
           )}
         </div>
       ),
-    },
-  ];
-
-  const attendanceColumns = [
-    {
-      header: 'Employee',
-      render: (row) => {
-        const name = row.fullName || `${row.firstName || ''} ${row.lastName || ''}`.trim() || 'Team Member';
-        const code = row.employeeCode || row.employee_code || row.employeeId?.slice(0, 8);
-        return (
-          <div className="flex items-center gap-2.5">
-            <Avatar
-              src={row.avatarUrl || row.employee?.avatarUrl}
-              name={name}
-              size="sm"
-              className="ring-1 ring-slate-200"
-            />
-            <div>
-              <p className="font-semibold text-slate-800 text-xs">{name}</p>
-              <p className="text-[11px] text-slate-400 font-mono">ID: {code}</p>
-            </div>
-          </div>
-        );
-      },
-    },
-    {
-      header: 'Date',
-      render: (row) => (
-        <span className="text-xs text-slate-600 font-medium">
-          {row.attendance?.attendanceDate || selectedDate}
-        </span>
-      ),
-    },
-    {
-      header: 'Check-In',
-      render: (row) => {
-        const time = row.attendance?.punchIn || row.punchIn || row.checkInTime || row.checkIn;
-        const isLate = row.attendance?.isLate;
-        return (
-          <div>
-            <span className="text-xs font-mono font-medium text-slate-800">
-              {time ? new Date(time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
-            </span>
-            {isLate && (
-              <span className="block text-[10px] text-amber-600 font-semibold">Late Check-in</span>
-            )}
-          </div>
-        );
-      },
-    },
-    {
-      header: 'Check-Out',
-      render: (row) => {
-        const time = row.attendance?.punchOut || row.punchOut || row.checkOutTime || row.checkOut;
-        return (
-          <span className="text-xs font-mono font-medium text-slate-800">
-            {time ? new Date(time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
-          </span>
-        );
-      },
-    },
-    {
-      header: 'Hours & Overtime',
-      render: (row) => {
-        const hrs = Number(row.attendance?.totalHours ?? row.totalHours ?? 0);
-        const otVal = Number(row.attendance?.overtimeHours ?? row.overtimeHours ?? 0);
-        return (
-          <div>
-            <span className="text-xs font-medium text-slate-800">{formatHoursToClock(hrs)}</span>
-            {otVal > 0 && (
-              <span className="block text-[10px] text-emerald-600 font-semibold">+{formatHoursToClock(otVal)} Overtime</span>
-            )}
-          </div>
-        );
-      },
-    },
-    {
-      header: 'Status',
-      render: (row) => {
-        const isOnBreak = Boolean(row.attendance?.isOnBreak || row.isOnBreak);
-        const currentBreakStart = row.attendance?.currentBreakStart || row.currentBreakStart;
-        const tz = row.attendance?.timezone || row.timezone || user?.organization?.timezone || user?.timezone || 'Asia/Kolkata';
-        const breakDuration = row.attendance?.breakDurationMinutes || row.breakDurationMinutes || 0;
-        const liveMins = currentBreakStart ? getLiveBreakMinutes(currentBreakStart) : breakDuration;
-        const liveStartFormatted = currentBreakStart ? formatTimeWithTimezone(currentBreakStart, tz) : '';
-        const rawStatus = (row.attendance?.status || row.status || 'ABSENT').toUpperCase();
-        const isNotStarted = rawStatus === 'NOT_STARTED' || rawStatus === 'YET_TO_CHECK_IN';
-        return (
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <Badge
-              variant={
-                rawStatus === 'PRESENT'
-                  ? 'success'
-                  : rawStatus === 'LATE'
-                  ? 'warning'
-                  : rawStatus === 'HALF_DAY'
-                  ? 'info'
-                  : rawStatus === 'ON_LEAVE'
-                  ? 'brand'
-                  : isNotStarted
-                  ? 'neutral'
-                  : 'danger'
-              }
-              size="sm"
-            >
-              {isNotStarted ? 'Shift Not Started' : rawStatus.replace(/_/g, ' ')}
-            </Badge>
-            {isOnBreak && (
-              <span
-                title={currentBreakStart ? `Break started at ${liveStartFormatted} (${liveMins} mins)` : 'Employee is currently on break'}
-                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-300 ring-1 ring-amber-400/30 shadow-2xs"
-              >
-                <span className="relative flex h-2 w-2 shrink-0">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
-                </span>
-                <span>On Break · {liveMins} mins</span>
-                {liveStartFormatted && (
-                  <span className="text-amber-700 font-normal">
-                    (Started at {liveStartFormatted})
-                  </span>
-                )}
-              </span>
-            )}
-            {breakDuration > 0 && !isOnBreak && (
-              <span
-                title={`Total break duration: ${breakDuration} mins`}
-                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200"
-              >
-                <Coffee className="w-2.5 h-2.5 text-slate-500 shrink-0" />
-                {breakDuration}m
-              </span>
-            )}
-          </div>
-        );
-      },
-    },
-    {
-      header: 'Action',
-      className: 'text-right',
-      render: (row) => {
-        const curStatus = (row.attendance?.status || row.status || '').toUpperCase();
-        const isActuallyAbsent = curStatus === 'ABSENT';
-        return (
-          <div className="flex items-center justify-end gap-1.5">
-            {isActuallyAbsent && (() => {
-              const userRole = (user?.role || user?.roleName || '').toLowerCase();
-              const isAdmin = ['admin', 'superadmin', 'orgadmin'].includes(userRole);
-              if (isAdmin) return true;
-              const targetRole = (row.roleName || row.role || 'Employee').toLowerCase();
-              const isTargetHrOrManager = ['manager', 'lead', 'teamlead', 'supervisor', 'hr', 'hrmanager'].some((r) => targetRole.includes(r));
-              if (isTargetHrOrManager) return false;
-              return ['manager', 'lead', 'teamlead', 'supervisor', 'hr', 'hrmanager'].some((r) => userRole.includes(r));
-            })() && (
-              <Button
-                size="sm"
-                variant="primary"
-                icon={Umbrella}
-                className="!bg-brand-600 hover:!bg-brand-700 text-white !py-1 !px-2.5 !text-xs font-semibold shadow-xs"
-                onClick={() => handleOpenConvertAbsence(row)}
-                title="Convert this absence into an approved leave and deduct from bucket"
-              >
-                Convert to Leave
-              </Button>
-            )}
-            {row.attendance && (
-              <Button
-                size="sm"
-                variant={row.attendance.status === 'LATE' ? 'primary' : 'secondary'}
-                icon={Clock}
-                className={
-                  row.attendance.status === 'LATE'
-                    ? '!bg-amber-600 hover:!bg-amber-700 text-white !py-1 !px-2.5 !text-xs font-semibold shadow-xs'
-                    : '!py-1 !px-2.5 !text-xs text-slate-700 hover:text-slate-900 border-slate-200'
-                }
-                onClick={() => handleEditTiming(row)}
-                title="Adjust arrival/departure timing"
-              >
-                {row.attendance.status === 'LATE' ? 'Adjust Late Arrival' : 'Edit Timing'}
-              </Button>
-            )}
-            <Button
-              size="sm"
-              variant="ghost"
-              icon={Eye}
-              onClick={() => handleViewPunch(row)}
-            >
-              View Punch
-            </Button>
-          </div>
-        );
-      },
     },
   ];
 
@@ -987,7 +577,7 @@ export const TeamManagementPage = () => {
             Team Management
           </h1>
           <p className="text-sm text-slate-500">
-            View your team members, check daily attendance, review leaves, and check documents.
+            View your team members and check team documents.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -1006,7 +596,10 @@ export const TeamManagementPage = () => {
       <div className="flex border-b border-slate-200 gap-6 text-sm font-semibold">
         <button
           type="button"
-          onClick={() => setActiveTab('members')}
+          onClick={() => {
+            setActiveTab('members');
+            setSearchParams({ tab: 'members' });
+          }}
           className={`pb-3 transition-colors flex items-center gap-2 ${
             activeTab === 'members'
               ? 'text-brand-600 border-b-2 border-brand-600'
@@ -1018,31 +611,10 @@ export const TeamManagementPage = () => {
         </button>
         <button
           type="button"
-          onClick={() => setActiveTab('attendance')}
-          className={`pb-3 transition-colors flex items-center gap-2 ${
-            activeTab === 'attendance'
-              ? 'text-brand-600 border-b-2 border-brand-600'
-              : 'text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          <Clock className="w-4 h-4" />
-          Attendance ({attendance.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('leaves')}
-          className={`pb-3 transition-colors flex items-center gap-2 ${
-            activeTab === 'leaves'
-              ? 'text-brand-600 border-b-2 border-brand-600'
-              : 'text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          <CalendarDays className="w-4 h-4" />
-          Leaves ({safeLeaves.filter((l) => l.status === 'PENDING').length} Pending)
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('documents')}
+          onClick={() => {
+            setActiveTab('documents');
+            setSearchParams({ tab: 'documents' });
+          }}
           className={`pb-3 transition-colors flex items-center gap-2 ${
             activeTab === 'documents'
               ? 'text-brand-600 border-b-2 border-brand-600'
@@ -1119,206 +691,7 @@ export const TeamManagementPage = () => {
         </div>
       )}
 
-      {/* Tab 2: Team Attendance (Prompt 4) */}
-      {activeTab === 'attendance' && (
-        <div className="space-y-4">
-          {/* Attendance Summary Banner */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-            <div className="p-3.5 bg-white border border-slate-200/80 rounded-2xl shadow-xs">
-              <span className="text-[10px] uppercase font-bold text-slate-500 block">Total Team</span>
-              <span className="text-xl font-bold text-slate-900 mt-0.5 block">
-                {attendanceSummary.totalRecords ?? attendance.length}
-              </span>
-            </div>
-
-            <div className="p-3.5 bg-emerald-50/70 border border-emerald-100 rounded-2xl shadow-xs">
-              <span className="text-[10px] uppercase font-bold text-emerald-700 block">Present On-Time</span>
-              <span className="text-xl font-bold text-emerald-900 mt-0.5 block">
-                {attendanceSummary.presentCount ?? safeAttendance.filter((a) => a.attendance?.status === 'PRESENT').length}
-              </span>
-            </div>
-
-            <div className="p-3.5 bg-amber-50/70 border border-amber-200 rounded-2xl shadow-xs ring-1 ring-amber-400/20">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] uppercase font-bold text-amber-800 block">On Break</span>
-                <Coffee className="w-3.5 h-3.5 text-amber-600" />
-              </div>
-              <span className="text-xl font-bold text-amber-900 mt-0.5 block">
-                {attendanceSummary.onBreakCount ?? safeAttendance.filter((a) => a.attendance?.isOnBreak).length}
-              </span>
-            </div>
-
-            <div className="p-3.5 bg-amber-50/70 border border-amber-100 rounded-2xl shadow-xs">
-              <span className="text-[10px] uppercase font-bold text-amber-700 block">Late Arrivals</span>
-              <span className="text-xl font-bold text-amber-900 mt-0.5 block">
-                {attendanceSummary.lateCount ?? safeAttendance.filter((a) => a.attendance?.isLate || a.attendance?.status === 'LATE').length}
-              </span>
-            </div>
-
-            <div className="p-3.5 bg-rose-50/70 border border-rose-100 rounded-2xl shadow-xs">
-              <span className="text-[10px] uppercase font-bold text-rose-700 block">Absent / Un-punched</span>
-              <span className="text-xl font-bold text-rose-900 mt-0.5 block">
-                {isSelectedDateSunday ? 0 : (attendanceSummary.absentCount ?? safeAttendance.filter((a) => !a.attendance?.id || a.attendance?.status === 'ABSENT').length)}
-              </span>
-            </div>
-          </div>
-
-          {/* Date & Filter Controls */}
-          <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50/70 p-3 rounded-2xl border border-slate-200/80">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-slate-600">Attendance Date:</span>
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => {
-                  setSelectedDate(e.target.value);
-                  setAttendancePage(1);
-                }}
-                className="px-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-white font-medium"
-              />
-            </div>
-
-            <div className="flex items-center gap-2">
-              <select
-                value={attendanceStatusFilter}
-                onChange={(e) => {
-                  setAttendanceStatusFilter(e.target.value);
-                  setAttendancePage(1);
-                }}
-                className="px-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-white text-slate-700 focus:outline-none"
-              >
-                <option value="">All Attendance Statuses</option>
-                <option value="ON_BREAK">☕ On Break</option>
-                <option value="PRESENT">Present</option>
-                <option value="LATE">Late Arrival</option>
-                <option value="HALF_DAY">Half Day</option>
-                <option value="ABSENT">Absent</option>
-              </select>
-            </div>
-          </div>
-
-          <DataTable
-            columns={attendanceColumns}
-            data={paginatedAttendance}
-            pagination={attendancePagination}
-            onPageChange={setAttendancePage}
-            isLoading={isLoading}
-            error={error}
-            emptyTitle={isSelectedDateSunday ? "Sunday is a Weekly Holiday" : "No attendance records"}
-            emptyDescription={isSelectedDateSunday ? "Sundays are designated company holidays. Attendance records are not tracked for Sundays." : `No team member check-in records found for ${selectedDate}.`}
-          />
-        </div>
-      )}
-
-      {/* Tab 3: Team Leaves */}
-      {activeTab === 'leaves' && (
-        <div className="space-y-4">
-          <DataTable
-            columns={[
-              {
-                header: 'Employee',
-                render: (row) => (
-                  <span className="text-xs font-semibold text-slate-800">
-                    {row.employeeName || row.employee?.fullName || 'Direct Report'}
-                  </span>
-                ),
-              },
-              {
-                header: 'Leave Type',
-                render: (row) => (
-                  <span className="text-xs text-slate-700">{row.leaveTypeName || row.type || 'Leave'}</span>
-                ),
-              },
-              {
-                header: 'Schedule',
-                render: (row) => (
-                  <span className="text-xs text-slate-600">
-                    {row.startDate} &rarr; {row.endDate} ({row.daysCount || row.totalDays || 1}d)
-                  </span>
-                ),
-              },
-              {
-                header: 'Reason',
-                render: (row) => (
-                  <span className="text-xs text-slate-500 italic truncate max-w-xs block">
-                    {row.reason || 'No reason provided'}
-                  </span>
-                ),
-              },
-              {
-                header: 'Current Status',
-                render: (row) => (
-                  <Badge variant={row.status === 'APPROVED' ? 'success' : row.status === 'REJECTED' ? 'danger' : 'warning'} size="sm">
-                    {row.status}
-                  </Badge>
-                ),
-              },
-              {
-                header: 'Submitted Date',
-                render: (row) => {
-                  const d = row.appliedDate || row.appliedAt || row.createdAt || row.created_at;
-                  return (
-                    <span className="text-xs text-slate-500 font-medium">
-                      {d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recent'}
-                    </span>
-                  );
-                },
-              },
-              {
-                header: 'Action',
-                className: 'text-right',
-                render: (row) => {
-                  const isSelf =
-                    (user?.employeeId && row.employeeId === user.employeeId) ||
-                    (user?.id && (row.requesterUserId === user.id || row.employee?.userId === user.id));
-
-                  return (
-                    <div className="flex items-center justify-end gap-1.5">
-                      {row.status === 'PENDING' && (
-                        <>
-                          {isSelf ? (
-                            <span className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 italic">
-                              Self-request
-                            </span>
-                          ) : (
-                            <>
-                              <Button
-                                size="sm"
-                                variant="success"
-                                icon={CheckCircle2}
-                                onClick={() => setApprovalAction({ isOpen: true, item: row, type: 'APPROVE' })}
-                              >
-                                Approve
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="danger"
-                                icon={XCircle}
-                                onClick={() => setApprovalAction({ isOpen: true, item: row, type: 'REJECT' })}
-                              >
-                                Reject
-                              </Button>
-                            </>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  );
-                },
-              },
-            ]}
-            data={paginatedLeaves}
-            pagination={leavePagination}
-            onPageChange={setLeavePage}
-            isLoading={isLoading}
-            error={error}
-            emptyTitle="No team leave requests"
-            emptyDescription="All leave requests from your team have been processed."
-          />
-        </div>
-      )}
-
-      {/* Tab 4: Team Documents */}
+      {/* Tab 2: Team Documents */}
       {activeTab === 'documents' && (
         <div className="space-y-4">
           {/* Filters toolbar */}
@@ -1462,44 +835,6 @@ export const TeamManagementPage = () => {
         onClose={() => setAssigningMember(null)}
         onSuccess={loadTabData}
         employee={assigningMember}
-      />
-
-      <ApprovalActionModal
-        isOpen={approvalAction.isOpen}
-        onClose={() => setApprovalAction({ isOpen: false, item: null, type: 'APPROVE' })}
-        onSuccess={loadTabData}
-        item={approvalAction.item}
-        actionType={approvalAction.type}
-        currentUser={user}
-      />
-
-      <AttendanceDetailModal
-        isOpen={Boolean(selectedAttendanceDetail)}
-        onClose={() => setSelectedAttendanceDetail(null)}
-        record={selectedAttendanceDetail}
-        canEditTiming={true}
-        onEditTiming={(rec) => {
-          setSelectedAttendanceDetail(null);
-          setSelectedEditTimingRecord(rec);
-        }}
-      />
-
-      <EditAttendanceTimingModal
-        isOpen={Boolean(selectedEditTimingRecord)}
-        onClose={() => setSelectedEditTimingRecord(null)}
-        record={selectedEditTimingRecord}
-        onSuccess={() => {
-          loadTabData();
-        }}
-      />
-
-      <ConvertAbsenceToLeaveModal
-        isOpen={Boolean(selectedConvertRecord)}
-        onClose={() => setSelectedConvertRecord(null)}
-        record={selectedConvertRecord}
-        onSuccess={() => {
-          loadTabData();
-        }}
       />
 
       {/* Document Rejection Modal */}

@@ -167,7 +167,7 @@ export const ManagerDashboardPage = () => {
       subtext: `${presentToday} present &bull; ${lateToday} late check-in`,
       icon: Clock,
       gradient: 'from-emerald-500 to-teal-600',
-      action: () => navigate('/team?tab=attendance'),
+      action: () => navigate('/attendance'),
     },
     {
       title: 'Pending Leaves',

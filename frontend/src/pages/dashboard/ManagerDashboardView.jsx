@@ -297,7 +297,7 @@ export const ManagerDashboardView = () => {
 
         {/* KPI 2: Today's Team Presence */}
         <div
-          onClick={() => navigate('/team?tab=attendance')}
+          onClick={() => navigate('/attendance')}
           className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer group"
         >
           <div className="flex items-center justify-between">
