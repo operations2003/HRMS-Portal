@@ -21,6 +21,7 @@ import {
   Briefcase,
   Calculator,
   Sparkles,
+  ChevronRight,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
