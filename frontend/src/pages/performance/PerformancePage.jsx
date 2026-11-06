@@ -19,9 +19,7 @@ import {
   Edit,
   Trash2,
   Briefcase,
-  Calculator,
   Sparkles,
-  ChevronRight,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
@@ -1248,87 +1246,6 @@ export const PerformancePage = () => {
                 }
               </div>
               <p className="text-xs text-slate-400 mt-0.5">Score &lt; 70% (Coaching / PIP)</p>
-            </div>
-          </div>
-
-          {/* Designation KPI Framework Quick Select Shelf */}
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
-              <div>
-                <h3 className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                  <Briefcase className="w-4 h-4 text-brand-600" />
-                  TaskNera Designation KPI Frameworks
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Select a role below to review targets or score candidate performance:
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsFrameworkDirectoryOpen(true)}
-                className="text-xs text-brand-600 font-semibold hover:underline flex items-center gap-1 cursor-pointer"
-              >
-                <span>View Full Framework Details &amp; Rubrics</span>
-                <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
-              {KPI_DESIGNATION_FRAMEWORKS.map((fw) => (
-                <div
-                  key={fw.id}
-                  className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/40 hover:border-brand-500/50 hover:bg-white dark:hover:bg-slate-800 transition-all flex flex-col justify-between gap-3 shadow-xs"
-                >
-                  <div className="space-y-1">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-brand-600 dark:text-brand-400 block font-mono">
-                      {fw.category}
-                    </span>
-                    <h4 className="text-xs font-bold text-slate-900 dark:text-white leading-snug">
-                      {fw.title}
-                    </h4>
-                    <p className="text-[11px] text-slate-500 line-clamp-2 pt-1">
-                      {fw.primaryObjective}
-                    </p>
-                  </div>
-
-                  <div className="pt-2 border-t border-slate-200/60 dark:border-slate-700/60 space-y-1.5">
-                    <div className="flex items-center justify-between text-[11px] text-slate-500 font-mono">
-                      <span>{fw.kpis.length} KPIs</span>
-                      <span className="font-bold text-slate-800 dark:text-slate-200">100% Weight</span>
-                    </div>
-                    {canGiveAppraisal && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCandidateToScore(null);
-                          setIsKpiScoringOpen(true);
-                        }}
-                        className="w-full text-center py-1 px-2 rounded-lg text-[11px] font-bold bg-brand-50 hover:bg-brand-100 text-brand-700 dark:bg-brand-950/60 dark:text-brand-300 transition-colors cursor-pointer"
-                      >
-                        Score Candidate &rarr;
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Common Performance Rating Reference Bar */}
-          <div className="p-3.5 bg-gradient-to-r from-emerald-50 via-sky-50 to-amber-50 dark:from-slate-800 dark:to-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700 flex flex-wrap items-center justify-between gap-2 text-xs">
-            <div className="flex items-center gap-2 font-bold text-slate-800 dark:text-slate-200">
-              <Calculator className="w-4 h-4 text-brand-600" />
-              <span>Common Rating System (Weighted Score = Achievement % × Weight ÷ 100):</span>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {RATING_SCALE.map((s) => (
-                <span
-                  key={s.rating}
-                  className={`px-2 py-0.5 rounded-full text-[11px] font-bold border ${s.bgColor}`}
-                >
-                  {s.rating}.0 ({s.rating === 1 ? '<50%' : `${s.minScore}–${Math.floor(s.maxScore)}%`} {s.level})
-                </span>
-              ))}
             </div>
           </div>
 
