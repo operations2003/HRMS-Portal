@@ -20,6 +20,7 @@ import {
   AlertTriangle,
   ArrowRight,
   Filter,
+  Layers,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
@@ -244,6 +245,13 @@ export const FnFSettlementPage = () => {
           >
             Refresh
           </Button>
+          {isHrOrAdmin && (
+            <Link to="/offboarding">
+              <Button variant="ghost" size="sm" icon={Layers}>
+                Offboarding Command
+              </Button>
+            </Link>
+          )}
         </div>
       </div>
 
