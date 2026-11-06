@@ -36,7 +36,6 @@ import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
 import { EmptyState } from '../../components/common/EmptyState.jsx';
 import { ConfirmDialog } from '../../components/common/ConfirmDialog.jsx';
 import { ExitStatusTimeline } from '../../components/exit/ExitStatusTimeline.jsx';
-import { ResignationSubmitModal } from '../../components/exit/ResignationSubmitModal.jsx';
 import { ResignationWithdrawModal } from '../../components/exit/ResignationWithdrawModal.jsx';
 import { ManagerExitReviewModal } from '../../components/exit/ManagerExitReviewModal.jsx';
 import { HRExitApprovalModal } from '../../components/exit/HRExitApprovalModal.jsx';
@@ -107,7 +106,6 @@ export const ResignationPage = () => {
   const [orgError, setOrgError] = useState(null);
 
   // Modals state
-  const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
   const [reviewingRecord, setReviewingRecord] = useState(null);
   const [hrActingRecord, setHrActingRecord] = useState(null);
@@ -529,25 +527,6 @@ export const ResignationPage = () => {
               {isLoadingTeam ? 'Refreshing...' : 'Refresh'}
             </Button>
           )}
-
-          {activeTab === 'my' && !hasActiveExit && (
-            <Button variant="danger" icon={LogOut} onClick={() => setIsSubmitModalOpen(true)}>
-              Submit Resignation
-            </Button>
-          )}
-
-          {activeTab !== 'my' && activeTab !== 'fnf' && activeTab !== 'termination' && !hasActiveExit && (
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={LogOut}
-              className="text-slate-500 hover:text-rose-600"
-              onClick={() => setIsSubmitModalOpen(true)}
-              title="Submit your own personal resignation"
-            >
-              Submit My Resignation
-            </Button>
-          )}
         </div>
       </div>
 
@@ -843,20 +822,6 @@ export const ResignationPage = () => {
                   active, with all permissions and benefits configured.
                 </p>
               </div>
-
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-left text-xs text-slate-600 space-y-1.5">
-                <p className="font-semibold text-slate-800">Considering a career transition?</p>
-                <p>
-                  Submitting a formal resignation will prompt for your proposed last working day, calculate the
-                  statutory notice period, and initiate handover workflows with your manager and HR.
-                </p>
-              </div>
-
-              <div className="pt-2">
-                <Button variant="danger" icon={LogOut} onClick={() => setIsSubmitModalOpen(true)}>
-                  Initiate Formal Resignation
-                </Button>
-              </div>
             </div>
           )}
         </div>
@@ -907,16 +872,6 @@ export const ResignationPage = () => {
       )}
 
       {/* Modals & Dialogs */}
-      <ResignationSubmitModal
-        isOpen={isSubmitModalOpen}
-        onClose={() => setIsSubmitModalOpen(false)}
-        onSuccess={() => {
-          fetchMyExit();
-          if (isManager) fetchTeamExits();
-          if (isHrOrAdmin) fetchOrgExits();
-        }}
-      />
-
       <ResignationWithdrawModal
         isOpen={isWithdrawModalOpen}
         onClose={() => setIsWithdrawModalOpen(false)}
