@@ -203,7 +203,7 @@ export const KpiScoringModal = ({
     setError(null);
 
     if (!selectedEmpId) {
-      setError('Please select a candidate to evaluate.');
+      setError('Please select an employee to evaluate.');
       return;
     }
 
@@ -246,12 +246,12 @@ export const KpiScoringModal = ({
       if (existingRecord?.id) {
         await performanceService.updateRecord(existingRecord.id, payload, goalsPayload);
         toast.success(
-          `Performance review updated for ${selectedEmployee?.fullName || 'Candidate'}: Score ${totalScore}% (${ratingResult.level})`
+          `Performance review updated for ${selectedEmployee?.fullName || 'Employee'}: Score ${totalScore}% (${ratingResult.level})`
         );
       } else {
         await performanceService.createRecord(payload, goalsPayload);
         toast.success(
-          `Performance review recorded for ${selectedEmployee?.fullName || 'Candidate'}: Score ${totalScore}% (${ratingResult.level})`
+          `Performance review recorded for ${selectedEmployee?.fullName || 'Employee'}: Score ${totalScore}% (${ratingResult.level})`
         );
       }
 
@@ -259,7 +259,7 @@ export const KpiScoringModal = ({
       onClose();
     } catch (err) {
       console.error('Failed to submit KPI performance review:', err);
-      setError(err.message || 'Failed to submit candidate evaluation.');
+      setError(err.message || 'Failed to submit employee evaluation.');
     } finally {
       setSubmitting(false);
     }
@@ -269,8 +269,8 @@ export const KpiScoringModal = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Candidate Performance Review & KPI Scoring"
-      subtitle="Evaluate candidate against official TaskNera designation framework with real-time weighted scoring."
+      title="Employee Performance Review & KPI Scoring"
+      subtitle="Evaluate employee against official TaskNera designation framework with real-time weighted scoring."
       maxWidth="max-w-4xl"
     >
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -286,7 +286,7 @@ export const KpiScoringModal = ({
           {/* Candidate Selector */}
           <div>
             <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-              Select Candidate / Staff <span className="text-rose-500">*</span>
+              Select Employee <span className="text-rose-500">*</span>
             </label>
             <select
               value={selectedEmpId}
@@ -294,7 +294,7 @@ export const KpiScoringModal = ({
               required
               className="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 py-2 px-3 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500/20"
             >
-              <option value="">-- Choose Candidate to Evaluate --</option>
+              <option value="">-- Choose Employee to Evaluate --</option>
               {employees.map((emp) => (
                 <option key={emp.id} value={emp.id}>
                   {emp.fullName} ({emp.employeeCode}) — {emp.designation?.name || emp.role || 'Staff'}

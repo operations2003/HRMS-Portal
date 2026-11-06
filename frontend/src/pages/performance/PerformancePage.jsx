@@ -632,7 +632,7 @@ export const PerformancePage = () => {
 
   const kpiColumns = [
     {
-      header: 'Candidate / Employee',
+      header: 'Employee',
       render: (row) => {
         const empName = row.employee?.fullName || row.employeeName || 'Staff Member';
         const desig = typeof row.employee?.designation === 'string'
@@ -748,7 +748,7 @@ export const PerformancePage = () => {
                 setRecordToScore(row);
                 setIsKpiScoringOpen(true);
               }}
-              title="Evaluate / Re-score candidate KPIs"
+              title="Evaluate / Re-score employee KPIs"
             >
               Score KPIs
             </Button>
@@ -1130,7 +1130,7 @@ export const PerformancePage = () => {
                 Performance Reviews &amp; KPI Scoring
               </h1>
               <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                Evaluate candidates against TaskNera's 5 designation frameworks using weighted scoring and the 1–5 Common Rating System.
+                Evaluate employees against TaskNera's 5 designation frameworks using weighted scoring and the 1–5 Common Rating System.
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -1152,7 +1152,7 @@ export const PerformancePage = () => {
                     setIsKpiScoringOpen(true);
                   }}
                 >
-                  Score Candidate Performance
+                  Score Employee
                 </Button>
               )}
             </div>
@@ -1246,7 +1246,7 @@ export const PerformancePage = () => {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h3 className="text-sm font-extrabold text-slate-900 dark:text-white">
-                  Evaluated Candidate Scorecards ({filteredKpiReviews.length})
+                  Evaluated Employee Scorecards ({filteredKpiReviews.length})
                 </h3>
                 <p className="text-xs text-slate-500">
                   Comprehensive performance evaluations with individual KPI breakdowns and weighted ratings.
@@ -1261,7 +1261,7 @@ export const PerformancePage = () => {
                     type="text"
                     value={kpiSearch}
                     onChange={(e) => setKpiSearch(e.target.value)}
-                    placeholder="Search candidate or cycle..."
+                    placeholder="Search employee or cycle..."
                     className="pl-8 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
                   />
                 </div>
