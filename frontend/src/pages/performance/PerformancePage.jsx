@@ -18,7 +18,6 @@ import {
   Users,
   Edit,
   Trash2,
-  Briefcase,
   Sparkles,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
@@ -1135,13 +1134,6 @@ export const PerformancePage = () => {
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <Button
-                variant="secondary"
-                icon={Briefcase}
-                onClick={() => setIsFrameworkDirectoryOpen(true)}
-              >
-                View KPI Framework
-              </Button>
               <Button
                 variant="secondary"
                 icon={RefreshCw}
