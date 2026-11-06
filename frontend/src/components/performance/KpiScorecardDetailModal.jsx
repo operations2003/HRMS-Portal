@@ -146,7 +146,7 @@ export const KpiScorecardDetailModal = ({ isOpen, onClose, record }) => {
           </div>
         </div>
 
-        {/* Goals & KPI Scoring Items */}
+        {/* Goals & KPI Scoring Items */} 
         {loadingDetails ? (
           <div className="p-8 text-center text-slate-400 text-xs flex items-center justify-center gap-2">
             <Loader2 className="w-4 h-4 animate-spin text-brand-500" />
