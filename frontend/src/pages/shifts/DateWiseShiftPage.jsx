@@ -791,8 +791,9 @@ export const DateWiseShiftPage = () => {
   const handleSelectAllDays = () => {
     if (!canEditShifts) return;
     const all = new Set();
+    const doj = selectedEmployee?.dateOfJoining ? String(selectedEmployee.dateOfJoining).slice(0, 10) : '';
     calendarDays.forEach((d) => {
-      if (!d.empty) all.add(d.dateKey);
+      if (!d.empty && (!doj || d.dateKey >= doj)) all.add(d.dateKey);
     });
     setSelectedDates(all);
   };
@@ -805,6 +806,11 @@ export const DateWiseShiftPage = () => {
   // Quick Open Modal for single date
   const handleOpenAssignForDate = (dateKey) => {
     if (!canEditShifts) return;
+    const doj = selectedEmployee?.dateOfJoining ? String(selectedEmployee.dateOfJoining).slice(0, 10) : '';
+    if (doj && dateKey < doj) {
+      toast.warning(`${selectedEmployee?.fullName || 'Employee'} joined on ${doj}. Shifts cannot be scheduled prior to joining date.`);
+      return;
+    }
     setSelectedDates(new Set([dateKey]));
     setIsAssignModalOpen(true);
   };
@@ -1442,15 +1448,19 @@ export const DateWiseShiftPage = () => {
                     {/* Day Cells 1..N */}
                     {scheduleData?.days?.map((day) => {
                       const cell = row.cells?.[day.dateKey];
-                      const isNA = cell?.shortLabel === 'NA' || cell?.displayType === 'NA' || cell?.shiftType === 'NA' || cell?.cellText === '-';
+                      const empDOJ = row.employee?.dateOfJoining
+                        ? (typeof row.employee.dateOfJoining === 'string' ? row.employee.dateOfJoining.slice(0, 10) : '')
+                        : '';
+                      const isPreJoining = Boolean(empDOJ && day.dateKey < empDOJ);
+                      const isNA = isPreJoining || cell?.shortLabel === 'NA' || cell?.displayType === 'NA' || cell?.shiftType === 'NA' || cell?.cellText === '-';
                       const isSun = day.dayName === 'Sun' || cell?.isSunday;
                       const isWO = !isNA && (cell?.shiftType === 'WO' || cell?.displayType === 'WO' || isSun);
                       const isHoliday = !isNA && (cell?.holiday || cell?.shiftType === 'HL' || cell?.shiftType === 'HOLIDAY' || cell?.displayType === 'HOLIDAY');
                       const isHalfDay = Boolean(!isNA && !isHoliday && (cell?.isHalfDay || cell?.displayType === 'HALF_DAY'));
                       const isLeave = Boolean(!isNA && !isHoliday && (cell?.leave || cell?.displayType === 'LEAVE') && !isHalfDay);
                       const isOverride = Boolean(!isNA && (cell?.isOverride || cell?.displayType === 'OVERRIDE'));
-                      const text = cell?.cellText || cell?.shortLabel || (isWO ? 'WO' : '-');
-                      const att = cell?.attendance;
+                      const text = isPreJoining ? '-' : (cell?.cellText || cell?.shortLabel || (isWO ? 'WO' : '-'));
+                      const att = isPreJoining ? null : cell?.attendance;
 
                       const isYellowBadge = isHalfDay || isLeave || ['CL', 'PL', 'SL', 'HD', 'UP', 'LEAVE'].includes(text);
                       const isHolidayBadge = isHoliday || text === 'HL' || text === 'HOLIDAY';

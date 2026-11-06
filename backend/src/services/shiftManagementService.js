@@ -568,14 +568,14 @@ export const shiftManagementService = {
         const empLwd = emp.lastWorkingDay
           ? (emp.lastWorkingDay instanceof Date ? emp.lastWorkingDay.toISOString().split('T')[0] : String(emp.lastWorkingDay).slice(0, 10))
           : null;
-        const isAfterExit = isExitedEmp && empLwd && dateKey > empLwd && !att?.checkIn;
+        const isAfterExit = Boolean(isExitedEmp && empLwd && dateKey > empLwd);
 
         // If employee joined during this month, any dates strictly before their joining date
         // must not have shifts scheduled. Display as '-' and don't count towards scheduled days or weekly offs.
         const empJoiningDate = emp.dateOfJoining
           ? (emp.dateOfJoining instanceof Date ? emp.dateOfJoining.toISOString().split('T')[0] : String(emp.dateOfJoining).slice(0, 10))
           : null;
-        const isBeforeJoining = empJoiningDate && dateKey < empJoiningDate && !att?.checkIn;
+        const isBeforeJoining = Boolean(empJoiningDate && dateKey < empJoiningDate);
 
         if (isAfterExit || isBeforeJoining) {
           cells[dateKey] = {
