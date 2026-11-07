@@ -33,6 +33,14 @@ export const exitService = {
   // =========================================================================
 
   async submitResignation(currentUser, data) {
+    const userRole = (currentUser.roleName || currentUser.role || '').toLowerCase();
+    const userEmail = (currentUser.email || '').toLowerCase();
+    if (userRole === 'ceo' || userEmail === 'sheetalbedi@tasknera.com' || userEmail === 'sheetal@tasknera.com') {
+      const err = new Error('Action not permitted: The CEO/Organization Head cannot submit an employee resignation.');
+      err.statusCode = 403;
+      throw err;
+    }
+
     const emp = await this.resolveEmployee(currentUser);
     if (!emp) {
       const err = new Error('Access denied: No employee profile associated with your user account.');

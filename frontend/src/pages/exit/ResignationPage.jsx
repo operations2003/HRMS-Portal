@@ -68,13 +68,28 @@ export const ResignationPage = () => {
     hasRole('SuperAdmin') ||
     hasRole('OrgAdmin');
 
+  const normRole = (user?.roleName || user?.role?.name || user?.role || '').toLowerCase();
+  const isCeo =
+    normRole === 'ceo' ||
+    user?.email === 'sheetalbedi@tasknera.com' ||
+    user?.email === 'sheetal@tasknera.com' ||
+    (user?.designationTitle || user?.designation?.title || '').toLowerCase().includes('ceo') ||
+    user?.id === 'emp-shubham-admin';
+
   const urlTab = searchParams.get('tab');
 
   // Active Tab: 'my' | 'team' | 'org' | 'fnf' | 'termination'
   const [activeTab, setActiveTab] = useState(() => {
     if (urlTab) return urlTab;
+    if (isCeo) return 'team';
     return 'my';
   });
+
+  useEffect(() => {
+    if (isCeo && activeTab === 'my') {
+      setActiveTab('team');
+    }
+  }, [isCeo, activeTab]);
 
   useEffect(() => {
     if (urlTab && urlTab !== activeTab) {
@@ -168,10 +183,12 @@ export const ResignationPage = () => {
   };
 
   useEffect(() => {
-    fetchMyExit();
+    if (!isCeo) {
+      fetchMyExit();
+    }
     if (isManager) fetchTeamExits();
     if (isHrOrAdmin) fetchOrgExits();
-  }, [isManager, isHrOrAdmin]);
+  }, [isManager, isHrOrAdmin, isCeo]);
 
   const hasActiveExit =
     myExit &&
@@ -534,17 +551,19 @@ export const ResignationPage = () => {
 
       {/* Navigation Tabs */}
       <div className="flex flex-wrap border-b border-slate-200 gap-1">
-        <button
-          onClick={() => handleTabChange('my')}
-          className={`px-4 py-2.5 text-xs font-semibold border-b-2 transition-all flex items-center gap-1.5 ${
-            activeTab === 'my'
-              ? 'border-brand-600 text-brand-700 font-bold'
-              : 'border-transparent text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          <LogOut className="w-3.5 h-3.5" />
-          My Resignation
-        </button>
+        {!isCeo && (
+          <button
+            onClick={() => handleTabChange('my')}
+            className={`px-4 py-2.5 text-xs font-semibold border-b-2 transition-all flex items-center gap-1.5 ${
+              activeTab === 'my'
+                ? 'border-brand-600 text-brand-700 font-bold'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            My Resignation
+          </button>
+        )}
 
         {isManager && (
           <button
@@ -602,7 +621,7 @@ export const ResignationPage = () => {
       </div>
 
       {/* TAB 1: My Resignation & Exit Information */}
-      {activeTab === 'my' && (
+      {!isCeo && activeTab === 'my' && (
         <div className="space-y-6">
           {isLoadingMy ? (
             <div className="bg-white rounded-2xl border border-slate-200/80 p-8 shadow-sm">
