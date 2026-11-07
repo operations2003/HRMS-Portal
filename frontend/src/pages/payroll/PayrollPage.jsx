@@ -55,6 +55,9 @@ export const PayrollPage = () => {
   const isHr = ['hr', 'hrmanager'].some((r) => normRole.includes(r));
   const canAccessOrgPayroll = isCeoOrAdmin || isHr;
 
+  // Selected employee for structure view
+  const [selectedEmpId, setSelectedEmpId] = useState(null);
+
   // Tabs: For CEO, default directly to Organization Salary ('org')
   const [activeTab, setActiveTab] = useState(isCeo ? 'org' : 'structure');
 
@@ -75,9 +78,6 @@ export const PayrollPage = () => {
   const [orgLoading, setOrgLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDept, setSelectedDept] = useState('');
-
-  // Selected employee for structure view
-  const [selectedEmpId, setSelectedEmpId] = useState(null);
 
   // Salary Edit Modal (Admin/CEO deciding salaries, and HR)
   const [editModalOpen, setEditModalOpen] = useState(false);
