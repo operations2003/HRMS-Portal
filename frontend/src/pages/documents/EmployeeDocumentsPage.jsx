@@ -53,6 +53,12 @@ export const EmployeeDocumentsPage = () => {
   // Tab: For CEO, default directly to 'organization' documents
   const [activeTab, setActiveTab] = useState(isCeo ? 'organization' : 'my');
 
+  useEffect(() => {
+    if (isCeo && activeTab !== 'organization') {
+      setActiveTab('organization');
+    }
+  }, [isCeo, activeTab]);
+
   // Documents state
   const [myDocuments, setMyDocuments] = useState([]);
   const [allDocuments, setAllDocuments] = useState([]);
@@ -73,15 +79,17 @@ export const EmployeeDocumentsPage = () => {
     if (!canManageDocuments) return;
     try {
       if (showRefreshing) setRefreshing(true);
+      else if (isCeo) setLoading(true);
       setError(null);
       const docs = await documentService.getAllDocuments();
       setAllDocuments(Array.isArray(docs) ? docs : []);
     } catch (err) {
       console.error('Error fetching company documents:', err);
     } finally {
+      if (isCeo) setLoading(false);
       setRefreshing(false);
     }
-  }, [canManageDocuments]);
+  }, [canManageDocuments, isCeo]);
 
   // Fetch current user's documents
   const fetchMyDocuments = useCallback(async (showRefreshing = false) => {
@@ -147,8 +155,10 @@ export const EmployeeDocumentsPage = () => {
   }, [toast]);
 
   useEffect(() => {
-    fetchMyDocuments();
-  }, [fetchMyDocuments]);
+    if (!isCeo) {
+      fetchMyDocuments();
+    }
+  }, [fetchMyDocuments, isCeo]);
 
   useEffect(() => {
     if (canManageDocuments) {
@@ -200,7 +210,7 @@ export const EmployeeDocumentsPage = () => {
 
   // Calculate statistics for current view
   const currentDocs =
-    activeTab === 'my'
+    (!isCeo && activeTab === 'my')
       ? myDocuments
       : selectedEmployeeId
       ? selectedEmployeeDocs
@@ -271,8 +281,8 @@ export const EmployeeDocumentsPage = () => {
         </div>
       </div>
 
-      {/* Role-Based Navigation Tabs (Shows 'My Personal Documents' first, then 'Organization Documents') */}
-      {canManageDocuments && (
+      {/* Role-Based Navigation Tabs (Hidden for CEO as they manage Organization Documents) */}
+      {canManageDocuments && !isCeo && (
         <div className="flex items-center">
           <div className="bg-slate-200/70 p-1.5 rounded-2xl flex items-center gap-1.5 shadow-inner">
             <button
@@ -447,7 +457,7 @@ export const EmployeeDocumentsPage = () => {
           </p>
           <p className="text-xs text-slate-400 mt-1">Please wait while we load your files</p>
         </div>
-      ) : activeTab === 'my' ? (
+      ) : (!isCeo && activeTab === 'my') ? (
         /* Employee's Own Document Vault */
         <DocumentVaultUploader
           documents={myDocuments}
