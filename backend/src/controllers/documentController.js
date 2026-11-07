@@ -287,6 +287,13 @@ export const documentController = {
    */
   async uploadMyDocument(req, res, next) {
     try {
+      const userRole = (req.user?.roleName || '').toLowerCase();
+      const userEmail = (req.user?.email || '').toLowerCase();
+      const isCeo = userRole === 'ceo' || userEmail === 'sheetalbedi@tasknera.com' || userEmail === 'sheetal@tasknera.com';
+      if (isCeo) {
+        return sendError(res, 'CEO accounts are not required or permitted to upload onboarding/personal documents.', 403);
+      }
+
       const orgId = req.user.orgId || 'org-1';
       const employee = await employeeRepository.findByUserId(req.user.id, orgId);
       if (!employee) {

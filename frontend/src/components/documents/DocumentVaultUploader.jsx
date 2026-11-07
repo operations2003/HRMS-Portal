@@ -24,6 +24,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext.jsx';
+import { useAuth } from '../../context/AuthContext.jsx';
 import { documentService } from '../../services/documentService.js';
 import { Badge } from '../common/Badge.jsx';
 import { Button } from '../common/Button.jsx';
@@ -136,6 +137,21 @@ export const DocumentVaultUploader = ({
   onDocumentsUpdated,
 }) => {
   const { showSuccess, showError } = useToast();
+  const auth = useAuth();
+  const user = auth?.user;
+  const userRole = (user?.roleName || user?.role?.name || user?.role || '').toLowerCase().trim();
+  const userEmail = (user?.email || '').toLowerCase().trim();
+  const userDesig = (user?.designationTitle || user?.designation?.title || '').toLowerCase().trim();
+  const isCeo =
+    userRole === 'ceo' ||
+    userEmail === 'sheetalbedi@tasknera.com' ||
+    userEmail === 'sheetal@tasknera.com' ||
+    userDesig.includes('ceo') ||
+    user?.id === 'emp-shubham-admin';
+
+  // For CEO, strictly disable document uploading option
+  const effectiveCanUpload = Boolean(canUpload && !isCeo);
+
   const fileInputRef = useRef(null);
 
   // Upload Form State
@@ -364,8 +380,8 @@ export const DocumentVaultUploader = ({
 
   return (
     <div className="space-y-6">
-      {/* Upload Box (Only when upload is allowed) */}
-      {canUpload && (
+      {/* Upload Box (Only when upload is allowed and not CEO) */}
+      {effectiveCanUpload && (
         <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">

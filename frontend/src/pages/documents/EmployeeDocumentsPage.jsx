@@ -25,8 +25,18 @@ import { LoadingSpinner } from '../../components/common/LoadingSpinner.jsx';
 import { Avatar } from '../../components/common/Avatar.jsx';
 
 export const EmployeeDocumentsPage = () => {
-  const { hasRole, hasPermission, isAuthenticated } = useAuth();
+  const { user, hasRole, hasPermission, isAuthenticated } = useAuth();
   const toast = useToast();
+
+  const userRole = (user?.roleName || user?.role?.name || user?.role || '').toLowerCase().trim();
+  const userEmail = (user?.email || '').toLowerCase().trim();
+  const userDesig = (user?.designationTitle || user?.designation?.title || '').toLowerCase().trim();
+  const isCeo =
+    userRole === 'ceo' ||
+    userEmail === 'sheetalbedi@tasknera.com' ||
+    userEmail === 'sheetal@tasknera.com' ||
+    userDesig.includes('ceo') ||
+    user?.id === 'emp-shubham-admin';
 
   const canManageDocuments =
     hasPermission('document:manage') ||
@@ -40,8 +50,8 @@ export const EmployeeDocumentsPage = () => {
       hasPermission('employee:read') ||
       hasRole(['Employee', 'Manager']));
 
-  // Tab: 'my' | 'organization' (shows 'my' personal documents first by default)
-  const [activeTab, setActiveTab] = useState('my');
+  // Tab: For CEO, default directly to 'organization' documents
+  const [activeTab, setActiveTab] = useState(isCeo ? 'organization' : 'my');
 
   // Documents state
   const [myDocuments, setMyDocuments] = useState([]);
@@ -230,7 +240,9 @@ export const EmployeeDocumentsPage = () => {
                 </span>
               </div>
               <p className="text-sm text-slate-500 mt-1 max-w-2xl leading-relaxed">
-                View, upload, and verify employee documents like ID cards, certificates, and employment contracts.
+                {isCeo
+                  ? 'View and verify employee documents like ID cards, certificates, and employment contracts.'
+                  : 'View, upload, and verify employee documents like ID cards, certificates, and employment contracts.'}
               </p>
             </div>
           </div>
@@ -439,11 +451,11 @@ export const EmployeeDocumentsPage = () => {
         /* Employee's Own Document Vault */
         <DocumentVaultUploader
           documents={myDocuments}
-          canUpload={true}
+          canUpload={!isCeo}
           canAcknowledge={true}
           canVerify={false}
           titlePrefix="My Documents"
-          subtitle="Your identity proofs, certificates, and employment contracts."
+          subtitle={isCeo ? 'Authorized administrative and company documents.' : 'Your identity proofs, certificates, and employment contracts.'}
           onDocumentsUpdated={() => fetchMyDocuments(true)}
         />
       ) : selectedEmployeeId ? (
@@ -512,16 +524,16 @@ export const EmployeeDocumentsPage = () => {
             <DocumentVaultUploader
               candidateId={null}
               documents={selectedEmployeeDocs}
-              canUpload={true}
+              canUpload={!isCeo}
               canVerify={true}
               canAcknowledge={false}
-              canDelete={true}
+              canDelete={!isCeo}
               titlePrefix={
                 selectedEmpObj
                   ? `${selectedEmpObj.firstName} ${selectedEmpObj.lastName}'s Documents`
                   : 'Employee Documents'
               }
-              subtitle="Review uploaded documents, approve or reject them, or upload new files."
+              subtitle={isCeo ? 'Review uploaded documents, approve or reject them.' : 'Review uploaded documents, approve or reject them, or upload new files.'}
               onUpload={async (formData) => {
                 await documentService.uploadDocumentForOwner('EMPLOYEE', selectedEmployeeId, formData);
               }}
