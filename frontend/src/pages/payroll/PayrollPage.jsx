@@ -46,12 +46,23 @@ export const PayrollPage = () => {
 
   // Role detection
   const normRole = (user?.roleName || '').toLowerCase();
-  const isCeoOrAdmin = ['admin', 'superadmin', 'orgadmin'].some((r) => normRole.includes(r)) || user?.email === 'sheetalbedi@tasknera.com';
+  const isCeo =
+    normRole === 'ceo' ||
+    user?.email === 'sheetalbedi@tasknera.com' ||
+    user?.email === 'sheetal@tasknera.com' ||
+    (user?.designationTitle || user?.designation?.title || '').toLowerCase().includes('ceo');
+  const isCeoOrAdmin = ['admin', 'superadmin', 'orgadmin'].some((r) => normRole.includes(r)) || isCeo;
   const isHr = ['hr', 'hrmanager'].some((r) => normRole.includes(r));
   const canAccessOrgPayroll = isCeoOrAdmin || isHr;
 
-  // Tabs: 'structure' (My Salary / Detailed Structure) vs 'org' (Organization Salary)
-  const [activeTab, setActiveTab] = useState('structure');
+  // Tabs: For CEO, default directly to Organization Salary ('org')
+  const [activeTab, setActiveTab] = useState(isCeo ? 'org' : 'structure');
+
+  useEffect(() => {
+    if (isCeo && !selectedEmpId && activeTab !== 'org') {
+      setActiveTab('org');
+    }
+  }, [isCeo, selectedEmpId, activeTab]);
 
   // Personal/Selected employee payroll data
   const [data, setData] = useState(null);
@@ -150,11 +161,13 @@ export const PayrollPage = () => {
   };
 
   useEffect(() => {
-    fetchPayroll(selectedEmpId);
+    if (!isCeo || selectedEmpId) {
+      fetchPayroll(selectedEmpId);
+    }
     if (canAccessOrgPayroll) {
       fetchOrgPayroll();
     }
-  }, [selectedEmpId]);
+  }, [selectedEmpId, isCeo, canAccessOrgPayroll]);
 
   // Handle viewing specific employee structure from org list
   const handleViewEmployeeStructure = (emp) => {
@@ -648,7 +661,7 @@ export const PayrollPage = () => {
             icon={RefreshCw}
             loading={refreshing || orgLoading}
             onClick={() => {
-              fetchPayroll(selectedEmpId, true);
+              if (!isCeo || selectedEmpId) fetchPayroll(selectedEmpId, true);
               if (canAccessOrgPayroll) fetchOrgPayroll();
             }}
           >
@@ -660,31 +673,36 @@ export const PayrollPage = () => {
       {/* Role Navigation Tabs for Admin / CEO & HR */}
       {canAccessOrgPayroll && (
         <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-2">
-          <button
-            type="button"
-            onClick={() => setActiveTab('structure')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-              activeTab === 'structure'
-                ? 'bg-brand-600 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
-            }`}
-          >
-            <Wallet className="w-4 h-4" />
-            <span>
-              {selectedEmpId && selectedEmpId !== user?.employeeId
-                ? 'Salary Structure'
-                : 'My Salary'}
-            </span>
-            {selectedEmpId && selectedEmpId !== user?.employeeId && (
-              <span className="px-1.5 py-0.2 rounded text-[10px] bg-amber-100 text-amber-800 font-semibold">
-                Viewing Staff
+          {(!isCeo || selectedEmpId) && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('structure')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                activeTab === 'structure'
+                  ? 'bg-brand-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
+              }`}
+            >
+              <Wallet className="w-4 h-4" />
+              <span>
+                {selectedEmpId && selectedEmpId !== user?.employeeId
+                  ? 'Salary Structure'
+                  : 'My Salary'}
               </span>
-            )}
-          </button>
+              {selectedEmpId && selectedEmpId !== user?.employeeId && (
+                <span className="px-1.5 py-0.2 rounded text-[10px] bg-amber-100 text-amber-800 font-semibold">
+                  Viewing Staff
+                </span>
+              )}
+            </button>
+          )}
 
           <button
             type="button"
-            onClick={() => setActiveTab('org')}
+            onClick={() => {
+              setActiveTab('org');
+              if (isCeo) setSelectedEmpId(null);
+            }}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
               activeTab === 'org'
                 ? 'bg-brand-600 text-white shadow-xs'
@@ -741,8 +759,8 @@ export const PayrollPage = () => {
         />
       )}
 
-      {/* TAB 1: My Salary / Detailed Salary Structure (Accessible to all for own salary, or Admin/HR for selected employee) */}
-      {(activeTab === 'structure' || !canAccessOrgPayroll) && (
+      {/* TAB 1: Salary Structure (Accessible to non-CEO for own salary, or Admin/HR for selected employee) */}
+      {(activeTab === 'structure' || !canAccessOrgPayroll) && (!isCeo || selectedEmpId) && (
         <div className="space-y-6">
           {/* Employee Selector for Admin / CEO and HR */}
           {canAccessOrgPayroll && (
@@ -766,7 +784,13 @@ export const PayrollPage = () => {
               <div className="flex items-center gap-2 w-full sm:w-auto">
                 <select
                   value={selectedEmpId || ''}
-                  onChange={(e) => setSelectedEmpId(e.target.value || null)}
+                  onChange={(e) => {
+                    const val = e.target.value || null;
+                    setSelectedEmpId(val);
+                    if (isCeo && !val) {
+                      setActiveTab('org');
+                    }
+                  }}
                   aria-label="Select employee to inspect"
                   className="text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 text-slate-800 dark:text-slate-200 focus:outline-none"
                 >
