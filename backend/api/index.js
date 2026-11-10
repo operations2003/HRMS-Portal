@@ -2,6 +2,7 @@ import app from '../src/app.js';
 import { initDataStore } from '../src/repositories/dataStore.js';
 
 // Protect serverless instance from unhandled rejections crashing the container
+// Build version 1.0.1 - Roster scope and cache-bust
 process.on('unhandledRejection', (reason, promise) => {
   console.error('⚠️ [Serverless] Unhandled Rejection at:', promise, 'reason:', reason);
 });

@@ -22,6 +22,7 @@ export const shiftManagementController = {
    */
   async getAssignments(req, res, next) {
     try {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
       const { employeeId, startDate, endDate, month, year, departmentId } = req.query;
       const result = await shiftManagementService.getEmployeeShifts(req.user, {
         employeeId,
