@@ -546,6 +546,20 @@ export const shiftManagementService = {
       const defaultShort = this.getShortShiftLabel(defaultTiming);
       const empLeaves = leavesByEmp.get(emp.id) || [];
 
+      // Determine joining date for this employee
+      let empJoiningDate = emp.dateOfJoining
+        ? (emp.dateOfJoining instanceof Date ? emp.dateOfJoining.toISOString().split('T')[0] : String(emp.dateOfJoining).slice(0, 10))
+        : null;
+      if (!empJoiningDate && emp.fullName && emp.fullName.toLowerCase().includes('ashutosh')) {
+        empJoiningDate = '2026-11-05';
+      }
+
+      // Determine last working day for exited/completed employees
+      const isExitedEmp = ['exited', 'completed', 'terminated'].includes((emp.status || '').toLowerCase());
+      const empLwd = emp.lastWorkingDay
+        ? (emp.lastWorkingDay instanceof Date ? emp.lastWorkingDay.toISOString().split('T')[0] : String(emp.lastWorkingDay).slice(0, 10))
+        : null;
+
       const cells = {};
       let scheduledDaysCount = 0;
       let presentDaysCount = 0;
@@ -564,20 +578,10 @@ export const shiftManagementService = {
 
         // If employee has exited/completed, any dates strictly after their last working day
         // did not have them working, so display as '-' and don't count towards schedule or weekly offs
-        const isExitedEmp = ['exited', 'completed', 'terminated'].includes((emp.status || '').toLowerCase());
-        const empLwd = emp.lastWorkingDay
-          ? (emp.lastWorkingDay instanceof Date ? emp.lastWorkingDay.toISOString().split('T')[0] : String(emp.lastWorkingDay).slice(0, 10))
-          : null;
         const isAfterExit = Boolean(isExitedEmp && empLwd && dateKey > empLwd);
 
         // If employee joined during this month, any dates strictly before their joining date
         // must not have shifts scheduled. Display as '-' and don't count towards scheduled days or weekly offs.
-        let empJoiningDate = emp.dateOfJoining
-          ? (emp.dateOfJoining instanceof Date ? emp.dateOfJoining.toISOString().split('T')[0] : String(emp.dateOfJoining).slice(0, 10))
-          : null;
-        if (!empJoiningDate && emp.fullName && emp.fullName.toLowerCase().includes('ashutosh')) {
-          empJoiningDate = '2026-11-05';
-        }
         const isBeforeJoining = Boolean(empJoiningDate && dateKey < empJoiningDate);
 
         if (isAfterExit || isBeforeJoining) {
