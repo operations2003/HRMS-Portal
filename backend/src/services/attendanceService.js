@@ -791,7 +791,7 @@ export const attendanceService = {
         status,
         sessions: initialSessions,
         source: data.source || 'WEB',
-        notes: data.notes !== undefined ? data.notes : (existing.source?.startsWith('SYSTEM_') ? '' : existing.notes || ''),
+        notes: data.notes !== undefined ? data.notes : (existing.source?.startsWith('SYSTEM_') || existing.source === 'LEAVE_ASSIGNMENT' ? '' : existing.notes || ''),
         location: data.location || existing.location || {},
       });
     }

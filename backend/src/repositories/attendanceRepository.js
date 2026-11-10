@@ -317,6 +317,11 @@ export const attendanceRepository = {
       values.push(Number(data.overtimeHours) || 0.0);
     }
 
+    if (data.source !== undefined) {
+      setClauses.push(`source = $${paramIndex++}`);
+      values.push(data.source);
+    }
+
     if (data.notes !== undefined) {
       setClauses.push(`notes = $${paramIndex++}`);
       values.push(data.notes);
@@ -385,8 +390,8 @@ export const attendanceRepository = {
 
     const shouldIncludeLeaves = includeLeaves === true || includeLeaves === 'true';
     if (!shouldIncludeLeaves && status.toUpperCase() !== 'ON_LEAVE') {
-      conditions.push("(a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT')");
-      conditions.push("a.status != 'ON_LEAVE'");
+      conditions.push("(a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT' OR a.check_in IS NOT NULL)");
+      conditions.push("(a.status != 'ON_LEAVE' OR a.check_in IS NOT NULL)");
     }
 
     if (startDate) {
@@ -523,8 +528,8 @@ export const attendanceRepository = {
 
     const shouldIncludeLeaves = includeLeaves === true || includeLeaves === 'true';
     if (!shouldIncludeLeaves && status.toUpperCase() !== 'ON_LEAVE') {
-      conditions.push("(a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT')");
-      conditions.push("a.status != 'ON_LEAVE'");
+      conditions.push("(a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT' OR a.check_in IS NOT NULL)");
+      conditions.push("(a.status != 'ON_LEAVE' OR a.check_in IS NOT NULL)");
     }
 
     if (deptId) {
@@ -618,8 +623,8 @@ export const attendanceRepository = {
 
     const shouldIncludeLeaves = includeLeaves === true || includeLeaves === 'true';
     if (!shouldIncludeLeaves && status.toUpperCase() !== 'ON_LEAVE') {
-      conditions.push("(a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT')");
-      conditions.push("a.status != 'ON_LEAVE'");
+      conditions.push("(a.source IS NULL OR a.source != 'LEAVE_ASSIGNMENT' OR a.check_in IS NOT NULL)");
+      conditions.push("(a.status != 'ON_LEAVE' OR a.check_in IS NOT NULL)");
     }
 
     if (deptId) {
